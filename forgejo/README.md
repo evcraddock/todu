@@ -27,11 +27,12 @@ Claude Code plugin for managing Forgejo/Gitea issues with rich git context.
 
 ## Prerequisites
 
-- **Forgejo Token**: Set `FORGEJO_TOKEN` environment variable with a personal access token
+- **Forgejo Token** (Required): Set `FORGEJO_TOKEN` environment variable with a personal access token
   - Create token in Forgejo at: Settings > Applications > Generate New Token
   - Required scopes: `read:issue`, `write:issue`
-- **Forgejo Base URL**: Set `FORGEJO_URL` environment variable with your Forgejo instance URL
-  - Example: `export FORGEJO_URL=https://forgejo.example.com`
+- **Forgejo Base URL** (Required): Set `FORGEJO_URL` environment variable with your Forgejo instance URL
+  - Example: `export FORGEJO_URL=https://forgejo.caradoc.com`
+  - **Important**: This variable is required because the plugin cannot reliably auto-detect the Forgejo URL
 
 ## Usage
 
