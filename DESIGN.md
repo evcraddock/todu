@@ -18,10 +18,10 @@ plugin** that can be installed independently from a shared marketplace.
 
 - `{system}-task-create` - Create task with git context (branch, commits, files)
 - `{system}-task-sync` - Sync tasks to local cache
-- `{system}-task-report` - Generate reports from local data
+- `{system}-task-search` - Search and filter tasks from local cache
 
 Skills can be interactive, prompting users for details when needed. All
-API access is via existing CLI tools (`gh`, `fj`, `curl`).
+operations are handled by Python scripts using API SDKs and direct API calls.
 
 ### Marketplace Structure
 
@@ -38,7 +38,7 @@ todu/                            # Marketplace root
 │   │   │   └── SKILL.md
 │   │   ├── task-sync/
 │   │   │   └── SKILL.md
-│   │   └── task-report/
+│   │   └── task-search/
 │   │       └── SKILL.md
 │   ├── scripts/
 │   │   ├── ensure-uv.sh         # Auto-install uv
@@ -57,7 +57,7 @@ todu/                            # Marketplace root
 │   │   │   └── SKILL.md
 │   │   ├── task-sync/
 │   │   │   └── SKILL.md
-│   │   └── task-report/
+│   │   └── task-search/
 │   │       └── SKILL.md
 │   ├── scripts/
 │   │   ├── ensure-uv.sh
@@ -76,7 +76,7 @@ todu/                            # Marketplace root
 │   │   │   └── SKILL.md
 │   │   ├── task-sync/
 │   │   │   └── SKILL.md
-│   │   └── task-report/
+│   │   └── task-search/
 │   │       └── SKILL.md
 │   ├── scripts/
 │   │   ├── ensure-uv.sh
@@ -132,20 +132,20 @@ explicit mention. If unsure, ask the user.
 - Tracks sync timestamp
 - Reports what changed
 
-#### {system}-task-report
+#### {system}-task-search
 
-**Examples**: `github-task-report`, `forgejo-task-report`, `todoist-task-report`
+**Examples**: `github-task-search`, `forgejo-task-search`, `todoist-task-search`
 
-**Detection Logic**: Use the system the user asks about. Can ask for
-clarification if multiple plugins are installed.
+**Detection Logic**: Use when user asks to find, list, show, or search for
+tasks. Use the system that matches git remote or user's explicit mention.
 
 **Capabilities**:
 
-- Read-only operations from local cache
-- Multiple report formats (markdown, JSON)
-- Filter by status, assignee, labels
+- Search local cache (fast, no API calls)
+- Filter by status, assignee, labels, date ranges
+- Return results in various formats (markdown, JSON)
 - Cross-reference with git data
-- Can prompt user for additional info when needed (interactive)
+- Interactive filters (prompt for search criteria if needed)
 
 ## Scripts and Tools
 
@@ -285,7 +285,7 @@ Future phases may add a config file for user preferences.
   - [ ] `plugin.json` with metadata
   - [ ] `github-task-create` skill with git context
   - [ ] `github-task-sync` skill
-  - [ ] `github-task-report` skill
+  - [ ] `github-task-search` skill
   - [ ] Local storage utilities
   - [ ] README and docs
 - [ ] Test installation and basic workflows
