@@ -2,5 +2,7 @@
   "name": "github",
   "description": "GitHub task management - create issues, sync, and search with rich git context",
   "version": "0.1.0",
-  "author": "Erik Craddock"
+  "author": {
+    "name": "Erik Craddock"
+  }
 }

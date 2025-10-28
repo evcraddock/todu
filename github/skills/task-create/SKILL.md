@@ -5,6 +5,20 @@ description: Create a GitHub issue with context from the current git repository,
 
 # Create GitHub Issue
 
+**⚠️ IMPORTANT: Always invoke this skill via the Skill tool for EVERY create request.**
+
+Do NOT call `create-issue.py` directly. This skill provides essential logic beyond just running the script:
+
+- Extracting git context (current branch, recent commits, modified files)
+- Prompting for missing information (title, description, labels)
+- Formatting issue body with rich git context
+- Handling interactive clarifications
+- Auto-syncing created issue to local cache
+
+Even if you've invoked this skill before in the conversation, you MUST invoke it again for each new issue creation request.
+
+---
+
 This skill creates a GitHub issue with rich context from the current git environment.
 
 ## When to Use
@@ -36,13 +50,14 @@ This skill creates a GitHub issue with rich context from the current git environ
 
 **User**: "Create an issue for this authentication bug"
 **Skill**:
+
 - Extracts current branch: `fix/auth-timeout`
 - Finds recent commits related to auth
 - Prompts: "What should the issue title be?"
 - User: "Users getting timeout on password reset"
 - Prompts: "Any additional description?"
 - Creates issue with git context in body
-- Shows: "✅ Created issue #123: https://github.com/owner/repo/issues/123"
+- Shows: "✅ Created issue #123: <https://github.com/owner/repo/issues/123>"
 
 ## Script Interface
 
@@ -56,6 +71,7 @@ cd $PLUGIN_DIR
 ```
 
 Returns JSON:
+
 ```json
 {
   "id": "123",

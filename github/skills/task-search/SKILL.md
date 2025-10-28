@@ -5,6 +5,21 @@ description: Search GitHub issues in local cache without API calls. Use when use
 
 # Search GitHub Issues
 
+**⚠️ IMPORTANT: Always invoke this skill via the Skill tool for EVERY search request.**
+
+Do NOT call `list-issues.py` directly. This skill provides essential logic beyond just running the script:
+
+- Parsing natural language search criteria from user query
+- Prompting for clarification when filters are ambiguous
+- Extracting repo context from git remote
+- Formatting results in user-friendly display
+- Detecting stale cache and suggesting sync
+- Handling empty results gracefully
+
+Even if you've invoked this skill before in the conversation, you MUST invoke it again for each new search request.
+
+---
+
 This skill searches locally cached GitHub issues with filtering capabilities.
 
 ## When to Use
@@ -35,8 +50,10 @@ This skill searches locally cached GitHub issues with filtering capabilities.
 
 **User**: "Show me my open issues"
 **Skill**:
+
 - Calls list script with `--status open`
 - Displays:
+
   ```
   Found 12 open issues:
 
@@ -48,11 +65,13 @@ This skill searches locally cached GitHub issues with filtering capabilities.
 
 **User**: "Find bugs assigned to me"
 **Skill**:
+
 - Extracts: status=open, labels=bug, assignee=current-user
 - Shows filtered results
 
 **User**: "List high priority issues"
 **Skill**:
+
 - Searches for label="priority-high"
 - Returns matches
 
@@ -69,6 +88,7 @@ cd $PLUGIN_DIR
 ```
 
 Returns JSON array:
+
 ```json
 [
   {

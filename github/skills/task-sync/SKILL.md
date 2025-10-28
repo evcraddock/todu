@@ -5,6 +5,21 @@ description: Sync GitHub issues to local cache for faster access and offline rep
 
 # Sync GitHub Issues
 
+**⚠️ IMPORTANT: Always invoke this skill via the Skill tool for EVERY sync request.**
+
+Do NOT call `sync-issues.py` directly. This skill provides essential logic beyond just running the script:
+
+- Extracting repository from git remote automatically
+- Prompting for which repo to sync when ambiguous
+- Determining optimal sync strategy (full vs incremental)
+- Formatting sync results in user-friendly summary
+- Handling authentication errors gracefully
+- Reporting what changed (new, updated, deleted issues)
+
+Even if you've invoked this skill before in the conversation, you MUST invoke it again for each new sync request.
+
+---
+
 This skill downloads recent GitHub issues and stores them locally in normalized format.
 
 ## When to Use
@@ -36,12 +51,14 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
 
 **User**: "Sync my GitHub issues"
 **Skill**:
+
 - Detects repo from git remote: `owner/repo`
 - Calls sync script
 - Shows: "✅ Synced 45 issues (3 new, 2 updated) at 2025-10-27 14:30"
 
 **User**: "Update tasks"
 **Skill**:
+
 - Asks: "Which system? (GitHub, Forgejo, Todoist)"
 - User: "GitHub"
 - Syncs and reports results
@@ -56,6 +73,7 @@ cd $PLUGIN_DIR
 ```
 
 Returns JSON:
+
 ```json
 {
   "synced": 45,

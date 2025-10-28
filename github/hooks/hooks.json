@@ -1,6 +1,15 @@
 {
-  "sessionStart": {
-    "command": "bash",
-    "args": ["-c", "$PLUGIN_DIR/scripts/ensure-uv.sh"]
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["-c", "$PLUGIN_DIR/scripts/ensure-uv.sh"]
+          }
+        ]
+      }
+    ]
   }
 }
