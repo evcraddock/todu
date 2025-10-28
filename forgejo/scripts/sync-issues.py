@@ -18,12 +18,8 @@ import requests
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
 
 def get_forgejo_url(cwd=None):
-    """Get Forgejo base URL from environment variable or git remote in cwd."""
-    # First check environment variable
-    if os.environ.get('FORGEJO_URL'):
-        return os.environ['FORGEJO_URL'].rstrip('/')
-
-    # Try to extract from git remote in the specified directory (or current directory)
+    """Get Forgejo base URL from git remote in cwd or environment variable."""
+    # First try to extract from git remote in the current directory
     try:
         result = subprocess.run(
             ['git', 'remote', 'get-url', 'origin'],
@@ -48,9 +44,13 @@ def get_forgejo_url(cwd=None):
     except Exception:
         pass
 
+    # Fall back to environment variable
+    if os.environ.get('FORGEJO_URL'):
+        return os.environ['FORGEJO_URL'].rstrip('/')
+
     print(json.dumps({
-        "error": "FORGEJO_URL environment variable not set and could not detect from git remote",
-        "help": "Either set FORGEJO_URL or run from a git repository with a Forgejo remote"
+        "error": "Could not detect Forgejo URL from git remote and FORGEJO_URL not set",
+        "help": "Either run from a git repository with a Forgejo remote or set FORGEJO_URL"
     }), file=sys.stderr)
     sys.exit(1)
 
