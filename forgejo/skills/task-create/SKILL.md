@@ -67,8 +67,7 @@ This skill creates a Forgejo/Gitea issue with rich context from the current git 
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/create-issue.py \
+$PLUGIN_DIR/scripts/create-issue.py \
   --repo "owner/repo" \
   --title "Issue title" \
   --body "Issue description with git context" \

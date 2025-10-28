@@ -80,8 +80,7 @@ This skill searches locally cached Forgejo/Gitea issues with filtering capabilit
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/list-issues.py \
+$PLUGIN_DIR/scripts/list-issues.py \
   --repo "owner/repo" \
   --status "open" \
   --assignee "username" \

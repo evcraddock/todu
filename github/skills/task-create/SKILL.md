@@ -62,8 +62,7 @@ This skill creates a GitHub issue with rich context from the current git environ
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/create-issue.py \
+$PLUGIN_DIR/scripts/create-issue.py \
   --repo "owner/repo" \
   --title "Issue title" \
   --body "Issue description with git context" \

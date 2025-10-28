@@ -78,8 +78,7 @@ This skill searches locally cached GitHub issues with filtering capabilities.
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/list-issues.py \
+$PLUGIN_DIR/scripts/list-issues.py \
   --repo "owner/repo" \
   --status "open" \
   --assignee "username" \

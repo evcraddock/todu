@@ -104,18 +104,17 @@ This skill updates a GitHub issue's status, priority, or closes/cancels it.
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/update-issue.py \
+$PLUGIN_DIR/scripts/update-issue.py \
   --repo "owner/repo" \
   --issue 3 \
   --status in-progress \
   --priority high
 
 # Close issue
-./scripts/update-issue.py --repo "owner/repo" --issue 3 --close
+$PLUGIN_DIR/scripts/update-issue.py --repo "owner/repo" --issue 3 --close
 
 # Cancel issue
-./scripts/update-issue.py --repo "owner/repo" --issue 3 --cancel
+$PLUGIN_DIR/scripts/update-issue.py --repo "owner/repo" --issue 3 --cancel
 ```
 
 Returns JSON:

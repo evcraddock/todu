@@ -87,25 +87,23 @@ This skill searches Todoist tasks from local cache with rich filtering capabilit
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-
 # All tasks
-./scripts/list-tasks.py --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --format markdown
 
 # Filter by project
-./scripts/list-tasks.py --project-id "2203306141" --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --project-id "2203306141" --format markdown
 
 # Filter by status
-./scripts/list-tasks.py --status open --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --status open --format markdown
 
 # Filter by priority
-./scripts/list-tasks.py --priority high --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --priority high --format markdown
 
 # Filter by labels
-./scripts/list-tasks.py --labels "bug,urgent" --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --labels "bug,urgent" --format markdown
 
 # Combine filters
-./scripts/list-tasks.py --project-id "2203306141" --status open --priority high --format markdown
+$PLUGIN_DIR/scripts/list-tasks.py --project-id "2203306141" --status open --priority high --format markdown
 ```
 
 Returns JSON:

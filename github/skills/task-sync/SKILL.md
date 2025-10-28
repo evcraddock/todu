@@ -65,8 +65,7 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/sync-issues.py \
+$PLUGIN_DIR/scripts/sync-issues.py \
   --repo "owner/repo" \
   --since "2025-10-27T10:00:00Z"  # optional, for incremental sync
 ```

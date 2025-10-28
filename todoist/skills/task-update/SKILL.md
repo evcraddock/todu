@@ -96,25 +96,23 @@ This skill updates a Todoist task's status, priority, or completion state.
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-
 # Mark as completed
-./scripts/update-task.py --task-id "12345678" --complete
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --complete
 
 # Change status
-./scripts/update-task.py --task-id "12345678" --status "in-progress"
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --status "in-progress"
 
 # Change priority
-./scripts/update-task.py --task-id "12345678" --priority "high"
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --priority "high"
 
 # Close (marks as done)
-./scripts/update-task.py --task-id "12345678" --close
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --close
 
 # Cancel (marks as canceled and closes)
-./scripts/update-task.py --task-id "12345678" --cancel
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --cancel
 
 # Combine updates
-./scripts/update-task.py --task-id "12345678" --status "done" --priority "high" --complete
+$PLUGIN_DIR/scripts/update-task.py --task-id "12345678" --status "done" --priority "high" --complete
 ```
 
 Returns JSON:
@@ -139,17 +137,20 @@ Returns JSON:
 ## Valid Values
 
 **Status** (maps to labels, affects completion):
+
 - `backlog` - Task is backlogged
 - `in-progress` - Task is being worked on
 - `done` - Task is completed (completes the task)
 - `canceled` - Task is canceled (completes the task)
 
 **Priority** (maps to Todoist priority numbers):
+
 - `low` - Todoist priority 2 (medium)
 - `medium` - Todoist priority 3 (high)
 - `high` - Todoist priority 4 (urgent)
 
 **Completion Flags**:
+
 - `--complete` - Mark task as done
 - `--close` - Close task (defaults to done)
 - `--cancel` - Cancel task (sets status:canceled and closes)

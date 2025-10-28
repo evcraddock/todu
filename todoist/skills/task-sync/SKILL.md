@@ -74,16 +74,14 @@ This skill syncs Todoist tasks to local cache for offline searching and filterin
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-
 # Full sync (all active tasks)
-./scripts/sync-tasks.py
+$PLUGIN_DIR/scripts/sync-tasks.py
 
 # Project sync
-./scripts/sync-tasks.py --project-id "2203306141"
+$PLUGIN_DIR/scripts/sync-tasks.py --project-id "2203306141"
 
 # Single task sync
-./scripts/sync-tasks.py --task-id "12345678"
+$PLUGIN_DIR/scripts/sync-tasks.py --task-id "12345678"
 ```
 
 Returns JSON:

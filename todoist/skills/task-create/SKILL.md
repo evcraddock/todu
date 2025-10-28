@@ -70,7 +70,7 @@ This skill creates a Todoist task, optionally with git context from the current 
 - Prompts: "Due date? (natural language like 'tomorrow', 'next Monday')"
 - User: "tomorrow"
 - Creates task with specified details
-- Shows: "✅ Created task: https://todoist.com/app/task/12345678"
+- Shows: "✅ Created task: <https://todoist.com/app/task/12345678>"
 
 **User**: "Create a task for the bug I'm working on"
 **Skill**:
@@ -88,8 +88,7 @@ This skill creates a Todoist task, optionally with git context from the current 
 ## Script Interface
 
 ```bash
-cd $PLUGIN_DIR
-./scripts/create-task.py \
+$PLUGIN_DIR/scripts/create-task.py \
   --title "Task title" \
   --description "Task description (can include git context)" \
   --project-id "2203306141" \
@@ -120,7 +119,7 @@ Returns JSON:
 
 ## Environment Variables
 
-- `TODOIST_TOKEN` (required): Personal API token from https://todoist.com/app/settings/integrations/developer
+- `TODOIST_TOKEN` (required): Personal API token from <https://todoist.com/app/settings/integrations/developer>
 
 ## Notes
 
