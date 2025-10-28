@@ -17,16 +17,40 @@ import requests
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
 
-def get_forgejo_url():
-    """Get Forgejo base URL from environment variable."""
-    # FORGEJO_URL must be set as we can't reliably detect it from git remote
-    # (the script may be run from a different directory than the target repo)
+def get_forgejo_url(cwd=None):
+    """Get Forgejo base URL from environment variable or git remote in cwd."""
+    # First check environment variable
     if os.environ.get('FORGEJO_URL'):
         return os.environ['FORGEJO_URL'].rstrip('/')
 
+    # Try to extract from git remote in the specified directory (or current directory)
+    try:
+        result = subprocess.run(
+            ['git', 'remote', 'get-url', 'origin'],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=cwd
+        )
+        remote_url = result.stdout.strip()
+
+        # Parse URL to extract base domain
+        # Handle both SSH and HTTPS URLs
+        if remote_url.startswith('git@'):
+            # SSH format: git@forgejo.example.com:owner/repo.git
+            host = remote_url.split('@')[1].split(':')[0]
+            return f"https://{host}"
+        elif remote_url.startswith('http'):
+            # HTTPS format: https://forgejo.example.com/owner/repo.git
+            from urllib.parse import urlparse
+            parsed = urlparse(remote_url)
+            return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        pass
+
     print(json.dumps({
-        "error": "FORGEJO_URL environment variable is required",
-        "help": "Set it to your Forgejo instance URL, e.g.: export FORGEJO_URL=https://forgejo.example.com"
+        "error": "FORGEJO_URL environment variable not set and could not detect from git remote",
+        "help": "Either set FORGEJO_URL or run from a git repository with a Forgejo remote"
     }), file=sys.stderr)
     sys.exit(1)
 
