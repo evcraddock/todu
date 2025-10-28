@@ -1,0 +1,6 @@
+{
+  "sessionStart": {
+    "command": "bash",
+    "args": ["-c", "$PLUGIN_DIR/scripts/ensure-uv.sh"]
+  }
+}
