@@ -18,8 +18,8 @@ import requests
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
 
 def get_forgejo_url(cwd=None):
-    """Get Forgejo base URL from git remote in cwd or environment variable."""
-    # First try to extract from git remote in the current directory
+    """Get Forgejo base URL from git remote in cwd."""
+    # Try to extract from git remote in the current directory
     try:
         result = subprocess.run(
             ['git', 'remote', 'get-url', 'origin'],
@@ -35,22 +35,31 @@ def get_forgejo_url(cwd=None):
         if remote_url.startswith('git@'):
             # SSH format: git@forgejo.example.com:owner/repo.git
             host = remote_url.split('@')[1].split(':')[0]
-            return f"https://{host}"
+            base_url = f"https://{host}"
         elif remote_url.startswith('http'):
             # HTTPS format: https://forgejo.example.com/owner/repo.git
             from urllib.parse import urlparse
             parsed = urlparse(remote_url)
-            return f"{parsed.scheme}://{parsed.netloc}"
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            base_url = None
+
+        # Reject github.com
+        if base_url and 'github.com' in base_url:
+            print(json.dumps({
+                "error": "This appears to be a GitHub repository, not Forgejo",
+                "help": "Use the github plugin for GitHub repositories"
+            }), file=sys.stderr)
+            sys.exit(1)
+
+        if base_url:
+            return base_url
     except Exception:
         pass
 
-    # Fall back to environment variable
-    if os.environ.get('FORGEJO_URL'):
-        return os.environ['FORGEJO_URL'].rstrip('/')
-
     print(json.dumps({
-        "error": "Could not detect Forgejo URL from git remote and FORGEJO_URL not set",
-        "help": "Either run from a git repository with a Forgejo remote or set FORGEJO_URL"
+        "error": "Could not detect Forgejo URL from git remote",
+        "help": "Make sure you are in a git repository with a Forgejo remote"
     }), file=sys.stderr)
     sys.exit(1)
 
