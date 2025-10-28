@@ -13,6 +13,11 @@
       "name": "forgejo",
       "source": "./forgejo",
       "description": "Forgejo task management - create issues, sync, and search with rich git context"
+    },
+    {
+      "name": "todoist",
+      "source": "./todoist",
+      "description": "Todoist task management - create personal tasks, sync, and search with git context"
     }
   ]
 }
