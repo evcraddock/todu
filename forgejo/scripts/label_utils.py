@@ -23,7 +23,7 @@ def ensure_labels_exist(base_url, headers, repo_name, required_labels):
     """Ensure required labels exist in the repository, creating them if necessary.
 
     Args:
-        base_url: Forgejo base URL (e.g., "https://forgejo.caradoc.com")
+        base_url: Forgejo base URL (e.g., "https://forgejo.example.com")
         headers: Request headers with authorization
         repo_name: Repository in "owner/repo" format
         required_labels: List of label names to ensure exist
@@ -77,7 +77,7 @@ def get_label_ids(base_url, headers, repo_name, label_names):
     """Get label IDs from label names.
 
     Args:
-        base_url: Forgejo base URL (e.g., "https://forgejo.caradoc.com")
+        base_url: Forgejo base URL (e.g., "https://forgejo.example.com")
         headers: Request headers with authorization
         repo_name: Repository in "owner/repo" format
         label_names: List of label names to get IDs for

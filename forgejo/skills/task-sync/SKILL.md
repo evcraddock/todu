@@ -56,7 +56,7 @@ This skill downloads recent Forgejo/Gitea issues and stores them locally in norm
 **Skill**:
 
 - Detects repo from git remote: `owner/repo`
-- Detects Forgejo URL: `https://forgejo.caradoc.com`
+- Detects Forgejo URL: `https://forgejo.example.com`
 - Calls sync script
 - Shows: "✅ Synced 45 issues (3 new, 2 updated) at 2025-10-27 14:30"
 

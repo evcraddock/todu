@@ -129,7 +129,7 @@ Returns JSON:
   "title": "...",
   "status": "closed",
   "labels": ["status:done", "priority:high"],
-  "url": "https://forgejo.caradoc.com/owner/repo/issues/3"
+  "url": "https://forgejo.example.com/owner/repo/issues/3"
 }
 ```
 

@@ -98,7 +98,7 @@ Returns JSON array:
     "title": "Fix authentication timeout",
     "status": "open",
     "labels": ["bug", "priority-high"],
-    "url": "https://forgejo.caradoc.com/owner/repo/issues/156"
+    "url": "https://forgejo.example.com/owner/repo/issues/156"
   }
 ]
 ```

@@ -39,11 +39,11 @@ def get_forgejo_url():
         # Parse URL to extract base domain
         # Handle both SSH and HTTPS URLs
         if remote_url.startswith('git@'):
-            # SSH format: git@forgejo.caradoc.com:owner/repo.git
+            # SSH format: git@forgejo.example.com:owner/repo.git
             host = remote_url.split('@')[1].split(':')[0]
             return f"https://{host}"
         elif remote_url.startswith('http'):
-            # HTTPS format: https://forgejo.caradoc.com/owner/repo.git
+            # HTTPS format: https://forgejo.example.com/owner/repo.git
             from urllib.parse import urlparse
             parsed = urlparse(remote_url)
             return f"{parsed.scheme}://{parsed.netloc}"

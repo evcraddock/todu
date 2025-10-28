@@ -62,7 +62,7 @@ This skill creates a Forgejo/Gitea issue with rich context from the current git 
 - User: "Users getting timeout on password reset"
 - Prompts: "Any additional description?"
 - Creates issue with git context in body
-- Shows: "✅ Created issue #123: <https://forgejo.caradoc.com/owner/repo/issues/123>"
+- Shows: "✅ Created issue #123: <https://forgejo.example.com/owner/repo/issues/123>"
 
 ## Script Interface
 
@@ -82,7 +82,7 @@ Returns JSON:
   "id": "123",
   "system": "forgejo",
   "title": "...",
-  "url": "https://forgejo.caradoc.com/owner/repo/issues/123",
+  "url": "https://forgejo.example.com/owner/repo/issues/123",
   "status": "open"
 }
 ```
