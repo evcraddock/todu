@@ -1,0 +1,8 @@
+{
+  "name": "todoist",
+  "description": "Todoist task management - create personal tasks, sync, and search with git context",
+  "version": "0.1.0",
+  "author": {
+    "name": "Erik Craddock"
+  }
+}
