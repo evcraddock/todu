@@ -106,8 +106,13 @@ The plugin includes Python scripts with PEP 723 inline dependencies:
 Scripts can be run manually if needed:
 
 ```bash
-cd forgejo
-./scripts/create-issue.py --repo owner/name --title "Bug fix" --body "Description"
+# Using absolute path
+~/.claude/plugins/marketplaces/todu/forgejo/scripts/create-issue.py \
+  --repo owner/name --title "Bug fix" --body "Description"
+
+# Using relative path (from todu project root)
+./forgejo/scripts/create-issue.py \
+  --repo owner/name --title "Bug fix" --body "Description"
 ```
 
 ## Troubleshooting

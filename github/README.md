@@ -89,8 +89,13 @@ The plugin includes Python scripts with PEP 723 inline dependencies:
 Scripts can be run manually if needed:
 
 ```bash
-cd github
-./scripts/create-issue.py --repo owner/name --title "Bug fix" --body "Description"
+# Using absolute path
+~/.claude/plugins/marketplaces/todu/github/scripts/create-issue.py \
+  --repo owner/name --title "Bug fix" --body "Description"
+
+# Using relative path (from todu project root)
+./github/scripts/create-issue.py \
+  --repo owner/name --title "Bug fix" --body "Description"
 ```
 
 ## Troubleshooting
