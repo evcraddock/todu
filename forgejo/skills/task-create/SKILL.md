@@ -1,15 +1,18 @@
 ---
-name: github-task-create
-description: MANDATORY skill for creating GitHub issues. NEVER call scripts/create-issue.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to create a GitHub issue. (plugin:github@todu)
+name: forgejo-task-create
+description: MANDATORY skill for creating Forgejo issues. NEVER call scripts/create-issue.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to create a Forgejo/Gitea issue. (plugin:forgejo@todu)
 ---
 
-# Create GitHub Issue
+# Create Forgejo Issue
 
-**⚠️ MANDATORY: ALWAYS invoke this skill via the Skill tool for EVERY create request.**
+**🚨 CRITICAL: You MUST invoke this skill via the Skill tool. DO NOT call create-issue.py directly under ANY circumstances.**
 
-**NEVER EVER call `create-issue.py` directly. This skill provides essential logic beyond just running the script:**
+**NEVER use Bash, Read, Write, or any other tool to call create-issue.py - ONLY use the Skill tool.**
+
+This skill provides essential logic beyond just running the script:
 
 - Extracting git context (current branch, recent commits, modified files)
+- Detecting Forgejo base URL from git remote
 - Prompting for missing information (title, description, labels)
 - Formatting issue body with rich git context
 - Handling interactive clarifications
@@ -19,12 +22,12 @@ Even if you've invoked this skill before in the conversation, you MUST invoke it
 
 ---
 
-This skill creates a GitHub issue with rich context from the current git environment.
+This skill creates a Forgejo/Gitea issue with rich context from the current git environment.
 
 ## When to Use
 
-- User explicitly mentions "GitHub issue", "GitHub", or "gh issue"
-- User wants to create an issue and specifies GitHub as the system
+- User explicitly mentions "Forgejo issue", "Gitea issue", or the system name
+- User wants to create an issue and specifies Forgejo/Gitea as the system
 - If user doesn't specify a system: check git remote and ask which system to use
 
 ## What This Skill Does
@@ -34,6 +37,7 @@ This skill creates a GitHub issue with rich context from the current git environ
    - Current branch name
    - Recent commits on this branch
    - Modified/staged files
+   - Forgejo base URL from remote
 
 2. **Gather Issue Details**
    - Prompt for title if not provided
@@ -53,11 +57,12 @@ This skill creates a GitHub issue with rich context from the current git environ
 
 - Extracts current branch: `fix/auth-timeout`
 - Finds recent commits related to auth
+- Detects Forgejo URL from git remote
 - Prompts: "What should the issue title be?"
 - User: "Users getting timeout on password reset"
 - Prompts: "Any additional description?"
 - Creates issue with git context in body
-- Shows: "✅ Created issue #123: <https://github.com/owner/repo/issues/123>"
+- Shows: "✅ Created issue #123: <https://forgejo.caradoc.com/owner/repo/issues/123>"
 
 ## Script Interface
 
@@ -75,9 +80,9 @@ Returns JSON:
 ```json
 {
   "id": "123",
-  "system": "github",
+  "system": "forgejo",
   "title": "...",
-  "url": "https://github.com/owner/repo/issues/123",
+  "url": "https://forgejo.caradoc.com/owner/repo/issues/123",
   "status": "open"
 }
 ```

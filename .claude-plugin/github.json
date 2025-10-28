@@ -1,0 +1,5 @@
+{
+  "name": "github",
+  "source": "./github",
+  "description": "GitHub task management - create issues, sync, and search with rich git context"
+}

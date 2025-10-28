@@ -1,13 +1,15 @@
 ---
-name: github-task-search
-description: MANDATORY skill for searching GitHub issues. NEVER call scripts/list-issues.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to find, list, show, or search GitHub issues. (plugin:github@todu)
+name: forgejo-task-search
+description: MANDATORY skill for searching Forgejo issues. NEVER call scripts/list-issues.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to search Forgejo/Gitea issues. (plugin:forgejo@todu)
 ---
 
-# Search GitHub Issues
+# Search Forgejo Issues
 
-**⚠️ MANDATORY: ALWAYS invoke this skill via the Skill tool for EVERY search request.**
+**🚨 CRITICAL: You MUST invoke this skill via the Skill tool. DO NOT call list-issues.py directly under ANY circumstances.**
 
-**NEVER EVER call `list-issues.py` directly. This skill provides essential logic beyond just running the script:**
+**NEVER use Bash, Read, Write, or any other tool to call list-issues.py - ONLY use the Skill tool.**
+
+This skill provides essential logic beyond just running the script:
 
 - Parsing natural language search criteria from user query
 - Prompting for clarification when filters are ambiguous
@@ -20,12 +22,12 @@ Even if you've invoked this skill before in the conversation, you MUST invoke it
 
 ---
 
-This skill searches locally cached GitHub issues with filtering capabilities.
+This skill searches locally cached Forgejo/Gitea issues with filtering capabilities.
 
 ## When to Use
 
-- User explicitly mentions searching/listing/finding GitHub issues
-- User wants to search and specifies GitHub as the system
+- User explicitly mentions searching/listing/finding Forgejo/Gitea issues
+- User wants to search and specifies Forgejo/Gitea as the system
 - If user doesn't specify a system: check git remote and ask which system to search
 - Fast queries without hitting API (reads from local cache)
 
@@ -38,7 +40,7 @@ This skill searches locally cached GitHub issues with filtering capabilities.
 
 2. **Search Local Cache**
    - Call `$PLUGIN_DIR/scripts/list-issues.py` with filters
-   - Script reads from `~/.local/todu/github/issues/`
+   - Script reads from `~/.local/todu/forgejo/issues/`
    - Returns matching issues in requested format
 
 3. **Display Results**
@@ -96,7 +98,7 @@ Returns JSON array:
     "title": "Fix authentication timeout",
     "status": "open",
     "labels": ["bug", "priority-high"],
-    "url": "https://github.com/owner/repo/issues/156"
+    "url": "https://forgejo.caradoc.com/owner/repo/issues/156"
   }
 ]
 ```
@@ -104,5 +106,5 @@ Returns JSON array:
 ## Notes
 
 - If cache is empty or stale, suggest running sync first
-- Cache location: `~/.local/todu/github/issues/`
+- Cache location: `~/.local/todu/forgejo/issues/`
 - No API calls = fast and works offline

@@ -1,0 +1,8 @@
+{
+  "name": "forgejo",
+  "description": "Forgejo/Gitea task management - create issues, sync, and search with rich git context",
+  "version": "0.1.0",
+  "author": {
+    "name": "Erik Craddock"
+  }
+}

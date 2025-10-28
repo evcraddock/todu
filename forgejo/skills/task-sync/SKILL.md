@@ -1,15 +1,18 @@
 ---
-name: github-task-sync
-description: MANDATORY skill for syncing GitHub issues. NEVER call scripts/sync-issues.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to sync GitHub issues. (plugin:github@todu)
+name: forgejo-task-sync
+description: MANDATORY skill for syncing Forgejo issues. NEVER call scripts/sync-issues.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to sync Forgejo/Gitea issues. (plugin:forgejo@todu)
 ---
 
-# Sync GitHub Issues
+# Sync Forgejo Issues
 
-**⚠️ MANDATORY: ALWAYS invoke this skill via the Skill tool for EVERY sync request.**
+**🚨 CRITICAL: You MUST invoke this skill via the Skill tool. DO NOT call sync-issues.py directly under ANY circumstances.**
 
-**NEVER EVER call `sync-issues.py` directly. This skill provides essential logic beyond just running the script:**
+**NEVER use Bash, Read, Write, or any other tool to call sync-issues.py - ONLY use the Skill tool.**
+
+This skill provides essential logic beyond just running the script:
 
 - Extracting repository from git remote automatically
+- Detecting Forgejo base URL from git remote
 - Prompting for which repo to sync when ambiguous
 - Determining optimal sync strategy (full vs incremental)
 - Formatting sync results in user-friendly summary
@@ -20,12 +23,12 @@ Even if you've invoked this skill before in the conversation, you MUST invoke it
 
 ---
 
-This skill downloads recent GitHub issues and stores them locally in normalized format.
+This skill downloads recent Forgejo/Gitea issues and stores them locally in normalized format.
 
 ## When to Use
 
-- User explicitly mentions syncing/updating GitHub issues or tasks
-- User wants to sync and specifies GitHub as the system
+- User explicitly mentions syncing/updating Forgejo/Gitea issues or tasks
+- User wants to sync and specifies Forgejo/Gitea as the system
 - If user doesn't specify a system: check git remote and ask which system to sync
 
 ## What This Skill Does
@@ -33,13 +36,14 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
 1. **Determine Repository**
    - Extract repo from current git remote, OR
    - Ask user which repository to sync
+   - Detect Forgejo base URL from git remote
 
 2. **Sync Issues**
    - Call `$PLUGIN_DIR/scripts/sync-issues.py` with repo info
-   - Script fetches issues from GitHub API
+   - Script fetches issues from Forgejo API
    - Normalizes to standard JSON format
-   - Saves to `~/.local/todu/github/issues/{id}.json`
-   - Updates `~/.local/todu/github/sync.json` with timestamp
+   - Saves to `~/.local/todu/forgejo/issues/{id}.json`
+   - Updates `~/.local/todu/forgejo/sync.json` with timestamp
 
 3. **Report Results**
    - Show how many issues were synced
@@ -48,10 +52,11 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
 
 ## Example Interactions
 
-**User**: "Sync my GitHub issues"
+**User**: "Sync my Forgejo issues"
 **Skill**:
 
 - Detects repo from git remote: `owner/repo`
+- Detects Forgejo URL: `https://forgejo.caradoc.com`
 - Calls sync script
 - Shows: "✅ Synced 45 issues (3 new, 2 updated) at 2025-10-27 14:30"
 
@@ -59,7 +64,7 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
 **Skill**:
 
 - Asks: "Which system? (GitHub, Forgejo, Todoist)"
-- User: "GitHub"
+- User: "Forgejo"
 - Syncs and reports results
 
 ## Script Interface

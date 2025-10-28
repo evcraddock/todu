@@ -53,6 +53,10 @@ def sync_issues(repo_name, since=None, issue_number=None):
         issues_dir = CACHE_DIR / "issues"
         issues_dir.mkdir(parents=True, exist_ok=True)
 
+        # Use repo name prefix in filename to avoid conflicts
+        # Replace '/' with '_' for valid filename
+        repo_prefix = repo_name.replace('/', '_')
+
         # Fetch issues based on mode
         if issue_number:
             # Single issue mode
@@ -79,7 +83,8 @@ def sync_issues(repo_name, since=None, issue_number=None):
             if issue.pull_request:
                 continue
 
-            issue_file = issues_dir / f"{issue.number}.json"
+            # Use repo prefix in filename to avoid conflicts between repos
+            issue_file = issues_dir / f"{repo_prefix}-{issue.number}.json"
             is_new = not issue_file.exists()
 
             # Save normalized issue

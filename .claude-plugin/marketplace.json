@@ -8,6 +8,11 @@
       "name": "github",
       "source": "./github",
       "description": "GitHub task management - create issues, sync, and search with rich git context"
+    },
+    {
+      "name": "forgejo",
+      "source": "./forgejo",
+      "description": "Forgejo task management - create issues, sync, and search with rich git context"
     }
   ]
 }

@@ -1,13 +1,15 @@
 ---
-name: github-task-update
-description: MANDATORY skill for updating GitHub issues. NEVER call scripts/update-issue.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to update a GitHub issue. (plugin:github@todu)
+name: forgejo-task-update
+description: MANDATORY skill for updating Forgejo issues. NEVER call scripts/update-issue.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to update a Forgejo/Gitea issue. (plugin:forgejo@todu)
 ---
 
-# Update GitHub Issue
+# Update Forgejo Issue
 
-**⚠️ MANDATORY: ALWAYS invoke this skill via the Skill tool for EVERY update request.**
+**🚨 CRITICAL: You MUST invoke this skill via the Skill tool. DO NOT call update-issue.py directly under ANY circumstances.**
 
-**NEVER EVER call `update-issue.py` directly. This skill provides essential logic beyond just running the script:**
+**NEVER use Bash, Read, Write, or any other tool to call update-issue.py - ONLY use the Skill tool.**
+
+This skill provides essential logic beyond just running the script:
 
 - Identifying which issue to update (searching if user doesn't provide number)
 - Prompting for missing information (what to update, with what value)
@@ -20,12 +22,12 @@ Even if you've invoked this skill before in the conversation, you MUST invoke it
 
 ---
 
-This skill updates a GitHub issue's status, priority, or closes/cancels it.
+This skill updates a Forgejo/Gitea issue's status, priority, or closes/cancels it.
 
 ## When to Use
 
-- User explicitly mentions updating a GitHub issue
-- User wants to update and specifies GitHub as the system
+- User explicitly mentions updating a Forgejo/Gitea issue
+- User wants to update and specifies Forgejo/Gitea as the system
 - If user doesn't specify a system: check git remote and ask which system to use
 
 ## What This Skill Does
@@ -123,19 +125,19 @@ Returns JSON:
 ```json
 {
   "id": "3",
-  "system": "github",
+  "system": "forgejo",
   "title": "...",
   "status": "closed",
   "labels": ["status:done", "priority:high"],
-  "url": "https://github.com/owner/repo/issues/3"
+  "url": "https://forgejo.caradoc.com/owner/repo/issues/3"
 }
 ```
 
 ## Notes
 
-- Status and priority are managed via GitHub labels (`status:*`, `priority:*`)
+- Status and priority are managed via Forgejo labels (`status:*`, `priority:*`)
 - Only one status label and one priority label at a time
 - `--close` sets `status:done` and closes the issue
 - `--cancel` sets `status:canceled` and closes the issue
 - Updated issue is automatically synced to local cache
-- Labels are visible in GitHub UI and searchable
+- Labels are visible in Forgejo UI and searchable
