@@ -5,9 +5,11 @@ Personal task management with Todoist integration for Claude Code. Create, sync,
 ## Features
 
 - **Create Tasks**: Create Todoist tasks with optional git context (branch, commits, files)
+- **View Tasks**: Display detailed task information with all comments
+- **Add Comments**: Comment on existing tasks
+- **Update Tasks**: Update task status, priority, or mark as complete/canceled
 - **Sync Tasks**: Sync tasks to local cache for fast, offline searching
 - **Search Tasks**: Search cached tasks with filters (project, status, priority, labels)
-- **Update Tasks**: Update task status, priority, or mark as complete/canceled
 - **Normalized Format**: Consistent JSON format across all task systems (GitHub, Forgejo, Todoist)
 
 ## Installation
@@ -61,6 +63,35 @@ Claude: [Extracts git context: branch, commits, files]
   Priority: high
   Due: tomorrow
 ✅ Created: https://todoist.com/app/task/12345678
+```
+
+### View a Task
+
+```text
+User: "Show me task 12345678"
+Claude: [Invokes todoist-task-view skill]
+  **Complete authentication timeout fix**
+  Description: Branch: fix/auth-timeout...
+  Project: Work
+  Priority: high
+  Status: open
+  Due: 2025-10-29
+
+  Comments (2):
+  - alice (2025-10-28): Started working on this
+  - bob (2025-10-28): Found the root cause
+
+  URL: https://todoist.com/app/task/12345678
+```
+
+### Add a Comment
+
+```text
+User: "Add a comment to task 12345678 saying the fix is deployed"
+Claude: [Invokes todoist-task-comment-create skill]
+  - Prompts for comment text if not provided
+  - Posts comment to the task
+✅ Comment added to task 12345678
 ```
 
 ### Sync Tasks
@@ -132,12 +163,14 @@ Claude: [Searches for "code review"]
 
 ## Skills
 
-The plugin provides four skills that Claude Code automatically invokes:
+The plugin provides six skills that Claude Code automatically invokes:
 
 - **todoist-task-create**: Create personal tasks with optional git context
+- **todoist-task-view**: View task details with all comments
+- **todoist-task-comment-create**: Add comments to tasks
+- **todoist-task-update**: Update task status, priority, or completion
 - **todoist-task-sync**: Sync tasks to local cache
 - **todoist-task-search**: Search cached tasks with filters
-- **todoist-task-update**: Update task status, priority, or completion
 
 Skills are invoked automatically based on user intent. You never need to call them directly.
 
@@ -298,19 +331,27 @@ Normal usage stays well within these limits. Background syncs happen automatical
    User: "Create a task for the auth bug I'm working on"
    Claude: [Extracts branch, commits] Creates task with context
 
-2. Sync all tasks:
+2. View the task details:
+   User: "Show me task 12345678"
+   Claude: [Displays full task with comments]
+
+3. Add a comment:
+   User: "Add a comment that I found the root cause"
+   Claude: ✅ Comment added to task 12345678
+
+4. Sync all tasks:
    User: "Sync my Todoist"
    Claude: ✅ Synced 42 tasks
 
-3. Search for specific tasks:
+5. Search for specific tasks:
    User: "Show me high priority tasks"
    Claude: [Lists 3 high priority tasks]
 
-4. Update a task:
+6. Update a task:
    User: "Mark task 12345678 as done"
    Claude: ✅ Task completed
 
-5. Search again:
+7. Search again:
    User: "Show open tasks"
    Claude: [Lists remaining open tasks]
 ```

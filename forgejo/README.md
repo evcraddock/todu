@@ -5,9 +5,11 @@ Claude Code plugin for managing Forgejo/Gitea issues with rich git context.
 ## Features
 
 - **Create Issues**: Automatically include current branch, commits, and file context
+- **View Issues**: Display detailed issue information with all comments
+- **Add Comments**: Comment on existing issues
+- **Update Issues**: Change status, priority, or close issues
 - **Sync Issues**: Cache issues locally for fast access
 - **Search Issues**: Query cached issues without API calls
-- **Update Issues**: Change status, priority, or close issues
 
 ## Installation
 
@@ -36,7 +38,7 @@ Claude Code plugin for managing Forgejo/Gitea issues with rich git context.
 
 ## Usage
 
-The plugin provides four autonomous skills that Claude invokes based on context:
+The plugin provides autonomous skills that Claude invokes based on context:
 
 ### Create an Issue
 
@@ -50,6 +52,31 @@ Claude will:
 - Prompt for title and description
 - Ask about labels
 - Create the issue with git context
+
+### View an Issue
+
+```text
+User: "Show me issue #42"
+```
+
+Claude will:
+
+- Fetch issue details from Forgejo
+- Display title, description, status, and labels
+- Show all comments with authors and timestamps
+- Include direct link to issue
+
+### Add a Comment
+
+```text
+User: "Add a comment to issue #42 saying the fix is deployed"
+```
+
+Claude will:
+
+- Prompt for comment text if not provided
+- Post comment to the issue
+- Display confirmation with comment URL
 
 ### Sync Issues
 
@@ -99,9 +126,11 @@ Format: Normalized JSON (same across GitHub, Forgejo, Todoist plugins)
 The plugin includes Python scripts with PEP 723 inline dependencies:
 
 - `scripts/create-issue.py` - Create Forgejo issue
+- `scripts/view-issue.py` - View issue details with comments
+- `scripts/create-comment.py` - Add comment to issue
+- `scripts/update-issue.py` - Update issue status/priority
 - `scripts/sync-issues.py` - Sync issues to cache
 - `scripts/list-issues.py` - Query cached issues
-- `scripts/update-issue.py` - Update issue status/priority
 
 Scripts can be run manually if needed:
 

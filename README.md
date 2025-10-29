@@ -36,6 +36,9 @@ Install one or more plugins based on your needs:
 Manage GitHub issues with rich git context including branches, commits, and file changes.
 
 - Create issues with automatic context extraction
+- View issues with full details and comments
+- Add comments to issues
+- Update issue status and priority
 - Sync issues to local cache
 - Search and filter cached issues
 
@@ -53,9 +56,14 @@ Create a token at: <https://github.com/settings/tokens>
 
 Manage Forgejo/Gitea issues with the same capabilities as GitHub.
 
+- Create issues with automatic context extraction
+- View issues with full details and comments
+- Add comments to issues
+- Update issue status and priority
+- Sync issues to local cache
+- Search and filter cached issues
 - Works with self-hosted Forgejo and Gitea instances
 - Automatically detects Forgejo remotes
-- Uses `fj` CLI for API interactions
 
 **Authentication:**
 
@@ -71,10 +79,14 @@ Also install the `fj` CLI: <https://code.forgejo.org/forgejo/cli>
 
 Manage personal tasks in Todoist with priority and status tracking.
 
-- Create and update tasks
+- Create tasks with optional git context
+- View tasks with full details and comments
+- Add comments to tasks
+- Update task status and priority
 - Priority mapping (low/medium/high)
 - Status tracking via labels (open, in-progress, done, canceled)
 - Sync tasks to local cache
+- Search and filter cached tasks
 
 **Authentication:**
 
@@ -101,6 +113,29 @@ All plugins provide autonomous skills that Claude invokes automatically based on
 
 # Personal task
 "Create a Todoist task to research meditation"
+```
+
+### Viewing Tasks
+
+```text
+"Show me GitHub issue #42"
+"View Todoist task 12345678"
+"Display Forgejo issue #5 with comments"
+```
+
+### Adding Comments
+
+```text
+"Add a comment to issue #42 saying the fix is deployed"
+"Comment on task 12345678 with my progress update"
+```
+
+### Updating Tasks
+
+```text
+"Close issue #42"
+"Mark Todoist task 12345678 as high priority"
+"Set Forgejo issue #5 to in-progress"
 ```
 
 ### Syncing Tasks
