@@ -37,7 +37,11 @@ def get_forgejo_url():
 
         # Parse URL to extract base domain
         # Handle both SSH and HTTPS URLs
-        if remote_url.startswith('git@'):
+        if remote_url.startswith('ssh://git@'):
+            # SSH format: ssh://git@forgejo.example.com/owner/repo.git
+            host = remote_url.replace('ssh://git@', '').split('/')[0]
+            return f"https://{host}"
+        elif remote_url.startswith('git@'):
             # SSH format: git@forgejo.example.com:owner/repo.git
             host = remote_url.split('@')[1].split(':')[0]
             return f"https://{host}"
@@ -148,6 +152,18 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
         response.raise_for_status()
         issue = response.json()
 
+        # Extract status from status:* label, fallback to state
+        labels = [label['name'] for label in issue.get('labels', [])]
+        status_value = None
+        for label in labels:
+            if label.startswith('status:'):
+                status_value = label.split(':', 1)[1]
+                break
+
+        # If no status label, derive from Forgejo state
+        if not status_value:
+            status_value = "open" if issue['state'] == "open" else "closed"
+
         # Return normalized format
         result = {
             "id": str(issue['number']),
@@ -155,11 +171,11 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
             "type": "issue",
             "title": issue['title'],
             "description": issue['body'] or "",
-            "status": "open" if issue['state'] == "open" else "closed",
+            "status": status_value,
             "url": issue['html_url'],
             "createdAt": issue['created_at'],
             "updatedAt": issue['updated_at'],
-            "labels": [label['name'] for label in issue.get('labels', [])],
+            "labels": labels,
             "assignees": [assignee['login'] for assignee in (issue.get('assignees') or [])],
             "systemData": {
                 "repo": repo_name,

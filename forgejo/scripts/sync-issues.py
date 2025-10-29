@@ -32,7 +32,11 @@ def get_forgejo_url(cwd=None):
 
         # Parse URL to extract base domain
         # Handle both SSH and HTTPS URLs
-        if remote_url.startswith('git@'):
+        if remote_url.startswith('ssh://git@'):
+            # SSH format: ssh://git@forgejo.example.com/owner/repo.git
+            host = remote_url.replace('ssh://git@', '').split('/')[0]
+            base_url = f"https://{host}"
+        elif remote_url.startswith('git@'):
             # SSH format: git@forgejo.example.com:owner/repo.git
             host = remote_url.split('@')[1].split(':')[0]
             base_url = f"https://{host}"
@@ -65,17 +69,29 @@ def get_forgejo_url(cwd=None):
 
 def normalize_issue(issue, repo_name):
     """Convert Forgejo issue to normalized format."""
+    # Extract status from status:* label, fallback to state
+    labels = [label['name'] for label in issue.get('labels', [])]
+    status = None
+    for label in labels:
+        if label.startswith('status:'):
+            status = label.split(':', 1)[1]
+            break
+
+    # If no status label, derive from Forgejo state
+    if not status:
+        status = "open" if issue['state'] == "open" else "closed"
+
     return {
         "id": str(issue['number']),
         "system": "forgejo",
         "type": "issue",
         "title": issue['title'],
         "description": issue['body'] or "",
-        "status": "open" if issue['state'] == "open" else "closed",
+        "status": status,
         "url": issue['html_url'],
         "createdAt": issue['created_at'],
         "updatedAt": issue['updated_at'],
-        "labels": [label['name'] for label in issue.get('labels', [])],
+        "labels": labels,
         "assignees": [assignee['login'] for assignee in (issue.get('assignees') or [])],
         "systemData": {
             "repo": repo_name,
