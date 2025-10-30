@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PLUGIN_DIR/scripts/ensure-uv.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-uv.sh",
             "args": []
           }
         ]
