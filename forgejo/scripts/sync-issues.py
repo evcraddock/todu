@@ -81,7 +81,23 @@ def normalize_issue(issue, repo_name):
     if not status:
         status = "open" if issue['state'] == "open" else "closed"
 
-    return {
+    # Add completedAt timestamp for completed issues (NOT canceled)
+    completed_at = None
+    if status in ["closed", "done"]:
+        # Use closed_at if available, otherwise fall back to updated_at
+        if issue.get('closed_at'):
+            completed_at = issue['closed_at']
+        else:
+            completed_at = issue['updated_at']
+
+    # Extract standardized priority from labels
+    priority = None
+    for label in labels:
+        if label.startswith("priority:"):
+            priority = label.split(":", 1)[1]
+            break
+
+    normalized = {
         "id": str(issue['number']),
         "system": "forgejo",
         "type": "issue",
@@ -93,6 +109,8 @@ def normalize_issue(issue, repo_name):
         "updatedAt": issue['updated_at'],
         "labels": labels,
         "assignees": [assignee['login'] for assignee in (issue.get('assignees') or [])],
+        "priority": priority,  # Standardized priority field
+        "dueDate": None,  # Forgejo issues don't have due dates
         "systemData": {
             "repo": repo_name,
             "number": issue['number'],
@@ -101,14 +119,21 @@ def normalize_issue(issue, repo_name):
         }
     }
 
-def sync_issues(repo_name, since=None, issue_number=None):
+    # Only include completedAt if the issue is completed
+    if completed_at:
+        normalized["completedAt"] = completed_at
+
+    return normalized
+
+def sync_issues(repo_name, since=None, issue_number=None, base_url=None):
     """Sync Forgejo issues to local cache."""
     token = os.environ.get('FORGEJO_TOKEN')
     if not token:
         print(json.dumps({"error": "FORGEJO_TOKEN environment variable not set"}), file=sys.stderr)
         sys.exit(1)
 
-    base_url = get_forgejo_url()
+    if not base_url:
+        base_url = get_forgejo_url()
 
     try:
         headers = {
@@ -239,6 +264,7 @@ def main():
     parser.add_argument('--repo', required=True, help='Repository in owner/name format')
     parser.add_argument('--since', help='ISO timestamp to fetch issues since')
     parser.add_argument('--issue', type=int, help='Sync specific issue number')
+    parser.add_argument('--base-url', help='Forgejo base URL (e.g., https://forgejo.example.com)')
 
     args = parser.parse_args()
 
@@ -248,7 +274,7 @@ def main():
 
     since = datetime.fromisoformat(args.since.replace('Z', '+00:00')) if args.since else None
 
-    return sync_issues(args.repo, since, args.issue)
+    return sync_issues(args.repo, since, args.issue, args.base_url)
 
 if __name__ == '__main__':
     sys.exit(main())

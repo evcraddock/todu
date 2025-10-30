@@ -63,7 +63,25 @@ def normalize_task(task):
         elif "status:backlog" in task_labels:
             status = "backlog"
 
-    return {
+    # Add completedAt timestamp for completed tasks
+    completed_at = None
+    if status in ["done", "canceled"]:
+        # Use completed_at if available, otherwise fall back to updated_at
+        if hasattr(task, 'completed_at') and task.completed_at:
+            completed_at = task.completed_at.isoformat() if hasattr(task.completed_at, 'isoformat') else str(task.completed_at)
+        else:
+            completed_at = updated_at
+
+    # Standardized priority field
+    priority_value = None
+    if task.priority == 4:
+        priority_value = "high"
+    elif task.priority == 3:
+        priority_value = "medium"
+    elif task.priority == 2:
+        priority_value = "low"
+
+    normalized = {
         "id": task.id,
         "system": "todoist",
         "type": "task",
@@ -75,6 +93,8 @@ def normalize_task(task):
         "updatedAt": updated_at,
         "labels": task_labels,
         "assignees": [],  # Todoist tasks are personal
+        "priority": priority_value,  # Standardized priority field
+        "dueDate": due_date,  # Standardized due date field
         "systemData": {
             "project_id": task.project_id,
             "priority": task.priority,
@@ -82,6 +102,12 @@ def normalize_task(task):
             "is_completed": task.is_completed
         }
     }
+
+    # Only include completedAt if the task is completed
+    if completed_at:
+        normalized["completedAt"] = completed_at
+
+    return normalized
 
 def sync_tasks(project_id=None, task_id=None):
     """Sync Todoist tasks to local cache."""

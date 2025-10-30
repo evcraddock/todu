@@ -18,18 +18,50 @@ CACHE_DIR = Path.home() / ".local" / "todu" / "github"
 
 def normalize_issue(issue, repo_name):
     """Convert GitHub issue to normalized format."""
-    return {
+    # Extract label names first
+    label_names = [label.name for label in issue.labels]
+
+    # Extract standardized status from labels
+    status = None
+    for label in label_names:
+        if label.startswith("status:"):
+            status = label.split(":", 1)[1]
+            break
+
+    # Fall back to GitHub state if no status label
+    if not status:
+        status = "open" if issue.state == "open" else "closed"
+
+    # Add completedAt timestamp for completed issues (NOT canceled)
+    completed_at = None
+    if issue.state == "closed" and status not in ["canceled"]:
+        # Use closed_at if available, otherwise fall back to updated_at
+        if hasattr(issue, 'closed_at') and issue.closed_at:
+            completed_at = issue.closed_at.isoformat()
+        else:
+            completed_at = issue.updated_at.isoformat()
+
+    # Extract standardized priority from labels
+    priority = None
+    for label in label_names:
+        if label.startswith("priority:"):
+            priority = label.split(":", 1)[1]
+            break
+
+    normalized = {
         "id": str(issue.number),
         "system": "github",
         "type": "issue",
         "title": issue.title,
         "description": issue.body or "",
-        "status": "open" if issue.state == "open" else "closed",
+        "status": status,
         "url": issue.html_url,
         "createdAt": issue.created_at.isoformat(),
         "updatedAt": issue.updated_at.isoformat(),
-        "labels": [label.name for label in issue.labels],
+        "labels": label_names,
         "assignees": [assignee.login for assignee in issue.assignees],
+        "priority": priority,  # Standardized priority field
+        "dueDate": None,  # GitHub issues don't have due dates
         "systemData": {
             "repo": repo_name,
             "number": issue.number,
@@ -37,6 +69,12 @@ def normalize_issue(issue, repo_name):
             "state_reason": getattr(issue, 'state_reason', None)
         }
     }
+
+    # Only include completedAt if the issue is closed
+    if completed_at:
+        normalized["completedAt"] = completed_at
+
+    return normalized
 
 def sync_issues(repo_name, since=None, issue_number=None):
     """Sync GitHub issues to local cache."""

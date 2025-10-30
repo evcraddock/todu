@@ -1,0 +1,8 @@
+{
+  "name": "core",
+  "description": "Core todu functionality - generate daily and weekly reports across all task systems",
+  "version": "0.1.0",
+  "author": {
+    "name": "Erik Craddock"
+  }
+}

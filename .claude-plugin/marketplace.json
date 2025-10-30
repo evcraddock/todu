@@ -18,6 +18,11 @@
       "name": "todoist",
       "source": "./todoist",
       "description": "Todoist task management - create personal tasks, sync, and search with git context"
+    },
+    {
+      "name": "core",
+      "source": "./core",
+      "description": "Core todu functionality - generate daily and weekly reports across all task systems"
     }
   ]
 }
