@@ -16,27 +16,18 @@ CACHE_BASE = Path.home() / ".local" / "todu"
 
 
 def load_all_tasks() -> List[Dict[str, Any]]:
-    """Load all tasks/issues from all plugin caches."""
+    """Load all tasks/issues from consolidated cache."""
     tasks = []
 
-    if not CACHE_BASE.exists():
-        return tasks
-
-    # Scan all plugin directories under CACHE_BASE
-    for plugin_dir in CACHE_BASE.iterdir():
-        if not plugin_dir.is_dir():
-            continue
-
-        # Look for tasks in both issues/ and tasks/ subdirectories
-        for subdir_name in ["issues", "tasks"]:
-            subdir = plugin_dir / subdir_name
-            if subdir.exists() and subdir.is_dir():
-                for file_path in subdir.glob("*.json"):
-                    try:
-                        with open(file_path) as f:
-                            tasks.append(json.load(f))
-                    except Exception as e:
-                        print(f"Warning: Failed to load {file_path}: {e}", file=sys.stderr)
+    # Load from consolidated issues directory
+    issues_dir = CACHE_BASE / "issues"
+    if issues_dir.exists() and issues_dir.is_dir():
+        for file_path in issues_dir.glob("*.json"):
+            try:
+                with open(file_path) as f:
+                    tasks.append(json.load(f))
+            except Exception as e:
+                print(f"Warning: Failed to load {file_path}: {e}", file=sys.stderr)
 
     return tasks
 

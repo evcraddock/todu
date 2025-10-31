@@ -1,6 +1,6 @@
 ---
 name: core-task-report
-description: MANDATORY skill for generating markdown reports from tasks across all systems (GitHub, Forgejo, Todoist). NEVER call scripts/report.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to generate daily or weekly task reports. (plugin:core@todu)
+description: MANDATORY skill for generating markdown reports from tasks across all systems. NEVER call scripts/report.py directly - ALWAYS use this skill via the Skill tool. Use when user wants to generate daily or weekly task reports. (plugin:core@todu)
 ---
 
 # Generate Task Reports
@@ -20,7 +20,7 @@ Even if you've invoked this skill before in the conversation, you MUST invoke it
 
 ---
 
-This skill generates markdown reports by aggregating locally cached tasks from GitHub, Forgejo, and Todoist.
+This skill generates markdown reports by aggregating locally cached tasks from Task Management Systems.
 
 ## When to Use
 
@@ -133,31 +133,36 @@ $PROJECT_ROOT/scripts/report.py --type weekly --week 2025-10-21 --output ~/weekl
 # Daily Task Report - 2025-10-29
 
 ## Summary
+
 - **In Progress**: 5 tasks
 - **Due/Overdue**: 3 tasks
 - **High Priority**: 7 tasks
 
 ## 🚧 In Progress (5)
-| System   | Title                                      | Priority | Assignee | Due Date   |
-|----------|--------------------------------------------|----------|----------|------------|
-| todoist  | Implement reporting feature                | high     | erik     | 2025-10-29 |
-| github   | Fix authentication bug #123                | medium   | alice    | -          |
 
-## ⚠️  Overdue (2)
-| System   | Title                                      | Priority | Days Late | Assignee |
+| System  | Title                       | Priority | Assignee | Due Date   |
+| ------- | --------------------------- | -------- | -------- | ---------- |
+| todoist | Implement reporting feature | high     | erik     | 2025-10-29 |
+| github  | Fix authentication bug #123 | medium   | alice    | -          |
+
+## ⚠️ Overdue (2)
+
+| System | Title | Priority | Days Late | Assignee |
 |----------|--------------------------------------------|-----------|-----------|-----------—|
-| todoist  | Review PR from last week                   | high     | 5         | erik     |
+| todoist | Review PR from last week | high | 5 | erik |
 
 ## 📅 Due Today (1)
-| System   | Title                                      | Priority | Assignee |
-|----------|--------------------------------------------|----------|----------|
-| todoist  | Submit budget report                       | medium   | erik     |
+
+| System  | Title                | Priority | Assignee |
+| ------- | -------------------- | -------- | -------- |
+| todoist | Submit budget report | medium   | erik     |
 
 ## 🔥 High Priority (7)
-| System   | Title                                      | Assignee | Due Date   |
-|----------|--------------------------------------------|----------|------------|
-| github   | Security vulnerability #456                | bob      | -          |
-| forgejo  | Production deployment                      | alice    | -          |
+
+| System  | Title                       | Assignee | Due Date |
+| ------- | --------------------------- | -------- | -------- |
+| github  | Security vulnerability #456 | bob      | -        |
+| forgejo | Production deployment       | alice    | -        |
 ```
 
 ### Weekly Report
@@ -166,20 +171,23 @@ $PROJECT_ROOT/scripts/report.py --type weekly --week 2025-10-21 --output ~/weekl
 # Weekly Task Report - Week of 2025-10-21
 
 ## Summary
+
 - **Completed**: 15 tasks
 - **Cancelled**: 2 tasks
 - **Completion Rate**: 88% (15 of 17 closed)
 
 ## ✅ Completed This Week (15)
-| System   | Title                                      | Completed  | Assignee | Labels              |
-|----------|--------------------------------------------|-----------|-----------|--------------------|
-| todoist  | Write documentation                        | 2025-10-23 | erik     | docs, p:high        |
-| github   | Implement user authentication #789         | 2025-10-24 | alice    | enhancement         |
+
+| System  | Title                              | Completed  | Assignee | Labels       |
+| ------- | ---------------------------------- | ---------- | -------- | ------------ |
+| todoist | Write documentation                | 2025-10-23 | erik     | docs, p:high |
+| github  | Implement user authentication #789 | 2025-10-24 | alice    | enhancement  |
 
 ## ❌ Cancelled This Week (2)
-| System   | Title                                      | Cancelled  | Assignee | Labels              |
-|----------|--------------------------------------------|-----------|-----------|--------------------|
-| forgejo  | Outdated feature request                   | 2025-10-25 | -        | wontfix             |
+
+| System  | Title                    | Cancelled  | Assignee | Labels  |
+| ------- | ------------------------ | ---------- | -------- | ------- |
+| forgejo | Outdated feature request | 2025-10-25 | -        | wontfix |
 ```
 
 ## Technical Details
