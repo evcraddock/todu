@@ -179,7 +179,7 @@ Skills are invoked automatically based on user intent. You never need to call th
 
 Tasks are cached locally for fast, offline searching:
 
-- **Tasks**: `~/.local/todu/items/todoist-{task-id}.json`
+- **Tasks**: `~/.local/todu/issues/todoist-{task-id}.json`
 - **Sync metadata**: `~/.local/todu/todoist/sync.json`
 
 Each task is stored in normalized JSON format compatible with GitHub and Forgejo plugins.

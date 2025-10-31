@@ -116,7 +116,7 @@ Claude will:
 
 ## Local Storage
 
-Issues are cached in: `~/.local/todu/items/`
+Issues are cached in: `~/.local/todu/issues/`
 
 Format: Normalized JSON (same across GitHub, Forgejo, Todoist plugins)
 

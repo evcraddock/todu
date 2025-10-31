@@ -44,7 +44,7 @@ This skill searches locally cached tasks and issues across all systems (GitHub, 
 
 3. **Search Local Cache**
    - Call `$PLUGIN_DIR/scripts/list-items.py` with filters
-   - Script reads from `~/.local/todu/items/` (or legacy structure)
+   - Script reads from `~/.local/todu/issues/`
    - Returns matching items in requested format
 
 4. **Display Results**
@@ -179,12 +179,10 @@ When user doesn't specify a system:
 
 ## Cache Management
 
-- Cache locations:
-  - New: `~/.local/todu/items/`
-  - Legacy: `~/.local/todu/{system}/issues/` or `~/.local/todu/{system}/tasks/`
+- Cache location: `~/.local/todu/issues/`
+- All systems write to consolidated issues directory
 - If cache is empty: Inform user and suggest running sync
 - If cache is stale (>1 hour): Offer to sync before searching
-- Script automatically handles both cache structures
 
 ## Display Format
 
@@ -216,5 +214,5 @@ When showing results from single system, omit grouping.
 - All searches use local cache (fast, offline-capable)
 - Cross-system search is the default behavior
 - Can combine multiple filters for precise searches
-- Supports both new consolidated cache and legacy plugin-specific caches
+- Uses consolidated cache at `~/.local/todu/issues/`
 - No API calls = fast and works offline

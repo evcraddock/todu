@@ -13,8 +13,8 @@ from datetime import datetime
 CACHE_DIR = Path.home() / ".local" / "todu"
 
 def load_items_from_consolidated():
-    """Load items from new consolidated structure: ~/.local/todu/items/"""
-    items_dir = CACHE_DIR / "items"
+    """Load items from new consolidated structure: ~/.local/todu/issues/"""
+    items_dir = CACHE_DIR / "issues"
     items = []
 
     if items_dir.exists():
@@ -35,7 +35,7 @@ def load_items_from_legacy():
 
     # Check for plugin directories
     for system_dir in CACHE_DIR.iterdir():
-        if not system_dir.is_dir() or system_dir.name == 'items':
+        if not system_dir.is_dir() or system_dir.name == 'issues':
             continue
 
         # Check both issues/ and tasks/ subdirectories

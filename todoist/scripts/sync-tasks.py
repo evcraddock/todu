@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from todoist_api_python.api import TodoistAPI
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "todoist"
-ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "issues"
 
 # Priority mapping: Todoist 1-4 to our labels
 PRIORITY_TO_LABEL = {

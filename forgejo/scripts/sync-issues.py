@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import requests
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
-ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "issues"
 
 def get_forgejo_url(cwd=None):
     """Get Forgejo base URL from git remote in cwd."""

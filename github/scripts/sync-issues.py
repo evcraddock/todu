@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from github import Github, Auth
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "github"
-ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "issues"
 
 def normalize_issue(issue, repo_name):
     """Convert GitHub issue to normalized format."""
