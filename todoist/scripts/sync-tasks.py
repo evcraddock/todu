@@ -14,6 +14,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 from todoist_api_python.api import TodoistAPI
 
+# Add path to core scripts for sync_manager
+core_scripts_path = Path(__file__).parent.parent.parent / "core" / "scripts"
+sys.path.insert(0, str(core_scripts_path))
+from sync_manager import update_sync_metadata
+
 CACHE_DIR = Path.home() / ".local" / "todu" / "todoist"
 ITEMS_DIR = Path.home() / ".local" / "todu" / "issues"
 
@@ -162,28 +167,25 @@ def sync_tasks(project_id=None, task_id=None):
             else:
                 updated_count += 1
 
-        # Update sync metadata
-        sync_file = CACHE_DIR / "sync.json"
-        sync_metadata = {
-            "lastSync": datetime.now(timezone.utc).isoformat(),
-            "mode": sync_mode,
-            "project_id": project_id,
-            "stats": {
+        # Update sync metadata in unified file
+        update_sync_metadata(
+            system="todoist",
+            mode=sync_mode,
+            task_count=new_count + updated_count,
+            stats={
                 "new": new_count,
                 "updated": updated_count,
                 "total": new_count + updated_count
-            }
-        }
-
-        with open(sync_file, 'w') as f:
-            json.dump(sync_metadata, f, indent=2)
+            },
+            project_id=project_id
+        )
 
         # Return stats
         result = {
-            "synced": sync_metadata["stats"]["total"],
+            "synced": new_count + updated_count,
             "new": new_count,
             "updated": updated_count,
-            "timestamp": sync_metadata["lastSync"]
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         print(json.dumps(result, indent=2))

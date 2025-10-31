@@ -15,6 +15,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 import requests
 
+# Add path to core scripts for sync_manager
+core_scripts_path = Path(__file__).parent.parent.parent / "core" / "scripts"
+sys.path.insert(0, str(core_scripts_path))
+from sync_manager import update_sync_metadata
+
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
 ITEMS_DIR = Path.home() / ".local" / "todu" / "issues"
 
@@ -212,22 +217,18 @@ def sync_issues(repo_name, since=None, issue_number=None, base_url=None):
             else:
                 updated_count += 1
 
-        # Update sync metadata
-        sync_file = CACHE_DIR / "sync.json"
-        sync_data = {
-            "lastSync": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-            "lastSyncMode": sync_mode,
-            "taskCount": new_count + updated_count,
-            "errors": []
-        }
-        with open(sync_file, 'w') as f:
-            json.dump(sync_data, f, indent=2)
+        # Update sync metadata in unified file
+        update_sync_metadata(
+            system="forgejo",
+            mode=sync_mode,
+            task_count=new_count + updated_count
+        )
 
         result = {
             "synced": new_count + updated_count,
             "new": new_count,
             "updated": updated_count,
-            "timestamp": sync_data["lastSync"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "mode": sync_mode
         }
 
