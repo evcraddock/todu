@@ -73,11 +73,11 @@ def register_project(nickname, system, repo=None, project_id=None):
         "addedAt": projects.get(nickname, {}).get("addedAt", datetime.now(timezone.utc).isoformat())
     }
 
-    if repo:
+    # For Todoist, store project_id in the 'repo' field for consistency
+    if system == 'todoist':
+        project_data["repo"] = project_id
+    elif repo:
         project_data["repo"] = repo
-
-    if project_id:
-        project_data["projectId"] = project_id
 
     # Update projects
     projects[nickname] = project_data
@@ -92,8 +92,7 @@ def register_project(nickname, system, repo=None, project_id=None):
         "action": "updated" if is_update else "created",
         "nickname": nickname,
         "system": system,
-        "repo": repo,
-        "projectId": project_id
+        "repo": project_id if system == 'todoist' else repo
     }
     print(json.dumps(result, indent=2))
     return 0

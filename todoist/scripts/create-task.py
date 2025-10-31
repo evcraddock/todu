@@ -130,7 +130,7 @@ def main():
     parser = argparse.ArgumentParser(description='Create a Todoist task')
     parser.add_argument('--title', required=True, help='Task title/content')
     parser.add_argument('--description', help='Task description')
-    parser.add_argument('--project-id', help='Project ID')
+    parser.add_argument('--project-id', required=True, help='Project ID (required, from project registry)')
     parser.add_argument('--priority', choices=['priority:low', 'priority:medium', 'priority:high'],
                        help='Task priority')
     parser.add_argument('--due-date', help='Due date (natural language like "tomorrow" or "next Monday")')
