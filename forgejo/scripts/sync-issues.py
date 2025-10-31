@@ -104,7 +104,8 @@ def normalize_issue(issue, repo_name):
         "type": "issue",
         "title": issue['title'],
         "description": issue['body'] or "",
-        "status": status,
+        "state": issue['state'],  # System-level state: "open" or "closed"
+        "status": status,  # Workflow-level status from labels
         "url": issue['html_url'],
         "createdAt": issue['created_at'],
         "updatedAt": issue['updated_at'],

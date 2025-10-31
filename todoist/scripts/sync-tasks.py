@@ -88,7 +88,8 @@ def normalize_task(task):
         "type": "task",
         "title": task.content,
         "description": task.description or "",
-        "status": status,
+        "state": "closed" if task.is_completed else "open",  # System-level state
+        "status": status,  # Workflow-level status from labels
         "url": task.url,
         "createdAt": created_at,
         "updatedAt": updated_at,
