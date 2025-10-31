@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from todoist_api_python.api import TodoistAPI
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "todoist"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
 
 # Priority mapping: Todoist 1-4 to our labels
 PRIORITY_TO_LABEL = {
@@ -120,8 +121,7 @@ def sync_tasks(project_id=None, task_id=None):
         api = TodoistAPI(token)
 
         # Create cache directories
-        tasks_dir = CACHE_DIR / "tasks"
-        tasks_dir.mkdir(parents=True, exist_ok=True)
+        ITEMS_DIR.mkdir(parents=True, exist_ok=True)
 
         # Fetch tasks based on mode
         if task_id:
@@ -148,7 +148,7 @@ def sync_tasks(project_id=None, task_id=None):
         updated_count = 0
 
         for task in tasks:
-            task_file = tasks_dir / f"{task.id}.json"
+            task_file = ITEMS_DIR / f"todoist-{task.id}.json"
             is_new = not task_file.exists()
 
             # Save normalized task

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from github import Github, Auth
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "github"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
 
 def normalize_issue(issue, repo_name):
     """Convert GitHub issue to normalized format."""
@@ -88,8 +89,7 @@ def sync_issues(repo_name, since=None, issue_number=None):
         repo = gh.get_repo(repo_name)
 
         # Create cache directories
-        issues_dir = CACHE_DIR / "issues"
-        issues_dir.mkdir(parents=True, exist_ok=True)
+        ITEMS_DIR.mkdir(parents=True, exist_ok=True)
 
         # Use repo name prefix in filename to avoid conflicts
         # Replace '/' with '_' for valid filename
@@ -121,8 +121,8 @@ def sync_issues(repo_name, since=None, issue_number=None):
             if issue.pull_request:
                 continue
 
-            # Use repo prefix in filename to avoid conflicts between repos
-            issue_file = issues_dir / f"{repo_prefix}-{issue.number}.json"
+            # Use system and repo prefix in filename to avoid conflicts
+            issue_file = ITEMS_DIR / f"github-{repo_prefix}-{issue.number}.json"
             is_new = not issue_file.exists()
 
             # Save normalized issue

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 import requests
 
 CACHE_DIR = Path.home() / ".local" / "todu" / "forgejo"
+ITEMS_DIR = Path.home() / ".local" / "todu" / "items"
 
 def get_forgejo_url(cwd=None):
     """Get Forgejo base URL from git remote in cwd."""
@@ -142,8 +143,7 @@ def sync_issues(repo_name, since=None, issue_number=None, base_url=None):
         }
 
         # Create cache directory
-        issues_dir = CACHE_DIR / "issues"
-        issues_dir.mkdir(parents=True, exist_ok=True)
+        ITEMS_DIR.mkdir(parents=True, exist_ok=True)
 
         # Use repo name prefix in filename to avoid conflicts
         # Replace '/' with '_' for valid filename
@@ -197,8 +197,8 @@ def sync_issues(repo_name, since=None, issue_number=None, base_url=None):
         updated_count = 0
 
         for issue in issues:
-            # Use repo prefix in filename to avoid conflicts between repos
-            issue_file = issues_dir / f"{repo_prefix}-{issue['number']}.json"
+            # Use system and repo prefix in filename to avoid conflicts
+            issue_file = ITEMS_DIR / f"forgejo-{repo_prefix}-{issue['number']}.json"
             is_new = not issue_file.exists()
 
             # Save normalized issue

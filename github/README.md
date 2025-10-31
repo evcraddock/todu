@@ -116,9 +116,11 @@ Claude will:
 
 ## Local Storage
 
-Issues are cached in: `~/.local/todu/github/issues/`
+Issues are cached in: `~/.local/todu/items/`
 
 Format: Normalized JSON (same across GitHub, Forgejo, Todoist plugins)
+
+File naming: `github-{repo}-{issue_number}.json`
 
 ## Scripts
 
@@ -129,7 +131,8 @@ The plugin includes Python scripts with PEP 723 inline dependencies:
 - `scripts/create-comment.py` - Add comment to issue
 - `scripts/update-issue.py` - Update issue status/priority
 - `scripts/sync-issues.py` - Sync issues to cache
-- `scripts/list-issues.py` - Query cached issues
+
+Note: Issue searching uses the unified `core/scripts/list-items.py` which searches across all systems.
 
 Scripts can be run manually if needed:
 
