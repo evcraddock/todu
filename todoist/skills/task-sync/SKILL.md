@@ -9,6 +9,7 @@ description: MANDATORY skill for syncing Todoist tasks. NEVER call scripts/sync-
 
 **NEVER EVER call `sync-tasks.py` directly. This skill provides essential logic beyond just running the script:**
 
+- Ensuring project is registered before syncing (via core:project-register skill)
 - Determining sync scope (all tasks, specific project, single task)
 - Prompting for project selection if ambiguous
 - Handling sync modes (full vs. single task)
@@ -35,13 +36,20 @@ This skill syncs Todoist tasks to local cache for offline searching and filterin
    - Project sync: All tasks in a specific project
    - Single task sync: One specific task (usually after create/update)
 
-2. **Execute Sync**
+2. **Ensure Project is Registered (if project-specific sync)**
+   - Call the `core:project-register` skill with project ID
+   - Skill handles nickname conflicts with user interaction
+   - If already registered, continues immediately
+   - If not registered, registers with smart nickname suggestion
+   - Note: Full sync (no project specified) skips this step
+
+3. **Execute Sync**
    - Call `$PLUGIN_DIR/scripts/sync-tasks.py` with appropriate parameters
    - Script fetches tasks from Todoist API
-   - Normalizes and caches tasks locally in `~/.local/todu/todoist/tasks/`
+   - Normalizes and caches tasks locally in `~/.local/todu/issues/`
    - Updates sync metadata in `~/.local/todu/todoist/sync.json`
 
-3. **Report Results**
+4. **Report Results**
    - Display sync statistics: new, updated, total
    - Show timestamp of last sync
    - Indicate any errors or warnings

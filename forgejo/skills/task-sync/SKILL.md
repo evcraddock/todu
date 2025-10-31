@@ -11,6 +11,7 @@ description: MANDATORY skill for syncing Forgejo issues. NEVER call scripts/sync
 
 This skill provides essential logic beyond just running the script:
 
+- Ensuring project is registered before syncing (via core:project-register skill)
 - Extracting repository from git remote automatically
 - Detecting Forgejo base URL from git remote
 - Prompting for which repo to sync when ambiguous
@@ -38,14 +39,20 @@ This skill downloads recent Forgejo/Gitea issues and stores them locally in norm
    - Ask user which repository to sync
    - Detect Forgejo base URL from git remote
 
-2. **Sync Issues**
+2. **Ensure Project is Registered**
+   - Call the `core:project-register` skill with repo info
+   - Skill handles nickname conflicts with user interaction
+   - If already registered, continues immediately
+   - If not registered, registers with smart nickname suggestion
+
+3. **Sync Issues**
    - Call `$PLUGIN_DIR/scripts/sync-issues.py` with repo info
    - Script fetches issues from Forgejo API
    - Normalizes to standard JSON format
-   - Saves to `~/.local/todu/forgejo/issues/{id}.json`
+   - Saves to `~/.local/todu/issues/{id}.json`
    - Updates `~/.local/todu/forgejo/sync.json` with timestamp
 
-3. **Report Results**
+4. **Report Results**
    - Show how many issues were synced
    - Report any new or updated issues
    - Display sync timestamp

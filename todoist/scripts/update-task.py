@@ -32,8 +32,8 @@ PRIORITY_TO_LABEL = {
     1: None
 }
 
-def update_task(task_id, status=None, priority=None, complete=False, close=False, cancel=False):
-    """Update a Todoist task's status, priority, or completion state."""
+def update_task(task_id, status=None, priority=None, complete=False, close=False, cancel=False, content=None, description=None):
+    """Update a Todoist task's status, priority, completion state, content, or description."""
     token = os.environ.get('TODOIST_TOKEN')
     if not token:
         print(json.dumps({"error": "TODOIST_TOKEN environment variable not set"}), file=sys.stderr)
@@ -58,6 +58,17 @@ def update_task(task_id, status=None, priority=None, complete=False, close=False
         if status in ["done", "canceled"] or complete:
             should_complete = True
 
+        # Prepare update parameters
+        update_params = {}
+
+        # Update content (title) if provided
+        if content is not None:
+            update_params['content'] = content
+
+        # Update description if provided
+        if description is not None:
+            update_params['description'] = description
+
         # Update priority if requested
         if priority:
             if priority not in VALID_PRIORITIES:
@@ -65,7 +76,11 @@ def update_task(task_id, status=None, priority=None, complete=False, close=False
                 return 1
 
             todoist_priority = LABEL_TO_PRIORITY.get(f"priority:{priority}", 1)
-            api.update_task(task_id=task_id, priority=todoist_priority)
+            update_params['priority'] = todoist_priority
+
+        # Apply updates if any
+        if update_params:
+            api.update_task(task_id=task_id, **update_params)
 
         # Add status label if provided (do this BEFORE completing the task)
         task_labels = list(task.labels) if task.labels else []
@@ -175,25 +190,27 @@ def update_task(task_id, status=None, priority=None, complete=False, close=False
         return 1
 
 def main():
-    parser = argparse.ArgumentParser(description='Update a Todoist task status, priority, or state')
+    parser = argparse.ArgumentParser(description='Update a Todoist task status, priority, state, content, or description')
     parser.add_argument('--task-id', required=True, help='Task ID to update')
     parser.add_argument('--status', choices=VALID_STATUSES, help='Set task status')
     parser.add_argument('--priority', choices=VALID_PRIORITIES, help='Set task priority')
     parser.add_argument('--complete', action='store_true', help='Mark task as completed')
     parser.add_argument('--close', action='store_true', help='Close task (marks as done)')
     parser.add_argument('--cancel', action='store_true', help='Cancel task (sets status:canceled and closes)')
+    parser.add_argument('--content', help='Update task content/title')
+    parser.add_argument('--description', help='Update task description')
 
     args = parser.parse_args()
 
     # Validate that at least one update is requested
-    if not any([args.status, args.priority, args.complete, args.close, args.cancel]):
-        parser.error("Must specify at least one of: --status, --priority, --complete, --close, or --cancel")
+    if not any([args.status, args.priority, args.complete, args.close, args.cancel, args.content, args.description]):
+        parser.error("Must specify at least one of: --status, --priority, --complete, --close, --cancel, --content, or --description")
 
     # Validate --close and --cancel are mutually exclusive
     if args.close and args.cancel:
         parser.error("Cannot specify both --close and --cancel")
 
-    return update_task(args.task_id, args.status, args.priority, args.complete, args.close, args.cancel)
+    return update_task(args.task_id, args.status, args.priority, args.complete, args.close, args.cancel, args.content, args.description)
 
 if __name__ == '__main__':
     sys.exit(main())

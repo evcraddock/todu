@@ -18,8 +18,8 @@ from github import Github, Auth
 VALID_STATUSES = ["backlog", "in-progress", "done", "canceled"]
 VALID_PRIORITIES = ["low", "medium", "high"]
 
-def update_issue(repo_name, issue_number, status=None, priority=None, close=False, cancel=False):
-    """Update a GitHub issue's status, priority, or state."""
+def update_issue(repo_name, issue_number, status=None, priority=None, close=False, cancel=False, title=None, body=None):
+    """Update a GitHub issue's status, priority, state, title, or body."""
     token = os.environ.get('GITHUB_TOKEN')
     if not token:
         print(json.dumps({"error": "GITHUB_TOKEN environment variable not set"}), file=sys.stderr)
@@ -76,9 +76,24 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
         # Update labels
         issue.set_labels(*new_labels)
 
+        # Prepare edit parameters
+        edit_params = {}
+
+        # Update title if provided
+        if title is not None:
+            edit_params['title'] = title
+
+        # Update body if provided
+        if body is not None:
+            edit_params['body'] = body
+
         # Close issue if requested
         if close:
-            issue.edit(state='closed')
+            edit_params['state'] = 'closed'
+
+        # Apply edits if any
+        if edit_params:
+            issue.edit(**edit_params)
 
         # Refresh issue to get updated state
         issue = repo.get_issue(issue_number)
@@ -126,25 +141,27 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
         return 1
 
 def main():
-    parser = argparse.ArgumentParser(description='Update a GitHub issue status, priority, or state')
+    parser = argparse.ArgumentParser(description='Update a GitHub issue status, priority, state, title, or body')
     parser.add_argument('--repo', required=True, help='Repository in owner/name format')
     parser.add_argument('--issue', type=int, required=True, help='Issue number to update')
     parser.add_argument('--status', choices=VALID_STATUSES, help='Set issue status')
     parser.add_argument('--priority', choices=VALID_PRIORITIES, help='Set issue priority')
     parser.add_argument('--close', action='store_true', help='Close issue (sets status:done)')
     parser.add_argument('--cancel', action='store_true', help='Cancel issue (sets status:canceled and closes)')
+    parser.add_argument('--title', help='Update issue title')
+    parser.add_argument('--body', help='Update issue body/description')
 
     args = parser.parse_args()
 
     # Validate that at least one update is requested
-    if not any([args.status, args.priority, args.close, args.cancel]):
-        parser.error("Must specify at least one of: --status, --priority, --close, or --cancel")
+    if not any([args.status, args.priority, args.close, args.cancel, args.title, args.body]):
+        parser.error("Must specify at least one of: --status, --priority, --close, --cancel, --title, or --body")
 
     # Validate --close and --cancel are mutually exclusive
     if args.close and args.cancel:
         parser.error("Cannot specify both --close and --cancel")
 
-    return update_issue(args.repo, args.issue, args.status, args.priority, args.close, args.cancel)
+    return update_issue(args.repo, args.issue, args.status, args.priority, args.close, args.cancel, args.title, args.body)
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -56,8 +56,8 @@ def get_forgejo_url():
     print(json.dumps({"error": "FORGEJO_URL environment variable not set and could not detect from git remote"}), file=sys.stderr)
     sys.exit(1)
 
-def update_issue(repo_name, issue_number, status=None, priority=None, close=False, cancel=False):
-    """Update a Forgejo issue's status, priority, or state."""
+def update_issue(repo_name, issue_number, status=None, priority=None, close=False, cancel=False, title=None, body=None):
+    """Update a Forgejo issue's status, priority, state, title, or body."""
     token = os.environ.get('FORGEJO_TOKEN')
     if not token:
         print(json.dumps({"error": "FORGEJO_TOKEN environment variable not set"}), file=sys.stderr)
@@ -141,10 +141,24 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
             response = requests.put(labels_url, headers=headers, json=labels_payload)
             response.raise_for_status()
 
-        # Close issue if requested (using PATCH for state)
+        # Prepare issue update payload
+        update_payload = {}
+
+        # Update title if provided
+        if title is not None:
+            update_payload['title'] = title
+
+        # Update body if provided
+        if body is not None:
+            update_payload['body'] = body
+
+        # Close issue if requested
         if close:
-            close_payload = {'state': 'closed'}
-            response = requests.patch(api_url, headers=headers, json=close_payload)
+            update_payload['state'] = 'closed'
+
+        # Apply updates if any
+        if update_payload:
+            response = requests.patch(api_url, headers=headers, json=update_payload)
             response.raise_for_status()
 
         # Get updated issue
@@ -213,25 +227,27 @@ def update_issue(repo_name, issue_number, status=None, priority=None, close=Fals
         return 1
 
 def main():
-    parser = argparse.ArgumentParser(description='Update a Forgejo issue status, priority, or state')
+    parser = argparse.ArgumentParser(description='Update a Forgejo issue status, priority, state, title, or body')
     parser.add_argument('--repo', required=True, help='Repository in owner/name format')
     parser.add_argument('--issue', type=int, required=True, help='Issue number to update')
     parser.add_argument('--status', choices=VALID_STATUSES, help='Set issue status')
     parser.add_argument('--priority', choices=VALID_PRIORITIES, help='Set issue priority')
     parser.add_argument('--close', action='store_true', help='Close issue (sets status:done)')
     parser.add_argument('--cancel', action='store_true', help='Cancel issue (sets status:canceled and closes)')
+    parser.add_argument('--title', help='Update issue title')
+    parser.add_argument('--body', help='Update issue body/description')
 
     args = parser.parse_args()
 
     # Validate that at least one update is requested
-    if not any([args.status, args.priority, args.close, args.cancel]):
-        parser.error("Must specify at least one of: --status, --priority, --close, or --cancel")
+    if not any([args.status, args.priority, args.close, args.cancel, args.title, args.body]):
+        parser.error("Must specify at least one of: --status, --priority, --close, --cancel, --title, or --body")
 
     # Validate --close and --cancel are mutually exclusive
     if args.close and args.cancel:
         parser.error("Cannot specify both --close and --cancel")
 
-    return update_issue(args.repo, args.issue, args.status, args.priority, args.close, args.cancel)
+    return update_issue(args.repo, args.issue, args.status, args.priority, args.close, args.cancel, args.title, args.body)
 
 if __name__ == '__main__':
     sys.exit(main())

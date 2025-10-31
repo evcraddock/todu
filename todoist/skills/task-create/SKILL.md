@@ -29,12 +29,22 @@ This skill creates a Todoist task, optionally with git context from the current 
 
 ## What This Skill Does
 
-1. **Determine Context**
+1. **Ensure Project is Registered (if project specified)**
+   - If user mentions a project nickname or ID
+   - Invoke the `core:project-register` skill via the Skill tool
+   - The skill will:
+     - Check if project is already registered (returns immediately if so)
+     - If not registered, generate nickname suggestion and handle conflicts
+     - Register the project with user-chosen nickname
+   - Use the registered project info for task creation
+   - If no project specified, task goes to inbox (no registration needed)
+
+2. **Determine Context**
    - Check if we're in a git repository
    - If yes, offer to include git context in description (optional for Todoist)
    - Git context includes: repo name, branch, recent commits, modified files
 
-2. **Gather Task Details**
+3. **Gather Task Details**
    - Prompt for title/content if not provided
    - Prompt for description (can include git context if in repo)
    - Ask about project (or use default/inbox)
@@ -42,13 +52,13 @@ This skill creates a Todoist task, optionally with git context from the current 
    - Ask about due date using natural language (optional)
    - Ask about labels (optional)
 
-3. **Create the Task**
+4. **Create the Task**
    - Call `$PLUGIN_DIR/scripts/create-task.py` with collected information
    - Script returns normalized JSON with task details
    - Display confirmation with task URL
    - DO NOT mention cache updates - this is transparent to the user
 
-4. **Handle Project Selection**
+5. **Handle Project Selection**
    - If user has multiple projects, list them and ask which one
    - Can use default project from config or environment
    - If no project specified, task goes to inbox

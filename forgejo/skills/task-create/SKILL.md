@@ -32,20 +32,29 @@ This skill creates a Forgejo/Gitea issue with rich context from the current git 
 
 ## What This Skill Does
 
-1. **Extract Git Context**
+1. **Ensure Project is Registered**
+   - Extract repo from current git remote or user input
+   - Invoke the `core:project-register` skill via the Skill tool
+   - The skill will:
+     - Check if project is already registered (returns immediately if so)
+     - If not registered, generate nickname suggestion and handle conflicts
+     - Register the project with user-chosen nickname
+   - Use the registered project info for issue creation
+
+2. **Extract Git Context**
    - Current repository (from git remote)
    - Current branch name
    - Recent commits on this branch
    - Modified/staged files
    - Forgejo base URL from remote
 
-2. **Gather Issue Details**
+3. **Gather Issue Details**
    - Prompt for title if not provided
    - Prompt for description/body (can include git context)
    - Ask about labels (e.g., bug, enhancement, documentation)
    - Ask about assignees (optional)
 
-3. **Create the Issue**
+4. **Create the Issue**
    - Call `$PLUGIN_DIR/scripts/create-issue.py` with collected information
    - Script returns normalized JSON with issue details
    - Display confirmation with issue URL

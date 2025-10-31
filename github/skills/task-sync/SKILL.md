@@ -9,6 +9,7 @@ description: MANDATORY skill for syncing GitHub issues. NEVER call scripts/sync-
 
 **NEVER EVER call `sync-issues.py` directly. This skill provides essential logic beyond just running the script:**
 
+- Ensuring project is registered before syncing (via core:project-register skill)
 - Extracting repository from git remote automatically
 - Prompting for which repo to sync when ambiguous
 - Determining optimal sync strategy (full vs incremental)
@@ -34,14 +35,20 @@ This skill downloads recent GitHub issues and stores them locally in normalized 
    - Extract repo from current git remote, OR
    - Ask user which repository to sync
 
-2. **Sync Issues**
+2. **Ensure Project is Registered**
+   - Call the `core:project-register` skill with repo info
+   - Skill handles nickname conflicts with user interaction
+   - If already registered, continues immediately
+   - If not registered, registers with smart nickname suggestion
+
+3. **Sync Issues**
    - Call `$PLUGIN_DIR/scripts/sync-issues.py` with repo info
    - Script fetches issues from GitHub API
    - Normalizes to standard JSON format
-   - Saves to `~/.local/todu/github/issues/{id}.json`
+   - Saves to `~/.local/todu/issues/{id}.json`
    - Updates `~/.local/todu/github/sync.json` with timestamp
 
-3. **Report Results**
+4. **Report Results**
    - Show how many issues were synced
    - Report any new or updated issues
    - Display sync timestamp
