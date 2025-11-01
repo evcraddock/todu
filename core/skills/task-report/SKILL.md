@@ -24,7 +24,7 @@ This skill generates markdown reports by aggregating locally cached tasks from T
 
 ## When to Use
 
-- User explicitly requests a "daily report" or "weekly report"
+- User explicitly requests a "daily review" or "weekly report"
 - User asks for task summaries or status reports
 - User wants to export tasks to markdown format
 - User mentions generating reports across all systems
@@ -55,7 +55,7 @@ This skill generates markdown reports by aggregating locally cached tasks from T
 
 ## Report Types
 
-### Daily Report
+### Daily Review
 
 Lists tasks that need attention today:
 
@@ -73,7 +73,7 @@ Summarizes completed work for the calendar week (Monday-Sunday):
 
 ## Example Interactions
 
-**User**: "Generate a daily report"
+**User**: "Generate a daily review"
 **Skill**:
 
 ```text
@@ -82,9 +82,9 @@ Checking cache freshness...
 ✓ Forgejo: synced 3 hours ago
 ✓ Todoist: synced 1 hour ago
 
-Generating daily report...
+Generating daily review...
 
-# Daily Task Report - 2025-10-29
+# Daily Task Review - 2025-10-29
 
 ## Summary
 - **In Progress**: 5 tasks
@@ -127,10 +127,10 @@ $PROJECT_ROOT/scripts/report.py --type weekly --week 2025-10-21 --output ~/weekl
 
 ## Example Output Formats
 
-### Daily Report
+### Daily Review
 
 ```markdown
-# Daily Task Report - 2025-10-29
+# Daily Task Review - 2025-10-29
 
 ## Summary
 

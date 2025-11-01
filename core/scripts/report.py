@@ -89,7 +89,7 @@ def get_week_range(date: datetime) -> tuple[datetime, datetime]:
 
 
 def generate_daily_report(tasks: List[Dict[str, Any]], user_tz) -> str:
-    """Generate daily task report."""
+    """Generate daily task review."""
     now = datetime.now(user_tz)
     today = now.date()
 
@@ -149,7 +149,7 @@ def generate_daily_report(tasks: List[Dict[str, Any]], user_tz) -> str:
 
     # Generate markdown report
     lines = [
-        f"# Daily Task Report - {today.strftime('%Y-%m-%d')}",
+        f"# Daily Task Review - {today.strftime('%Y-%m-%d')}",
         "",
         "## Summary",
         f"- **In Progress**: {len(in_progress)} tasks",
