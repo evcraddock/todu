@@ -5,30 +5,29 @@
 # ///
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 
+# Import cache loading functions from list-items.py
+_list_items_path = Path(__file__).parent / "list-items.py"
+_spec = importlib.util.spec_from_file_location("list_items", _list_items_path)
+_list_items = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_list_items)
 
-CACHE_BASE = Path.home() / ".local" / "todu"
+load_items_from_consolidated = _list_items.load_items_from_consolidated
+load_items_from_legacy = _list_items.load_items_from_legacy
 
 
 def load_all_tasks() -> List[Dict[str, Any]]:
-    """Load all tasks/issues from consolidated cache."""
-    tasks = []
-
-    # Load from consolidated issues directory
-    issues_dir = CACHE_BASE / "issues"
-    if issues_dir.exists() and issues_dir.is_dir():
-        for file_path in issues_dir.glob("*.json"):
-            try:
-                with open(file_path) as f:
-                    tasks.append(json.load(f))
-            except Exception as e:
-                print(f"Warning: Failed to load {file_path}: {e}", file=sys.stderr)
-
+    """Load all tasks/issues from consolidated cache with legacy fallback."""
+    # Try consolidated structure first, fall back to legacy
+    tasks = load_items_from_consolidated()
+    if not tasks:
+        tasks = load_items_from_legacy()
     return tasks
 
 
