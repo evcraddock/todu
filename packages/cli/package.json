@@ -1,0 +1,21 @@
+{
+  "name": "@todu/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "todu": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build ./src/cli.ts --outdir ./dist --target node",
+    "dev": "bun run ./src/cli.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@todu/core": "workspace:*",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.4.0"
+  }
+}

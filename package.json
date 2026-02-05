@@ -1,0 +1,37 @@
+{
+  "name": "todu",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:cli": "bun run --cwd packages/cli dev",
+    "dev:electron": "bun run --cwd packages/electron dev",
+    "dev:sync": "bun run --cwd packages/sync-server dev",
+    "build": "bun run build:core && bun run build:cli && bun run build:electron && bun run build:sync",
+    "build:core": "bun run --cwd packages/core build",
+    "build:cli": "bun run --cwd packages/cli build",
+    "build:electron": "bun run --cwd packages/electron build",
+    "build:sync": "bun run --cwd packages/sync-server build",
+    "test": "bun test",
+    "test:core": "bun test --cwd packages/core",
+    "test:cli": "bun test --cwd packages/cli",
+    "lint": "eslint packages/*/src",
+    "lint:fix": "eslint packages/*/src --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --build",
+    "pre-pr": "bun run typecheck && bun run lint && bun run test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.4.0"
+  }
+}
