@@ -1,31 +1,24 @@
 ## Summary
 
-<!-- Brief description of what this PR does -->
+<!-- Brief description of changes -->
+
+## Task
+
+<!-- Link to task: #123 -->
 
 ## Changes
 
-<!-- List the key changes -->
-
+<!-- List key changes -->
 - 
 
 ## Testing
 
 <!-- How was this tested? -->
-
 - [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
 - [ ] Manual testing performed
 
 ## Checklist
 
-- [ ] Code follows project standards (see AGENTS.md)
-- [ ] `bun run typecheck` passes
-- [ ] `bun run lint` passes
-- [ ] `bun run test` passes
+- [ ] `./scripts/pre-pr.sh` passes
 - [ ] Documentation updated (if needed)
-
-## Related
-
-<!-- Link to related issues/tasks -->
-
-Closes #
+- [ ] No unrelated changes included

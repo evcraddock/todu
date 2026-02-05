@@ -1,14 +1,10 @@
 # Dependencies
 node_modules/
 
-# Build outputs
+# Build
 dist/
-out/
 build/
 *.tsbuildinfo
-
-# Electron
-.electron/
 
 # Environment
 .env
@@ -16,27 +12,17 @@ build/
 .env.*.local
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
-*~
+.idea/
 
 # OS
 .DS_Store
-Thumbs.db
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# Test coverage
+# Test
 coverage/
 
-# Automerge data (local dev)
-*.automerge
-data/
+# Logs
+*.log
 
-# Package manager
-.pnpm-store/
+# AI agent config
+.claude/

@@ -1,15 +1,18 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-echo "==> Running pre-PR checks..."
+echo "Running pre-PR checks..."
 
-echo "==> Type checking..."
-bun run typecheck
+echo "→ Formatting..."
+bun run format
 
-echo "==> Linting..."
+echo "→ Linting..."
 bun run lint
 
-echo "==> Running tests..."
+echo "→ Type checking..."
+bun run typecheck
+
+echo "→ Running tests..."
 bun test
 
-echo "==> All checks passed!"
+echo "✓ All checks passed!"

@@ -1,72 +1,38 @@
 # todu
 
-Local-first task management with offline support and seamless sync.
+Local-first task management with offline support and seamless sync
 
-A rewrite of todu-api and todu.sh using [Automerge](https://automerge.org/) CRDTs for conflict-free collaboration across devices.
+## Getting Started
 
-## Features
+### Prerequisites
 
-- **Local-first**: Works offline, syncs when connected
-- **Desktop app**: Electron-based GUI
-- **CLI**: Full command-line interface
-- **Sync server**: Optional server for multi-device sync
-- **Conflict-free**: Automerge CRDTs handle merges automatically
+- Node.js 20+ or Bun 1.0+
+- npm, yarn, or bun
 
-## Architecture
-
-```
-┌─────────────┐     ┌─────────────┐
-│  Electron   │     │    CLI      │
-│    App      │     │             │
-└──────┬──────┘     └──────┬──────┘
-       │                   │
-       └─────────┬─────────┘
-                 │
-         ┌───────┴───────┐
-         │  Core Library │
-         │  (Automerge)  │
-         └───────┬───────┘
-                 │
-         ┌───────┴───────┐
-         │  Sync Server  │
-         │  (optional)   │
-         └───────────────┘
-```
-
-## Packages
-
-- `packages/core` - Shared data models and Automerge logic
-- `packages/cli` - Command-line interface
-- `packages/electron` - Desktop application
-- `packages/sync-server` - Sync server for multi-device support
-
-## Development
+### Installation
 
 ```bash
-# Install dependencies
+# Using npm
+npm install
+
+# Or using bun
 bun install
-
-# Run CLI in dev mode
-bun run dev:cli
-
-# Run Electron app in dev mode
-bun run dev:electron
-
-# Run sync server
-bun run dev:sync
 ```
 
-## Building
+### Development
 
 ```bash
-# Build all packages
-bun run build
+npm run dev
+# or
+bun run dev
+```
 
-# Build CLI only
-bun run build:cli
+## Testing
 
-# Build Electron app
-bun run build:electron
+```bash
+npm test
+# or
+bun test
 ```
 
 ## License

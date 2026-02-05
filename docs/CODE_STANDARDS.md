@@ -1,121 +1,112 @@
 # Code Standards
 
+## Formatting
+
+Use Biome or Prettier. Run before committing:
+
+```bash
+npm run format
+```
+
+## Linting
+
+Use ESLint or Biome:
+
+```bash
+npm run lint
+```
+
 ## TypeScript
 
 ### Strict Mode
-All packages use TypeScript strict mode. No `any` types without explicit justification.
 
-### Types vs Interfaces
-Prefer `type` for data shapes:
+TypeScript strict mode is enabled. No implicit `any`, strict null checks.
+
 ```typescript
-type Task = {
-  id: TaskId;
-  title: string;
-  status: TaskStatus;
-};
+// ❌ Bad
+const data = response as any;
+
+// ✅ Good
+const data: ApiResponse = response;
 ```
 
-Use `interface` for contracts that may be extended:
+### Types
+
+- Define types for all function parameters and return values
+- Use interfaces for object shapes
+- Export types that are part of public API
+
 ```typescript
-interface Repository<T> {
-  get(id: string): Promise<T | null>;
-  save(item: T): Promise<void>;
+interface Post {
+  id: number;
+  title: string;
+  content: string;
+}
+
+function createPost(data: CreatePostInput): Promise<Post> {
+  // ...
 }
 ```
 
-### Branded Types
-Use branded types for IDs to prevent mixing:
+### Null Handling
+
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+- Handle null cases explicitly
+
 ```typescript
-type TaskId = string & { readonly __brand: 'TaskId' };
-type ProjectId = string & { readonly __brand: 'ProjectId' };
+const title = post.title ?? "Untitled";
+const author = post.author?.name;
 ```
 
-### Explicit Return Types
-Public functions must have explicit return types:
-```typescript
-// Good
-export function createTask(title: string): Task { ... }
+## Imports
 
-// Bad
-export function createTask(title: string) { ... }
+- Use path aliases (`@/...`)
+- Group: external, internal, relative
+
+```typescript
+// External
+import { Hono } from "hono";
+
+// Internal
+import { db } from "@/db";
+
+// Relative
+import { validate } from "./validation";
 ```
+
+## Exports
+
+- Use named exports (not default)
+- Re-export from index.ts for public API
+
+## Functions
+
+- Keep functions small (<30 lines)
+- Single responsibility
+- Use object params for 3+ parameters
 
 ## Error Handling
 
-### Result Types
-Use Result types for operations that can fail:
+- Throw errors for exceptional cases
+- Include context in error messages
+
 ```typescript
-type Result<T, E = Error> = 
-  | { ok: true; value: T }
-  | { ok: false; error: E };
-```
-
-### Error Context
-Always include context in errors:
-```typescript
-// Good
-throw new Error(`Failed to load task ${taskId}: ${cause.message}`);
-
-// Bad
-throw new Error('Load failed');
-```
-
-## Automerge
-
-### Document Structure
-Each Automerge document type has a schema in `packages/core/src/schema/`.
-
-### Immutable Updates
-Use Automerge's `change` function for updates:
-```typescript
-import { change } from '@automerge/automerge';
-
-const updated = change(doc, 'Update task title', (d) => {
-  d.title = newTitle;
-});
-```
-
-### Sync
-Never assume network availability. Design for offline-first:
-```typescript
-// Good: Local operation, sync happens in background
-await localRepo.save(task);
-syncService.scheduleSync(); // Non-blocking
-
-// Bad: Requires network
-await remoteApi.saveTask(task);
-```
-
-## File Organization
-
-```
-packages/core/src/
-├── schema/       # Automerge document schemas
-├── operations/   # Business logic
-├── sync/         # Sync-related code
-└── types/        # Shared types
+if (!post) {
+  throw new Error(`Post not found: ${id}`);
+}
 ```
 
 ## Testing
 
-### Unit Tests
-Test pure functions and business logic:
-```typescript
-describe('createTask', () => {
-  it('creates a task with the given title', () => {
-    const task = createTask('My task');
-    expect(task.title).toBe('My task');
-  });
-});
-```
+- Use Vitest or Jest
+- Test all public functions
+- Use describe/it blocks
 
-### Integration Tests
-Test CLI commands end-to-end:
 ```typescript
-describe('todu task create', () => {
-  it('creates a task and outputs the ID', async () => {
-    const result = await runCli(['task', 'create', 'My task']);
-    expect(result.stdout).toContain('Created task');
+describe("createPost", () => {
+  it("creates post with title and content", async () => {
+    const post = await createPost({ title: "Test", content: "..." });
+    expect(post.title).toBe("Test");
   });
 });
 ```

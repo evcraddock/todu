@@ -1,56 +1,51 @@
-.PHONY: help install dev test lint typecheck build clean
+.PHONY: dev dev-stop dev-status dev-logs dev-tail check pre-pr help
+
+SOCKET := ./.overmind.sock
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies
-	bun install
+dev: ## Start the dev environment (daemonized)
+	@if [ -S $(SOCKET) ] && overmind ps -s $(SOCKET) > /dev/null 2>&1; then \
+		echo "Dev environment already running"; \
+		overmind ps -s $(SOCKET); \
+	else \
+		rm -f $(SOCKET); \
+		overmind start -f Procfile.dev -s $(SOCKET) -D; \
+		sleep 2; \
+		overmind ps -s $(SOCKET); \
+	fi
 
-dev: ## Run all services in dev mode (requires overmind)
-	overmind start -f Procfile.dev
+dev-stop: ## Stop the dev environment
+	@if [ -S $(SOCKET) ]; then overmind quit -s $(SOCKET) || true; fi
+	@rm -f $(SOCKET)
+	@tmux list-sessions 2>/dev/null | grep overmind | cut -d: -f1 | xargs -r -n1 tmux kill-session -t 2>/dev/null || true
 
-dev-cli: ## Run CLI in dev mode
-	bun run dev:cli
+dev-status: ## Check if dev environment is running
+	@if [ -S $(SOCKET) ] && overmind ps -s $(SOCKET) > /dev/null 2>&1; then \
+		echo "running"; \
+	else \
+		echo "stopped"; \
+	fi
 
-dev-electron: ## Run Electron in dev mode
-	bun run dev:electron
+dev-logs: ## Stream all logs (Ctrl+C to stop)
+	overmind echo -s $(SOCKET)
 
-dev-sync: ## Run sync server in dev mode
-	bun run dev:sync
+dev-tail: ## Show last 100 lines of logs (non-blocking)
+	@if [ -S $(SOCKET) ]; then \
+		for pane in $$(tmux -S $(SOCKET) list-panes -a -F '#{pane_id}' 2>/dev/null); do \
+			tmux -S $(SOCKET) capture-pane -p -t "$$pane" -S -100 2>/dev/null; \
+		done; \
+	else \
+		echo "Dev environment not running"; \
+	fi
 
-test: ## Run all tests
-	bun test
+check: ## Run linting and tests
+	bun run lint && bun test
 
-test-core: ## Run core package tests
-	bun test --cwd packages/core
+pre-pr: ## Run pre-PR checks
+	./scripts/pre-pr.sh
 
-test-cli: ## Run CLI tests
-	bun test --cwd packages/cli
-
-lint: ## Run linter
-	bun run lint
-
-lint-fix: ## Run linter with auto-fix
-	bun run lint:fix
-
-typecheck: ## Run type checker
-	bun run typecheck
-
-format: ## Format code
-	bun run format
-
-build: ## Build all packages
-	bun run build
-
-build-core: ## Build core package
-	bun run build:core
-
-build-cli: ## Build CLI
-	bun run build:cli
-
-clean: ## Clean build artifacts
-	rm -rf packages/*/dist
-	rm -rf node_modules
-
-pre-pr: ## Run all checks before PR
-	bun run pre-pr
+# Connect to specific service terminal (replace 'app' with service name from Procfile.dev)
+# connect-app: ## Connect to app terminal
+# 	overmind connect -s $(SOCKET) app

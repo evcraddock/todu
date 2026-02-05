@@ -1,38 +1,63 @@
-# Contributing to todu
+# Contributing
 
-## Getting Started
+This project uses an AI-first development process. Agents do the work, automation enforces quality, humans approve.
 
-1. Clone the repository
-2. Install dependencies: `bun install`
-3. Run tests: `bun run test`
+## Workflow
 
-## Development Workflow
+### 1. Pick Up a Task
 
-1. Create a branch from `main`
-2. Make changes following the code standards in AGENTS.md
-3. Write/update tests
-4. Run the pre-PR checks: `bun run pre-pr`
-5. Open a pull request
+Get assigned a task or pick from available tasks. Understand requirements before starting.
 
-## Pull Request Guidelines
+### 2. Create a Branch
 
-- Keep PRs focused on a single change
-- Include tests for new functionality
-- Update documentation as needed
-- Ensure all CI checks pass
+```bash
+git checkout main && git pull
+git checkout -b feat/{task-id}-short-description
+```
 
-## Code Style
+Branch prefixes:
+- `feat/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation only
+- `chore/` - Maintenance
 
-- TypeScript strict mode
-- ESLint + Prettier for formatting
-- Run `bun run lint` before committing
+### 3. Implement
 
-## Testing
+- Follow [CODE_STANDARDS.md](CODE_STANDARDS.md)
+- Write tests as you go
+- Commit frequently with clear messages
 
-- `bun run test` - Run all tests
-- `bun run test:core` - Run core package tests
-- `bun run test:cli` - Run CLI tests
+Commit format:
+```
+<type>: <short description>
 
-## Architecture
+Task: #<task-id>
+```
 
-See AGENTS.md for architecture guidelines and package boundaries.
+### 4. Verify Quality
+
+Before opening a PR:
+
+```bash
+./scripts/pre-pr.sh
+```
+
+Do not open a PR if this fails.
+
+### 5. Open PR
+
+Push and create PR with clear description linking to the task.
+
+### 6. Review and Merge
+
+- CI must pass
+- Address review feedback
+- Squash and merge after approval
+
+## When Stuck
+
+After 3 failed attempts at the same problem:
+
+1. Stop - Don't keep trying the same approach
+2. Document - What was tried and why it failed
+3. Ask - Request guidance or suggest alternatives
