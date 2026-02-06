@@ -140,6 +140,7 @@ Data is spread across multiple Automerge documents to avoid any single document 
 - **No indexes needed** — The task list documents serve as the indexes. Filtering by status/priority/label is an in-memory scan of a small document.
 - **Cross-project queries** — Load task list documents for active projects (typically single digits). Each is small.
 - **Archival is natural** — When a project is done, its task list and associated detail/comment documents stop syncing. Still on disk if needed.
+- **RAG-friendly** — Comment and detail documents can be independently watched and ingested by a future RAG system without parsing them out of a larger document or reacting to unrelated changes.
 
 **Tradeoffs:**
 
@@ -366,6 +367,7 @@ During migration, existing todu-skills continue to work since the CLI remains fu
 - **Team features** — Shared projects, assignments
 - **Additional extensions** — Linear, Jira, Todoist, calendar sync
 - **Habit tracking** — Extend recurring templates
+- **RAG addon** — Ingest task descriptions, comments, and external documents into a searchable vector database. The multi-document strategy makes this straightforward — subscribe to comment and detail document changes independently.
 - **Scheduled/event-driven jobs** — Daily digests, due date notifications
 
 ## References
