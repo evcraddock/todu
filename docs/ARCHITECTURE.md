@@ -2,7 +2,7 @@
 
 > Local-first task management with offline support, AI-powered planning, and seamless sync
 
-This document describes the architecture for todu, a rewrite of [todu-api](https://github.com/evcraddock/todu-api) and [todu.sh](https://github.com/evcraddock/todu.sh) with a local-first approach.
+This document describes the architecture for todu, a rewrite of [todu-api](https://github.com/evcraddock/todu-api) and [todu.sh](https://github.com/evcraddock/todu.sh) with a local-first approach. It replaces the Go CLI + Go API server + PostgreSQL stack with a TypeScript monorepo using Automerge for local-first storage and sync.
 
 ## Vision
 
@@ -11,7 +11,7 @@ A task management system that:
 - **Works offline** — Full functionality without internet
 - **Syncs seamlessly** — Changes merge automatically across devices via Automerge
 - **Plans with AI** — Embedded agent for organizing, planning, and reasoning about work
-- **Extends via plugins** — Todu extension system for capabilities (PDF, exports, integrations)
+- **Extends via plugins** — Todu extension system for integrations, imports, exports
 - **Integrates with coding agents** — Pi extension for terminal-based coding workflows
 - **Runs anywhere** — Desktop GUI (Electron) and terminal CLI
 
@@ -22,7 +22,7 @@ todu separates **planning** from **doing**:
 - **Brain (Electron app)** — AI agent for planning, organizing, and reasoning about tasks. Uses todu tools only — no file system access. "What should I work on next?" "Break this feature into tasks." "Summarize what I accomplished this week."
 - **Hands (pi in terminal)** — Full coding agent with todu extension for actual work. Reads task context, writes code, runs tests, records what was done.
 
-Both share the same engine and data via Automerge.
+Both share the same engine and data via Automerge. The Electron agent is intentionally constrained — no read/write/bash/edit tools. If we later want coding-agent capabilities in Electron, we can add those tools, but that's a bigger decision. For now, coding happens in an actual terminal.
 
 ## Package Structure
 
@@ -39,12 +39,22 @@ todu-github                       # Separate repo: GitHub Issues sync
 todu-forgejo                      # Separate repo: Forgejo Issues sync
 ```
 
+This mirrors pi-mono's layered approach:
+
+| pi-mono | todu | Role |
+|---------|------|------|
+| `ai` | — | (no LLM streaming equivalent in core) |
+| `agent` | `@todu/engine` | Core operations, no UI |
+| `coding-agent` | `@todu/cli` | Product with terminal interface |
+| `mom` | `@todu/electron` | Same engine, different UI |
+| — | `todu-pi-extension` | Lighter integration into pi |
+
 ### Package Responsibilities
 
 | Package | Dependencies | Responsibility |
 |---------|-------------|----------------|
-| `@todu/core` | None (internal) | Types, branded IDs, Automerge schema, validation, constants |
-| `@todu/engine` | `core`, `automerge` | SDK (`createTodu()`), CRUD operations, queries, sync, config, extension system |
+| `@todu/core` | None | Types, branded IDs (TaskId, ProjectId, LabelId), status/priority enums, type guards, Automerge document schema, validation functions, `Result<T, E>` type, shared constants |
+| `@todu/engine` | `core`, `automerge` | `createTodu()` SDK, Automerge doc management (create, open, save), storage abstraction, CRUD operations, queries (filter, sort, search), sync client, config, todu extension system |
 | `@todu/cli` | `engine` | Arg parsing, command routing, output formatting (table/JSON), exit codes |
 | `@todu/electron` | `engine`, `pi-ai`, `pi-agent-core` | Desktop GUI, AI agent for planning, system tray, notifications |
 | `todu-pi-extension` | `engine` | Registers todu tools in pi for terminal coding workflows |
@@ -53,13 +63,32 @@ todu-forgejo                      # Separate repo: Forgejo Issues sync
 
 ### Design Principles
 
-- **SDK-first** — The engine exposes a programmatic API (`createTodu()`). CLI and Electron are thin consumers.
-- **Bottom-up dependencies** — Each layer has zero knowledge of the layer above it. The engine doesn't know about CLI or Electron.
-- **No business logic in UI layers** — CLI parses args and formats output. Electron renders views and wires the agent. All logic lives in the engine.
+- **SDK-first** — The engine exposes a programmatic API (`createTodu(config) → Todu`). CLI and Electron are thin consumers. No backdoors — everything goes through the SDK.
+- **Bottom-up dependencies** — Each layer has zero knowledge of the layer above it. The engine doesn't know about CLI or Electron. Core doesn't know about Automerge runtime.
+- **No business logic in UI layers** — CLI parses args, calls engine, formats output. Electron renders views and wires the agent. All logic lives in the engine.
+- **Automerge lives in engine** — Core only defines schema types. Engine owns all Automerge runtime concerns (doc management, storage, sync protocol).
+- **Sync lives in engine** — CLI triggers sync explicitly. Electron syncs in background. Same engine code either way.
+- **Config lives in engine** — Shared by all consumers. CLI and Electron don't have their own config systems.
 
-## Core Concepts
+## The Engine SDK
 
-### Local-First with Automerge
+The engine is the central package. All consumers interact with todu through `createTodu(config)`, which returns a `Todu` instance with namespaced operations:
+
+| Namespace | Operations |
+|-----------|-----------|
+| `todu.task` | create, update, delete, get, list, search, move |
+| `todu.project` | create, update, delete, list |
+| `todu.label` | create, update, delete, list |
+| `todu.comment` | create, list (scoped to task) |
+| `todu.recurring` | create, update, delete, list, process |
+| `todu.sync` | start, stop, status |
+| `todu.config` | get, set |
+
+All mutation/query operations return `Result<T>` (success or typed error). The CLI, Electron, and pi extension all go through this same interface.
+
+The CLI is extremely thin: parse args → call engine → format output → exit code. No business logic whatsoever.
+
+## Local-First with Automerge
 
 All data is stored locally using [Automerge](https://automerge.org/) CRDTs (Conflict-free Replicated Data Types).
 
@@ -78,86 +107,23 @@ All data is stored locally using [Automerge](https://automerge.org/) CRDTs (Conf
 - `@automerge/automerge-repo-storage-nodefs` — Filesystem persistence
 - `@automerge/automerge-repo-network-websocket` — Sync server connection
 
-### The Engine SDK
+## Data Model
 
-The engine is the central package. All consumers interact with todu through it:
+### Core Entities
 
-```typescript
-import { createTodu } from "@todu/engine";
+| Entity | Key Fields | Notes |
+|--------|-----------|-------|
+| **Task** | id, title, description, status, priority, projectId, labels[], dueDate, scheduledDate, externalId, sourceUrl, templateId, createdAt, updatedAt | Status: active, inprogress, waiting, done, canceled. Priority: high, medium, low. |
+| **Project** | id, name, description, status, priority, externalId, systemId, syncStrategy | syncStrategy: bidirectional, pull, push, none |
+| **Label** | id, name, color | Shared across all projects |
+| **Comment** | id, taskId, content, author, createdAt | Author tracks human vs agent comments |
+| **RecurringTemplate** | id, title, description, projectId, labels[], priority, schedule (cron), nextDue, paused | Generates tasks when due |
 
-const todu = createTodu({ storagePath: "~/.todu" });
+All IDs are branded types (e.g., `TaskId`, `ProjectId`) — prevents mixing them up at the type level.
 
-// Task operations
-const task = await todu.task.create({ title: "Fix login bug", project: "myapp", priority: "high" });
-const tasks = await todu.task.list({ status: "active", priority: "high" });
-await todu.task.update(taskId, { status: "done" });
+### Automerge Document Structure
 
-// Project operations
-const projects = await todu.project.list();
-
-// Sync
-await todu.sync.start();
-todu.sync.status(); // → { connected: true, lastSync: "..." }
-
-// Config
-todu.config.get(); // → { storagePath, syncServer, ... }
-```
-
-The SDK interface:
-
-```typescript
-interface Todu {
-  task: {
-    create(input: CreateTaskInput): Promise<Result<Task>>;
-    update(id: TaskId, input: UpdateTaskInput): Promise<Result<Task>>;
-    delete(id: TaskId): Promise<Result<void>>;
-    get(id: TaskId): Promise<Result<Task>>;
-    list(filter?: TaskFilter): Promise<Result<Task[]>>;
-    search(query: string): Promise<Result<Task[]>>;
-    move(id: TaskId, projectId: ProjectId): Promise<Result<Task>>;
-  };
-  project: {
-    create(input: CreateProjectInput): Promise<Result<Project>>;
-    update(id: ProjectId, input: UpdateProjectInput): Promise<Result<Project>>;
-    delete(id: ProjectId): Promise<Result<void>>;
-    list(): Promise<Result<Project[]>>;
-  };
-  label: { /* same pattern */ };
-  comment: {
-    create(taskId: TaskId, input: CreateCommentInput): Promise<Result<Comment>>;
-    list(taskId: TaskId): Promise<Result<Comment[]>>;
-  };
-  recurring: {
-    create(input: CreateRecurringInput): Promise<Result<RecurringTemplate>>;
-    update(id: string, input: UpdateRecurringInput): Promise<Result<RecurringTemplate>>;
-    delete(id: string): Promise<Result<void>>;
-    list(): Promise<Result<RecurringTemplate[]>>;
-    process(): Promise<Result<Task[]>>; // Generate due tasks
-  };
-  sync: {
-    start(): Promise<void>;
-    stop(): Promise<void>;
-    status(): SyncStatus;
-  };
-  config: {
-    get(): ToduConfig;
-    set(updates: Partial<ToduConfig>): void;
-  };
-}
-```
-
-### How Thin Is the CLI?
-
-Very thin. A command like `todu task list --status active --priority high`:
-
-```typescript
-const todu = createTodu(loadConfig());
-const result = await todu.task.list({ status: "active", priority: "high" });
-if (!result.ok) { console.error(result.error); process.exit(1); }
-console.log(formatTable(result.value));
-```
-
-Parse args → call engine → format output. That's it.
+A single Automerge document holds all data: tasks, projects, labels, comments, recurring templates, registered external systems, and settings. This is the unit of sync — the entire document replicates across devices.
 
 ## AI Agent in Electron
 
@@ -165,226 +131,71 @@ The Electron app includes a lightweight AI agent for planning and organizing. It
 
 ### Pi Dependencies (minimal)
 
-```
-@mariozechner/pi-ai          — Model types, streaming, unified provider API
-@mariozechner/pi-agent-core  — Agent class, tool-call loop, AgentTool types, events
-@sinclair/typebox            — Tool parameter schema definitions
-```
+| Dependency | Purpose |
+|-----------|---------|
+| `@mariozechner/pi-ai` | Model types, streaming, unified provider API |
+| `@mariozechner/pi-agent-core` | Agent class, tool-call loop, AgentTool types |
+| `@sinclair/typebox` | Tool parameter schema definitions |
 
-No dependency on `pi-coding-agent`. No TUI, no extension system, no session management, no compaction, no skills, no themes. Pi is just the pipe to the LLM. These dependencies are replaceable — the Anthropic/OpenAI/Google SDKs are right there, and the agent loop is ~500 lines.
+### Why Not pi-coding-agent?
+
+`pi-coding-agent` is the full pi product — TUI, interactive mode, session management, compaction, skills, themes, slash commands, extension system, coding tools. We'd use maybe 20% of it and carry the rest as dead weight. It would also couple us to pi's product roadmap and breaking changes.
+
+`pi-ai` and `pi-agent-core` are focused, stable library packages. The agent loop is ~500 lines. If pi ever becomes a problem, we can replace it with raw Anthropic/OpenAI/Google SDKs.
 
 ### How It Works
 
-The agent gets todu tools (engine operations) plus tools from todu's own extension system. No file system tools.
+The agent receives todu tools (thin wrappers over engine SDK operations) plus tools from todu extensions. No file system tools — the Electron agent is for planning, not coding.
 
-```typescript
-import { Agent } from "@mariozechner/pi-agent-core";
-import { createTodu } from "@todu/engine";
-import { Type } from "@sinclair/typebox";
+Both the direct UI and the agent share the same engine instance and Automerge document. When the agent creates a task via tool call, the UI refreshes automatically.
 
-const todu = createTodu({ storagePath: "~/.todu" });
-
-const toduTools = [
-  {
-    name: "task_create",
-    label: "Create Task",
-    description: "Create a new task in a project",
-    parameters: Type.Object({
-      title: Type.String({ description: "Task title" }),
-      project: Type.Optional(Type.String()),
-      priority: Type.Optional(Type.String({ enum: ["low", "medium", "high"] })),
-    }),
-    async execute(_id, params) {
-      const result = await todu.task.create(params);
-      if (!result.ok) return { content: [{ type: "text", text: `Error: ${result.error}` }], details: {} };
-      return { content: [{ type: "text", text: `Created task #${result.value.id}` }], details: result.value };
-    }
-  },
-  // task_list, task_update, task_search, project_list, etc.
-];
-
-const agent = new Agent({
-  initialState: {
-    systemPrompt: "You are a task management assistant...",
-    model,
-    thinkingLevel: "off",
-    tools: toduTools,
-  },
-});
-```
+| Aspect | Electron Agent | Pi in Terminal |
+|--------|---------------|----------------|
+| Input | Chat panel in Electron | Terminal prompt |
+| Output | Streamed text + UI refresh | Terminal output |
+| Tools | todu engine operations only | todu + file ops + bash + coding tools |
+| File access | No | Yes (full coding agent) |
+| Purpose | Planning, organizing, reasoning | Coding, testing, implementing |
+| Model | User-configurable | User-configurable |
 
 ### Electron App UX
 
-**Direct UI (left panel):**
-- Task list, project list, filters, forms
-- Click to create/edit/complete tasks
-- Backed by engine calls directly
+- **Direct UI** — Task list, project views, filters, forms. Standard CRUD backed by engine calls.
+- **Agent chat** — Natural language planning. "What's my highest priority work?" "Break this feature into subtasks." "Create tasks for each action item in these meeting notes."
 
-**Agent chat (right panel or toggle):**
-- "Show me overdue tasks across all projects"
-- "Create tasks for each action item in these meeting notes"
-- "What's my highest priority work right now?"
-- "Break this feature into subtasks"
+### Concerns Addressed
 
-Both panels share the same engine instance. When the agent creates a task via tool, the direct UI refreshes — they share the same Automerge document.
+- **Scope** — Manageable. Electron is task UI + lightweight agent, not a full IDE.
+- **Pi roadmap risk** — Minimal. Thin dependency on stable library packages, not the product.
+- **Terminal-in-GUI** — Eliminated. No embedded terminal needed. Coding happens in an actual terminal.
+- **Context window** — Small. Todu tools only, curated summaries, no file contents flooding context.
+- **UX coherence** — A task manager that understands natural language, with an agent for planning and reasoning.
 
 ## Todu Extension System
 
-Todu has its own extension system, separate from pi's. Extensions serve both the AI agent AND the UI — pi extensions only serve the agent.
+Todu has its own extension system, separate from pi's. Extensions serve both the AI agent AND the direct UI.
 
-### Extension Interface
-
-```typescript
-interface ToduExtension {
-  name: string;
-
-  // Tools the AI agent can call
-  tools?: ToolDefinition[];
-
-  // Actions the engine/UI can call directly (no agent needed)
-  actions?: ActionDefinition[];
-}
-```
-
-### Example: PDF Extension
-
-```typescript
-const pdfExtension: ToduExtension = {
-  name: "pdf",
-
-  // Agent can ask to read a PDF
-  tools: [{
-    name: "read_pdf",
-    description: "Extract text from a PDF file",
-    parameters: Type.Object({ path: Type.String() }),
-    execute: async (_id, params) => {
-      const text = await extractPdfText(params.path);
-      return { content: [{ type: "text", text }], details: {} };
-    }
-  }],
-
-  // UI can export tasks without the agent
-  actions: [{
-    name: "export_tasks_pdf",
-    label: "Export to PDF",
-    execute: async (params) => { /* generate PDF from tasks */ }
-  }]
-};
-```
+A `ToduExtension` declares a name, optional **tools** (agent-callable), and optional **actions** (UI-callable). For example, a PDF extension might expose a `read_pdf` tool for the agent and an `export_tasks_pdf` action for the UI menu. A GitHub sync extension would expose sync operations as both tools and actions.
 
 ### Why Our Own Extension System?
 
 - **Domain-specific** — Designed for task management (imports, exports, integrations, views), not coding
-- **Serves both agent and UI** — Extensions provide agent tools AND UI actions/buttons
+- **Serves both agent and UI** — Extensions provide agent tools AND UI actions/buttons. Pi extensions only serve the agent.
 - **No pi dependency** — Doesn't couple us to pi's product roadmap or breaking changes
 - **Lightweight** — No pi-tui, interactive mode, coding tools, slash commands, themes
 
 ## Pi Extension (Terminal)
 
-The `todu-pi-extension` is a separate repo that registers todu tools inside pi for terminal coding workflows. It imports the engine directly:
+The `todu-pi-extension` is a separate repo that registers todu tools inside pi for terminal coding workflows. It imports the engine directly, calls `createTodu()`, and wraps each SDK operation as a pi tool.
 
-```typescript
-import { createTodu } from "@todu/engine";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+This replaces the current [todu-skills](https://github.com/evcraddock/todu-skills) approach (shelling out to the Go CLI). Benefits: direct Automerge access, typed parameters, faster execution.
 
-export default function (pi: ExtensionAPI) {
-  const todu = createTodu({ storagePath: "~/.todu" });
+The relationship between the two integration directions:
 
-  pi.registerTool({
-    name: "todu_task_list",
-    description: "List tasks from todu",
-    parameters: Type.Object({
-      project: Type.Optional(Type.String()),
-      status: Type.Optional(Type.String()),
-    }),
-    async execute(_id, params) {
-      const result = await todu.task.list(params);
-      // ...
-    },
-  });
+- **Electron app** = todu engine + pi agent (todu tools only)
+- **Pi extension** = pi agent + todu engine (todu tools added to coding tools)
 
-  // todu_task_create, todu_task_update, todu_task_show, etc.
-}
-```
-
-This replaces the current [todu-skills](https://github.com/evcraddock/todu-skills) approach (shelling out to CLI). Benefits: direct Automerge access, typed parameters, faster execution.
-
-The CLI remains functional, so existing todu-skills continue to work during migration.
-
-## Data Model
-
-### Core Entities
-
-```typescript
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: "active" | "inprogress" | "waiting" | "done" | "canceled";
-  priority?: "high" | "medium" | "low";
-  projectId?: string;
-  labels: string[];
-  dueDate?: Date;
-  scheduledDate?: Date;
-  externalId?: string;
-  sourceUrl?: string;
-  templateId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  status: "active" | "done" | "canceled";
-  priority: "high" | "medium" | "low";
-  externalId?: string;
-  systemId?: string;
-  syncStrategy: "bidirectional" | "pull" | "push" | "none";
-}
-
-interface Label {
-  id: string;
-  name: string;
-  color?: string;
-}
-
-interface Comment {
-  id: string;
-  taskId: string;
-  content: string;
-  author?: string;
-  createdAt: Date;
-}
-
-interface RecurringTemplate {
-  id: string;
-  title: string;
-  description?: string;
-  projectId?: string;
-  labels: string[];
-  priority?: "high" | "medium" | "low";
-  schedule: CronExpression;
-  nextDue: Date;
-  paused: boolean;
-}
-```
-
-### Automerge Document Structure
-
-```typescript
-interface ToduDocument {
-  tasks: Automerge.List<Task>;
-  projects: Automerge.List<Project>;
-  labels: Automerge.List<Label>;
-  comments: Automerge.List<Comment>;
-  recurringTemplates: Automerge.List<RecurringTemplate>;
-  systems: Automerge.List<System>;
-  settings: Settings;
-}
-```
+Same engine, same tools, two directions of integration. The CLI remains functional during migration, so existing todu-skills continue to work.
 
 ## Sync Architecture
 
@@ -407,33 +218,15 @@ Standard Automerge sync server — no custom server code needed:
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
-Uses [automerge-repo-sync-server](https://github.com/automerge/automerge-repo-sync-server):
-
-```bash
-# Via npx
-npx @automerge/automerge-repo-sync-server
-
-# Or via Docker
-docker run -d -p 3030:3030 -v ~/.todu/sync-data:/data \
-  -e DATA_DIR=/data \
-  ghcr.io/automerge/automerge-repo-sync-server:main
-```
+Uses [automerge-repo-sync-server](https://github.com/automerge/automerge-repo-sync-server). Run via `npx` or Docker. Configure todu to connect via `sync.server` in config.
 
 ### External Sync (GitHub, Forgejo, etc.)
 
 External sync is handled by todu extensions implementing a sync provider interface. To avoid race conditions with multiple devices, external sync runs through a **single sync worker** — never by multiple clients simultaneously.
 
-**Single device:**
+**Single device** — Electron handles external sync directly.
 
-```
-┌──────────────┐                    ┌──────────────┐
-│   Electron   │◄──────────────────►│    GitHub    │
-│  (worker     │                    │  (extension) │
-│   built-in)  │                    └──────────────┘
-└──────────────┘
-```
-
-**Multi-device:**
+**Multi-device** — A dedicated sync worker connects to the Automerge sync server and handles all external sync. Devices never talk to external systems directly. Changes propagate via Automerge.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -452,38 +245,9 @@ External sync is handled by todu extensions implementing a sync provider interfa
 
 ## Configuration
 
-### Config File
+Config file at `~/.todu/config.yaml` covers: sync server URL, enabled extensions, recurring task interval, agent default model, UI preferences.
 
-`~/.todu/config.yaml`:
-
-```yaml
-sync:
-  server: "wss://sync.example.com"
-  enabled: true
-
-extensions:
-  - todu-github
-  - todu-forgejo
-
-recurring:
-  enabled: true
-  checkInterval: "1h"
-
-agent:
-  defaultModel: "anthropic/claude-sonnet-4-20250514"
-
-ui:
-  theme: "dark"
-  defaultView: "inbox"
-```
-
-### Environment Variables
-
-```bash
-TODU_DATA_DIR=~/.todu/data
-TODU_CONFIG_FILE=~/.todu/config.yaml
-TODU_SYNC_SERVER=wss://...
-```
+Environment variable overrides: `TODU_DATA_DIR`, `TODU_CONFIG_FILE`, `TODU_SYNC_SERVER`.
 
 ## Build Tooling
 
@@ -496,23 +260,24 @@ TODU_SYNC_SERVER=wss://...
 
 Each package has a `tsconfig.build.json` that excludes test files from output. No bundling — raw `.js` + `.d.ts` + `.d.ts.map` output per file. Easier to debug and publish.
 
-Import strategy: relative `.js` imports (no path aliases). `Node16` module resolution for npm compatibility.
+Import strategy: relative `.js` imports (no path aliases). `Node16` module resolution for npm compatibility. Path aliases require build-time resolution and break when consumers import published packages.
 
 ## Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **Layered packages (core → engine → cli/electron)** | Each consumer imports only what it needs. Engine has zero UI knowledge. |
-| **SDK-first (createTodu())** | CLI, Electron, and pi extension share one code path |
+| **Layered packages (core → engine → cli/electron)** | Each consumer imports only what it needs. Engine has zero UI knowledge. Mirrors pi-mono's proven pattern. |
+| **SDK-first (createTodu())** | CLI, Electron, and pi extension share one code path. No business logic in UI layers. |
 | **Pi as LLM plumbing, not product wrapper** | Thin dependency (pi-ai + pi-agent-core). Replaceable. No coupling to pi's roadmap. |
 | **Own extension system, not pi's** | Domain-specific. Serves both agent and UI. No dead weight. |
-| **Brain/hands split** | Electron for planning (safe, no file access). Terminal for coding (full pi agent). |
+| **Brain/hands split** | Electron for planning (safe, no file access). Terminal for coding (full pi agent). No terminal-in-GUI complexity. |
 | **Automerge over SQLite** | Automatic conflict resolution, designed for multi-device sync |
-| **Curated summaries, not full sessions** | Small, syncable, good enough for cross-device context |
+| **Curated summaries, not full sessions** | Small, syncable, good enough for cross-device context. Automerge isn't designed for append-only logs. |
 | **Separate packages, not single binary** | CLI doesn't need Electron. Electron doesn't need CLI arg parsing. |
 | **Standard Automerge sync server** | No custom server code for device-to-device sync |
 | **Dedicated sync worker for external systems** | Avoids race conditions with GitHub/Forgejo from multiple devices |
 | **Biome over ESLint + Prettier** | One tool, one config, faster |
+| **Relative .js imports, no path aliases** | `Node16` module resolution for npm compatibility. Path aliases break published packages. |
 
 ## Implementation Phases
 
@@ -521,8 +286,8 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 | Component | Deliverable |
 |-----------|-------------|
 | Build tooling | Biome, tsgo/tsc, Husky, Vitest setup |
-| `@todu/core` | Types, branded IDs, Automerge schema, validation |
-| `@todu/engine` | `createTodu()` SDK, task/project/label/comment/recurring CRUD |
+| `@todu/core` | Types, branded IDs, Automerge schema, validation, Result type |
+| `@todu/engine` | `createTodu()` SDK, Automerge doc management, task/project/label/comment/recurring CRUD |
 | `@todu/engine` | Queries (filter, sort, search) |
 | `@todu/cli` | Thin CLI consuming engine, table/JSON output |
 | Tests | Unit tests for core, integration tests for engine |
@@ -550,7 +315,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 | Component | Deliverable |
 |-----------|-------------|
 | `@todu/engine` | Todu extension system (ToduExtension interface) |
-| `todu-pi-extension` | Pi extension for terminal use (depends on engine) |
+| `todu-pi-extension` | Pi extension for terminal use (replaces todu-skills) |
 | `todu-github` | GitHub Issues sync extension |
 | `todu-forgejo` | Forgejo Issues sync extension |
 | Sync worker | Standalone worker for multi-device external sync |
