@@ -17,14 +17,15 @@ git checkout -b feat/{task-id}-short-description
 
 Branch prefixes:
 
-- `feat/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation only
-- `chore/` - Maintenance
+- `feat/` — New features
+- `fix/` — Bug fixes
+- `docs/` — Documentation only
+- `chore/` — Maintenance
 
 ### 3. Implement
 
-- Follow [CODE_STANDARDS.md](CODE_STANDARDS.md)
+- Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) — this is the review checklist
+- Follow [ARCHITECTURE.md](ARCHITECTURE.md) — package structure, where logic belongs
 - Write tests as you go
 - Commit frequently with clear messages
 
@@ -32,6 +33,8 @@ Commit format:
 
 ```
 <type>: <short description>
+
+<optional body explaining why>
 
 Task: #<task-id>
 ```
@@ -41,10 +44,10 @@ Task: #<task-id>
 Before opening a PR:
 
 ```bash
-./scripts/pre-pr.sh
+make pre-pr
 ```
 
-Do not open a PR if this fails.
+This runs formatting, linting, type checking, and tests. Do not open a PR if this fails.
 
 ### 5. Open PR
 
@@ -52,14 +55,27 @@ Push and create PR with clear description linking to the task.
 
 ### 6. Review and Merge
 
-- CI must pass
+- CI must pass before requesting review
+- Agent review first, then human approval
 - Address review feedback
-- Squash and merge after approval
+- Squash and merge after explicit human approval
+
+**Never merge without human approval.** Agent reviews catch issues early — they are not permission to merge.
+
+## Tooling
+
+| Command | Purpose |
+|---------|---------|
+| `make build` | Build all packages (core → engine → cli) |
+| `make test` | Run tests |
+| `make check` | Lint + format + typecheck |
+| `make pre-pr` | Full pre-PR checks (check + test) |
+| `make run ARGS="..."` | Run CLI |
 
 ## When Stuck
 
 After 3 failed attempts at the same problem:
 
-1. Stop - Don't keep trying the same approach
-2. Document - What was tried and why it failed
-3. Ask - Request guidance or suggest alternatives
+1. **Stop** — Don't keep trying the same approach
+2. **Document** — What was tried and why it failed
+3. **Ask** — Request guidance or suggest alternatives
