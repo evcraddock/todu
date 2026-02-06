@@ -16,6 +16,7 @@ git checkout -b feat/{task-id}-short-description
 ```
 
 Branch prefixes:
+
 - `feat/` - New features
 - `fix/` - Bug fixes
 - `docs/` - Documentation only
@@ -28,6 +29,7 @@ Branch prefixes:
 - Commit frequently with clear messages
 
 Commit format:
+
 ```
 <type>: <short description>
 

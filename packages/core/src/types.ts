@@ -1,12 +1,12 @@
 // Branded types for type-safe IDs
-export type TaskId = string & { readonly __brand: 'TaskId' };
-export type ProjectId = string & { readonly __brand: 'ProjectId' };
+export type TaskId = string & { readonly __brand: "TaskId" };
+export type ProjectId = string & { readonly __brand: "ProjectId" };
 
 // Task status
-export type TaskStatus = 'todo' | 'in-progress' | 'done';
+export type TaskStatus = "todo" | "in-progress" | "done";
 
 // Task priority
-export type TaskPriority = 'low' | 'medium' | 'high';
+export type TaskPriority = "low" | "medium" | "high";
 
 // Core task type
 export type Task = {
@@ -31,9 +31,7 @@ export type Project = {
 };
 
 // Result type for error handling
-export type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 
 // Helper to create branded IDs
 export function createTaskId(id: string): TaskId {

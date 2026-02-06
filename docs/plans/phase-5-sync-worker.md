@@ -41,18 +41,20 @@ Implement the sync worker infrastructure that handles background operations. Thi
 ## Requirements
 
 ### Background Job Interface
+
 ```typescript
 interface BackgroundJob {
   name: string;
-  type: 'periodic' | 'scheduled' | 'event';
-  interval?: string;      // "5m", "10m", "1h"
-  schedule?: string;      // cron expression (future)
-  trigger?: string;       // event name (future)
+  type: "periodic" | "scheduled" | "event";
+  interval?: string; // "5m", "10m", "1h"
+  schedule?: string; // cron expression (future)
+  trigger?: string; // event name (future)
   run(context: JobContext): Promise<void>;
 }
 ```
 
 ### Worker Capabilities
+
 - Connect to Automerge sync server
 - Watch for document changes
 - Run jobs on schedule
@@ -60,11 +62,13 @@ interface BackgroundJob {
 - Handle graceful shutdown
 
 ### Functional
+
 - Recurring templates process automatically
 - Only one worker processes at a time (coordination)
 - Works when Electron running or standalone
 
 ### Technical
+
 - TypeScript
 - Can run as Docker container
 - Minimal dependencies for standalone mode
@@ -84,14 +88,17 @@ interface BackgroundJob {
 ## Implementation Notes
 
 ### Deterministic Task IDs
+
 To prevent duplicate tasks on multi-device:
+
 ```typescript
 function generateRecurringTaskId(templateId: string, scheduledDate: Date): string {
-  return `recurring-${templateId}-${scheduledDate.toISOString().split('T')[0]}`;
+  return `recurring-${templateId}-${scheduledDate.toISOString().split("T")[0]}`;
 }
 ```
 
 ### Worker Coordination
+
 - On multi-device, only worker should process recurring tasks
 - If no worker, devices should not auto-process (use manual `todu recurring process`)
 - Worker claims ownership via Automerge document flag

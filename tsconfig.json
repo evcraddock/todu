@@ -16,10 +16,5 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/cli" },
-    { "path": "./packages/electron" },
-    { "path": "./packages/sync-server" }
-  ]
+  "references": [{ "path": "./packages/core" }, { "path": "./packages/app" }]
 }

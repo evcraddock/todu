@@ -39,11 +39,13 @@ Create `todu-pi-extension` package that registers native LLM tools for the pi co
 ## Requirements
 
 ### Functional
+
 - All CLI functionality available as LLM tools
 - Tools work with local Automerge (same as CLI)
 - Backward compatible (existing todu-skills still work)
 
 ### Technical
+
 - TypeScript
 - Uses @todu/core for data access
 - Follows pi extension patterns

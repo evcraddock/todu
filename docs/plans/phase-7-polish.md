@@ -49,6 +49,7 @@ Final polish phase covering migration from old system, advanced background job t
 ## Requirements
 
 ### Migration
+
 ```bash
 # Export from old system
 curl https://api.todu.example.com/export > export.json
@@ -62,17 +63,19 @@ todu migrate verify
 ```
 
 ### Migration Mapping
-| Old (todu-api) | New (Automerge) |
-|----------------|-----------------|
-| Task | Task |
-| Project | Project |
-| Label | Label |
-| Comment | Comment |
+
+| Old (todu-api)        | New (Automerge)   |
+| --------------------- | ----------------- |
+| Task                  | Task              |
+| Project               | Project           |
+| Label                 | Label             |
+| Comment               | Comment           |
 | RecurringTaskTemplate | RecurringTemplate |
-| external_id | externalId |
-| source_url | sourceUrl |
+| external_id           | externalId        |
+| source_url            | sourceUrl         |
 
 ### Scheduled Jobs
+
 ```typescript
 interface BackgroundJob {
   type: 'scheduled';
@@ -92,6 +95,7 @@ interface BackgroundJob {
 ```
 
 ### Event-Driven Jobs
+
 ```typescript
 interface BackgroundJob {
   type: 'event';
