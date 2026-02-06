@@ -121,9 +121,30 @@ All data is stored locally using [Automerge](https://automerge.org/) CRDTs (Conf
 
 All IDs are branded types (e.g., `TaskId`, `ProjectId`) — prevents mixing them up at the type level.
 
-### Automerge Document Structure
+### Automerge Document Strategy
 
-A single Automerge document holds all data: tasks, projects, labels, comments, recurring templates, registered external systems, and settings. This is the unit of sync — the entire document replicates across devices.
+Data is spread across multiple Automerge documents to avoid any single document growing unboundedly. Heavy content (descriptions, comments) is separated from lightweight metadata so that listing tasks doesn't require loading full content.
+
+| Document Type | Scope | Contents | Growth Profile |
+|--------------|-------|----------|---------------|
+| **Catalog** (one) | Global | Projects, labels, settings, recurring templates, registered external systems | Small, bounded, rarely changes |
+| **Task list** (one per project) | Per project | Task metadata only: id, title, status, priority, labels, dates, externalId. No descriptions. | ~200 bytes per task. A project with 500 tasks ≈ 100KB. |
+| **Task detail** (one per task) | Per task | Description and other heavy content | 5-25KB typical. Loaded on demand when opening a task. |
+| **Comments** (one per task) | Per task | All comments for that task | Grows with discussion. Loaded on demand when viewing comments. |
+
+**Why this split:**
+
+- **Listing tasks is fast** — Load one small task list document per active project. No descriptions or comments to wade through.
+- **No unbounded documents** — The heaviest content (descriptions, comments) is isolated per-task. No single document accumulates all data.
+- **On-demand loading** — Opening a task loads its detail and comment documents. Closing it can release them.
+- **No indexes needed** — The task list documents serve as the indexes. Filtering by status/priority/label is an in-memory scan of a small document.
+- **Cross-project queries** — Load task list documents for active projects (typically single digits). Each is small.
+- **Archival is natural** — When a project is done, its task list and associated detail/comment documents stop syncing. Still on disk if needed.
+
+**Tradeoffs:**
+
+- Creating a task touches three documents (task list + detail + comments). Not atomic across documents, but for a single-user app, partial failures are rare and recoverable on next startup.
+- More documents to manage overall. The engine handles document lifecycle internally — consumers only see the SDK.
 
 ## AI Agent in Electron
 
@@ -272,6 +293,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 | **Own extension system, not pi's** | Domain-specific. Serves both agent and UI. No dead weight. |
 | **Brain/hands split** | Electron for planning (safe, no file access). Terminal for coding (full pi agent). No terminal-in-GUI complexity. |
 | **Automerge over SQLite** | Automatic conflict resolution, designed for multi-device sync |
+| **Multi-document strategy** | No single document grows unboundedly. Task lists stay small (metadata only). Heavy content (descriptions, comments) loads on demand per task. Task list docs double as indexes — no separate index to maintain. |
 | **Curated summaries, not full sessions** | Small, syncable, good enough for cross-device context. Automerge isn't designed for append-only logs. |
 | **Separate packages, not single binary** | CLI doesn't need Electron. Electron doesn't need CLI arg parsing. |
 | **Standard Automerge sync server** | No custom server code for device-to-device sync |
