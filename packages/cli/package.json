@@ -1,0 +1,15 @@
+{
+  "name": "@todu/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "todu-new": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsgo -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@todu/engine": "^0.0.1"
+  }
+}

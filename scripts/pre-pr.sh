@@ -3,16 +3,10 @@ set -e
 
 echo "Running pre-PR checks..."
 
-echo "→ Formatting..."
-bun run format
-
-echo "→ Linting..."
-bun run lint
-
-echo "→ Type checking..."
-bun run typecheck
+echo "→ Linting + formatting + type checking..."
+npm run check:ci
 
 echo "→ Running tests..."
-bun test
+npm test
 
 echo "✓ All checks passed!"

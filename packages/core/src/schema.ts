@@ -1,20 +1,4 @@
-// Automerge document schemas
-// These define the structure of documents stored in Automerge
+// Placeholder — document schemas will be fully defined in task #1603.
+// This file exists to verify the build pipeline works.
 
-import type { Task, Project } from "./types";
-
-// Root document containing all tasks and projects
-export type TodoDocument = {
-  tasks: Record<string, Task>;
-  projects: Record<string, Project>;
-  version: number;
-};
-
-// Initial empty document
-export function createEmptyDocument(): TodoDocument {
-  return {
-    tasks: {},
-    projects: {},
-    version: 1,
-  };
-}
+export const SCHEMA_VERSION = 1;

@@ -7,27 +7,23 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --cwd packages/app dev",
-    "build": "bun run build:core && bun run build:app",
-    "build:core": "bun run --cwd packages/core build",
-    "build:app": "bun run --cwd packages/app build",
-    "test": "bun test",
-    "test:core": "bun test --cwd packages/core",
-    "test:app": "bun test --cwd packages/app",
-    "lint": "eslint packages/*/src",
-    "lint:fix": "eslint packages/*/src --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "typecheck": "tsc --build",
-    "pre-pr": "bun run typecheck && bun run lint && bun run test"
+    "build": "npm run build:core && npm run build:engine && npm run build:cli",
+    "build:core": "npm run --workspace=packages/core build",
+    "build:engine": "npm run --workspace=packages/engine build",
+    "build:cli": "npm run --workspace=packages/cli build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "biome check --write --error-on-warnings . && tsgo --noEmit",
+    "check:ci": "biome check --error-on-warnings . && tsgo --noEmit",
+    "typecheck": "tsgo --noEmit",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/bun": "latest",
-    "eslint": "^9",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.2.0",
-    "typescript": "^5.4.0",
-    "typescript-eslint": "^8.54.0"
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^25.2.1",
+    "@typescript/native-preview": "^7.0.0-dev",
+    "husky": "^9.1.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
   }
 }

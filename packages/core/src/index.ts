@@ -1,4 +1,2 @@
-// @todu/core - Shared data models and Automerge logic
-
-export * from "./types";
-export * from "./schema";
+export * from "./types.js";
+export * from "./schema.js";

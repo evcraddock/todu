@@ -1,14 +1,8 @@
-import { describe, expect, it } from "bun:test";
-import { createEmptyDocument } from "./schema";
+import { describe, expect, it } from "vitest";
+import { SCHEMA_VERSION } from "./schema.js";
 
 describe("schema", () => {
-  describe("createEmptyDocument", () => {
-    it("creates a document with empty tasks and projects", () => {
-      const doc = createEmptyDocument();
-
-      expect(doc.tasks).toEqual({});
-      expect(doc.projects).toEqual({});
-      expect(doc.version).toBe(1);
-    });
+  it("exports a schema version", () => {
+    expect(SCHEMA_VERSION).toBe(1);
   });
 });

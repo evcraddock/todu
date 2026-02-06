@@ -1,5 +1,5 @@
 {
-  "name": "@todu/core",
+  "name": "@todu/engine",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,5 +12,8 @@
   },
   "scripts": {
     "build": "tsgo -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@todu/core": "^0.0.1"
   }
 }
