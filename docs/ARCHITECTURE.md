@@ -24,6 +24,8 @@ todu separates **planning** from **doing**:
 
 Both share the same engine and data via Automerge. The Electron agent is intentionally constrained — no read/write/bash/edit tools. If we later want coding-agent capabilities in Electron, we can add those tools, but that's a bigger decision. For now, coding happens in an actual terminal.
 
+During Phase 1 (CLI-only), there is no planning agent. Task management is manual via CLI commands. The agent arrives in Phase 2 with Electron.
+
 ## Package Structure
 
 ```
@@ -53,7 +55,7 @@ This mirrors pi-mono's layered approach:
 
 | Package | Dependencies | Responsibility |
 |---------|-------------|----------------|
-| `@todu/core` | None | Types, branded IDs (TaskId, ProjectId, LabelId), status/priority enums, type guards, Automerge document schema, validation functions, `Result<T, E>` type, shared constants |
+| `@todu/core` | None | Types, branded IDs (TaskId, ProjectId, LabelId, CommentId, HabitId), status/priority enums, type guards, Automerge document schema, validation functions, `Result<T, E>` type, shared constants |
 | `@todu/engine` | `core`, `automerge` | `createTodu()` SDK, Automerge doc management (create, open, save), storage abstraction, CRUD operations, queries (filter, sort, search), sync client, config, todu extension system |
 | `@todu/cli` | `engine` | Arg parsing, command routing, output formatting (table/JSON), exit codes |
 | `@todu/electron` | `engine`, `pi-ai`, `pi-agent-core` | Desktop GUI, AI agent for planning, system tray, notifications |
@@ -81,6 +83,7 @@ The engine is the central package. All consumers interact with todu through `cre
 | `todu.label` | create, update, delete, list |
 | `todu.comment` | create, list (scoped to task) |
 | `todu.recurring` | create, update, delete, list, process |
+| `todu.habit` | create, update, delete, list, complete, streak |
 | `todu.sync` | start, stop, status |
 | `todu.config` | get, set |
 
@@ -113,13 +116,33 @@ All data is stored locally using [Automerge](https://automerge.org/) CRDTs (Conf
 
 | Entity | Key Fields | Notes |
 |--------|-----------|-------|
-| **Task** | id, title, description, status, priority, projectId, labels[], dueDate, scheduledDate, externalId, sourceUrl, templateId, createdAt, updatedAt | Status: active, inprogress, waiting, done, canceled. Priority: high, medium, low. |
+| **Task** | id, title, description, status, priority, projectId, labels[], dueDate, scheduledDate, externalId, sourceUrl, templateId, createdAt, updatedAt | Priority: high, medium, low. |
 | **Project** | id, name, description, status, priority, externalId, systemId, syncStrategy | syncStrategy: bidirectional, pull, push, none |
 | **Label** | id, name, color | Shared across all projects |
 | **Comment** | id, taskId, content, author, createdAt | Author tracks human vs agent comments |
 | **RecurringTemplate** | id, title, description, projectId, labels[], priority, schedule (cron), nextDue, paused | Generates tasks when due |
+| **Habit** | id, title, description, frequency, streak, lastCompleted, paused, createdAt | Trackable habits with streak tracking. Separate from recurring templates — habits are about building consistency, not generating tasks. |
 
-All IDs are branded types (e.g., `TaskId`, `ProjectId`) — prevents mixing them up at the type level.
+All IDs are branded types (`TaskId`, `ProjectId`, `LabelId`, `CommentId`, `HabitId`) — prevents mixing them up at the type level.
+
+### Task Statuses
+
+| Status | Meaning |
+|--------|---------|
+| **active** | Ready to work on. The default state for new tasks. |
+| **inprogress** | Currently being worked on. |
+| **waiting** | Blocked on something external — another person, a dependency, information. Not actionable right now. |
+| **done** | Completed. |
+| **canceled** | Won't be done. Kept for history, not shown in active views. |
+
+### External Sync Fields
+
+Tasks and projects include fields for linking to external systems (GitHub Issues, Forgejo, etc.):
+
+- **externalId** — The ID in the external system (e.g., GitHub issue number). Used to map todu entities to their external counterparts during sync.
+- **sourceUrl** — URL to the external entity (e.g., `https://github.com/org/repo/issues/42`). For quick navigation.
+- **systemId** (on Project) — Identifies which external system a project syncs with (e.g., `github:org/repo`). Used by sync extensions to know which projects they're responsible for.
+- **syncStrategy** (on Project) — Controls sync direction: bidirectional (two-way), pull (external → todu only), push (todu → external only), none (no sync).
 
 ### Automerge Document Strategy
 
@@ -127,7 +150,7 @@ Data is spread across multiple Automerge documents to avoid any single document 
 
 | Document Type | Scope | Contents | Growth Profile |
 |--------------|-------|----------|---------------|
-| **Catalog** (one) | Global | Projects, labels, settings, recurring templates, registered external systems | Small, bounded, rarely changes |
+| **Catalog** (one) | Global | Projects, labels, habits, settings, recurring templates, registered external systems | Small, bounded, rarely changes |
 | **Task list** (one per project) | Per project | Task metadata only: id, title, status, priority, labels, dates, externalId. No descriptions. | ~200 bytes per task. A project with 500 tasks ≈ 100KB. |
 | **Task detail** (one per task) | Per task | Description and other heavy content | 5-25KB typical. Loaded on demand when opening a task. |
 | **Comments** (one per task) | Per task | All comments for that task | Grows with discussion. Loaded on demand when viewing comments. |
@@ -142,10 +165,17 @@ Data is spread across multiple Automerge documents to avoid any single document 
 - **Archival is natural** — When a project is done, its task list and associated detail/comment documents stop syncing. Still on disk if needed.
 - **RAG-friendly** — Comment and detail documents can be independently watched and ingested by a future RAG system without parsing them out of a larger document or reacting to unrelated changes.
 
+**Document lifecycle:**
+
+- **Creation** — Creating a task touches three documents (task list entry + detail + comments). Not atomic across documents, but for a single-user app, partial failures are rare and recoverable via startup reconciliation.
+- **Deletion** — Task is marked as deleted (tombstone) in the task list document. Detail and comment documents are abandoned — they stop being loaded or synced but aren't physically removed (Automerge documents are append-only). Startup reconciliation can clean up orphaned documents.
+- **Search** — Searching across task titles, statuses, and labels is fast (scan task list documents). Full-text search across descriptions requires loading detail documents or delegating to a future RAG addon.
+- **Reconciliation** — On startup, the engine scans task list documents and verifies detail/comment documents exist. Orphaned documents (detail/comments without a task list entry) are cleaned up. Missing documents (task list entry without detail) are flagged.
+
 **Tradeoffs:**
 
-- Creating a task touches three documents (task list + detail + comments). Not atomic across documents, but for a single-user app, partial failures are rare and recoverable on next startup.
 - More documents to manage overall. The engine handles document lifecycle internally — consumers only see the SDK.
+- Schema evolution requires a migration strategy. Automerge documents are append-only, so schema changes are applied by reading the old format and writing new fields. A version field in the catalog document tracks the current schema version.
 
 ## AI Agent in Electron
 
@@ -310,7 +340,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 |-----------|-------------|
 | Build tooling | Biome, tsgo/tsc, Husky, Vitest setup |
 | `@todu/core` | Types, branded IDs, Automerge schema, validation, Result type |
-| `@todu/engine` | `createTodu()` SDK, Automerge doc management, task/project/label/comment/recurring CRUD |
+| `@todu/engine` | `createTodu()` SDK, Automerge doc management, task/project/label/comment/recurring/habit CRUD |
 | `@todu/engine` | Queries (filter, sort, search) |
 | `@todu/cli` | Thin CLI consuming engine, table/JSON output |
 | Tests | Unit tests for core, integration tests for engine |
@@ -366,7 +396,6 @@ During migration, existing todu-skills continue to work since the CLI remains fu
 - **Mobile apps** — React Native with `@todu/engine`
 - **Team features** — Shared projects, assignments
 - **Additional extensions** — Linear, Jira, Todoist, calendar sync
-- **Habit tracking** — Extend recurring templates
 - **RAG addon** — Ingest task descriptions, comments, and external documents into a searchable vector database. The multi-document strategy makes this straightforward — subscribe to comment and detail document changes independently.
 - **Scheduled/event-driven jobs** — Daily digests, due date notifications
 
