@@ -35,15 +35,15 @@ make check
 make help
 ```
 
-| Command | Description |
-|---------|-------------|
-| `make build` | Build all packages |
-| `make test` | Run tests |
-| `make lint` | Run linter |
-| `make typecheck` | TypeScript type checking |
-| `make check` | Lint + test |
-| `make pre-pr` | Full pre-PR checks |
-| `make run ARGS="..."` | Run CLI commands |
+| Command               | Description              |
+| --------------------- | ------------------------ |
+| `make build`          | Build all packages       |
+| `make test`           | Run tests                |
+| `make lint`           | Run linter               |
+| `make typecheck`      | TypeScript type checking |
+| `make check`          | Lint + test              |
+| `make pre-pr`         | Full pre-PR checks       |
+| `make run ARGS="..."` | Run CLI commands         |
 
 ### Before Opening a PR
 
@@ -54,6 +54,7 @@ make pre-pr
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on:
+
 - Package structure
 - Automerge-based local-first design
 - Sync architecture

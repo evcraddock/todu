@@ -1,7 +1,7 @@
 // Automerge document schemas
 // These define the structure of documents stored in Automerge
 
-import type { Task, Project } from './types';
+import type { Task, Project } from "./types";
 
 // Root document containing all tasks and projects
 export type TodoDocument = {

@@ -47,20 +47,21 @@ Implement the plugin system that enables external integrations. Create GitHub an
 ## Requirements
 
 ### Plugin Interface
+
 ```typescript
 interface SyncProvider {
   readonly name: string;
   readonly version: string;
-  
+
   initialize(config: PluginConfig): Promise<void>;
   shutdown(): Promise<void>;
-  
+
   pull(project: Project): Promise<ExternalTask[]>;
   push(tasks: Task[], project: Project): Promise<void>;
-  
+
   mapToTask(external: ExternalTask): Task;
   mapFromTask(task: Task): ExternalTask;
-  
+
   // Optional
   handleWebhook?(payload: unknown): Promise<void>;
   backgroundJobs?: BackgroundJob[];
@@ -68,17 +69,20 @@ interface SyncProvider {
 ```
 
 ### Plugin Distribution
+
 - npm packages (`todu-github`, `todu-forgejo`)
 - Installed to `~/.todu/plugins/`
 - Version compatibility with @todu/core
 
 ### Sync Behavior
+
 - Pull: Fetch from external, create/update local tasks
 - Push: Send local changes to external
 - Conflict resolution: Last-write-wins based on updatedAt
 - Track externalId to link tasks ↔ issues
 
 ### Project Configuration
+
 ```yaml
 # Per-project sync config
 projects:
@@ -87,17 +91,19 @@ projects:
       provider: "github"
       config:
         repo: "owner/repo"
-      strategy: "bidirectional"  # pull, push, bidirectional
+      strategy: "bidirectional" # pull, push, bidirectional
       interval: "10m"
 ```
 
 ### Functional
+
 - Changes in GitHub appear in todu
 - Changes in todu appear in GitHub
 - Comments sync bidirectionally
 - Labels map between systems
 
 ### Technical
+
 - Plugins are npm packages
 - OAuth for authentication (or API tokens)
 - Rate limiting handling
@@ -120,16 +126,19 @@ projects:
 ## Plugin Ecosystem
 
 ### Security Model
+
 - Users explicitly install plugins
 - Plugins have access to task data
 - OAuth tokens stored securely
 - No sandboxing (trust model like npm)
 
 ### Discovery
+
 - Initially: document known plugins
 - Future: plugin registry / directory
 
 ### Community Plugins (Future)
+
 - Linear
 - Jira
 - Todoist

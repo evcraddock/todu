@@ -3,6 +3,7 @@
 ## Before Starting ANY Task
 
 **ALWAYS use the `task-start-preflight` skill** when you hear:
+
 - "start task", "work on task", "get started", "pick up task"
 - "let's do task", "begin task", "tackle task"
 - Or any variation of starting work
@@ -12,6 +13,7 @@ The preflight ensures you understand the task, check dependencies, and follow pr
 ## Required Reading
 
 Before working, read and follow:
+
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - workflow and PR process
 - [docs/CODE_STANDARDS.md](docs/CODE_STANDARDS.md) - code style and patterns
 
@@ -22,6 +24,7 @@ You MUST follow these guidelines throughout your work.
 **No exceptions. No "quick fixes". No "obvious bugs".**
 
 Always:
+
 1. Create a feature branch (`feat/<task-id>-<description>`)
 2. Create a PR
 3. Wait for CI to pass
@@ -30,6 +33,7 @@ Always:
 6. Only then merge
 
 This applies even when:
+
 - You're confident the fix is correct
 - It's a one-line change
 - You're in the middle of debugging
@@ -42,11 +46,13 @@ This applies even when:
 **Agent reviews do not replace human approval.** The agent review is a helper to catch issues early - it is NOT permission to merge.
 
 After an agent review completes:
+
 1. Show the review results to the user
 2. **Stop and wait for explicit human approval**
 3. Only merge when the user says "merge", "approved", "LGTM", or similar
 
 **DO NOT:**
+
 - Auto-merge after agent review
 - Assume approval because the review passed
 - Merge and then tell the user about it
@@ -68,6 +74,7 @@ Local-first task management with offline support and seamless sync
 Run `make help` to see all available commands.
 
 Key Makefile targets:
+
 - `make run ARGS="..."` - Run CLI commands
 - `make build` - Build all packages
 - `make test` - Run tests
@@ -80,6 +87,7 @@ Note: `make dev` is a placeholder until Phase 2 (Electron). For CLI development,
 ## Dependencies
 
 When installing packages:
+
 - Use latest **STABLE** versions only
 - Reject canary/beta/alpha/rc versions unless user explicitly approves
 - Verify stable version: `npm view <package> versions | grep -v '-'`
@@ -106,11 +114,13 @@ Non-stable versions (canary, beta, alpha, rc) can have bugs or incomplete featur
 After creating a PR, CI runs automatically. **Do not request a review until CI passes.**
 
 Check CI status:
+
 ```bash
 gh pr view <number> --json statusCheckRollup --jq '.statusCheckRollup[0] | "\(.status) - \(.conclusion // "pending")"'
 ```
 
 If CI fails:
+
 - Check the failure: `gh run view <run-id> --log-failed`
 - Fix the issue, commit, and push
 - Wait for CI to pass before requesting review

@@ -16,8 +16,5 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/app" }
-  ]
+  "references": [{ "path": "./packages/core" }, { "path": "./packages/app" }]
 }
