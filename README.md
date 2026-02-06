@@ -1,49 +1,26 @@
 # todu
 
+[![CI](https://github.com/evcraddock/todu/actions/workflows/ci.yml/badge.svg)](https://github.com/evcraddock/todu/actions/workflows/ci.yml)
+
 Local-first task management with offline support and seamless sync
 
 ## Prerequisites
 
-- Node.js 20+ or Bun 1.0+
+- Bun 1.0+
 
 ## Installation
 
 ```bash
 bun install
-# or
-npm install
 ```
 
-## How to Work on This Project
+## Development
 
-### Start the Dev Environment
-
-```bash
-make dev
-```
-
-This starts all services defined in `Procfile.dev`. The command returns immediately (daemonized).
-
-### View Logs
+### Run CLI Commands
 
 ```bash
-# Stream all logs (Ctrl+C to stop)
-make dev-logs
-
-# Quick peek at recent logs
-make dev-tail
-```
-
-### Check Status
-
-```bash
-make dev-status
-```
-
-### Stop the Dev Environment
-
-```bash
-make dev-stop
+make run ARGS="--help"
+make run ARGS="task list"
 ```
 
 ### Run Tests and Linting
@@ -52,21 +29,35 @@ make dev-stop
 make check
 ```
 
+### Available Commands
+
+```bash
+make help
+```
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Build all packages |
+| `make test` | Run tests |
+| `make lint` | Run linter |
+| `make typecheck` | TypeScript type checking |
+| `make check` | Lint + test |
+| `make pre-pr` | Full pre-PR checks |
+| `make run ARGS="..."` | Run CLI commands |
+
 ### Before Opening a PR
 
 ```bash
 make pre-pr
 ```
 
-### Available Make Commands
+## Architecture
 
-```bash
-make help
-```
-
-## Dev Environment Setup
-
-If `make dev` fails, the dev environment needs configuration. See task #1560 "Set up dev environment" for details on configuring `Procfile.dev` and any required services.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on:
+- Package structure
+- Automerge-based local-first design
+- Sync architecture
+- Plugin system
 
 ## License
 
