@@ -1,1 +1,6 @@
-sync: bun run dev:sync
+# Dev services managed by overmind
+# Add services here as needed (Phase 2+)
+#
+# Examples:
+#   app: bun run dev
+#   sync-server: docker run --rm -p 3030:3030 ghcr.io/automerge/automerge-repo-sync-server:main

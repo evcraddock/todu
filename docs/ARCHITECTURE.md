@@ -26,9 +26,8 @@ A task management system that:
 
 todu                          # Main application
 ├── packages/core             # @todu/core source
-├── packages/cli              # CLI commands
-├── packages/electron         # Desktop UI (includes worker for single-device)
-└── packages/worker           # Standalone sync worker (for multi-device)
+├── packages/app              # Unified CLI + Electron app (single binary)
+└── packages/worker           # Standalone sync worker (post-MVP, for multi-device)
 
 todu-pi-extension             # Separate repo
 └── Pi coding agent tools

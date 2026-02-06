@@ -1,13 +1,14 @@
 {
-  "name": "@todu/cli",
+  "name": "@todu/app",
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "todu": "./dist/cli.js"
+    "todu": "./dist/index.js"
   },
+  "main": "./dist/index.js",
   "scripts": {
-    "build": "bun build ./src/cli.ts --outdir ./dist --target node",
-    "dev": "bun run ./src/cli.ts",
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "dev": "bun run ./src/index.ts",
     "test": "bun test"
   },
   "dependencies": {
