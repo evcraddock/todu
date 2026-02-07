@@ -1,0 +1,405 @@
+import crypto from "node:crypto";
+import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
+import type { Repo } from "@automerge/automerge-repo";
+import {
+  type CatalogDocument,
+  type CreateTaskInput,
+  type ProjectId,
+  type Result,
+  type Task,
+  type TaskDetailDocument,
+  type TaskFilter,
+  type TaskId,
+  type TaskListDocument,
+  type TaskWithDetail,
+  type UpdateTaskInput,
+  createTaskDetailDocument,
+  createTaskId,
+  createTaskListDocument,
+  err,
+  notFound,
+  ok,
+  validateCreateTaskInput,
+  validateUpdateTaskInput,
+  validationError,
+} from "@todu/core";
+import type { TaskNamespace } from "./todu.js";
+
+// ============================================================================
+// Task namespace — multi-document CRUD
+// ============================================================================
+
+export function createTaskNamespace(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+): TaskNamespace {
+  /**
+   * Get or create the TaskListDocument for a project.
+   * Stores the document ID in catalog.taskListDocIds.
+   */
+  async function getOrCreateTaskListDoc(
+    projectId: ProjectId,
+  ): Promise<DocHandle<TaskListDocument>> {
+    const catalogDoc = catalog.doc();
+    const existingDocId = catalogDoc?.taskListDocIds[projectId];
+
+    if (existingDocId) {
+      return await repo.find<TaskListDocument>(existingDocId as DocumentId);
+    }
+
+    // Create new task list document
+    const handle = repo.create<TaskListDocument>();
+    const template = createTaskListDocument(projectId);
+    handle.change((doc) => {
+      doc.projectId = template.projectId;
+      doc.tasks = template.tasks;
+      doc.detailDocIds = template.detailDocIds;
+    });
+
+    // Register in catalog
+    catalog.change((doc) => {
+      doc.taskListDocIds[projectId] = handle.documentId;
+    });
+
+    return handle;
+  }
+
+  /**
+   * Find a task across all task list documents.
+   * Returns the task, its index, and the task list handle.
+   */
+  async function findTask(
+    id: TaskId,
+  ): Promise<
+    | { found: true; task: Task; index: number; listHandle: DocHandle<TaskListDocument> }
+    | { found: false }
+  > {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc) return { found: false };
+
+    for (const docId of Object.values(catalogDoc.taskListDocIds)) {
+      const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+      const doc = handle.doc();
+      if (!doc) continue;
+
+      const index = doc.tasks.findIndex((t) => t.id === id);
+      if (index !== -1) {
+        return { found: true, task: cloneTask(doc.tasks[index]), index, listHandle: handle };
+      }
+    }
+
+    return { found: false };
+  }
+
+  return {
+    async create(input: CreateTaskInput): Promise<Result<TaskWithDetail>> {
+      const validationErr = validateCreateTaskInput(input);
+      if (validationErr) return err(validationErr);
+
+      // Verify project exists
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc) return err(notFound("project", input.projectId));
+      const project = catalogDoc.projects.find((p) => p.id === input.projectId);
+      if (!project) return err(notFound("project", input.projectId));
+
+      const now = new Date().toISOString();
+      const id = createTaskId(`task-${crypto.randomUUID().slice(0, 8)}`);
+
+      const task: Task = {
+        id,
+        title: input.title.trim(),
+        status: "active",
+        priority: input.priority ?? "medium",
+        projectId: input.projectId,
+        labels: input.labels ?? [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      // Automerge doesn't allow undefined — only set optional fields if present
+      if (input.dueDate !== undefined) task.dueDate = input.dueDate;
+      if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
+
+      // Add to task list document
+      const listHandle = await getOrCreateTaskListDoc(input.projectId);
+      listHandle.change((doc) => {
+        doc.tasks.push(task);
+      });
+
+      // Create detail document if description provided
+      const description = input.description?.trim();
+      if (description) {
+        const detailHandle = repo.create<TaskDetailDocument>();
+        const template = createTaskDetailDocument(id, description);
+        detailHandle.change((doc) => {
+          doc.taskId = template.taskId;
+          doc.description = template.description;
+        });
+
+        listHandle.change((doc) => {
+          doc.detailDocIds[id] = detailHandle.documentId;
+        });
+      }
+
+      return ok({ ...task, description });
+    },
+
+    async list(filter?: TaskFilter): Promise<Result<Task[]>> {
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc) return ok([]);
+
+      const allTasks: Task[] = [];
+
+      // If filtering by project, only load that project's task list
+      const docIds = filter?.projectId
+        ? [catalogDoc.taskListDocIds[filter.projectId]].filter(Boolean)
+        : Object.values(catalogDoc.taskListDocIds);
+
+      for (const docId of docIds) {
+        const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+        const doc = handle.doc();
+        if (!doc) continue;
+
+        for (const task of doc.tasks) {
+          allTasks.push(cloneTask(task));
+        }
+      }
+
+      // Apply filters
+      let filtered = allTasks;
+      if (filter?.status) {
+        filtered = filtered.filter((t) => t.status === filter.status);
+      }
+      if (filter?.priority) {
+        filtered = filtered.filter((t) => t.priority === filter.priority);
+      }
+      if (filter?.label) {
+        filtered = filtered.filter((t) => t.labels.includes(filter.label!));
+      }
+      if (filter?.dueBefore) {
+        filtered = filtered.filter(
+          (t) => t.dueDate !== undefined && t.dueDate <= filter.dueBefore!,
+        );
+      }
+      if (filter?.dueAfter) {
+        filtered = filtered.filter((t) => t.dueDate !== undefined && t.dueDate >= filter.dueAfter!);
+      }
+
+      // Default sort: priority desc, then createdAt desc
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      filtered.sort((a, b) => {
+        const pd = priorityOrder[b.priority] - priorityOrder[a.priority];
+        if (pd !== 0) return pd;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+
+      return ok(filtered);
+    },
+
+    async get(id: TaskId): Promise<Result<TaskWithDetail>> {
+      const result = await findTask(id);
+      if (!result.found) return err(notFound("task", id));
+
+      // Load detail document on demand
+      const listDoc = result.listHandle.doc();
+      const detailDocId = listDoc?.detailDocIds[id];
+      let description: string | undefined;
+
+      if (detailDocId) {
+        const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+        const detailDoc = detailHandle.doc();
+        if (detailDoc) {
+          description = detailDoc.description;
+        }
+      }
+
+      return ok({ ...result.task, description });
+    },
+
+    async update(id: TaskId, input: UpdateTaskInput): Promise<Result<TaskWithDetail>> {
+      const result = await findTask(id);
+      if (!result.found) return err(notFound("task", id));
+
+      const validationErr = validateUpdateTaskInput(input, result.task.status);
+      if (validationErr) return err(validationErr);
+
+      const now = new Date().toISOString();
+
+      // Update metadata in task list document
+      result.listHandle.change((doc) => {
+        const task = doc.tasks[result.index];
+        if (input.title !== undefined) task.title = input.title.trim();
+        if (input.status !== undefined) task.status = input.status;
+        if (input.priority !== undefined) task.priority = input.priority;
+        if (input.labels !== undefined) {
+          // Replace labels array entirely
+          task.labels.splice(0, task.labels.length, ...input.labels);
+        }
+        if (input.dueDate !== undefined) task.dueDate = input.dueDate;
+        if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
+        task.updatedAt = now;
+      });
+
+      // Update description in detail document if changed
+      let description: string | undefined;
+      if (input.description !== undefined) {
+        const listDoc = result.listHandle.doc();
+        const detailDocId = listDoc?.detailDocIds[id];
+
+        if (detailDocId) {
+          // Update existing detail doc
+          const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+          detailHandle.change((doc) => {
+            doc.description = input.description!.trim();
+          });
+          description = input.description.trim();
+        } else if (input.description.trim()) {
+          // Create new detail doc
+          const detailHandle = repo.create<TaskDetailDocument>();
+          const template = createTaskDetailDocument(id, input.description.trim());
+          detailHandle.change((doc) => {
+            doc.taskId = template.taskId;
+            doc.description = template.description;
+          });
+          result.listHandle.change((doc) => {
+            doc.detailDocIds[id] = detailHandle.documentId;
+          });
+          description = input.description.trim();
+        }
+      } else {
+        // Load existing description
+        const listDoc = result.listHandle.doc();
+        const detailDocId = listDoc?.detailDocIds[id];
+        if (detailDocId) {
+          const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+          description = detailHandle.doc()?.description;
+        }
+      }
+
+      // Read back updated task
+      const updated = result.listHandle.doc()!.tasks[result.index];
+      return ok({ ...cloneTask(updated), description });
+    },
+
+    async delete(id: TaskId): Promise<Result<void>> {
+      const result = await findTask(id);
+      if (!result.found) return err(notFound("task", id));
+
+      // Remove from task list
+      result.listHandle.change((doc) => {
+        doc.tasks.splice(result.index, 1);
+        delete doc.detailDocIds[id];
+      });
+
+      // Detail and comments docs are orphaned — they'll be cleaned up
+      // by a future garbage collection pass. Automerge docs without
+      // references are harmless.
+
+      return ok(undefined);
+    },
+
+    async move(id: TaskId, targetProjectId: ProjectId): Promise<Result<TaskWithDetail>> {
+      // Verify target project exists
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc) return err(notFound("project", targetProjectId));
+      const targetProject = catalogDoc.projects.find((p) => p.id === targetProjectId);
+      if (!targetProject) return err(notFound("project", targetProjectId));
+
+      // Find the task
+      const result = await findTask(id);
+      if (!result.found) return err(notFound("task", id));
+
+      if (result.task.projectId === targetProjectId) {
+        return err(validationError("projectId", "Task is already in that project"));
+      }
+
+      const now = new Date().toISOString();
+      const taskData = { ...result.task };
+
+      // Capture detail doc ID before removing from source
+      const sourceListDoc = result.listHandle.doc();
+      const detailDocId = sourceListDoc?.detailDocIds[id];
+
+      // Remove from source task list
+      result.listHandle.change((doc) => {
+        doc.tasks.splice(result.index, 1);
+        delete doc.detailDocIds[id];
+      });
+
+      // Add to target task list
+      const targetListHandle = await getOrCreateTaskListDoc(targetProjectId);
+      taskData.projectId = targetProjectId;
+      taskData.updatedAt = now;
+
+      // Strip undefined fields — Automerge doesn't allow them
+      const cleanTask = stripUndefined(taskData);
+
+      targetListHandle.change((doc) => {
+        doc.tasks.push(cleanTask as Task);
+        if (detailDocId) {
+          doc.detailDocIds[id] = detailDocId;
+        }
+      });
+
+      // Load description for return value
+      let description: string | undefined;
+      if (detailDocId) {
+        const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+        description = detailHandle.doc()?.description;
+      }
+
+      return ok({ ...taskData, description });
+    },
+
+    async search(query: string): Promise<Result<Task[]>> {
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc) return ok([]);
+
+      const lowerQuery = query.toLowerCase();
+      const matches: Task[] = [];
+
+      for (const docId of Object.values(catalogDoc.taskListDocIds)) {
+        const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+        const doc = handle.doc();
+        if (!doc) continue;
+
+        for (const task of doc.tasks) {
+          if (task.title.toLowerCase().includes(lowerQuery)) {
+            matches.push(cloneTask(task));
+          }
+        }
+      }
+
+      return ok(matches);
+    },
+  };
+}
+
+/** Clone a task out of the Automerge proxy */
+function cloneTask(t: Task): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    projectId: t.projectId,
+    labels: [...t.labels],
+    dueDate: t.dueDate,
+    scheduledDate: t.scheduledDate,
+    externalId: t.externalId,
+    sourceUrl: t.sourceUrl,
+    templateId: t.templateId,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  };
+}
+
+/** Remove undefined values from an object — Automerge doesn't allow them */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result as Partial<T>;
+}

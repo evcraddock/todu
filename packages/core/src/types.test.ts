@@ -11,6 +11,7 @@ import {
   isSyncStrategy,
   isTaskPriority,
   isTaskStatus,
+  isValidStatusTransition,
   notFound,
   ok,
   storageError,
@@ -145,5 +146,44 @@ describe("error factories", () => {
   it("creates StorageError", () => {
     const error = storageError("Disk full");
     expect(error).toEqual({ type: "storage", message: "Disk full" });
+  });
+});
+
+describe("isValidStatusTransition", () => {
+  it("allows same status (no-op)", () => {
+    expect(isValidStatusTransition("active", "active")).toBe(true);
+    expect(isValidStatusTransition("done", "done")).toBe(true);
+  });
+
+  it("allows active → inprogress", () => {
+    expect(isValidStatusTransition("active", "inprogress")).toBe(true);
+  });
+
+  it("allows active → done", () => {
+    expect(isValidStatusTransition("active", "done")).toBe(true);
+  });
+
+  it("allows inprogress → done", () => {
+    expect(isValidStatusTransition("inprogress", "done")).toBe(true);
+  });
+
+  it("allows done → active (reopen)", () => {
+    expect(isValidStatusTransition("done", "active")).toBe(true);
+  });
+
+  it("allows canceled → active (reopen)", () => {
+    expect(isValidStatusTransition("canceled", "active")).toBe(true);
+  });
+
+  it("rejects done → inprogress", () => {
+    expect(isValidStatusTransition("done", "inprogress")).toBe(false);
+  });
+
+  it("rejects done → waiting", () => {
+    expect(isValidStatusTransition("done", "waiting")).toBe(false);
+  });
+
+  it("rejects canceled → done", () => {
+    expect(isValidStatusTransition("canceled", "done")).toBe(false);
   });
 });

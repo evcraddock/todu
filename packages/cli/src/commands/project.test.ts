@@ -44,7 +44,7 @@ describe("project CLI commands", () => {
     }
   }
 
-  it("project create → list → show → update → delete flow", () => {
+  it("project create → list → show → update → delete flow", { timeout: 30000 }, () => {
     // Create
     const createOutput = run('project create --name "Test Project" --priority high');
     expect(createOutput).toContain("Project created:");

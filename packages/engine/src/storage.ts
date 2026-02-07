@@ -69,6 +69,7 @@ async function loadOrCreateCatalog(
     const empty = createEmptyCatalog();
     doc.version = empty.version;
     doc.projects = empty.projects;
+    doc.taskListDocIds = empty.taskListDocIds;
     doc.settings = empty.settings;
   });
 
