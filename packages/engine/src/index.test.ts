@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Repo } from "@automerge/automerge-repo";
+import type { DocumentId } from "@automerge/automerge-repo";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
+import type { CatalogDocument } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 import type { Todu } from "./index.js";
@@ -83,5 +87,39 @@ describe("createTodu", () => {
     todu = await createTodu({ storagePath: tmpDir });
     await expect(todu.close()).resolves.toBeUndefined();
     todu = null; // prevent double-close in afterEach
+  });
+
+  it("migrates old catalog missing fields", async () => {
+    // Simulate an old catalog with only projects and version
+    const repo = new Repo({
+      storage: new NodeFSStorageAdapter(tmpDir),
+    });
+    const handle = repo.create<Partial<CatalogDocument>>();
+    handle.change((doc) => {
+      doc.version = 1;
+      doc.projects = [];
+      // Deliberately missing: labels, taskListDocIds, settings
+    });
+    const markerPath = path.join(tmpDir, "todu-catalog.id");
+    fs.writeFileSync(markerPath, handle.documentId, "utf-8");
+    await repo.flush();
+    await repo.shutdown();
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Load with createTodu — should migrate without crashing
+    todu = await createTodu({ storagePath: tmpDir });
+
+    // All operations should work on migrated catalog
+    const projects = await todu.project.list();
+    expect(projects.ok).toBe(true);
+
+    const tasks = await todu.task.list();
+    expect(tasks.ok).toBe(true);
+
+    const labels = await todu.label.list();
+    expect(labels.ok).toBe(true);
+
+    const notes = await todu.note.list();
+    expect(notes.ok).toBe(true);
   });
 });
