@@ -1,4 +1,4 @@
-import type { Project, ProjectId, Settings, Task } from "./types.js";
+import type { Label, Note, Project, ProjectId, Settings, Task } from "./types.js";
 
 // ============================================================================
 // Automerge Document Schemas
@@ -16,17 +16,22 @@ export interface CatalogDocument {
   /** All projects */
   projects: Project[];
 
+  /** All labels */
+  labels: Label[];
+
   /**
    * Map of projectId → Automerge document ID for that project's task list.
    * Populated when the first task is created in a project.
    */
   taskListDocIds: Record<string, string>;
 
+  /** Automerge document ID for the notes document */
+  notesDocId?: string;
+
   /** Application settings */
   settings: Settings;
 
   // Future slices will add:
-  // labels: Label[];
   // habits: Habit[];
   // recurringTemplates: RecurringTemplate[];
   // systems: System[];
@@ -65,15 +70,13 @@ export interface TaskDetailDocument {
 }
 
 /**
- * Comments document (one per task).
- * Schema defined here, but CRUD operations are in #1606.
+ * Notes document (one global).
+ * Contains all notes — standalone journal entries and entity-attached notes.
+ * Each note is ~200B, so thousands fit comfortably.
  */
-export interface CommentsDocument {
-  /** The task these comments belong to */
-  taskId: string;
-
-  /** Comments array — populated by #1606 */
-  comments: unknown[];
+export interface NotesDocument {
+  /** All notes */
+  notes: Note[];
 }
 
 // ============================================================================
@@ -90,6 +93,7 @@ export function createEmptyCatalog(): CatalogDocument {
   return {
     version: SCHEMA_VERSION,
     projects: [],
+    labels: [],
     taskListDocIds: {},
     settings: {
       schemaVersion: SCHEMA_VERSION,
@@ -109,5 +113,11 @@ export function createTaskDetailDocument(taskId: string, description: string): T
   return {
     taskId,
     description,
+  };
+}
+
+export function createNotesDocument(): NotesDocument {
+  return {
+    notes: [],
   };
 }

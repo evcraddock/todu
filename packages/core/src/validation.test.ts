@@ -2,14 +2,22 @@ import { describe, expect, it } from "vitest";
 import { createProjectId } from "./types.js";
 import {
   MAX_DESCRIPTION_LENGTH,
+  MAX_LABEL_NAME_LENGTH,
+  MAX_NOTE_CONTENT_LENGTH,
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  validateCreateLabelInput,
+  validateCreateNoteInput,
   validateCreateProjectInput,
   validateCreateTaskInput,
   validateDescription,
   validateISODate,
+  validateLabelColor,
+  validateLabelName,
+  validateNoteContent,
   validateProjectName,
   validateTaskTitle,
+  validateUpdateLabelInput,
   validateUpdateProjectInput,
   validateUpdateTaskInput,
 } from "./validation.js";
@@ -268,5 +276,160 @@ describe("validateUpdateTaskInput", () => {
 
   it("skips transition check when currentStatus not provided", () => {
     expect(validateUpdateTaskInput({ status: "done" })).toBeNull();
+  });
+});
+
+// ============================================================================
+// Label validation tests
+// ============================================================================
+
+describe("validateLabelName", () => {
+  it("accepts a valid name", () => {
+    expect(validateLabelName("bug")).toBeNull();
+  });
+
+  it("rejects empty string", () => {
+    const error = validateLabelName("");
+    expect(error?.field).toBe("name");
+    expect(error?.message).toContain("required");
+  });
+
+  it("rejects whitespace-only string", () => {
+    expect(validateLabelName("   ")).not.toBeNull();
+  });
+
+  it("rejects name exceeding max length", () => {
+    const error = validateLabelName("a".repeat(MAX_LABEL_NAME_LENGTH + 1));
+    expect(error).not.toBeNull();
+  });
+
+  it("accepts name at max length", () => {
+    expect(validateLabelName("a".repeat(MAX_LABEL_NAME_LENGTH))).toBeNull();
+  });
+});
+
+describe("validateLabelColor", () => {
+  it("accepts valid hex color", () => {
+    expect(validateLabelColor("#FF0000")).toBeNull();
+    expect(validateLabelColor("#00ff00")).toBeNull();
+    expect(validateLabelColor("#123abc")).toBeNull();
+  });
+
+  it("rejects invalid colors", () => {
+    expect(validateLabelColor("red")).not.toBeNull();
+    expect(validateLabelColor("#FFF")).not.toBeNull();
+    expect(validateLabelColor("FF0000")).not.toBeNull();
+    expect(validateLabelColor("#GGGGGG")).not.toBeNull();
+  });
+});
+
+describe("validateCreateLabelInput", () => {
+  it("accepts valid input with name only", () => {
+    expect(validateCreateLabelInput({ name: "bug" })).toBeNull();
+  });
+
+  it("accepts valid input with color", () => {
+    expect(validateCreateLabelInput({ name: "bug", color: "#FF0000" })).toBeNull();
+  });
+
+  it("rejects empty name", () => {
+    const error = validateCreateLabelInput({ name: "" });
+    expect(error?.field).toBe("name");
+  });
+
+  it("rejects invalid color", () => {
+    const error = validateCreateLabelInput({ name: "bug", color: "red" });
+    expect(error?.field).toBe("color");
+  });
+});
+
+describe("validateUpdateLabelInput", () => {
+  it("accepts valid name update", () => {
+    expect(validateUpdateLabelInput({ name: "feature" })).toBeNull();
+  });
+
+  it("accepts valid color update", () => {
+    expect(validateUpdateLabelInput({ color: "#00FF00" })).toBeNull();
+  });
+
+  it("rejects empty input", () => {
+    const error = validateUpdateLabelInput({});
+    expect(error?.field).toBe("input");
+  });
+
+  it("rejects empty name", () => {
+    const error = validateUpdateLabelInput({ name: "" });
+    expect(error?.field).toBe("name");
+  });
+});
+
+// ============================================================================
+// Note validation tests
+// ============================================================================
+
+describe("validateNoteContent", () => {
+  it("accepts valid content", () => {
+    expect(validateNoteContent("Some note")).toBeNull();
+  });
+
+  it("rejects empty string", () => {
+    const error = validateNoteContent("");
+    expect(error?.field).toBe("content");
+    expect(error?.message).toContain("required");
+  });
+
+  it("rejects whitespace-only", () => {
+    expect(validateNoteContent("   ")).not.toBeNull();
+  });
+
+  it("rejects content exceeding max length", () => {
+    const error = validateNoteContent("a".repeat(MAX_NOTE_CONTENT_LENGTH + 1));
+    expect(error).not.toBeNull();
+  });
+});
+
+describe("validateCreateNoteInput", () => {
+  it("accepts standalone note (journal)", () => {
+    expect(validateCreateNoteInput({ content: "Today was productive" })).toBeNull();
+  });
+
+  it("accepts note attached to task", () => {
+    expect(
+      validateCreateNoteInput({ content: "Progress", entityType: "task", entityId: "task-123" }),
+    ).toBeNull();
+  });
+
+  it("accepts note attached to project", () => {
+    expect(
+      validateCreateNoteInput({ content: "Update", entityType: "project", entityId: "proj-abc" }),
+    ).toBeNull();
+  });
+
+  it("accepts note with tags", () => {
+    expect(validateCreateNoteInput({ content: "Thought", tags: ["idea", "design"] })).toBeNull();
+  });
+
+  it("rejects empty content", () => {
+    const error = validateCreateNoteInput({ content: "" });
+    expect(error?.field).toBe("content");
+  });
+
+  it("rejects invalid entity type", () => {
+    const error = validateCreateNoteInput({
+      content: "Note",
+      entityType: "label" as "task",
+      entityId: "lbl-123",
+    });
+    expect(error?.field).toBe("entityType");
+  });
+
+  it("rejects entityType without entityId", () => {
+    const error = validateCreateNoteInput({ content: "Note", entityType: "task" });
+    expect(error?.field).toBe("entityId");
+  });
+
+  it("rejects entityId without entityType", () => {
+    const error = validateCreateNoteInput({ content: "Note", entityId: "task-123" });
+    expect(error?.field).toBe("entityType");
   });
 });

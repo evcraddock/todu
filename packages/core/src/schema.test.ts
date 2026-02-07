@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SCHEMA_VERSION,
   createEmptyCatalog,
+  createNotesDocument,
   createTaskDetailDocument,
   createTaskListDocument,
 } from "./schema.js";
@@ -21,6 +22,11 @@ describe("schema", () => {
     it("creates a catalog with empty projects", () => {
       const catalog = createEmptyCatalog();
       expect(catalog.projects).toEqual([]);
+    });
+
+    it("creates a catalog with empty labels", () => {
+      const catalog = createEmptyCatalog();
+      expect(catalog.labels).toEqual([]);
     });
 
     it("creates a catalog with empty taskListDocIds", () => {
@@ -49,6 +55,13 @@ describe("schema", () => {
       const doc = createTaskDetailDocument("task-123", "Some description");
       expect(doc.taskId).toBe("task-123");
       expect(doc.description).toBe("Some description");
+    });
+  });
+
+  describe("createNotesDocument", () => {
+    it("creates an empty notes document", () => {
+      const doc = createNotesDocument();
+      expect(doc.notes).toEqual([]);
     });
   });
 });
