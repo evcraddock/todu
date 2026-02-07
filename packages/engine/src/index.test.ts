@@ -16,6 +16,7 @@ describe("createTodu", () => {
   afterEach(async () => {
     if (todu) {
       await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
       todu = null;
     }
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -59,6 +60,7 @@ describe("createTodu", () => {
     const markerPath = path.join(tmpDir, "todu-catalog.id");
     const firstDocId = fs.readFileSync(markerPath, "utf-8").trim();
     await todu.close();
+    await new Promise((r) => setTimeout(r, 50));
 
     // Second run — loads same catalog
     todu = await createTodu({ storagePath: tmpDir });
