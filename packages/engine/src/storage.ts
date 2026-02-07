@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
@@ -53,7 +54,7 @@ async function loadOrCreateCatalog(
   repo: Repo,
   storagePath: string,
 ): Promise<DocHandle<CatalogDocument>> {
-  const markerPath = `${storagePath}/${CATALOG_DOC_KEY}.id`;
+  const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
 
   // Try to load existing catalog
   if (fs.existsSync(markerPath)) {
