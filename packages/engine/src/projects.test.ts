@@ -18,6 +18,8 @@ describe("project namespace", () => {
 
   afterEach(async () => {
     await todu.close();
+    // Small delay to let Automerge storage flush before removing temp dir
+    await new Promise((r) => setTimeout(r, 50));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
