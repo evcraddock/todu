@@ -132,6 +132,23 @@ export interface Project {
 }
 
 // ============================================================================
+// Input types
+// ============================================================================
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+  priority?: TaskPriority;
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string;
+  status?: ProjectStatus;
+  priority?: TaskPriority;
+}
+
+// ============================================================================
 // Settings
 // ============================================================================
 
