@@ -1,4 +1,4 @@
-import type { Project, ProjectId, Task, TaskWithDetail } from "@todu/core";
+import type { ProjectId, Task, TaskWithDetail } from "@todu/core";
 import { createProjectId, createTaskId, isTaskPriority, isTaskStatus } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
