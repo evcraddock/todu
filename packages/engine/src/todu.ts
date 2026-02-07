@@ -1,4 +1,12 @@
-import type { Project, ProjectId, Result, TaskId, ToduError } from "@todu/core";
+import type {
+  CreateProjectInput,
+  Project,
+  ProjectId,
+  Result,
+  TaskId,
+  ToduError,
+  UpdateProjectInput,
+} from "@todu/core";
 
 // ============================================================================
 // Config
@@ -15,10 +23,10 @@ export interface ToduConfig {
 // ============================================================================
 
 export interface ProjectNamespace {
-  create(input: unknown): Promise<Result<Project>>;
+  create(input: CreateProjectInput): Promise<Result<Project>>;
   list(): Promise<Result<Project[]>>;
   get(id: ProjectId): Promise<Result<Project>>;
-  update(id: ProjectId, input: unknown): Promise<Result<Project>>;
+  update(id: ProjectId, input: UpdateProjectInput): Promise<Result<Project>>;
   delete(id: ProjectId): Promise<Result<void>>;
 }
 
