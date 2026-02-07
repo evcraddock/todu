@@ -1,0 +1,437 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { ProjectId, TaskId } from "@todu/core";
+import { createProjectId, createTaskId } from "@todu/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createTodu } from "./index.js";
+import type { Todu } from "./index.js";
+
+describe("task namespace", () => {
+  let tmpDir: string;
+  let todu: Todu;
+  let projectId: ProjectId;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-task-test-"));
+    todu = await createTodu({ storagePath: tmpDir });
+
+    // Create a project for tasks
+    const result = await todu.project.create({ name: "Test Project" });
+    if (!result.ok) throw new Error("Failed to create project");
+    projectId = result.value.id;
+  });
+
+  afterEach(async () => {
+    await todu.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  describe("create", () => {
+    it("creates a task with required fields", async () => {
+      const result = await todu.task.create({ title: "Fix bug", projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.title).toBe("Fix bug");
+      expect(result.value.status).toBe("active");
+      expect(result.value.priority).toBe("medium");
+      expect(result.value.projectId).toBe(projectId);
+      expect(result.value.labels).toEqual([]);
+      expect(result.value.id).toMatch(/^task-/);
+    });
+
+    it("creates a task with all optional fields", async () => {
+      const result = await todu.task.create({
+        title: "Full Task",
+        projectId,
+        priority: "high",
+        description: "Detailed description",
+        labels: ["bug", "urgent"],
+        dueDate: "2026-04-01",
+        scheduledDate: "2026-03-30",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.priority).toBe("high");
+      expect(result.value.description).toBe("Detailed description");
+      expect(result.value.labels).toEqual(["bug", "urgent"]);
+      expect(result.value.dueDate).toBe("2026-04-01");
+      expect(result.value.scheduledDate).toBe("2026-03-30");
+    });
+
+    it("trims whitespace from title", async () => {
+      const result = await todu.task.create({ title: "  Trimmed  ", projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.title).toBe("Trimmed");
+    });
+
+    it("returns validation error for empty title", async () => {
+      const result = await todu.task.create({ title: "", projectId });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+    });
+
+    it("returns NotFound for nonexistent project", async () => {
+      const result = await todu.task.create({
+        title: "Test",
+        projectId: createProjectId("proj-nope"),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+  });
+
+  describe("list", () => {
+    it("returns empty list when no tasks exist", async () => {
+      const result = await todu.task.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toEqual([]);
+    });
+
+    it("returns all tasks", async () => {
+      await todu.task.create({ title: "Task A", projectId });
+      await todu.task.create({ title: "Task B", projectId });
+
+      const result = await todu.task.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+    });
+
+    it("filters by status", async () => {
+      const created = await todu.task.create({ title: "Task A", projectId });
+      if (!created.ok) throw new Error("create failed");
+      await todu.task.update(created.value.id, { status: "done" });
+      await todu.task.create({ title: "Task B", projectId });
+
+      const result = await todu.task.list({ status: "active" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Task B");
+    });
+
+    it("filters by priority", async () => {
+      await todu.task.create({ title: "High", projectId, priority: "high" });
+      await todu.task.create({ title: "Low", projectId, priority: "low" });
+
+      const result = await todu.task.list({ priority: "high" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("High");
+    });
+
+    it("filters by project", async () => {
+      const proj2 = await todu.project.create({ name: "Other Project" });
+      if (!proj2.ok) throw new Error("create failed");
+
+      await todu.task.create({ title: "In main", projectId });
+      await todu.task.create({ title: "In other", projectId: proj2.value.id });
+
+      const result = await todu.task.list({ projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("In main");
+    });
+
+    it("filters by label", async () => {
+      await todu.task.create({ title: "Bug", projectId, labels: ["bug"] });
+      await todu.task.create({ title: "Feature", projectId, labels: ["feature"] });
+
+      const result = await todu.task.list({ label: "bug" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Bug");
+    });
+
+    it("sorts by priority desc then createdAt desc", async () => {
+      await todu.task.create({ title: "Low", projectId, priority: "low" });
+      await todu.task.create({ title: "High", projectId, priority: "high" });
+      await todu.task.create({ title: "Medium", projectId, priority: "medium" });
+
+      const result = await todu.task.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.map((t) => t.title)).toEqual(["High", "Medium", "Low"]);
+    });
+
+    it("lists across multiple projects", async () => {
+      const proj2 = await todu.project.create({ name: "Project 2" });
+      if (!proj2.ok) throw new Error("create failed");
+
+      await todu.task.create({ title: "Task 1", projectId });
+      await todu.task.create({ title: "Task 2", projectId: proj2.value.id });
+
+      const result = await todu.task.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+    });
+  });
+
+  describe("get", () => {
+    it("returns task with description", async () => {
+      const created = await todu.task.create({
+        title: "With desc",
+        projectId,
+        description: "Full description here",
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.get(created.value.id);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.title).toBe("With desc");
+      expect(result.value.description).toBe("Full description here");
+    });
+
+    it("returns task without description", async () => {
+      const created = await todu.task.create({ title: "No desc", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.get(created.value.id);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.description).toBeUndefined();
+    });
+
+    it("returns NotFound for nonexistent task", async () => {
+      const result = await todu.task.get(createTaskId("task-nope"));
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+  });
+
+  describe("update", () => {
+    let taskId: TaskId;
+
+    beforeEach(async () => {
+      const result = await todu.task.create({
+        title: "Original",
+        projectId,
+        description: "Original desc",
+      });
+      if (!result.ok) throw new Error("create failed");
+      taskId = result.value.id;
+    });
+
+    it("updates title", async () => {
+      const result = await todu.task.update(taskId, { title: "Updated" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.title).toBe("Updated");
+    });
+
+    it("updates status", async () => {
+      const result = await todu.task.update(taskId, { status: "inprogress" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.status).toBe("inprogress");
+    });
+
+    it("updates description", async () => {
+      const result = await todu.task.update(taskId, { description: "New desc" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.description).toBe("New desc");
+    });
+
+    it("adds description to task that had none", async () => {
+      const bare = await todu.task.create({ title: "No desc yet", projectId });
+      if (!bare.ok) throw new Error("create failed");
+
+      const result = await todu.task.update(bare.value.id, { description: "Added later" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.description).toBe("Added later");
+    });
+
+    it("updates labels", async () => {
+      const result = await todu.task.update(taskId, { labels: ["bug", "p1"] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.labels).toEqual(["bug", "p1"]);
+    });
+
+    it("rejects invalid status transition", async () => {
+      await todu.task.update(taskId, { status: "done" });
+      const result = await todu.task.update(taskId, { status: "inprogress" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+    });
+
+    it("returns NotFound for nonexistent task", async () => {
+      const result = await todu.task.update(createTaskId("task-nope"), { title: "X" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+
+    it("returns existing description when updating other fields", async () => {
+      const result = await todu.task.update(taskId, { title: "Changed title" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.description).toBe("Original desc");
+    });
+  });
+
+  describe("delete", () => {
+    it("deletes an existing task", async () => {
+      const created = await todu.task.create({ title: "To delete", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.delete(created.value.id);
+      expect(result.ok).toBe(true);
+
+      const list = await todu.task.list();
+      expect(list.ok).toBe(true);
+      if (!list.ok) return;
+      expect(list.value).toHaveLength(0);
+    });
+
+    it("returns NotFound for nonexistent task", async () => {
+      const result = await todu.task.delete(createTaskId("task-nope"));
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+  });
+
+  describe("move", () => {
+    it("moves a task between projects", async () => {
+      const proj2 = await todu.project.create({ name: "Target" });
+      if (!proj2.ok) throw new Error("create failed");
+
+      const created = await todu.task.create({
+        title: "Movable",
+        projectId,
+        description: "Moving desc",
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.move(created.value.id, proj2.value.id);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.projectId).toBe(proj2.value.id);
+      expect(result.value.description).toBe("Moving desc");
+
+      // Verify it's in the target project
+      const targetTasks = await todu.task.list({ projectId: proj2.value.id });
+      expect(targetTasks.ok).toBe(true);
+      if (!targetTasks.ok) return;
+      expect(targetTasks.value).toHaveLength(1);
+
+      // Verify it's gone from source
+      const sourceTasks = await todu.task.list({ projectId });
+      expect(sourceTasks.ok).toBe(true);
+      if (!sourceTasks.ok) return;
+      expect(sourceTasks.value).toHaveLength(0);
+    });
+
+    it("rejects move to same project", async () => {
+      const created = await todu.task.create({ title: "Stay", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.move(created.value.id, projectId);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+    });
+
+    it("returns NotFound for nonexistent target project", async () => {
+      const created = await todu.task.create({ title: "Test", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.task.move(created.value.id, createProjectId("proj-nope"));
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+
+    it("returns NotFound for nonexistent task", async () => {
+      const result = await todu.task.move(createTaskId("task-nope"), projectId);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+  });
+
+  describe("search", () => {
+    it("finds tasks by title substring", async () => {
+      await todu.task.create({ title: "Fix login bug", projectId });
+      await todu.task.create({ title: "Add signup flow", projectId });
+      await todu.task.create({ title: "Fix logout bug", projectId });
+
+      const result = await todu.task.search("fix");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+    });
+
+    it("search is case-insensitive", async () => {
+      await todu.task.create({ title: "FIX CAPS", projectId });
+
+      const result = await todu.task.search("fix");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+    });
+
+    it("returns empty for no matches", async () => {
+      await todu.task.create({ title: "Something", projectId });
+
+      const result = await todu.task.search("nonexistent");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(0);
+    });
+
+    it("searches across projects", async () => {
+      const proj2 = await todu.project.create({ name: "Other" });
+      if (!proj2.ok) throw new Error("create failed");
+
+      await todu.task.create({ title: "Fix bug here", projectId });
+      await todu.task.create({ title: "Fix bug there", projectId: proj2.value.id });
+
+      const result = await todu.task.search("fix bug");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+    });
+  });
+
+  describe("persistence", () => {
+    it("tasks survive close and reopen", async () => {
+      await todu.task.create({
+        title: "Persistent",
+        projectId,
+        description: "Survives restart",
+      });
+      await todu.close();
+
+      todu = await createTodu({ storagePath: tmpDir });
+      const list = await todu.task.list();
+      expect(list.ok).toBe(true);
+      if (!list.ok) return;
+      expect(list.value).toHaveLength(1);
+      expect(list.value[0].title).toBe("Persistent");
+
+      // Verify description loads too
+      const detail = await todu.task.get(list.value[0].id);
+      expect(detail.ok).toBe(true);
+      if (!detail.ok) return;
+      expect(detail.value.description).toBe("Survives restart");
+    });
+  });
+});

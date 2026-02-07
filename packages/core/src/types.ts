@@ -132,6 +132,31 @@ export interface Project {
 }
 
 // ============================================================================
+// Task entity — metadata stored in TaskListDocument
+// ============================================================================
+
+export interface Task {
+  id: TaskId;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  projectId: ProjectId;
+  labels: string[];
+  dueDate?: string;
+  scheduledDate?: string;
+  externalId?: string;
+  sourceUrl?: string;
+  templateId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Task with description loaded from TaskDetailDocument */
+export interface TaskWithDetail extends Task {
+  description?: string;
+}
+
+// ============================================================================
 // Input types
 // ============================================================================
 
@@ -146,6 +171,56 @@ export interface UpdateProjectInput {
   description?: string;
   status?: ProjectStatus;
   priority?: TaskPriority;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  projectId: ProjectId;
+  priority?: TaskPriority;
+  description?: string;
+  labels?: string[];
+  dueDate?: string;
+  scheduledDate?: string;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  description?: string;
+  labels?: string[];
+  dueDate?: string;
+  scheduledDate?: string;
+}
+
+export interface TaskFilter {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  projectId?: ProjectId;
+  label?: string;
+  dueBefore?: string;
+  dueAfter?: string;
+}
+
+// ============================================================================
+// Status transitions
+// ============================================================================
+
+/**
+ * Allowed status transitions. Key = from status, value = allowed targets.
+ * "active" is the default starting status.
+ */
+export const ALLOWED_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+  active: ["inprogress", "waiting", "done", "canceled"],
+  inprogress: ["active", "waiting", "done", "canceled"],
+  waiting: ["active", "inprogress", "done", "canceled"],
+  done: ["active"], // reopen
+  canceled: ["active"], // reopen
+};
+
+export function isValidStatusTransition(from: TaskStatus, to: TaskStatus): boolean {
+  if (from === to) return true;
+  return ALLOWED_STATUS_TRANSITIONS[from].includes(to);
 }
 
 // ============================================================================

@@ -1,11 +1,16 @@
 import type {
   CreateProjectInput,
+  CreateTaskInput,
   Project,
   ProjectId,
   Result,
+  Task,
+  TaskFilter,
   TaskId,
+  TaskWithDetail,
   ToduError,
   UpdateProjectInput,
+  UpdateTaskInput,
 } from "@todu/core";
 
 // ============================================================================
@@ -31,13 +36,13 @@ export interface ProjectNamespace {
 }
 
 export interface TaskNamespace {
-  create(input: unknown): Promise<Result<unknown>>;
-  list(filter?: unknown): Promise<Result<unknown[]>>;
-  get(id: TaskId): Promise<Result<unknown>>;
-  update(id: TaskId, input: unknown): Promise<Result<unknown>>;
+  create(input: CreateTaskInput): Promise<Result<TaskWithDetail>>;
+  list(filter?: TaskFilter): Promise<Result<Task[]>>;
+  get(id: TaskId): Promise<Result<TaskWithDetail>>;
+  update(id: TaskId, input: UpdateTaskInput): Promise<Result<TaskWithDetail>>;
   delete(id: TaskId): Promise<Result<void>>;
-  move(id: TaskId, projectId: ProjectId): Promise<Result<unknown>>;
-  search(query: string): Promise<Result<unknown[]>>;
+  move(id: TaskId, projectId: ProjectId): Promise<Result<TaskWithDetail>>;
+  search(query: string): Promise<Result<Task[]>>;
 }
 
 export interface LabelNamespace {

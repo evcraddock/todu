@@ -3,6 +3,7 @@
 import { createTodu } from "@todu/engine";
 import { Command } from "commander";
 import { registerProjectCommands } from "./commands/project.js";
+import { registerTaskCommands } from "./commands/task.js";
 
 const program = new Command();
 
@@ -20,9 +21,9 @@ const getTodu = () => {
 
 // Register command groups
 registerProjectCommands(program, getTodu);
+registerTaskCommands(program, getTodu);
 
 // Stubs for future vertical slices
-program.command("task").description("Manage tasks (coming soon)");
 program.command("label").description("Manage labels (coming soon)");
 program.command("recurring").description("Manage recurring templates (coming soon)");
 program.command("habit").description("Manage habits (coming soon)");
