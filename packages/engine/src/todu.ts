@@ -1,6 +1,13 @@
 import type {
+  CreateLabelInput,
+  CreateNoteInput,
   CreateProjectInput,
   CreateTaskInput,
+  Label,
+  LabelId,
+  Note,
+  NoteFilter,
+  NoteId,
   Project,
   ProjectId,
   Result,
@@ -9,6 +16,7 @@ import type {
   TaskId,
   TaskWithDetail,
   ToduError,
+  UpdateLabelInput,
   UpdateProjectInput,
   UpdateTaskInput,
 } from "@todu/core";
@@ -46,15 +54,16 @@ export interface TaskNamespace {
 }
 
 export interface LabelNamespace {
-  create(input: unknown): Promise<Result<unknown>>;
-  list(): Promise<Result<unknown[]>>;
-  update(id: string, input: unknown): Promise<Result<unknown>>;
-  delete(id: string): Promise<Result<void>>;
+  create(input: CreateLabelInput): Promise<Result<Label>>;
+  list(): Promise<Result<Label[]>>;
+  update(id: LabelId, input: UpdateLabelInput): Promise<Result<Label>>;
+  delete(id: LabelId): Promise<Result<void>>;
 }
 
-export interface CommentNamespace {
-  create(taskId: TaskId, input: unknown): Promise<Result<unknown>>;
-  list(taskId: TaskId): Promise<Result<unknown[]>>;
+export interface NoteNamespace {
+  create(input: CreateNoteInput): Promise<Result<Note>>;
+  list(filter?: NoteFilter): Promise<Result<Note[]>>;
+  delete(id: NoteId): Promise<Result<void>>;
 }
 
 export interface RecurringNamespace {
@@ -88,7 +97,7 @@ export interface Todu {
   project: ProjectNamespace;
   task: TaskNamespace;
   label: LabelNamespace;
-  comment: CommentNamespace;
+  note: NoteNamespace;
   recurring: RecurringNamespace;
   habit: HabitNamespace;
   sync: SyncNamespace;
@@ -130,9 +139,10 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close"> {
       update: stub,
       delete: stub,
     },
-    comment: {
+    note: {
       create: stub,
       list: stub,
+      delete: stub,
     },
     recurring: {
       create: stub,

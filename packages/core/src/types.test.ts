@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  createCommentId,
   createHabitId,
   createLabelId,
+  createNoteId,
   createProjectId,
   createRecurringId,
   createTaskId,
   err,
+  isNoteEntityType,
   isProjectStatus,
   isSyncStrategy,
   isTaskPriority,
@@ -17,7 +18,7 @@ import {
   storageError,
   validationError,
 } from "./types.js";
-import type { CommentId, HabitId, LabelId, ProjectId, RecurringId, TaskId } from "./types.js";
+import type { HabitId, LabelId, NoteId, ProjectId, RecurringId, TaskId } from "./types.js";
 
 describe("branded IDs", () => {
   it("creates a branded TaskId", () => {
@@ -35,9 +36,9 @@ describe("branded IDs", () => {
     expect(id).toBe("label-789" as LabelId);
   });
 
-  it("creates a branded CommentId", () => {
-    const id = createCommentId("comment-101");
-    expect(id).toBe("comment-101" as CommentId);
+  it("creates a branded NoteId", () => {
+    const id = createNoteId("note-101");
+    expect(id).toBe("note-101" as NoteId);
   });
 
   it("creates a branded HabitId", () => {
@@ -93,6 +94,20 @@ describe("type guards", () => {
     it("rejects invalid statuses", () => {
       expect(isProjectStatus("inprogress")).toBe(false);
       expect(isProjectStatus("waiting")).toBe(false);
+    });
+  });
+
+  describe("isNoteEntityType", () => {
+    it("accepts valid entity types", () => {
+      expect(isNoteEntityType("task")).toBe(true);
+      expect(isNoteEntityType("project")).toBe(true);
+      expect(isNoteEntityType("habit")).toBe(true);
+    });
+
+    it("rejects invalid entity types", () => {
+      expect(isNoteEntityType("label")).toBe(false);
+      expect(isNoteEntityType("note")).toBe(false);
+      expect(isNoteEntityType("")).toBe(false);
     });
   });
 

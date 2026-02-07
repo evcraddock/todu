@@ -1,12 +1,16 @@
 import type {
+  CreateLabelInput,
+  CreateNoteInput,
   CreateProjectInput,
   CreateTaskInput,
   TaskStatus,
+  UpdateLabelInput,
   UpdateProjectInput,
   UpdateTaskInput,
   ValidationError,
 } from "./types.js";
 import {
+  isNoteEntityType,
   isProjectStatus,
   isTaskPriority,
   isTaskStatus,
@@ -21,6 +25,9 @@ import {
 export const MAX_PROJECT_NAME_LENGTH = 100;
 export const MAX_TASK_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 2000;
+export const MAX_LABEL_NAME_LENGTH = 50;
+export const MAX_NOTE_CONTENT_LENGTH = 5000;
+export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
 // Field validators
@@ -202,6 +209,96 @@ export function validateUpdateTaskInput(
   if (input.scheduledDate !== undefined) {
     const dateError = validateISODate("scheduledDate", input.scheduledDate);
     if (dateError) return dateError;
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Label validators
+// ============================================================================
+
+export function validateLabelName(name: string): ValidationError | null {
+  if (!name || name.trim().length === 0) {
+    return validationError("name", "Label name is required");
+  }
+  if (name.trim().length > MAX_LABEL_NAME_LENGTH) {
+    return validationError(
+      "name",
+      `Label name must be ${MAX_LABEL_NAME_LENGTH} characters or less`,
+    );
+  }
+  return null;
+}
+
+export function validateLabelColor(color: string): ValidationError | null {
+  if (!HEX_COLOR_REGEX.test(color)) {
+    return validationError("color", `Invalid hex color: ${color} (expected #RRGGBB)`);
+  }
+  return null;
+}
+
+export function validateCreateLabelInput(input: CreateLabelInput): ValidationError | null {
+  const nameError = validateLabelName(input.name);
+  if (nameError) return nameError;
+
+  if (input.color !== undefined) {
+    const colorError = validateLabelColor(input.color);
+    if (colorError) return colorError;
+  }
+
+  return null;
+}
+
+export function validateUpdateLabelInput(input: UpdateLabelInput): ValidationError | null {
+  if (input.name === undefined && input.color === undefined) {
+    return validationError("input", "At least one field must be provided");
+  }
+
+  if (input.name !== undefined) {
+    const nameError = validateLabelName(input.name);
+    if (nameError) return nameError;
+  }
+
+  if (input.color !== undefined) {
+    const colorError = validateLabelColor(input.color);
+    if (colorError) return colorError;
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Note validators
+// ============================================================================
+
+export function validateNoteContent(content: string): ValidationError | null {
+  if (!content || content.trim().length === 0) {
+    return validationError("content", "Note content is required");
+  }
+  if (content.trim().length > MAX_NOTE_CONTENT_LENGTH) {
+    return validationError(
+      "content",
+      `Note content must be ${MAX_NOTE_CONTENT_LENGTH} characters or less`,
+    );
+  }
+  return null;
+}
+
+export function validateCreateNoteInput(input: CreateNoteInput): ValidationError | null {
+  const contentError = validateNoteContent(input.content);
+  if (contentError) return contentError;
+
+  if (input.entityType !== undefined && !isNoteEntityType(input.entityType)) {
+    return validationError("entityType", `Invalid entity type: ${input.entityType}`);
+  }
+
+  // If entityType is set, entityId must also be set (and vice versa)
+  if (input.entityType !== undefined && !input.entityId) {
+    return validationError("entityId", "Entity ID is required when entity type is specified");
+  }
+  if (input.entityId !== undefined && !input.entityType) {
+    return validationError("entityType", "Entity type is required when entity ID is specified");
   }
 
   return null;

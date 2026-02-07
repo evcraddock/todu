@@ -27,7 +27,7 @@ describe("createTodu", () => {
     expect(todu.project).toBeDefined();
     expect(todu.task).toBeDefined();
     expect(todu.label).toBeDefined();
-    expect(todu.comment).toBeDefined();
+    expect(todu.note).toBeDefined();
     expect(todu.recurring).toBeDefined();
     expect(todu.habit).toBeDefined();
     expect(todu.sync).toBeDefined();

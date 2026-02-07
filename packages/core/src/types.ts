@@ -5,7 +5,7 @@
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ProjectId = string & { readonly __brand: "ProjectId" };
 export type LabelId = string & { readonly __brand: "LabelId" };
-export type CommentId = string & { readonly __brand: "CommentId" };
+export type NoteId = string & { readonly __brand: "NoteId" };
 export type HabitId = string & { readonly __brand: "HabitId" };
 export type RecurringId = string & { readonly __brand: "RecurringId" };
 
@@ -21,8 +21,8 @@ export function createLabelId(id: string): LabelId {
   return id as LabelId;
 }
 
-export function createCommentId(id: string): CommentId {
-  return id as CommentId;
+export function createNoteId(id: string): NoteId {
+  return id as NoteId;
 }
 
 export function createHabitId(id: string): HabitId {
@@ -157,6 +157,38 @@ export interface TaskWithDetail extends Task {
 }
 
 // ============================================================================
+// Label entity — stored in catalog document
+// ============================================================================
+
+export interface Label {
+  id: LabelId;
+  name: string;
+  color?: string;
+  createdAt: string;
+}
+
+// ============================================================================
+// Note entity — stored in NotesDocument
+// ============================================================================
+
+export const NOTE_ENTITY_TYPES = ["task", "project", "habit"] as const;
+export type NoteEntityType = (typeof NOTE_ENTITY_TYPES)[number];
+
+export function isNoteEntityType(value: string): value is NoteEntityType {
+  return (NOTE_ENTITY_TYPES as readonly string[]).includes(value);
+}
+
+export interface Note {
+  id: NoteId;
+  content: string;
+  author: string;
+  entityType?: NoteEntityType;
+  entityId?: string;
+  tags: string[];
+  createdAt: string;
+}
+
+// ============================================================================
 // Input types
 // ============================================================================
 
@@ -200,6 +232,31 @@ export interface TaskFilter {
   label?: string;
   dueBefore?: string;
   dueAfter?: string;
+}
+
+export interface CreateLabelInput {
+  name: string;
+  color?: string;
+}
+
+export interface UpdateLabelInput {
+  name?: string;
+  color?: string;
+}
+
+export interface CreateNoteInput {
+  content: string;
+  author?: string;
+  entityType?: NoteEntityType;
+  entityId?: string;
+  tags?: string[];
+}
+
+export interface NoteFilter {
+  entityType?: NoteEntityType;
+  entityId?: string;
+  tag?: string;
+  author?: string;
 }
 
 // ============================================================================
