@@ -2,13 +2,13 @@ import type { Project, ProjectId, ProjectStatus } from "@todu/core";
 import { createProjectId, isProjectStatus } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
-import { formatError, formatJSON, formatTable } from "../format.js";
+import { colorPriority, colorStatus, formatError, formatJSON, formatTable } from "../format.js";
 
 const PROJECT_COLUMNS = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
-  { key: "status", label: "Status" },
-  { key: "priority", label: "Priority" },
+  { key: "status", label: "Status", colorize: colorStatus },
+  { key: "priority", label: "Priority", colorize: colorPriority },
 ];
 
 function projectToRow(p: Project): Record<string, string> {

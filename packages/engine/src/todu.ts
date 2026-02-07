@@ -14,6 +14,7 @@ import type {
   Task,
   TaskFilter,
   TaskId,
+  TaskSortOptions,
   TaskWithDetail,
   ToduError,
   UpdateLabelInput,
@@ -45,7 +46,7 @@ export interface ProjectNamespace {
 
 export interface TaskNamespace {
   create(input: CreateTaskInput): Promise<Result<TaskWithDetail>>;
-  list(filter?: TaskFilter): Promise<Result<Task[]>>;
+  list(filter?: TaskFilter, sort?: TaskSortOptions): Promise<Result<Task[]>>;
   get(id: TaskId): Promise<Result<TaskWithDetail>>;
   update(id: TaskId, input: UpdateTaskInput): Promise<Result<TaskWithDetail>>;
   delete(id: TaskId): Promise<Result<void>>;

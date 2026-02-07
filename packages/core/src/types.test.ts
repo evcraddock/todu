@@ -11,6 +11,7 @@ import {
   isProjectStatus,
   isSyncStrategy,
   isTaskPriority,
+  isTaskSortField,
   isTaskStatus,
   isValidStatusTransition,
   notFound,
@@ -108,6 +109,22 @@ describe("type guards", () => {
       expect(isNoteEntityType("label")).toBe(false);
       expect(isNoteEntityType("note")).toBe(false);
       expect(isNoteEntityType("")).toBe(false);
+    });
+  });
+
+  describe("isTaskSortField", () => {
+    it("accepts valid sort fields", () => {
+      expect(isTaskSortField("priority")).toBe(true);
+      expect(isTaskSortField("dueDate")).toBe(true);
+      expect(isTaskSortField("createdAt")).toBe(true);
+      expect(isTaskSortField("updatedAt")).toBe(true);
+      expect(isTaskSortField("title")).toBe(true);
+    });
+
+    it("rejects invalid sort fields", () => {
+      expect(isTaskSortField("name")).toBe(false);
+      expect(isTaskSortField("status")).toBe(false);
+      expect(isTaskSortField("")).toBe(false);
     });
   });
 
