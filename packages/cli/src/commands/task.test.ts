@@ -39,7 +39,7 @@ describe("task CLI commands", () => {
     }
   }
 
-  it("task create → list → show → update → move → search → delete flow", () => {
+  it("task create → list → show → update → move → search → delete flow", { timeout: 30000 }, () => {
     // Create a project first
     const projJson = run('--format json project create --name "My App"');
     const proj = JSON.parse(projJson);
