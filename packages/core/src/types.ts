@@ -226,12 +226,26 @@ export interface UpdateTaskInput {
 }
 
 export interface TaskFilter {
-  status?: TaskStatus;
+  status?: TaskStatus | TaskStatus[];
   priority?: TaskPriority;
   projectId?: ProjectId;
   label?: string;
   dueBefore?: string;
   dueAfter?: string;
+  overdue?: boolean;
+  today?: boolean;
+}
+
+export const TASK_SORT_FIELDS = ["priority", "dueDate", "createdAt", "updatedAt", "title"] as const;
+export type TaskSortField = (typeof TASK_SORT_FIELDS)[number];
+
+export function isTaskSortField(value: string): value is TaskSortField {
+  return (TASK_SORT_FIELDS as readonly string[]).includes(value);
+}
+
+export interface TaskSortOptions {
+  field: TaskSortField;
+  direction: "asc" | "desc";
 }
 
 export interface CreateLabelInput {

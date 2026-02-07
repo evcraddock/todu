@@ -11,6 +11,8 @@ import {
   type TaskFilter,
   type TaskId,
   type TaskListDocument,
+  type TaskSortField,
+  type TaskSortOptions,
   type TaskWithDetail,
   type UpdateTaskInput,
   createTaskDetailDocument,
@@ -143,7 +145,7 @@ export function createTaskNamespace(
       return ok({ ...task, description });
     },
 
-    async list(filter?: TaskFilter): Promise<Result<Task[]>> {
+    async list(filter?: TaskFilter, sort?: TaskSortOptions): Promise<Result<Task[]>> {
       const catalogDoc = catalog.doc();
       if (!catalogDoc) return ok([]);
 
@@ -167,7 +169,8 @@ export function createTaskNamespace(
       // Apply filters
       let filtered = allTasks;
       if (filter?.status) {
-        filtered = filtered.filter((t) => t.status === filter.status);
+        const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
+        filtered = filtered.filter((t) => statuses.includes(t.status));
       }
       if (filter?.priority) {
         filtered = filtered.filter((t) => t.priority === filter.priority);
@@ -183,14 +186,47 @@ export function createTaskNamespace(
       if (filter?.dueAfter) {
         filtered = filtered.filter((t) => t.dueDate !== undefined && t.dueDate >= filter.dueAfter!);
       }
+      if (filter?.overdue) {
+        const today = new Date().toISOString().slice(0, 10);
+        filtered = filtered.filter(
+          (t) =>
+            t.dueDate !== undefined &&
+            t.dueDate < today &&
+            t.status !== "done" &&
+            t.status !== "canceled",
+        );
+      }
+      if (filter?.today) {
+        const today = new Date().toISOString().slice(0, 10);
+        filtered = filtered.filter(
+          (t) => t.dueDate?.startsWith(today) || t.scheduledDate?.startsWith(today),
+        );
+      }
 
-      // Default sort: priority desc, then createdAt desc
+      // Sort
       const priorityOrder = { high: 3, medium: 2, low: 1 };
-      filtered.sort((a, b) => {
-        const pd = priorityOrder[b.priority] - priorityOrder[a.priority];
-        if (pd !== 0) return pd;
-        return b.createdAt.localeCompare(a.createdAt);
-      });
+      if (sort) {
+        const dir = sort.direction === "asc" ? 1 : -1;
+        filtered.sort((a, b) => {
+          const av = getSortValue(a, sort.field, priorityOrder);
+          const bv = getSortValue(b, sort.field, priorityOrder);
+          // Sentinel values (\uffff) always sort last regardless of direction
+          const aSentinel = av === "\uffff";
+          const bSentinel = bv === "\uffff";
+          if (aSentinel && !bSentinel) return 1;
+          if (!aSentinel && bSentinel) return -1;
+          if (av < bv) return -1 * dir;
+          if (av > bv) return 1 * dir;
+          return 0;
+        });
+      } else {
+        // Default sort: priority desc, then createdAt desc
+        filtered.sort((a, b) => {
+          const pd = priorityOrder[b.priority] - priorityOrder[a.priority];
+          if (pd !== 0) return pd;
+          return b.createdAt.localeCompare(a.createdAt);
+        });
+      }
 
       return ok(filtered);
     },
@@ -391,6 +427,28 @@ function cloneTask(t: Task): Task {
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   };
+}
+
+/** Get a comparable value for sorting */
+function getSortValue(
+  task: Task,
+  field: TaskSortField,
+  priorityOrder: Record<string, number>,
+): string | number {
+  switch (field) {
+    case "priority":
+      return priorityOrder[task.priority] ?? 0;
+    case "dueDate":
+      return task.dueDate ?? "\uffff"; // missing dates sort last
+    case "createdAt":
+      return task.createdAt;
+    case "updatedAt":
+      return task.updatedAt;
+    case "title":
+      return task.title.toLowerCase();
+    default:
+      return task.createdAt;
+  }
 }
 
 /** Remove undefined values from an object — Automerge doesn't allow them */

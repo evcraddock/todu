@@ -6,6 +6,7 @@ import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
 import { registerProjectCommands } from "./commands/project.js";
 import { registerTaskCommands } from "./commands/task.js";
+import { setColorEnabled } from "./format.js";
 
 const program = new Command();
 
@@ -13,7 +14,13 @@ program
   .name("todu-new")
   .description("Local-first task management")
   .version("0.0.1")
-  .option("--format <type>", "output format (text or json)", "text");
+  .option("--format <type>", "output format (text or json)", "text")
+  .option("--no-color", "disable color output")
+  .hook("preAction", () => {
+    if (!program.opts().color) {
+      setColorEnabled(false);
+    }
+  });
 
 // Lazy initialization — only create Todu instance when a command runs
 const getTodu = () => {

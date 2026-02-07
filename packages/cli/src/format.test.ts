@@ -1,6 +1,13 @@
 import type { NotFoundError, StorageError, ValidationError } from "@todu/core";
-import { describe, expect, it } from "vitest";
-import { formatError, formatJSON, formatTable } from "./format.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  colorPriority,
+  colorStatus,
+  formatError,
+  formatJSON,
+  formatTable,
+  setColorEnabled,
+} from "./format.js";
 
 describe("formatTable", () => {
   const columns = [
@@ -62,5 +69,44 @@ describe("formatError", () => {
   it("formats StorageError", () => {
     const error: StorageError = { type: "storage", message: "Disk full" };
     expect(formatError(error)).toBe("Error: Disk full");
+  });
+});
+
+describe("color functions", () => {
+  describe("with color disabled", () => {
+    beforeEach(() => setColorEnabled(false));
+    afterEach(() => setColorEnabled(false));
+
+    it("colorPriority returns plain text", () => {
+      expect(colorPriority("high")).toBe("high");
+      expect(colorPriority("medium")).toBe("medium");
+      expect(colorPriority("low")).toBe("low");
+    });
+
+    it("colorStatus returns plain text", () => {
+      expect(colorStatus("done")).toBe("done");
+      expect(colorStatus("inprogress")).toBe("inprogress");
+    });
+  });
+
+  describe("with color enabled", () => {
+    beforeEach(() => setColorEnabled(true));
+    afterEach(() => setColorEnabled(false));
+
+    it("colorPriority returns text containing the value", () => {
+      // picocolors may strip ANSI in non-TTY (test runner), so just verify
+      // the function runs and returns the value
+      expect(colorPriority("high")).toContain("high");
+      expect(colorPriority("medium")).toContain("medium");
+      expect(colorPriority("low")).toContain("low");
+    });
+
+    it("colorStatus returns text containing the value", () => {
+      expect(colorStatus("done")).toContain("done");
+      expect(colorStatus("inprogress")).toContain("inprogress");
+      expect(colorStatus("canceled")).toContain("canceled");
+      expect(colorStatus("waiting")).toContain("waiting");
+      expect(colorStatus("active")).toContain("active");
+    });
   });
 });

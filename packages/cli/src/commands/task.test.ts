@@ -119,6 +119,47 @@ describe("task CLI commands", () => {
     expect(JSON.parse(afterDelete)).toHaveLength(0);
   });
 
+  it("status shortcuts: start, done, cancel", { timeout: 30000 }, () => {
+    // Create project and task
+    run('project create --name "Test"');
+    const taskJson = run('--format json task create --title "Shortcut test" --project "Test"');
+    const task = JSON.parse(taskJson);
+
+    // Start
+    const startOut = run(`task start ${task.id}`);
+    expect(startOut).toContain("inprogress");
+
+    // Done
+    const doneOut = run(`task done ${task.id}`);
+    expect(doneOut).toContain("done");
+
+    // Reopen then cancel
+    run(`task update ${task.id} --status active`);
+    const cancelOut = run(`task cancel ${task.id}`);
+    expect(cancelOut).toContain("canceled");
+  });
+
+  it("multi-status filter and sort", { timeout: 30000 }, () => {
+    run('project create --name "Filter"');
+    run('--format json task create --title "Alpha" --project "Filter" --priority low');
+    const tJson = run(
+      '--format json task create --title "Bravo" --project "Filter" --priority high',
+    );
+    const t = JSON.parse(tJson);
+    run(`task start ${t.id}`);
+
+    // Multi-status filter
+    const multi = run('--format json task list --status "active,inprogress"');
+    const parsed = JSON.parse(multi);
+    expect(parsed).toHaveLength(2);
+
+    // Sort by title asc
+    const sorted = run("--format json task list --sort title --asc");
+    const sortedParsed = JSON.parse(sorted);
+    expect(sortedParsed[0].title).toBe("Alpha");
+    expect(sortedParsed[1].title).toBe("Bravo");
+  });
+
   it("handles errors gracefully", () => {
     // Show nonexistent task
     const showErr = run("task show task-nonexistent", true);

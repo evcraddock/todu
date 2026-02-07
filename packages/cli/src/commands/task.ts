@@ -1,14 +1,20 @@
-import type { ProjectId, Task, TaskWithDetail } from "@todu/core";
-import { createProjectId, createTaskId, isTaskPriority, isTaskStatus } from "@todu/core";
+import type { ProjectId, Task, TaskSortOptions, TaskStatus, TaskWithDetail } from "@todu/core";
+import {
+  createProjectId,
+  createTaskId,
+  isTaskPriority,
+  isTaskSortField,
+  isTaskStatus,
+} from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
-import { formatError, formatJSON, formatTable } from "../format.js";
+import { colorPriority, colorStatus, formatError, formatJSON, formatTable } from "../format.js";
 
 const TASK_COLUMNS = [
   { key: "id", label: "ID" },
   { key: "title", label: "Title" },
-  { key: "status", label: "Status" },
-  { key: "priority", label: "Priority" },
+  { key: "status", label: "Status", colorize: colorStatus },
+  { key: "priority", label: "Priority", colorize: colorPriority },
   { key: "project", label: "Project" },
 ];
 
@@ -135,9 +141,13 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .command("list")
     .description("List tasks")
     .option("--project <project>", "filter by project (ID or name)")
-    .option("--status <status>", "filter by status")
+    .option("--status <statuses>", "filter by status (comma-separated)")
     .option("--priority <priority>", "filter by priority")
     .option("--label <label>", "filter by label")
+    .option("--overdue", "show overdue tasks only")
+    .option("--today", "show tasks due or scheduled today")
+    .option("--sort <field>", "sort by field (priority, dueDate, createdAt, updatedAt, title)")
+    .option("--asc", "sort ascending (default: descending)")
     .action(async (opts) => {
       const todu = await getTodu();
       try {
@@ -152,23 +162,48 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
           projectId = project.id;
         }
 
-        if (opts.status && !isTaskStatus(opts.status)) {
-          console.error(`Error: invalid status: ${opts.status}`);
-          process.exitCode = 1;
-          return;
+        // Parse multi-status: --status active,inprogress
+        let status: TaskStatus | TaskStatus[] | undefined;
+        if (opts.status) {
+          const parts = opts.status.split(",").map((s: string) => s.trim());
+          for (const s of parts) {
+            if (!isTaskStatus(s)) {
+              console.error(`Error: invalid status: ${s}`);
+              process.exitCode = 1;
+              return;
+            }
+          }
+          status = parts.length === 1 ? (parts[0] as TaskStatus) : (parts as TaskStatus[]);
         }
+
         if (opts.priority && !isTaskPriority(opts.priority)) {
           console.error(`Error: invalid priority: ${opts.priority}`);
           process.exitCode = 1;
           return;
         }
 
-        const result = await todu.task.list({
-          projectId,
-          status: opts.status,
-          priority: opts.priority,
-          label: opts.label,
-        });
+        // Parse sort
+        let sort: TaskSortOptions | undefined;
+        if (opts.sort) {
+          if (!isTaskSortField(opts.sort)) {
+            console.error(`Error: invalid sort field: ${opts.sort}`);
+            process.exitCode = 1;
+            return;
+          }
+          sort = { field: opts.sort, direction: opts.asc ? "asc" : "desc" };
+        }
+
+        const result = await todu.task.list(
+          {
+            projectId,
+            status,
+            priority: opts.priority,
+            label: opts.label,
+            overdue: opts.overdue,
+            today: opts.today,
+          },
+          sort,
+        );
 
         if (!result.ok) {
           console.error(formatError(result.error));
@@ -342,4 +377,37 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
         await todu.close();
       }
     });
+
+  // Status shortcut helper
+  function statusShortcut(name: string, description: string, targetStatus: TaskStatus) {
+    task
+      .command(`${name} <id>`)
+      .description(description)
+      .action(async (id) => {
+        const todu = await getTodu();
+        try {
+          const result = await todu.task.update(createTaskId(id), { status: targetStatus });
+          if (!result.ok) {
+            console.error(formatError(result.error));
+            process.exitCode = 1;
+            return;
+          }
+
+          const nameMap = await buildProjectNameMap(todu);
+          const format = program.opts().format;
+          if (format === "json") {
+            console.log(formatJSON(result.value));
+          } else {
+            console.log(`Task ${targetStatus}:`);
+            console.log(taskDetail(result.value, nameMap[result.value.projectId]));
+          }
+        } finally {
+          await todu.close();
+        }
+      });
+  }
+
+  statusShortcut("start", "Start a task (set status to inprogress)", "inprogress");
+  statusShortcut("done", "Complete a task (set status to done)", "done");
+  statusShortcut("cancel", "Cancel a task (set status to canceled)", "canceled");
 }
