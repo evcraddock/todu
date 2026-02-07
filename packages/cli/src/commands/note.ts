@@ -1,5 +1,5 @@
 import type { Note, NoteEntityType } from "@todu/core";
-import { createNoteId, createProjectId, createTaskId, isNoteEntityType } from "@todu/core";
+import { createNoteId, createProjectId } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
 import { formatError, formatJSON, formatTable } from "../format.js";
@@ -134,6 +134,10 @@ export function registerNoteCommands(program: Command, getTodu: () => Promise<To
               if (match) {
                 entityType = "project";
                 entityId = match.id;
+              } else {
+                console.error(`Project not found: ${opts.project}`);
+                process.exitCode = 1;
+                return;
               }
             }
           }
