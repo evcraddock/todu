@@ -23,6 +23,7 @@ describe("note namespace", () => {
 
   afterEach(async () => {
     await todu.close();
+    await new Promise((r) => setTimeout(r, 50));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -224,6 +225,7 @@ describe("note namespace", () => {
     it("notes survive close and reopen", async () => {
       await todu.note.create({ content: "Persistent thought", tags: ["journal"] });
       await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
 
       todu = await createTodu({ storagePath: tmpDir });
       const result = await todu.note.list();

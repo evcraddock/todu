@@ -24,6 +24,7 @@ describe("task namespace", () => {
 
   afterEach(async () => {
     await todu.close();
+    await new Promise((r) => setTimeout(r, 50));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -485,6 +486,7 @@ describe("task namespace", () => {
         description: "Survives restart",
       });
       await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
 
       todu = await createTodu({ storagePath: tmpDir });
       const list = await todu.task.list();

@@ -17,6 +17,7 @@ describe("label namespace", () => {
 
   afterEach(async () => {
     await todu.close();
+    await new Promise((r) => setTimeout(r, 50));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
