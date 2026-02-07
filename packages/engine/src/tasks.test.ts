@@ -178,19 +178,20 @@ describe("task namespace", () => {
     });
 
     it("filters by multiple statuses", async () => {
-      const t1 = await todu.task.create({ title: "Active", projectId });
+      const t1 = await todu.task.create({ title: "Stays active", projectId });
       const t2 = await todu.task.create({ title: "Started", projectId });
-      await todu.task.create({ title: "Done", projectId });
+      await todu.task.create({ title: "Never updated", projectId });
       if (!t1.ok || !t2.ok) throw new Error("create failed");
       await todu.task.update(t2.value.id, { status: "inprogress" });
-      const t3 = await todu.task.create({ title: "Also done", projectId });
+      const t3 = await todu.task.create({ title: "Completed", projectId });
       if (!t3.ok) throw new Error("create failed");
       await todu.task.update(t3.value.id, { status: "done" });
 
+      // "Stays active", "Started" (inprogress), and "Never updated" (still active) match
       const result = await todu.task.list({ status: ["active", "inprogress"] });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value).toHaveLength(3); // Active + Started + Done(initial was active)
+      expect(result.value).toHaveLength(3);
     });
 
     it("filters overdue tasks", async () => {
@@ -228,7 +229,7 @@ describe("task namespace", () => {
       expect(result.value.map((t) => t.title)).toEqual(["Alpha", "Bravo", "Charlie"]);
     });
 
-    it("sorts by dueDate descending", async () => {
+    it("sorts by dueDate descending, missing dates last", async () => {
       await todu.task.create({ title: "Early", projectId, dueDate: "2026-01-01" });
       await todu.task.create({ title: "Late", projectId, dueDate: "2026-12-31" });
       await todu.task.create({ title: "No due", projectId });
@@ -236,10 +237,10 @@ describe("task namespace", () => {
       const result = await todu.task.list(undefined, { field: "dueDate", direction: "desc" });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // No due sorts last (\uffff), so: No due, Late, Early when desc
-      expect(result.value[0].title).toBe("No due");
-      expect(result.value[1].title).toBe("Late");
-      expect(result.value[2].title).toBe("Early");
+      // Missing dates always sort last regardless of direction
+      expect(result.value[0].title).toBe("Late");
+      expect(result.value[1].title).toBe("Early");
+      expect(result.value[2].title).toBe("No due");
     });
   });
 

@@ -11,6 +11,7 @@ import {
   type TaskFilter,
   type TaskId,
   type TaskListDocument,
+  type TaskSortField,
   type TaskSortOptions,
   type TaskWithDetail,
   type UpdateTaskInput,
@@ -209,6 +210,11 @@ export function createTaskNamespace(
         filtered.sort((a, b) => {
           const av = getSortValue(a, sort.field, priorityOrder);
           const bv = getSortValue(b, sort.field, priorityOrder);
+          // Sentinel values (\uffff) always sort last regardless of direction
+          const aSentinel = av === "\uffff";
+          const bSentinel = bv === "\uffff";
+          if (aSentinel && !bSentinel) return 1;
+          if (!aSentinel && bSentinel) return -1;
           if (av < bv) return -1 * dir;
           if (av > bv) return 1 * dir;
           return 0;
@@ -426,7 +432,7 @@ function cloneTask(t: Task): Task {
 /** Get a comparable value for sorting */
 function getSortValue(
   task: Task,
-  field: string,
+  field: TaskSortField,
   priorityOrder: Record<string, number>,
 ): string | number {
   switch (field) {
