@@ -10,6 +10,7 @@
     "build": "tsgo -p tsconfig.build.json"
   },
   "dependencies": {
-    "@todu/engine": "^0.0.1"
+    "@todu/engine": "^0.0.1",
+    "commander": "^14.0.3"
   }
 }
