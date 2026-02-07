@@ -3,7 +3,12 @@ import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
-import { CATALOG_DOC_KEY, type CatalogDocument, createEmptyCatalog } from "@todu/core";
+import {
+  CATALOG_DOC_KEY,
+  type CatalogDocument,
+  SCHEMA_VERSION,
+  createEmptyCatalog,
+} from "@todu/core";
 
 // ============================================================================
 // Storage layer — Automerge repo + document management
@@ -60,6 +65,7 @@ async function loadOrCreateCatalog(
   if (fs.existsSync(markerPath)) {
     const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
     const handle = await repo.find<CatalogDocument>(docId);
+    migrateCatalog(handle);
     return handle;
   }
 
@@ -78,4 +84,35 @@ async function loadOrCreateCatalog(
   fs.writeFileSync(markerPath, handle.documentId, "utf-8");
 
   return handle;
+}
+
+/**
+ * Migrate an existing catalog document to the current schema.
+ * Backfills any missing fields that were added in later versions.
+ * This ensures engine code can always assume catalog fields exist.
+ */
+function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
+  const doc = handle.doc();
+  if (!doc) return;
+
+  const defaults = createEmptyCatalog();
+  let needsMigration = false;
+
+  // Check for missing fields
+  if (!Array.isArray(doc.projects)) needsMigration = true;
+  if (!Array.isArray(doc.labels)) needsMigration = true;
+  if (doc.taskListDocIds === undefined || doc.taskListDocIds === null) needsMigration = true;
+  if (doc.settings === undefined || doc.settings === null) needsMigration = true;
+  if (doc.version === undefined || doc.version === null) needsMigration = true;
+
+  if (!needsMigration) return;
+
+  handle.change((d) => {
+    if (!Array.isArray(d.projects)) d.projects = defaults.projects;
+    if (!Array.isArray(d.labels)) d.labels = defaults.labels;
+    if (d.taskListDocIds === undefined || d.taskListDocIds === null)
+      d.taskListDocIds = defaults.taskListDocIds;
+    if (d.settings === undefined || d.settings === null) d.settings = defaults.settings;
+    if (d.version === undefined || d.version === null) d.version = SCHEMA_VERSION;
+  });
 }
