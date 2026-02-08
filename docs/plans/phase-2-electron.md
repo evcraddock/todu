@@ -157,6 +157,7 @@ Coarse-grained invalidation is fine for a single-user app. Optimize later if nee
 - Task search: search input that queries `todu.task.search()`
 - Move task: change project from detail view
 - Delete with confirmation dialog
+- Comment thread on task detail: shows entity-attached notes (entityType=task), inline "add comment" input, delete comment
 
 ### Acceptance Criteria
 
@@ -170,6 +171,9 @@ Coarse-grained invalidation is fine for a single-user app. Optimize later if nee
 - [ ] Can move task between projects
 - [ ] Delete shows confirmation, removes from list
 - [ ] Status transition errors shown (e.g., can't go from done to inprogress)
+- [ ] Task detail shows comment thread (entity-attached notes)
+- [ ] Can add a comment from task detail view
+- [ ] Can delete a comment from task detail view
 
 ### Dependencies
 
@@ -185,6 +189,7 @@ Coarse-grained invalidation is fine for a single-user app. Optimize later if nee
 
 - Project list view: name, status, priority, task count
 - Project detail view: project info + filtered task list for that project
+- Comment thread on project detail: entity-attached notes (entityType=project), inline add/delete
 - Create/edit project form: name, description, priority
 - Project status management (active, done, canceled)
 - Delete project with warning if it has tasks
@@ -196,6 +201,8 @@ Coarse-grained invalidation is fine for a single-user app. Optimize later if nee
 
 - [ ] Project list shows all projects with task counts
 - [ ] Project detail shows tasks belonging to that project (reuses task list component)
+- [ ] Project detail shows comment thread (entity-attached notes)
+- [ ] Can add and delete comments from project detail
 - [ ] Can create, edit, delete projects
 - [ ] Label list shows all labels with color swatches
 - [ ] Can create label with color picker
@@ -216,6 +223,7 @@ Coarse-grained invalidation is fine for a single-user app. Optimize later if nee
 
 - Habit list view: title, schedule, streak (🔥), today's status (✅/—), next due
 - Habit detail view: full info + streak stats + history
+- Comment thread on habit detail: entity-attached notes (entityType=habit), inline add/delete
 - Check/uncheck toggle: one-click check-in from list or detail view
 - History visualization: calendar-style grid or simple date list showing completed/missed
 - Create/edit habit form: title, schedule (RRULE with presets), timezone, start date
@@ -243,6 +251,8 @@ Instead of raw RRULE input, offer presets with custom option:
 - [ ] Can create habit with schedule preset or custom RRULE
 - [ ] Can pause/resume habits
 - [ ] Can edit and delete habits
+- [ ] Habit detail shows comment thread (entity-attached notes)
+- [ ] Can add and delete comments from habit detail
 
 ### Dependencies
 
@@ -267,11 +277,13 @@ Instead of raw RRULE input, offer presets with custom option:
 
 **Notes:**
 
+The Notes sidebar view is for browsing and creating standalone journal entries. Entity-attached notes (comments on tasks/projects/habits) are created and displayed inline in each entity's detail view (Slices 2-4). This view provides:
+
 - Notes list view: content preview, author, date, entity attachment info, tags
-- Filter: by entity type (standalone/task/project/habit), by tag
-- Create note form: content, tags, optional entity attachment
+- Filter: by entity type (all/standalone/task/project/habit), by tag
+- Create standalone journal note: content, tags
 - Delete note with confirmation
-- Entity-attached notes visible from task/project/habit detail views
+- Clicking an entity-attached note navigates to that entity's detail view
 
 ### Acceptance Criteria
 
@@ -279,15 +291,14 @@ Instead of raw RRULE input, offer presets with custom option:
 - [ ] Can create, edit, delete, pause/resume templates
 - [ ] Upcoming view shows projected future occurrences
 - [ ] Generate creates a task for a future date
-- [ ] Notes list shows all notes with filtering
-- [ ] Can create standalone journal notes
-- [ ] Can create entity-attached notes from task/project/habit detail views
+- [ ] Notes list shows all notes with filtering by type and tag
+- [ ] Can create standalone journal notes from the Notes view
 - [ ] Can delete notes
+- [ ] Clicking an entity-attached note navigates to the parent entity
 
 ### Dependencies
 
 - Slice 1 (Electron foundation + IPC)
-- Slice 2 (task detail view — for entity-attached notes display)
 
 ---
 
