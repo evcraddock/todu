@@ -129,6 +129,13 @@ export interface Todu {
   habit: HabitNamespace;
   sync: SyncNamespace;
   config: ConfigNamespace;
+
+  /**
+   * Register a callback to be notified when data changes.
+   * Returns a cleanup function to unsubscribe.
+   */
+  onChange(callback: () => void): () => void;
+
   close(): Promise<void>;
 }
 
@@ -140,7 +147,7 @@ function notImplemented(): Promise<Result<never, ToduError>> {
   return Promise.reject(new Error("Not implemented"));
 }
 
-export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close"> {
+export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "onChange"> {
   const stub = () => notImplemented();
 
   return {

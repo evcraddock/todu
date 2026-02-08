@@ -65,6 +65,12 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
     note: createNoteNamespace(storage.catalog, storage.repo),
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),
+    onChange(callback: () => void): () => void {
+      storage.catalog.on("change", callback);
+      return () => {
+        storage.catalog.off("change", callback);
+      };
+    },
     async close() {
       await storage.close();
     },

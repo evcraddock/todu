@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -36,9 +36,15 @@ clean: ## Remove build artifacts
 run: ## Run CLI (usage: make run ARGS="task list")
 	node packages/cli/dist/index.js $(ARGS)
 
-# Placeholder until Phase 2 (Electron)
-dev: ## Start dev environment
-	@echo "No dev services configured yet. For CLI development, use: make run ARGS=\"--help\""
+# =============================================================================
+# Electron
+# =============================================================================
+
+dev-electron: ## Launch Electron app in dev mode (hot reload)
+	npm run --workspace=packages/electron dev
+
+build-electron: ## Build Electron app for distribution
+	npm run --workspace=packages/electron build
 
 dev-status: ## Check if dev environment is running
 	@echo "n/a"
