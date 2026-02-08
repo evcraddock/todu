@@ -65,3 +65,8 @@ rm -rf "$TODU_DATA_DIR" && export TODU_DATA_DIR=$(mktemp -d)
 - [list-filters.md](cli-note/list-filters.md) — Filter by task, project, tag, author
 - [delete.md](cli-note/delete.md) — Delete notes
 - [errors.md](cli-note/errors.md) — Error cases
+
+### [cli-config/](cli-config/)
+- [init.md](cli-config/init.md) — Initialize a dev config
+- [show.md](cli-config/show.md) — Display resolved configuration
+- [dev-workflow.md](cli-config/dev-workflow.md) — Full dev config workflow
