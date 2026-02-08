@@ -1,6 +1,5 @@
 import type { DocHandle } from "@automerge/automerge-repo";
 import type { CatalogDocument } from "@todu/core";
-import { todayInTimezone } from "./schedule.js";
 
 // ============================================================================
 // Template processing framework
@@ -20,12 +19,12 @@ export interface SchedulableItem {
 
 /**
  * Context passed to template processors during processTemplates().
+ * Processors determine "today" per-item using todayInTimezone()
+ * with each item's configured timezone.
  */
 export interface ProcessingContext {
   /** The catalog document handle for reading/writing */
   catalog: DocHandle<CatalogDocument>;
-  /** Today's date in the item's timezone (YYYY-MM-DD) */
-  today: string;
 }
 
 /**
@@ -87,11 +86,8 @@ export async function processTemplates(catalog: DocHandle<CatalogDocument>): Pro
 
   for (const [type, processor] of processors) {
     try {
-      // Each processor determines "today" based on individual item timezones,
-      // but we pass the catalog for access
       const context: ProcessingContext = {
         catalog,
-        today: "", // Processors determine per-item today using todayInTimezone()
       };
       await processor(context);
     } catch (e) {
