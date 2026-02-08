@@ -1,6 +1,6 @@
 # CLI Label Integration Tests
 
-Tests for `todu-new label` commands.
+Tests for `toduai label` commands.
 
 ## Setup
 

@@ -4,13 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new label create --name bug --color "#ff0000"
+toduai label create --name bug --color "#ff0000"
 ```
 
 ## Update Name
 
 ```bash
-todu-new label update bug --name defect
+toduai label update bug --name defect
 ```
 
 **Expected:**
@@ -26,7 +26,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Update Color
 
 ```bash
-todu-new label update defect --color "#cc0000"
+toduai label update defect --color "#cc0000"
 ```
 
 **Expected:**
@@ -42,7 +42,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Update Both
 
 ```bash
-todu-new label update defect --name critical --color "#990000"
+toduai label update defect --name critical --color "#990000"
 ```
 
 **Expected:** Both name and color updated.
@@ -50,8 +50,8 @@ todu-new label update defect --name critical --color "#990000"
 ## Update by ID
 
 ```bash
-LABEL_ID=$(todu-new --format json label list | jq -r '.[0].id')
-todu-new label update "$LABEL_ID" --name urgent
+LABEL_ID=$(toduai --format json label list | jq -r '.[0].id')
+toduai label update "$LABEL_ID" --name urgent
 ```
 
 **Expected:** Name changed to "urgent".
@@ -59,7 +59,7 @@ todu-new label update "$LABEL_ID" --name urgent
 ## Verify
 
 ```bash
-todu-new label list --no-color
+toduai label list --no-color
 ```
 
 **Expected:** Shows the label with final name and color.

@@ -4,15 +4,15 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "My App"
-TASK=$(todu-new --format json task create --title "Fix login" --project "My App" --priority high --description "Users can't log in with SSO")
+toduai project create --name "My App"
+TASK=$(toduai --format json task create --title "Fix login" --project "My App" --priority high --description "Users can't log in with SSO")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## Show Task
 
 ```bash
-todu-new task show "$TASK_ID"
+toduai task show "$TASK_ID"
 ```
 
 **Expected:**
@@ -34,7 +34,7 @@ Users can't log in with SSO
 ## Show as JSON
 
 ```bash
-todu-new --format json task show "$TASK_ID"
+toduai --format json task show "$TASK_ID"
 ```
 
 **Expected:** JSON object including `description` field.

@@ -4,16 +4,16 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "Source"
-todu-new project create --name "Destination"
-TASK=$(todu-new --format json task create --title "Movable task" --project "Source")
+toduai project create --name "Source"
+toduai project create --name "Destination"
+TASK=$(toduai --format json task create --title "Movable task" --project "Source")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## Move to Another Project
 
 ```bash
-todu-new task move "$TASK_ID" "Destination"
+toduai task move "$TASK_ID" "Destination"
 ```
 
 **Expected:**
@@ -33,7 +33,7 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Verify Source is Empty
 
 ```bash
-todu-new --format json task list --project "Source"
+toduai --format json task list --project "Source"
 ```
 
 **Expected:** Empty array `[]`.
@@ -41,7 +41,7 @@ todu-new --format json task list --project "Source"
 ## Verify Task is in Destination
 
 ```bash
-todu-new --format json task list --project "Destination"
+toduai --format json task list --project "Destination"
 ```
 
 **Expected:** Array with one task (the moved one).

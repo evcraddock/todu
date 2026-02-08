@@ -9,7 +9,7 @@ export TODU_DATA_DIR=$(mktemp -d)
 ## Simple Journal Entry
 
 ```bash
-todu-new note add "Today I shipped the login feature"
+toduai note add "Today I shipped the login feature"
 ```
 
 **Expected:**
@@ -26,7 +26,7 @@ Today I shipped the login feature
 ## Journal Entry with Tags
 
 ```bash
-todu-new note add "Sprint retrospective went well" --tag retro --tag weekly
+toduai note add "Sprint retrospective went well" --tag retro --tag weekly
 ```
 
 **Expected:**
@@ -44,7 +44,7 @@ Sprint retrospective went well
 ## Journal Entry with Author
 
 ```bash
-todu-new note add "Reviewed the PR" --author "agent"
+toduai note add "Reviewed the PR" --author "agent"
 ```
 
 **Expected:**
@@ -61,7 +61,7 @@ Reviewed the PR
 ## Journal Entry with JSON Output
 
 ```bash
-todu-new --format json note add "Quick thought"
+toduai --format json note add "Quick thought"
 ```
 
 **Expected:**
@@ -79,7 +79,7 @@ todu-new --format json note add "Quick thought"
 ## Verify
 
 ```bash
-todu-new note list --no-color
+toduai note list --no-color
 ```
 
 **Expected:** All 4 notes listed.

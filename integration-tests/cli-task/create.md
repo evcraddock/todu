@@ -4,13 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "My App"
+toduai project create --name "My App"
 ```
 
 ## Create with Required Fields
 
 ```bash
-todu-new task create --title "Fix login bug" --project "My App"
+toduai task create --title "Fix login bug" --project "My App"
 ```
 
 **Expected:**
@@ -32,8 +32,8 @@ Defaults: status=active, priority=medium.
 ## Create with All Options
 
 ```bash
-todu-new label create --name bug --color "#ff0000"
-todu-new task create --title "Fix crash" --project "My App" --priority high \
+toduai label create --name bug --color "#ff0000"
+toduai task create --title "Fix crash" --project "My App" --priority high \
   --description "App crashes on startup" --label bug --due "2026-03-01" --scheduled "2026-02-15"
 ```
 
@@ -59,7 +59,7 @@ App crashes on startup
 ## Create with JSON Output
 
 ```bash
-todu-new --format json task create --title "Add tests" --project "My App" --priority low
+toduai --format json task create --title "Add tests" --project "My App" --priority low
 ```
 
 **Expected:**
@@ -80,7 +80,7 @@ todu-new --format json task create --title "Add tests" --project "My App" --prio
 ## Verify
 
 ```bash
-todu-new task list --no-color
+toduai task list --no-color
 ```
 
 **Expected:** All three tasks shown in table format.

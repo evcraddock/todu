@@ -1,6 +1,6 @@
 # CLI Project Integration Tests
 
-Tests for `todu-new project` commands.
+Tests for `toduai project` commands.
 
 ## Setup
 

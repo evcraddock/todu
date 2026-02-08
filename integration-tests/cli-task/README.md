@@ -1,6 +1,6 @@
 # CLI Task Integration Tests
 
-Tests for `todu-new task` commands.
+Tests for `toduai task` commands.
 
 ## Setup
 

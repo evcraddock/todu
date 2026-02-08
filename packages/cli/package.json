@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "todu-new": "./dist/index.js"
+    "toduai": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "scripts": {

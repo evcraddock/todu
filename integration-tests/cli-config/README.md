@@ -1,6 +1,6 @@
 # CLI Config Integration Tests
 
-Tests for `todu-new config` commands.
+Tests for `toduai config` commands.
 
 ## Tests
 

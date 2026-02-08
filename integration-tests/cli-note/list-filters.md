@@ -4,23 +4,23 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "App"
-todu-new project create --name "Infra"
-TASK=$(todu-new --format json task create --title "Fix bug" --project "App")
+toduai project create --name "App"
+toduai project create --name "Infra"
+TASK=$(toduai --format json task create --title "Fix bug" --project "App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 
 # Create varied notes
-todu-new note add "Journal entry" --tag daily
-todu-new note add "Task progress" --task "$TASK_ID" --tag update
-todu-new note add "Project decision" --project "App" --tag decision
-todu-new note add "Agent review" --author agent --tag review
-todu-new note add "Infra note" --project "Infra"
+toduai note add "Journal entry" --tag daily
+toduai note add "Task progress" --task "$TASK_ID" --tag update
+toduai note add "Project decision" --project "App" --tag decision
+toduai note add "Agent review" --author agent --tag review
+toduai note add "Infra note" --project "Infra"
 ```
 
 ## List All
 
 ```bash
-todu-new note list --no-color
+toduai note list --no-color
 ```
 
 **Expected:** All 5 notes shown.
@@ -28,7 +28,7 @@ todu-new note list --no-color
 ## Filter by Task
 
 ```bash
-todu-new note list --task "$TASK_ID" --no-color
+toduai note list --task "$TASK_ID" --no-color
 ```
 
 **Expected:** Only "Task progress".
@@ -36,7 +36,7 @@ todu-new note list --task "$TASK_ID" --no-color
 ## Filter by Project
 
 ```bash
-todu-new note list --project "App" --no-color
+toduai note list --project "App" --no-color
 ```
 
 **Expected:** Only "Project decision".
@@ -44,7 +44,7 @@ todu-new note list --project "App" --no-color
 ## Filter by Tag
 
 ```bash
-todu-new note list --tag daily --no-color
+toduai note list --tag daily --no-color
 ```
 
 **Expected:** Only "Journal entry".
@@ -52,7 +52,7 @@ todu-new note list --tag daily --no-color
 ## Filter by Author
 
 ```bash
-todu-new note list --author agent --no-color
+toduai note list --author agent --no-color
 ```
 
 **Expected:** Only "Agent review".
@@ -60,7 +60,7 @@ todu-new note list --author agent --no-color
 ## List as JSON
 
 ```bash
-todu-new --format json note list
+toduai --format json note list
 ```
 
 **Expected:** JSON array of all note objects.
@@ -68,7 +68,7 @@ todu-new --format json note list
 ## Empty Results
 
 ```bash
-todu-new note list --tag nonexistent --no-color
+toduai note list --tag nonexistent --no-color
 ```
 
 **Expected:**
