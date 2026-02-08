@@ -9,7 +9,7 @@ export TODU_DATA_DIR=$(mktemp -d)
 ## Create with Name Only
 
 ```bash
-todu-new label create --name bug
+toduai label create --name bug
 ```
 
 **Expected:**
@@ -24,7 +24,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Create with Color
 
 ```bash
-todu-new label create --name urgent --color "#ff0000"
+toduai label create --name urgent --color "#ff0000"
 ```
 
 **Expected:**
@@ -40,7 +40,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Create with JSON Output
 
 ```bash
-todu-new --format json label create --name feature --color "#00ff00"
+toduai --format json label create --name feature --color "#00ff00"
 ```
 
 **Expected:**
@@ -57,7 +57,7 @@ todu-new --format json label create --name feature --color "#00ff00"
 ## Verify
 
 ```bash
-todu-new label list
+toduai label list
 ```
 
 **Expected:** All three labels shown.

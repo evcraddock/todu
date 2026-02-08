@@ -4,13 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "My App" --priority medium
+toduai project create --name "My App" --priority medium
 ```
 
 ## Update Name
 
 ```bash
-todu-new project update "My App" --name "My Application"
+toduai project update "My App" --name "My Application"
 ```
 
 **Expected:**
@@ -29,7 +29,7 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ## Update Priority
 
 ```bash
-todu-new project update "My Application" --priority high
+toduai project update "My Application" --priority high
 ```
 
 **Expected:** Shows priority changed to `high`.
@@ -37,7 +37,7 @@ todu-new project update "My Application" --priority high
 ## Update Status
 
 ```bash
-todu-new project update "My Application" --status done
+toduai project update "My Application" --status done
 ```
 
 **Expected:** Shows status changed to `done`.
@@ -45,7 +45,7 @@ todu-new project update "My Application" --status done
 ## Update Multiple Fields
 
 ```bash
-todu-new project update "My Application" --name "Legacy App" --priority low
+toduai project update "My Application" --name "Legacy App" --priority low
 ```
 
 **Expected:** Both name and priority updated.
@@ -53,7 +53,7 @@ todu-new project update "My Application" --name "Legacy App" --priority low
 ## Verify
 
 ```bash
-todu-new project show "Legacy App"
+toduai project show "Legacy App"
 ```
 
 **Expected:** Shows name=Legacy App, status=done, priority=low.

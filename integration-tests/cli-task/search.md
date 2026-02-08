@@ -4,16 +4,16 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "App"
-todu-new task create --title "Fix login bug" --project "App"
-todu-new task create --title "Add search feature" --project "App"
-todu-new task create --title "Update README" --project "App"
+toduai project create --name "App"
+toduai task create --title "Fix login bug" --project "App"
+toduai task create --title "Add search feature" --project "App"
+toduai task create --title "Update README" --project "App"
 ```
 
 ## Search by Keyword
 
 ```bash
-todu-new task search "login" --no-color
+toduai task search "login" --no-color
 ```
 
 **Expected:**
@@ -27,7 +27,7 @@ task-XXXXXXXX  Fix login bug  active  medium    App
 ## Case-Insensitive Search
 
 ```bash
-todu-new task search "LOGIN" --no-color
+toduai task search "LOGIN" --no-color
 ```
 
 **Expected:** Same result — finds "Fix login bug".
@@ -35,7 +35,7 @@ todu-new task search "LOGIN" --no-color
 ## Search with Multiple Matches
 
 ```bash
-todu-new task search "e" --no-color
+toduai task search "e" --no-color
 ```
 
 **Expected:** Multiple tasks matching (any task with "e" in the title).
@@ -43,7 +43,7 @@ todu-new task search "e" --no-color
 ## Search with No Results
 
 ```bash
-todu-new task search "nonexistent" --no-color
+toduai task search "nonexistent" --no-color
 ```
 
 **Expected:**
@@ -55,7 +55,7 @@ No results.
 ## Search as JSON
 
 ```bash
-todu-new --format json task search "login"
+toduai --format json task search "login"
 ```
 
 **Expected:** JSON array with matching tasks.

@@ -1,6 +1,6 @@
 # Integration Tests
 
-Manual integration test scripts for the `todu-new` CLI. Designed for LLM agents to execute step-by-step to verify CLI behavior end-to-end.
+Manual integration test scripts for the `toduai` CLI. Designed for LLM agents to execute step-by-step to verify CLI behavior end-to-end.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Manual integration test scripts for the `todu-new` CLI. Designed for LLM agents 
 
 2. Verify it works:
    ```bash
-   todu-new --version
+   toduai --version
    ```
 
 ## Running Tests

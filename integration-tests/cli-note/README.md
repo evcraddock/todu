@@ -1,6 +1,6 @@
 # CLI Note Integration Tests
 
-Tests for `todu-new note` commands. Notes can be standalone (journal entries) or attached to entities (tasks, projects).
+Tests for `toduai note` commands. Notes can be standalone (journal entries) or attached to entities (tasks, projects).
 
 ## Setup
 

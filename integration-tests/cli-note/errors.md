@@ -9,7 +9,7 @@ export TODU_DATA_DIR=$(mktemp -d)
 ## Add Note to Nonexistent Task
 
 ```bash
-todu-new note add "Orphan note" --task "task-nonexistent"
+toduai note add "Orphan note" --task "task-nonexistent"
 ```
 
 **Expected:**
@@ -23,7 +23,7 @@ Exit code: 1
 ## Add Note to Nonexistent Project
 
 ```bash
-todu-new note add "Orphan note" --project "Nonexistent"
+toduai note add "Orphan note" --project "Nonexistent"
 ```
 
 **Expected:**
@@ -35,7 +35,7 @@ Project not found: Nonexistent
 ## List Notes for Nonexistent Project
 
 ```bash
-todu-new note list --project "Nonexistent"
+toduai note list --project "Nonexistent"
 ```
 
 **Expected:**
@@ -47,7 +47,7 @@ Project not found: Nonexistent
 ## Delete Nonexistent Note
 
 ```bash
-todu-new note delete "note-nonexistent"
+toduai note delete "note-nonexistent"
 ```
 
 **Expected:**

@@ -6,15 +6,15 @@ Notes attached to tasks or projects.
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "My App"
-TASK=$(todu-new --format json task create --title "Fix bug" --project "My App")
+toduai project create --name "My App"
+TASK=$(toduai --format json task create --title "Fix bug" --project "My App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## Note Attached to Task
 
 ```bash
-todu-new note add "Found the root cause — null pointer in auth module" --task "$TASK_ID"
+toduai note add "Found the root cause — null pointer in auth module" --task "$TASK_ID"
 ```
 
 **Expected:**
@@ -32,7 +32,7 @@ Found the root cause — null pointer in auth module
 ## Note Attached to Project (by Name)
 
 ```bash
-todu-new note add "Architecture decision: use Automerge for sync" --project "My App"
+toduai note add "Architecture decision: use Automerge for sync" --project "My App"
 ```
 
 **Expected:**
@@ -50,7 +50,7 @@ Architecture decision: use Automerge for sync
 ## Attached Note with Tags
 
 ```bash
-todu-new note add "Blocked on API key" --task "$TASK_ID" --tag blocker
+toduai note add "Blocked on API key" --task "$TASK_ID" --tag blocker
 ```
 
 **Expected:** Shows entity and tags.
@@ -58,7 +58,7 @@ todu-new note add "Blocked on API key" --task "$TASK_ID" --tag blocker
 ## Verify Task Notes
 
 ```bash
-todu-new note list --task "$TASK_ID" --no-color
+toduai note list --task "$TASK_ID" --no-color
 ```
 
 **Expected:** Shows 2 notes attached to the task.
@@ -66,7 +66,7 @@ todu-new note list --task "$TASK_ID" --no-color
 ## Verify Project Notes
 
 ```bash
-todu-new note list --project "My App" --no-color
+toduai note list --project "My App" --no-color
 ```
 
 **Expected:** Shows 1 note attached to the project.

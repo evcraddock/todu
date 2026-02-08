@@ -9,7 +9,7 @@ cd $(mktemp -d)
 ## Initialize Dev Config
 
 ```bash
-todu-new config init
+toduai config init
 ```
 
 **Expected:**
@@ -19,7 +19,7 @@ Created: /path/to/.todu/config.yaml
 Created: /path/to/.todu/.gitignore
 
 Usage:
-  todu-new --config /path/to/.todu/config.yaml task list
+  toduai --config /path/to/.todu/config.yaml task list
 ```
 
 ## Verify Files Created
@@ -48,7 +48,7 @@ data/
 ## Init is Idempotent
 
 ```bash
-todu-new config init
+toduai config init
 ```
 
 **Expected:**

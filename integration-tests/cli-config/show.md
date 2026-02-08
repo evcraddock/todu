@@ -3,7 +3,7 @@
 ## Default Config (No File)
 
 ```bash
-todu-new config show
+toduai config show
 ```
 
 **Expected:**
@@ -19,8 +19,8 @@ Data dir:     /home/<user>/.config/todu/data
 
 ```bash
 cd $(mktemp -d)
-todu-new config init
-todu-new --config .todu/config.yaml config show
+toduai config init
+toduai --config .todu/config.yaml config show
 ```
 
 **Expected:**
@@ -36,7 +36,7 @@ Data dir:     /path/to/.todu/data
 
 ```bash
 export TODU_DATA_DIR=/tmp/override-data
-todu-new config show
+toduai config show
 ```
 
 **Expected:**
@@ -55,7 +55,7 @@ unset TODU_DATA_DIR
 ## JSON Output
 
 ```bash
-todu-new --format json config show
+toduai --format json config show
 ```
 
 **Expected:** JSON object with configPath, configSource, configExists, dataDir, dataDirSource fields.

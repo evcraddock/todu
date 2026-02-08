@@ -6,7 +6,7 @@ End-to-end workflow for using a dev config in a project.
 
 ```bash
 cd $(mktemp -d)
-todu-new config init
+toduai config init
 ```
 
 ## Use Dev Config for All Commands
@@ -15,14 +15,14 @@ todu-new config init
 CONFIG=".todu/config.yaml"
 
 # Create project
-todu-new --config $CONFIG project create --name "Dev App"
+toduai --config $CONFIG project create --name "Dev App"
 
 # Create tasks
-todu-new --config $CONFIG task create --title "Setup build" --project "Dev App"
-todu-new --config $CONFIG task create --title "Write tests" --project "Dev App"
+toduai --config $CONFIG task create --title "Setup build" --project "Dev App"
+toduai --config $CONFIG task create --title "Write tests" --project "Dev App"
 
 # List tasks
-todu-new --config $CONFIG task list --no-color
+toduai --config $CONFIG task list --no-color
 ```
 
 **Expected:** Both tasks shown in table format.
@@ -34,7 +34,7 @@ todu-new --config $CONFIG task list --no-color
 ls .todu/data/todu-catalog.id
 
 # Default location should NOT have this data
-# (unless you already use todu-new there)
+# (unless you already use toduai there)
 ```
 
 **Expected:** `todu-catalog.id` exists in `.todu/data/`.
@@ -42,7 +42,7 @@ ls .todu/data/todu-catalog.id
 ## JSON Config Show
 
 ```bash
-todu-new --config $CONFIG --format json config show
+toduai --config $CONFIG --format json config show
 ```
 
 **Expected:**

@@ -13,7 +13,7 @@ import { setColorEnabled } from "./format.js";
 const program = new Command();
 
 program
-  .name("todu-new")
+  .name("toduai")
   .description("Local-first task management")
   .version("0.0.1")
   .option("--format <type>", "output format (text or json)", "text")

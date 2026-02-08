@@ -4,13 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
-todu-new project create --name "My App" --priority high --description "Main application"
+toduai project create --name "My App" --priority high --description "Main application"
 ```
 
 ## Show by Name
 
 ```bash
-todu-new project show "My App"
+toduai project show "My App"
 ```
 
 **Expected:**
@@ -30,8 +30,8 @@ Description: Main application
 
 ```bash
 # Get the ID first
-PROJECT_ID=$(todu-new --format json project list | jq -r '.[0].id')
-todu-new project show "$PROJECT_ID"
+PROJECT_ID=$(toduai --format json project list | jq -r '.[0].id')
+toduai project show "$PROJECT_ID"
 ```
 
 **Expected:** Same output as above.
@@ -39,7 +39,7 @@ todu-new project show "$PROJECT_ID"
 ## Show as JSON
 
 ```bash
-todu-new --format json project show "My App"
+toduai --format json project show "My App"
 ```
 
 **Expected:** JSON object with all project fields.

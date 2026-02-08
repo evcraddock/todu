@@ -9,7 +9,7 @@ export TODU_DATA_DIR=$(mktemp -d)
 ## Create with Name Only
 
 ```bash
-todu-new project create --name "My App"
+toduai project create --name "My App"
 ```
 
 **Expected:**
@@ -30,7 +30,7 @@ Defaults: status=active, priority=medium, sync=none.
 ## Create with All Options
 
 ```bash
-todu-new project create --name "Backend API" --priority high --description "REST API service"
+toduai project create --name "Backend API" --priority high --description "REST API service"
 ```
 
 **Expected:**
@@ -50,7 +50,7 @@ Description: REST API service
 ## Create with JSON Output
 
 ```bash
-todu-new --format json project create --name "Frontend"
+toduai --format json project create --name "Frontend"
 ```
 
 **Expected:** JSON object with id, name, status, priority, syncStrategy, createdAt, updatedAt fields.
@@ -70,7 +70,7 @@ todu-new --format json project create --name "Frontend"
 ## Verify
 
 ```bash
-todu-new project list
+toduai project list
 ```
 
 **Expected:** All three projects shown in table format.
