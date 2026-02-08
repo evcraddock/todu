@@ -295,6 +295,29 @@ export function isValidStatusTransition(from: TaskStatus, to: TaskStatus): boole
 }
 
 // ============================================================================
+// Schedule types (shared by recurring templates and habits)
+// ============================================================================
+
+/**
+ * Schedule definition for recurring templates and habits.
+ * Uses RRULE (RFC 5545) for recurrence patterns.
+ */
+export interface ScheduleDefinition {
+  /** RRULE string (e.g., "FREQ=DAILY;INTERVAL=1", "FREQ=WEEKLY;BYDAY=MO,WE,FR") */
+  rule: string;
+  /** IANA timezone for date calculation (e.g., "America/Chicago") */
+  timezone: string;
+  /** Start date in YYYY-MM-DD format */
+  startDate: string;
+  /** Optional end date in YYYY-MM-DD format */
+  endDate?: string;
+}
+
+/** Allowed RRULE frequencies (no sub-daily) */
+export const ALLOWED_FREQUENCIES = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
+export type AllowedFrequency = (typeof ALLOWED_FREQUENCIES)[number];
+
+// ============================================================================
 // Settings
 // ============================================================================
 
