@@ -73,8 +73,14 @@ const api = {
   },
 
   // ── Events ─────────────────────────────────────────────────────────
-  // For change notifications and future agent events
+  // For change notifications and future agent events.
+  // Restricted to an allowlist of known channels for security.
   on: (channel: string, callback: (data: unknown) => void) => {
+    const ALLOWED_CHANNELS = ["todu:data:changed", "todu:agent:event"];
+    if (!ALLOWED_CHANNELS.includes(channel)) {
+      console.warn(`Blocked listen on unknown channel: ${channel}`);
+      return () => {};
+    }
     const listener = (_event: Electron.IpcRendererEvent, data: unknown): void => {
       callback(data);
     };
