@@ -52,14 +52,15 @@ export function registerConfigCommands(program: Command): void {
       // Create config with data_dir relative to config location
       saveConfig({ data_dir: "./data" }, configPath);
 
-      // Add .gitignore if in a git repo
+      // Add .gitignore to keep data out of version control
       const gitignorePath = path.join(dir, ".gitignore");
       if (!fs.existsSync(gitignorePath)) {
         fs.writeFileSync(gitignorePath, "# Ignore todu data\ndata/\n", "utf-8");
+        console.log(`Created: ${configPath}`);
+        console.log(`Created: ${gitignorePath}`);
+      } else {
+        console.log(`Created: ${configPath}`);
       }
-
-      console.log(`Created: ${configPath}`);
-      console.log(`Created: ${gitignorePath}`);
       console.log("");
       console.log("Usage:");
       console.log(`  todu-new --config ${configPath} task list`);

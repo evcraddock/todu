@@ -2,7 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getConfigPath, loadConfig, resolveDataDir, saveConfig } from "./config.js";
+import {
+  getConfigPath,
+  loadConfig,
+  resolveConfigSources,
+  resolveDataDir,
+  saveConfig,
+} from "./config.js";
 
 describe("config", () => {
   let tmpDir: string;
@@ -70,6 +76,12 @@ describe("config", () => {
       const config = loadConfig(configPath);
       expect(config).toEqual({});
     });
+
+    it("throws on malformed YAML", () => {
+      const configPath = path.join(tmpDir, "config.yaml");
+      fs.writeFileSync(configPath, "data_dir: [invalid: yaml: {{{\n");
+      expect(() => loadConfig(configPath)).toThrow();
+    });
   });
 
   describe("saveConfig", () => {
@@ -112,6 +124,30 @@ describe("config", () => {
       const configPath = path.join(tmpDir, "config.yaml");
       const result = resolveDataDir(configPath, {});
       expect(result).toContain(".config/todu/data");
+    });
+  });
+
+  describe("resolveConfigSources", () => {
+    it("reports --config flag as source", () => {
+      const configPath = path.join(tmpDir, "config.yaml");
+      fs.writeFileSync(configPath, "data_dir: ./mydata\n");
+      const sources = resolveConfigSources(configPath);
+      expect(sources.configSource).toBe("--config flag");
+      expect(sources.dataDirSource).toContain("config file");
+      expect(sources.dataDir).toBe(path.join(tmpDir, "mydata"));
+    });
+
+    it("reports TODU_DATA_DIR as source when set", () => {
+      process.env.TODU_DATA_DIR = "/override/data";
+      const sources = resolveConfigSources();
+      expect(sources.dataDirSource).toBe("TODU_DATA_DIR env var");
+      expect(sources.dataDir).toBe("/override/data");
+    });
+
+    it("reports default when nothing configured", () => {
+      const sources = resolveConfigSources();
+      expect(sources.configSource).toBe("default");
+      expect(sources.dataDirSource).toBe("default");
     });
   });
 });

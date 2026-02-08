@@ -30,14 +30,17 @@ export function getConfigPath(override?: string): string {
 
 /**
  * Load config from YAML file. Returns empty config if file doesn't exist.
+ * Throws on malformed YAML so users know their config is broken.
  */
 export function loadConfig(configPath: string): ToduConfig {
+  let content: string;
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
-    return (parse(content) as ToduConfig) ?? {};
+    content = fs.readFileSync(configPath, "utf-8");
   } catch {
-    return {};
+    return {}; // File not found — that's fine
   }
+  // Let YAML parse errors surface
+  return (parse(content) as ToduConfig) ?? {};
 }
 
 /**
