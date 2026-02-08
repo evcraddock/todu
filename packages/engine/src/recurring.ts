@@ -151,7 +151,6 @@ export function createRecurringNamespace(
         if (!project) return err(notFound("project", input.projectId));
       }
 
-      const existing = doc.recurringTemplates[index];
       const scheduleChanged = input.schedule !== undefined || input.timezone !== undefined;
 
       catalog.change((doc) => {
