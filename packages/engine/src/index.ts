@@ -1,4 +1,5 @@
 import { DEFAULT_DATA_DIR } from "@todu/core";
+import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
@@ -10,11 +11,12 @@ import { type Todu, type ToduConfig, createStubNamespaces } from "./todu.js";
 
 export type { Todu, ToduConfig } from "./todu.js";
 export type {
+  HabitNamespace,
   LabelNamespace,
   NoteNamespace,
   ProjectNamespace,
-  TaskNamespace,
   RecurringNamespace,
+  TaskNamespace,
 } from "./todu.js";
 export type { Storage } from "./storage.js";
 export type { UpcomingOccurrence } from "./recurring.js";
@@ -44,8 +46,9 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
 
   const storage = await initStorage(resolvedConfig.storagePath);
 
-  // Register recurring template processor before processing
+  // Register processors before processing
   registerRecurringProcessor(storage.catalog, storage.repo);
+  registerHabitProcessor(storage.catalog, storage.repo);
 
   // Process due templates/habits before returning the SDK.
   // This is the "generate on access" pattern — every CLI invocation
@@ -61,6 +64,7 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
     label: createLabelNamespace(storage.catalog, storage.repo),
     note: createNoteNamespace(storage.catalog, storage.repo),
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
+    habit: createHabitNamespace(storage.catalog, storage.repo),
     async close() {
       await storage.close();
     },

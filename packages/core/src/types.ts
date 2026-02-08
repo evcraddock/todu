@@ -350,6 +350,72 @@ export interface RecurringFilter {
 }
 
 // ============================================================================
+// Habit entity — stored in catalog document
+// ============================================================================
+
+export interface Habit {
+  id: HabitId;
+  title: string;
+  description?: string;
+  schedule: string;
+  timezone: string;
+  startDate: string;
+  endDate?: string;
+  nextDue: string;
+  paused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// Habit input types
+// ============================================================================
+
+export interface CreateHabitInput {
+  title: string;
+  schedule: string;
+  timezone: string;
+  startDate: string;
+  description?: string;
+  endDate?: string;
+}
+
+export interface UpdateHabitInput {
+  title?: string;
+  schedule?: string;
+  timezone?: string;
+  description?: string;
+  endDate?: string;
+}
+
+export interface HabitFilter {
+  paused?: boolean;
+}
+
+// ============================================================================
+// Habit check-in types
+// ============================================================================
+
+export interface HabitEntry {
+  date: string;
+  completed: boolean;
+  checkedAt?: string;
+}
+
+export interface HabitStreak {
+  current: number;
+  longest: number;
+  completedToday: boolean;
+  totalCheckins: number;
+}
+
+export interface HabitHistoryEntry {
+  date: string;
+  scheduled: boolean;
+  completed: boolean;
+}
+
+// ============================================================================
 // Schedule types (shared by recurring templates and habits)
 // ============================================================================
 

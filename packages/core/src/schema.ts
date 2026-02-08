@@ -1,4 +1,7 @@
 import type {
+  Habit,
+  HabitEntry,
+  HabitId,
   Label,
   Note,
   Project,
@@ -39,11 +42,16 @@ export interface CatalogDocument {
   /** Recurring task templates */
   recurringTemplates: RecurringTemplate[];
 
+  /** Habit definitions */
+  habits: Habit[];
+
+  /** Map of habitId → Automerge document ID for that habit's log */
+  habitLogDocIds: Record<string, string>;
+
   /** Application settings */
   settings: Settings;
 
   // Future slices will add:
-  // habits: Habit[];
   // systems: System[];
 }
 
@@ -89,6 +97,18 @@ export interface NotesDocument {
   notes: Note[];
 }
 
+/**
+ * Habit log document (one per habit).
+ * Contains check-in entries keyed by date for deterministic multi-device merging.
+ */
+export interface HabitLogDocument {
+  /** Which habit this log belongs to */
+  habitId: string;
+
+  /** Check-in entries keyed by date (YYYY-MM-DD) */
+  entries: Record<string, HabitEntry>;
+}
+
 // ============================================================================
 // Schema version
 // ============================================================================
@@ -106,6 +126,8 @@ export function createEmptyCatalog(): CatalogDocument {
     labels: [],
     taskListDocIds: {},
     recurringTemplates: [],
+    habits: [],
+    habitLogDocIds: {},
     settings: {
       schemaVersion: SCHEMA_VERSION,
     },
@@ -130,5 +152,12 @@ export function createTaskDetailDocument(taskId: string, description: string): T
 export function createNotesDocument(): NotesDocument {
   return {
     notes: [],
+  };
+}
+
+export function createHabitLogDocument(habitId: HabitId): HabitLogDocument {
+  return {
+    habitId,
+    entries: {},
   };
 }

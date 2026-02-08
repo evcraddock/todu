@@ -77,6 +77,8 @@ async function loadOrCreateCatalog(
     doc.projects = empty.projects;
     doc.labels = empty.labels;
     doc.recurringTemplates = empty.recurringTemplates;
+    doc.habits = empty.habits;
+    doc.habitLogDocIds = empty.habitLogDocIds;
     doc.taskListDocIds = empty.taskListDocIds;
     doc.settings = empty.settings;
   });
@@ -103,7 +105,9 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
   if (!Array.isArray(doc.projects)) needsMigration = true;
   if (!Array.isArray(doc.labels)) needsMigration = true;
   if (!Array.isArray(doc.recurringTemplates)) needsMigration = true;
+  if (!Array.isArray(doc.habits)) needsMigration = true;
   if (doc.taskListDocIds === undefined || doc.taskListDocIds === null) needsMigration = true;
+  if (doc.habitLogDocIds === undefined || doc.habitLogDocIds === null) needsMigration = true;
   if (doc.settings === undefined || doc.settings === null) needsMigration = true;
   if (doc.version === undefined || doc.version === null) needsMigration = true;
 
@@ -113,8 +117,11 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
     if (!Array.isArray(d.projects)) d.projects = defaults.projects;
     if (!Array.isArray(d.labels)) d.labels = defaults.labels;
     if (!Array.isArray(d.recurringTemplates)) d.recurringTemplates = defaults.recurringTemplates;
+    if (!Array.isArray(d.habits)) d.habits = defaults.habits;
     if (d.taskListDocIds === undefined || d.taskListDocIds === null)
       d.taskListDocIds = defaults.taskListDocIds;
+    if (d.habitLogDocIds === undefined || d.habitLogDocIds === null)
+      d.habitLogDocIds = defaults.habitLogDocIds;
     if (d.settings === undefined || d.settings === null) d.settings = defaults.settings;
     if (d.version === undefined || d.version === null) d.version = SCHEMA_VERSION;
   });
