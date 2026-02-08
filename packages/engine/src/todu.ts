@@ -2,6 +2,7 @@ import type {
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
+  CreateRecurringInput,
   CreateTaskInput,
   Label,
   LabelId,
@@ -10,6 +11,9 @@ import type {
   NoteId,
   Project,
   ProjectId,
+  RecurringFilter,
+  RecurringId,
+  RecurringTemplate,
   Result,
   Task,
   TaskFilter,
@@ -19,8 +23,10 @@ import type {
   ToduError,
   UpdateLabelInput,
   UpdateProjectInput,
+  UpdateRecurringInput,
   UpdateTaskInput,
 } from "@todu/core";
+import type { UpcomingOccurrence } from "./recurring.js";
 
 // ============================================================================
 // Config
@@ -68,11 +74,18 @@ export interface NoteNamespace {
 }
 
 export interface RecurringNamespace {
-  create(input: unknown): Promise<Result<unknown>>;
-  list(): Promise<Result<unknown[]>>;
-  update(id: string, input: unknown): Promise<Result<unknown>>;
-  delete(id: string): Promise<Result<void>>;
-  process(): Promise<Result<unknown[]>>;
+  create(input: CreateRecurringInput): Promise<Result<RecurringTemplate>>;
+  list(filter?: RecurringFilter): Promise<Result<RecurringTemplate[]>>;
+  get(id: RecurringId): Promise<Result<RecurringTemplate>>;
+  update(id: RecurringId, input: UpdateRecurringInput): Promise<Result<RecurringTemplate>>;
+  delete(id: RecurringId): Promise<Result<void>>;
+  pause(id: RecurringId): Promise<Result<RecurringTemplate>>;
+  resume(id: RecurringId): Promise<Result<RecurringTemplate>>;
+  upcoming(options?: { templateId?: RecurringId; days?: number }): Promise<
+    Result<UpcomingOccurrence[]>
+  >;
+  generate(templateId: RecurringId, date: string): Promise<Result<Task>>;
+  process(): Promise<Result<Task[]>>;
 }
 
 export interface HabitNamespace {
@@ -148,8 +161,13 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close"> {
     recurring: {
       create: stub,
       list: stub,
+      get: stub,
       update: stub,
       delete: stub,
+      pause: stub,
+      resume: stub,
+      upcoming: stub,
+      generate: stub,
       process: stub,
     },
     habit: {

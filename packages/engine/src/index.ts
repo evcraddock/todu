@@ -2,14 +2,22 @@ import { DEFAULT_DATA_DIR } from "@todu/core";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
+import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
 import { initStorage } from "./storage.js";
 import { createTaskNamespace } from "./tasks.js";
 import { type Todu, type ToduConfig, createStubNamespaces } from "./todu.js";
 
 export type { Todu, ToduConfig } from "./todu.js";
-export type { LabelNamespace, NoteNamespace, ProjectNamespace, TaskNamespace } from "./todu.js";
+export type {
+  LabelNamespace,
+  NoteNamespace,
+  ProjectNamespace,
+  TaskNamespace,
+  RecurringNamespace,
+} from "./todu.js";
 export type { Storage } from "./storage.js";
+export type { UpcomingOccurrence } from "./recurring.js";
 
 // Re-export schedule utilities for consumers
 export {
@@ -36,6 +44,9 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
 
   const storage = await initStorage(resolvedConfig.storagePath);
 
+  // Register recurring template processor before processing
+  registerRecurringProcessor(storage.catalog, storage.repo);
+
   // Process due templates/habits before returning the SDK.
   // This is the "generate on access" pattern — every CLI invocation
   // and Electron launch triggers template processing.
@@ -49,6 +60,7 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
     task: createTaskNamespace(storage.catalog, storage.repo),
     label: createLabelNamespace(storage.catalog, storage.repo),
     note: createNoteNamespace(storage.catalog, storage.repo),
+    recurring: createRecurringNamespace(storage.catalog, storage.repo),
     async close() {
       await storage.close();
     },

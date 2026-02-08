@@ -1,4 +1,12 @@
-import type { Label, Note, Project, ProjectId, Settings, Task } from "./types.js";
+import type {
+  Label,
+  Note,
+  Project,
+  ProjectId,
+  RecurringTemplate,
+  Settings,
+  Task,
+} from "./types.js";
 
 // ============================================================================
 // Automerge Document Schemas
@@ -28,12 +36,14 @@ export interface CatalogDocument {
   /** Automerge document ID for the notes document */
   notesDocId?: string;
 
+  /** Recurring task templates */
+  recurringTemplates: RecurringTemplate[];
+
   /** Application settings */
   settings: Settings;
 
   // Future slices will add:
   // habits: Habit[];
-  // recurringTemplates: RecurringTemplate[];
   // systems: System[];
 }
 
@@ -95,6 +105,7 @@ export function createEmptyCatalog(): CatalogDocument {
     projects: [],
     labels: [],
     taskListDocIds: {},
+    recurringTemplates: [],
     settings: {
       schemaVersion: SCHEMA_VERSION,
     },

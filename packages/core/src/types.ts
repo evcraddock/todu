@@ -295,6 +295,61 @@ export function isValidStatusTransition(from: TaskStatus, to: TaskStatus): boole
 }
 
 // ============================================================================
+// RecurringTemplate entity — stored in catalog document
+// ============================================================================
+
+export interface RecurringTemplate {
+  id: RecurringId;
+  title: string;
+  description?: string;
+  projectId: ProjectId;
+  labels: string[];
+  priority: TaskPriority;
+  schedule: string;
+  timezone: string;
+  startDate: string;
+  endDate?: string;
+  nextDue: string;
+  skippedDates: string[];
+  paused: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// RecurringTemplate input types
+// ============================================================================
+
+export interface CreateRecurringInput {
+  title: string;
+  schedule: string;
+  timezone: string;
+  startDate: string;
+  projectId: ProjectId;
+  description?: string;
+  labels?: string[];
+  priority?: TaskPriority;
+  endDate?: string;
+}
+
+export interface UpdateRecurringInput {
+  title?: string;
+  schedule?: string;
+  timezone?: string;
+  projectId?: ProjectId;
+  description?: string;
+  labels?: string[];
+  priority?: TaskPriority;
+  endDate?: string;
+  paused?: boolean;
+}
+
+export interface RecurringFilter {
+  paused?: boolean;
+  projectId?: ProjectId;
+}
+
+// ============================================================================
 // Schedule types (shared by recurring templates and habits)
 // ============================================================================
 

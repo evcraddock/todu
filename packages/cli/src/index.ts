@@ -6,6 +6,7 @@ import { registerConfigCommands } from "./commands/config.js";
 import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
 import { registerProjectCommands } from "./commands/project.js";
+import { registerRecurringCommands } from "./commands/recurring.js";
 import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
 import { setColorEnabled } from "./format.js";
@@ -39,10 +40,10 @@ registerProjectCommands(program, getTodu);
 registerTaskCommands(program, getTodu);
 registerLabelCommands(program, getTodu);
 registerNoteCommands(program, getTodu);
+registerRecurringCommands(program, getTodu);
 registerConfigCommands(program);
 
 // Stubs for future vertical slices
-program.command("recurring").description("Manage recurring templates (coming soon)");
 program.command("habit").description("Manage habits (coming soon)");
 
 program.parse();
