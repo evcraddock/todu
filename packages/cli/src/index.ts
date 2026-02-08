@@ -3,6 +3,7 @@
 import { createTodu } from "@todu/engine";
 import { Command } from "commander";
 import { registerConfigCommands } from "./commands/config.js";
+import { registerHabitCommands } from "./commands/habit.js";
 import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
 import { registerProjectCommands } from "./commands/project.js";
@@ -41,9 +42,7 @@ registerTaskCommands(program, getTodu);
 registerLabelCommands(program, getTodu);
 registerNoteCommands(program, getTodu);
 registerRecurringCommands(program, getTodu);
+registerHabitCommands(program, getTodu);
 registerConfigCommands(program);
-
-// Stubs for future vertical slices
-program.command("habit").description("Manage habits (coming soon)");
 
 program.parse();
