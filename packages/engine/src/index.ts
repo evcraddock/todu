@@ -2,6 +2,7 @@ import { DEFAULT_DATA_DIR } from "@todu/core";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
+import { processTemplates } from "./scheduling.js";
 import { initStorage } from "./storage.js";
 import { createTaskNamespace } from "./tasks.js";
 import { type Todu, type ToduConfig, createStubNamespaces } from "./todu.js";
@@ -10,11 +11,23 @@ export type { Todu, ToduConfig } from "./todu.js";
 export type { LabelNamespace, NoteNamespace, ProjectNamespace, TaskNamespace } from "./todu.js";
 export type { Storage } from "./storage.js";
 
+// Re-export schedule utilities for consumers
+export {
+  describeSchedule,
+  isScheduledDate,
+  nextOccurrence,
+  nextOccurrences,
+  todayInTimezone,
+} from "./schedule.js";
+export { registerProcessor, clearProcessors, getRegisteredProcessors } from "./scheduling.js";
+export type { SchedulableItem, ProcessingContext, TemplateProcessor } from "./scheduling.js";
+
 /**
  * Create a Todu SDK instance.
  *
  * Initializes Automerge storage, loads or creates the catalog document,
- * and returns the SDK with all operation namespaces.
+ * processes any due recurring templates/habits, and returns the SDK
+ * with all operation namespaces.
  */
 export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
   const resolvedConfig: ToduConfig = {
@@ -22,6 +35,12 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
   };
 
   const storage = await initStorage(resolvedConfig.storagePath);
+
+  // Process due templates/habits before returning the SDK.
+  // This is the "generate on access" pattern — every CLI invocation
+  // and Electron launch triggers template processing.
+  await processTemplates(storage.catalog);
+
   const stubs = createStubNamespaces(resolvedConfig);
 
   return {

@@ -1,24 +1,44 @@
+import { createRequire } from "node:module";
 import {
   type ValidationError,
   validateRRule as coreValidateRRule,
   validationError,
 } from "@todu/core";
-import { RRule } from "rrule";
+
+// rrule is a CJS package — use createRequire for ESM compatibility
+const require = createRequire(import.meta.url);
+const rruleModule = require("rrule");
+
+/** Internal RRule instance type (not exposed in public API) */
+interface RRuleInstance {
+  after(date: Date): Date | null;
+  between(start: Date, end: Date, inc?: boolean): Date[];
+}
+
+/** Internal: create an RRule from parsed options */
+function createRRule(options: Record<string, unknown>): RRuleInstance {
+  return new rruleModule.RRule(options) as RRuleInstance;
+}
+
+/** Internal: parse an RRULE string into options */
+function parseRRuleString(rule: string): Record<string, unknown> {
+  return rruleModule.RRule.parseString(rule) as Record<string, unknown>;
+}
 
 // ============================================================================
 // RRULE parsing and occurrence calculation
 // ============================================================================
 
 /**
- * Parse an RRULE string into an RRule instance with a start date.
- * The start date and timezone control when occurrences begin
- * and how "today" is determined.
+ * Parse an RRULE string into an internal RRule instance with a start date.
+ * Returns the instance for use by nextOccurrence/nextOccurrences.
+ * The RRule type is not exposed — consumers use the higher-level functions.
  */
-export function parseRule(
+function parseRule(
   rule: string,
   startDate: string,
   timezone: string,
-): { rrule: RRule; error?: never } | { rrule?: never; error: ValidationError } {
+): { rrule: RRuleInstance; error?: never } | { rrule?: never; error: ValidationError } {
   // Validate format first
   const formatError = coreValidateRRule(rule);
   if (formatError) return { error: formatError };
@@ -27,9 +47,9 @@ export function parseRule(
     // Parse start date as a Date in UTC (rrule library works in UTC internally)
     const dtstart = dateStringToUTC(startDate, timezone);
 
-    // Parse the RRULE string
-    const parsed = RRule.parseString(rule);
-    const rrule = new RRule({
+    // Parse the RRULE string and create instance
+    const parsed = parseRRuleString(rule);
+    const rrule = createRRule({
       ...parsed,
       dtstart,
     });
