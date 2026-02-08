@@ -1,11 +1,13 @@
 import { validateDateString, validateRRule, validateTimezone } from "./schedule.js";
 import type {
+  CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
   TaskStatus,
+  UpdateHabitInput,
   UpdateLabelInput,
   UpdateProjectInput,
   UpdateRecurringInput,
@@ -382,6 +384,94 @@ export function validateUpdateRecurringInput(input: UpdateRecurringInput): Valid
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
     return validationError("priority", `Invalid priority: ${input.priority}`);
+  }
+
+  if (input.endDate !== undefined) {
+    const endError = validateDateString("endDate", input.endDate);
+    if (endError) return endError;
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Habit validators
+// ============================================================================
+
+export const MAX_HABIT_TITLE_LENGTH = 100;
+
+export function validateHabitTitle(title: string): ValidationError | null {
+  if (!title || title.trim().length === 0) {
+    return validationError("title", "Habit title is required");
+  }
+  if (title.trim().length > MAX_HABIT_TITLE_LENGTH) {
+    return validationError(
+      "title",
+      `Habit title must be ${MAX_HABIT_TITLE_LENGTH} characters or less`,
+    );
+  }
+  return null;
+}
+
+export function validateCreateHabitInput(input: CreateHabitInput): ValidationError | null {
+  const titleError = validateHabitTitle(input.title);
+  if (titleError) return titleError;
+
+  const ruleError = validateRRule(input.schedule);
+  if (ruleError) return ruleError;
+
+  const tzError = validateTimezone(input.timezone);
+  if (tzError) return tzError;
+
+  const startError = validateDateString("startDate", input.startDate);
+  if (startError) return startError;
+
+  if (input.endDate !== undefined) {
+    const endError = validateDateString("endDate", input.endDate);
+    if (endError) return endError;
+
+    if (input.endDate <= input.startDate) {
+      return validationError("endDate", "End date must be after start date");
+    }
+  }
+
+  if (input.description !== undefined) {
+    const descError = validateDescription(input.description);
+    if (descError) return descError;
+  }
+
+  return null;
+}
+
+export function validateUpdateHabitInput(input: UpdateHabitInput): ValidationError | null {
+  if (
+    input.title === undefined &&
+    input.schedule === undefined &&
+    input.timezone === undefined &&
+    input.description === undefined &&
+    input.endDate === undefined
+  ) {
+    return validationError("input", "At least one field must be provided");
+  }
+
+  if (input.title !== undefined) {
+    const titleError = validateHabitTitle(input.title);
+    if (titleError) return titleError;
+  }
+
+  if (input.schedule !== undefined) {
+    const ruleError = validateRRule(input.schedule);
+    if (ruleError) return ruleError;
+  }
+
+  if (input.timezone !== undefined) {
+    const tzError = validateTimezone(input.timezone);
+    if (tzError) return tzError;
+  }
+
+  if (input.description !== undefined) {
+    const descError = validateDescription(input.description);
+    if (descError) return descError;
   }
 
   if (input.endDate !== undefined) {

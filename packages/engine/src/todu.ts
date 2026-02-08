@@ -1,9 +1,16 @@
 import type {
+  CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  Habit,
+  HabitEntry,
+  HabitFilter,
+  HabitHistoryEntry,
+  HabitId,
+  HabitStreak,
   Label,
   LabelId,
   Note,
@@ -21,6 +28,7 @@ import type {
   TaskSortOptions,
   TaskWithDetail,
   ToduError,
+  UpdateHabitInput,
   UpdateLabelInput,
   UpdateProjectInput,
   UpdateRecurringInput,
@@ -89,12 +97,17 @@ export interface RecurringNamespace {
 }
 
 export interface HabitNamespace {
-  create(input: unknown): Promise<Result<unknown>>;
-  list(): Promise<Result<unknown[]>>;
-  update(id: string, input: unknown): Promise<Result<unknown>>;
-  delete(id: string): Promise<Result<void>>;
-  complete(id: string): Promise<Result<unknown>>;
-  streak(id: string): Promise<Result<unknown>>;
+  create(input: CreateHabitInput): Promise<Result<Habit>>;
+  list(filter?: HabitFilter): Promise<Result<Habit[]>>;
+  get(id: HabitId): Promise<Result<Habit>>;
+  update(id: HabitId, input: UpdateHabitInput): Promise<Result<Habit>>;
+  delete(id: HabitId): Promise<Result<void>>;
+  pause(id: HabitId): Promise<Result<Habit>>;
+  resume(id: HabitId): Promise<Result<Habit>>;
+  check(id: HabitId): Promise<Result<HabitEntry>>;
+  uncheck(id: HabitId): Promise<Result<void>>;
+  streak(id: HabitId): Promise<Result<HabitStreak>>;
+  history(id: HabitId, days?: number): Promise<Result<HabitHistoryEntry[]>>;
 }
 
 export interface SyncNamespace {
@@ -173,10 +186,15 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close"> {
     habit: {
       create: stub,
       list: stub,
+      get: stub,
       update: stub,
       delete: stub,
-      complete: stub,
+      pause: stub,
+      resume: stub,
+      check: stub,
+      uncheck: stub,
       streak: stub,
+      history: stub,
     },
     sync: {
       start: () => Promise.resolve(),
