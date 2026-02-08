@@ -43,6 +43,15 @@ import type { UpcomingOccurrence } from "./recurring.js";
 export interface ToduConfig {
   /** Path to data storage directory */
   storagePath: string;
+
+  /** Start a local WebSocket sync server (used by Electron) */
+  syncServer?: boolean;
+
+  /** Port for sync server/client (default: 24377) */
+  syncPort?: number;
+
+  /** Try to connect to a running sync server (used by CLI) */
+  syncClient?: boolean;
 }
 
 // ============================================================================

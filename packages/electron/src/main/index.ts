@@ -9,8 +9,8 @@ let mainWindow: BrowserWindow | null = null;
 let todu: Todu | null = null;
 
 async function init(): Promise<void> {
-  // Initialize engine with default config
-  todu = await createTodu();
+  // Initialize engine with sync server so CLI can connect
+  todu = await createTodu({ syncServer: true });
 
   // Register all IPC handlers
   registerIpcHandlers(todu);

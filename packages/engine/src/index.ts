@@ -6,6 +6,8 @@ import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
 import { initStorage } from "./storage.js";
+import { connectSyncClient } from "./sync-client.js";
+import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import { type Todu, type ToduConfig, createStubNamespaces } from "./todu.js";
 
@@ -20,6 +22,8 @@ export type {
 } from "./todu.js";
 export type { Storage } from "./storage.js";
 export type { UpcomingOccurrence } from "./recurring.js";
+export { DEFAULT_SYNC_PORT } from "./sync-server.js";
+export { isSyncServerAvailable } from "./sync-client.js";
 
 // Re-export schedule utilities for consumers
 export {
@@ -38,6 +42,13 @@ export type { SchedulableItem, ProcessingContext, TemplateProcessor } from "./sc
  * Initializes Automerge storage, loads or creates the catalog document,
  * processes any due recurring templates/habits, and returns the SDK
  * with all operation namespaces.
+ *
+ * Sync modes:
+ * - `syncServer: true` — Start a WebSocket sync server. Other instances
+ *   (CLI, other devices) can connect and sync. Used by Electron.
+ * - `syncClient: true` — Connect to a running sync server. Changes
+ *   propagate bidirectionally via Automerge sync protocol. Used by CLI.
+ * - Neither — Standalone, no sync. Used by tests.
  */
 export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
   const resolvedConfig: ToduConfig = {
@@ -45,6 +56,17 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
   };
 
   const storage = await initStorage(resolvedConfig.storagePath);
+
+  // Start sync server or connect as client
+  let syncServer: SyncServer | null = null;
+  let disconnectSync: (() => void) | null = null;
+
+  if (config?.syncServer) {
+    syncServer = startSyncServer(storage.repo, config.syncPort);
+  } else if (config?.syncClient) {
+    const port = config.syncPort ?? 24377;
+    disconnectSync = await connectSyncClient(storage.repo, `ws://127.0.0.1:${port}`);
+  }
 
   // Register processors before processing
   registerRecurringProcessor(storage.catalog, storage.repo);
@@ -72,7 +94,13 @@ export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
       };
     },
     async close() {
+      // repo.shutdown() handles disconnecting network adapters.
+      // We just need to close the WS server (if any) after shutdown.
       await storage.close();
+      if (syncServer) {
+        await syncServer.close();
+        syncServer = null;
+      }
     },
   };
 }
