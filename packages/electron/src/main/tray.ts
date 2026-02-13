@@ -4,15 +4,9 @@ import { type BrowserWindow, Menu, Tray, app, nativeImage } from "electron";
 let tray: Tray | null = null;
 
 /**
- * Create a simple 16x16 tray icon programmatically.
- * Uses a small checkmark-style icon encoded as a data URL.
+ * Create a tray icon from an embedded 16x16 PNG.
  */
 function createTrayIcon(): Tray {
-  // Create a simple 16x16 icon — a filled circle
-  const size = 16;
-  const icon = nativeImage.createEmpty();
-
-  // Use a template image on macOS for proper dark/light adaptation
   const img = nativeImage.createFromDataURL(
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA" +
       "jklEQVQ4T2NkoBAwUqifAacBf/78+c/AwMDIQIoBjMguwGZAeHg4w5UrVxjOnTvH8P37" +
@@ -36,7 +30,6 @@ async function buildContextMenu(
   mainWindow: BrowserWindow | null,
   onNewTask: () => void,
 ): Promise<Menu> {
-  // Fetch counts
   let dueToday = 0;
   let habitsToCheck = 0;
 
@@ -54,7 +47,6 @@ async function buildContextMenu(
   try {
     const habitsResult = await todu.habit.list({ paused: false });
     if (habitsResult.ok) {
-      // Check which habits aren't completed today
       for (const habit of habitsResult.value) {
         try {
           const streakResult = await todu.habit.streak(habit.id);
@@ -123,29 +115,26 @@ export function setupTray(
   tray = createTrayIcon();
   tray.setToolTip("todu");
 
-  // Click toggles window visibility
-  tray.on("click", () => {
-    const win = getMainWindow();
-    if (win) {
-      if (win.isVisible()) {
-        win.hide();
-      } else {
-        win.show();
-        win.focus();
-      }
-    }
-  });
-
-  // Right-click (or click on macOS) shows context menu
-  // Rebuild menu each time to get fresh counts
-  tray.on("right-click", async () => {
-    const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
-    tray?.popUpContextMenu(menu);
-  });
-
-  // On macOS, single click also shows the menu
   if (process.platform === "darwin") {
+    // macOS: click shows context menu (standard macOS tray behavior)
     tray.on("click", async () => {
+      const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
+      tray?.popUpContextMenu(menu);
+    });
+  } else {
+    // Linux/Windows: click toggles window, right-click shows menu
+    tray.on("click", () => {
+      const win = getMainWindow();
+      if (win) {
+        if (win.isVisible()) {
+          win.hide();
+        } else {
+          win.show();
+          win.focus();
+        }
+      }
+    });
+    tray.on("right-click", async () => {
       const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
       tray?.popUpContextMenu(menu);
     });
