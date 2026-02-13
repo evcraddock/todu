@@ -113,6 +113,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT fill "#proj-name" "Electron Project"
+NODE_PATH=$NODE_PATH node $INTERACT fill "#proj-desc" "Created from the Electron UI"
 NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-primary"
 sleep 2
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-electron.png
@@ -142,7 +143,10 @@ Name:        Electron Project
 Status:      active
 Priority:    medium
 ...
+Description: Created from the Electron UI
 ```
+
+Verify the description field is present — this confirms Electron correctly passes all form fields through IPC.
 
 ## Teardown
 
