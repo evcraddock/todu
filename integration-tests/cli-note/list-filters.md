@@ -4,6 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+
 toduai project create --name "App"
 toduai project create --name "Infra"
 TASK=$(toduai --format json task create --title "Fix bug" --project "App")
@@ -17,7 +24,7 @@ toduai note add "Agent review" --author agent --tag review
 toduai note add "Infra note" --project "Infra"
 ```
 
-## List All
+## 1. List All (CLI)
 
 ```bash
 toduai note list --no-color
@@ -25,7 +32,7 @@ toduai note list --no-color
 
 **Expected:** All 5 notes shown.
 
-## Filter by Task
+## 2. Filter by Task (CLI)
 
 ```bash
 toduai note list --task "$TASK_ID" --no-color
@@ -33,7 +40,7 @@ toduai note list --task "$TASK_ID" --no-color
 
 **Expected:** Only "Task progress".
 
-## Filter by Project
+## 3. Filter by Project (CLI)
 
 ```bash
 toduai note list --project "App" --no-color
@@ -41,7 +48,7 @@ toduai note list --project "App" --no-color
 
 **Expected:** Only "Project decision".
 
-## Filter by Tag
+## 4. Filter by Tag (CLI)
 
 ```bash
 toduai note list --tag daily --no-color
@@ -49,7 +56,7 @@ toduai note list --tag daily --no-color
 
 **Expected:** Only "Journal entry".
 
-## Filter by Author
+## 5. Filter by Author (CLI)
 
 ```bash
 toduai note list --author agent --no-color
@@ -57,7 +64,7 @@ toduai note list --author agent --no-color
 
 **Expected:** Only "Agent review".
 
-## List as JSON
+## 6. List as JSON (CLI)
 
 ```bash
 toduai --format json note list
@@ -65,20 +72,95 @@ toduai --format json note list
 
 **Expected:** JSON array of all note objects.
 
-## Empty Results
+## 7. Empty Results (CLI)
 
 ```bash
 toduai note list --tag nonexistent --no-color
 ```
 
-**Expected:**
+**Expected:** `No results.`
 
-```
-No results.
-```
-
-## Cleanup
+## 8. Verify Electron Shows All Notes
 
 ```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Notes"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
+```
+
+**Expected:** Table shows all 5 notes with Date, Author, Content, Attached To, Tags columns.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-note-filters-all.png
+```
+
+## 9. Verify Electron Type Filter
+
+```bash
+# Filter to "Standalone" notes only
+NODE_PATH=$NODE_PATH node $INTERACT eval "
+  (() => {
+    const sel = document.querySelectorAll('.filter-select')[0];
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'standalone');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return sel.value;
+  })()
+"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 3000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-note-filters-standalone.png
+```
+
+**Expected:** Only standalone notes shown (Journal entry, Agent review — no entity attachment).
+
+```bash
+# Reset to all
+NODE_PATH=$NODE_PATH node $INTERACT eval "
+  (() => {
+    const sel = document.querySelectorAll('.filter-select')[0];
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'all');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()
+"
+```
+
+## 10. Verify Electron Tag Filter
+
+```bash
+# Filter by tag "daily"
+NODE_PATH=$NODE_PATH node $INTERACT eval "
+  (() => {
+    const sel = document.querySelectorAll('.filter-select')[1];
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'daily');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return sel.value;
+  })()
+"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 3000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-note-filters-tag.png
+```
+
+**Expected:** Only "Journal entry" shown (tagged with "daily").
+
+```bash
+# Reset tag filter
+NODE_PATH=$NODE_PATH node $INTERACT eval "
+  (() => {
+    const sel = document.querySelectorAll('.filter-select')[1];
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, '');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()
+"
+```
+
+## Teardown
+
+```bash
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
 rm -rf "$TODU_DATA_DIR"
 ```
