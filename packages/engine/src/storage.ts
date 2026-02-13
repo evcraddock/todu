@@ -14,12 +14,49 @@ import {
 // Storage layer — Automerge repo + document management
 // ============================================================================
 
+/** Sync message throttle interval in Automerge (see helpers/throttle.js) */
+const SYNC_THROTTLE_MS = 100;
+/** Extra time after sync message generation for WebSocket delivery */
+const SYNC_DELIVERY_MS = 20;
+
+/**
+ * Wait for pending sync messages to be generated and delivered.
+ *
+ * Automerge batches sync messages on a ~100ms throttle. After a mutation,
+ * we wait for the "generate-sync-message" event (confirming the change was
+ * packaged for sending), then yield briefly for the WebSocket to deliver
+ * the bytes. If no sync message arrives within the throttle window,
+ * there's nothing pending — return immediately.
+ */
+async function waitForSyncFlush(repo: Repo, documentId: DocumentId): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      repo.off("doc-metrics", onMetrics);
+      resolve();
+    }, SYNC_THROTTLE_MS + SYNC_DELIVERY_MS);
+
+    function onMetrics(m: { type: string; documentId: DocumentId }) {
+      if (m.type === "generate-sync-message" && m.documentId === documentId) {
+        repo.off("doc-metrics", onMetrics);
+        clearTimeout(timeout);
+        // Yield for WebSocket to deliver the bytes
+        setTimeout(resolve, SYNC_DELIVERY_MS);
+      }
+    }
+
+    repo.on("doc-metrics", onMetrics);
+  });
+}
+
 export interface Storage {
   /** The Automerge repo instance */
   repo: Repo;
 
   /** The catalog document handle */
   catalog: DocHandle<CatalogDocument>;
+
+  /** Whether this storage is ephemeral (in-memory, no persistence) */
+  ephemeral: boolean;
 
   /** Shut down the repo */
   close(): Promise<void>;
@@ -44,9 +81,84 @@ export async function initStorage(storagePath: string): Promise<Storage> {
   return {
     repo,
     catalog,
+    ephemeral: false,
     async close() {
       await repo.flush();
       await repo.shutdown();
+    },
+  };
+}
+
+/**
+ * Initialize ephemeral storage with no filesystem persistence.
+ * Used by CLI when syncing with a running Electron instance.
+ *
+ * Creates an in-memory Automerge repo and reads the catalog document ID
+ * from the marker file (written by the persistent owner).
+ *
+ * IMPORTANT: The caller must connect a sync adapter to the repo BEFORE
+ * calling `findCatalog()`. The ephemeral repo has no local data — it
+ * needs a sync peer to provide the document contents.
+ */
+export async function initEphemeralStorage(storagePath: string): Promise<
+  Omit<Storage, "catalog"> & {
+    /** Find the catalog document via sync. Call AFTER connecting a sync adapter. */
+    findCatalog(): Promise<Storage>;
+  }
+> {
+  // Read the catalog document ID from the marker file
+  const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
+  if (!fs.existsSync(markerPath)) {
+    throw new Error(
+      "No catalog marker found. Run the Electron app or CLI standalone first to create data.",
+    );
+  }
+  const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
+
+  // Create repo with no storage — purely in-memory
+  const repo = new Repo({});
+
+  return {
+    repo,
+    ephemeral: true,
+    async close() {
+      try {
+        await repo.shutdown();
+      } catch {
+        // Safe to ignore — adapters may already be disconnected
+      }
+    },
+    async findCatalog(): Promise<Storage> {
+      // Now that sync is connected, find the catalog document.
+      // Allow "requesting" state so find() doesn't fail while waiting
+      // for the sync peer to deliver the document data.
+      const catalog = await repo.find<CatalogDocument>(docId, {
+        allowableStates: ["ready", "requesting", "loading"],
+      });
+
+      // Wait for the document to actually be ready (populated via sync)
+      await catalog.whenReady();
+
+      return {
+        repo,
+        catalog,
+        ephemeral: true,
+        async close() {
+          // Wait for any pending mutations to be synced to the server.
+          // Automerge throttles sync messages (~100ms batches), so after
+          // a change() call the sync message won't be sent immediately.
+          // We listen for the "generate-sync-message" event to know the
+          // message was queued, then yield briefly for the WebSocket to
+          // deliver the bytes before shutting down.
+          await waitForSyncFlush(repo, docId);
+
+          try {
+            await repo.shutdown();
+          } catch {
+            // Safe to ignore — adapters may already be disconnected
+          }
+        },
+      };
     },
   };
 }

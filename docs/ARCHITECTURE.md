@@ -397,6 +397,69 @@ Same engine, same tools, two directions of integration. The CLI remains function
 
 Summaries are written by the agent at the end of a work session — small, lossy but useful for cross-device context. Full pi session history stays local; it's not worth syncing, and Automerge isn't designed for append-only logs.
 
+### Local Coordination (Same Machine)
+
+When both Electron and CLI run on the same machine, they share data via Automerge sync — not a custom RPC layer. This uses the same protocol that powers multi-device sync, keeping the architecture simple and avoiding a second communication mechanism.
+
+**Three runtime modes:**
+
+```
+Is Electron running locally?
+  Yes → Ephemeral sync client (mode 2)
+  No  → Open repo directly (mode 1)
+
+Is a remote sync server configured?
+  Yes → Replicate with it (mode 3, overlay on mode 1 or 2)
+  No  → Local only
+```
+
+#### Mode 1: CLI Standalone
+
+- CLI owns the Automerge repo directly (persistent `NodeFSStorageAdapter`)
+- No Electron, no sync server
+- Works on headless machines, servers, SSH sessions
+- Can optionally sync with remote devices (mode 3)
+
+#### Mode 2: CLI + Electron (Same Machine)
+
+- **Electron** owns the repo with persistent storage and runs a WebSocket sync server on `127.0.0.1:24377`
+- **CLI** opens an ephemeral repo (no storage adapter, in-memory only), syncs with Electron via Automerge sync protocol
+- CLI mutates data, waits for changes to sync back to Electron, then disconnects
+- **One copy of data on disk** (Electron's). CLI is a transient in-memory mirror that lives for the duration of one command.
+
+#### Mode 3: Multi-Device Sync (Overlay)
+
+- Each device runs mode 1 or mode 2 locally
+- Automerge sync replicates between devices via a remote sync server
+- See "Device Sync" below
+
+```
+Device A (Electron + CLI)           Device B (CLI standalone)
+┌─────────────────────┐            ┌──────────────────┐
+│  Electron           │            │  CLI              │
+│  ├─ local server    │            │  └─ sync client ──┼──┐
+│  │   ↑              │            └──────────────────┘  │
+│  │  CLI (ephemeral) │                                   │
+│  │                  │                                   │
+│  └─ sync client ────┼──┐                                │
+└─────────────────────┘  │                                │
+                         │    ┌──────────────────┐        │
+                         └───→│ Remote Sync Server│←───────┘
+                              └──────────────────┘
+```
+
+**Why Automerge sync for local coordination (not RPC):**
+
+- Both processes get a real `Todu` SDK instance — fully typed, no dual code paths
+- `onChange` works naturally (Automerge fires change events when sync brings in remote changes)
+- No protocol to maintain — Automerge handles serialization, conflict resolution, everything
+- Same mechanism scales from local to multi-device without architectural changes
+- Electron's Automerge Repo supports multiple network adapters simultaneously: local server adapter for CLI clients + remote client adapter for multi-device sync
+
+**Why not RPC:**
+
+An RPC layer would require reimplementing the entire Todu SDK as a client-server protocol (~40+ operations), maintaining message types, handling serialization, and managing two code paths in the CLI (direct engine vs RPC client). Automerge sync avoids all of this.
+
 ### Device Sync
 
 Standard Automerge sync server — no custom server code needed:
