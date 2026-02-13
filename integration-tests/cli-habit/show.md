@@ -26,7 +26,7 @@ toduai habit show "$HABIT_ID"
 **Expected:**
 
 ```
-ID:          habit-XXXXXXXX
+ID:          hab-XXXXXXXX
 Title:       Morning run
 Schedule:    FREQ=DAILY
 Timezone:    <local timezone>

@@ -27,7 +27,7 @@ HABIT3_ID=$(echo "$HABIT3" | jq -r .id)
 toduai habit delete "$HABIT1_ID"
 ```
 
-**Expected:** `Deleted habit: habit-XXXXXXXX`
+**Expected:** `Deleted habit: hab-XXXXXXXX`
 
 ## 2. Verify Deleted (CLI)
 
