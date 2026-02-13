@@ -7,6 +7,7 @@ End-to-end workflow: use a dev config to create data via CLI, then verify the El
 ```bash
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+PROJECT_ROOT=$(pwd)
 
 WORK_DIR=$(mktemp -d)
 cd "$WORK_DIR"
@@ -59,7 +60,7 @@ Point Electron at the same data dir the CLI used.
 ```bash
 DATA_DIR="$WORK_DIR/.todu/data"
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
-  --app-path ./packages/electron/dist/main/index.js \
+  --app-path "$PROJECT_ROOT/packages/electron/dist/main/index.js" \
   --env "TODU_DATA_DIR=$DATA_DIR"
 ```
 
