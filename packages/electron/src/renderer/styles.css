@@ -865,3 +865,115 @@ button.detail-description {
 .input-error {
   border-color: #ef4444 !important;
 }
+
+/* ============================================================================
+ * Schedule Preset Picker
+ * ============================================================================ */
+
+.schedule-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-sub-select {
+  max-width: 200px;
+}
+
+.schedule-custom-input {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+/* ============================================================================
+ * Recurring Detail extras
+ * ============================================================================ */
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.detail-paused-badge {
+  margin-left: 8px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.status-paused {
+  background: #78716c;
+  color: #fafaf9;
+}
+
+.inline-schedule-edit {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.clickable-value {
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: inherit;
+  text-align: left;
+}
+
+.clickable-value:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.data-table-compact {
+  font-size: 13px;
+}
+
+.data-table-compact td,
+.data-table-compact th {
+  padding: 6px 10px;
+}
+
+.generated-tag {
+  color: #22c55e;
+  font-size: 13px;
+}
+
+.skip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ============================================================================
+ * Notes
+ * ============================================================================ */
+
+.cell-content {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ccc;
+}
+
+.entity-link {
+  background: none;
+  border: none;
+  color: #60a5fa;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: none;
+}
+
+.entity-link:hover {
+  text-decoration: underline;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
