@@ -1,17 +1,31 @@
 # CLI Label Integration Tests
 
-Tests for `toduai label` commands.
+Tests for `toduai label` commands with Electron sync verification.
 
 ## Setup
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+# Launch Electron with shared data dir
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## Tests
 
-- [create.md](create.md) — Create labels with name and color
-- [list.md](list.md) — List all labels
-- [update.md](update.md) — Update label name and color
-- [delete.md](delete.md) — Delete labels
-- [errors.md](errors.md) — Duplicate names, invalid colors
+- [create.md](create.md) — Create labels via CLI and Electron, verify sync
+- [list.md](list.md) — List labels, verify Electron table
+- [update.md](update.md) — Update label name/color, verify in Electron
+- [delete.md](delete.md) — Delete labels, verify removal in Electron
+- [errors.md](errors.md) — Error cases
+
+## Teardown
+
+```bash
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
+rm -rf "$TODU_DATA_DIR"
+```
