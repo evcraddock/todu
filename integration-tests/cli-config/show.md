@@ -1,6 +1,6 @@
 # Test: Config Show
 
-## Default Config (No File)
+## 1. Default Config — No File
 
 ```bash
 toduai config show
@@ -15,10 +15,11 @@ Data dir:     /home/<user>/.config/todu/data
               (default)
 ```
 
-## With --config Flag
+## 2. With --config Flag
 
 ```bash
-cd $(mktemp -d)
+WORK_DIR=$(mktemp -d)
+cd "$WORK_DIR"
 toduai config init
 toduai --config .todu/config.yaml config show
 ```
@@ -32,11 +33,10 @@ Data dir:     /path/to/.todu/data
               (config file (/path/to/.todu/config.yaml))
 ```
 
-## With TODU_DATA_DIR Override
+## 3. With TODU_DATA_DIR Override
 
 ```bash
-export TODU_DATA_DIR=/tmp/override-data
-toduai config show
+TODU_DATA_DIR=/tmp/override-data toduai config show
 ```
 
 **Expected:**
@@ -48,11 +48,7 @@ Data dir:     /tmp/override-data
               (TODU_DATA_DIR env var)
 ```
 
-```bash
-unset TODU_DATA_DIR
-```
-
-## JSON Output
+## 4. JSON Output
 
 ```bash
 toduai --format json config show
@@ -60,8 +56,9 @@ toduai --format json config show
 
 **Expected:** JSON object with configPath, configSource, configExists, dataDir, dataDirSource fields.
 
-## Cleanup
+## Teardown
 
 ```bash
-cd - && rm -rf /tmp/tmp.*
+cd -
+rm -rf "$WORK_DIR"
 ```
