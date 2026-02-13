@@ -135,3 +135,11 @@ rm -rf "$TODU_DATA_DIR"
 - [init.md](cli-config/init.md) — Initialize a dev config
 - [show.md](cli-config/show.md) — Display resolved configuration
 - [dev-workflow.md](cli-config/dev-workflow.md) — Full dev config workflow
+
+### [lifecycle/](lifecycle/)
+- [startup.md](lifecycle/startup.md) — Clean launch, console errors, initial state
+- [navigation.md](lifecycle/navigation.md) — Sidebar nav, view switching, back buttons
+- [empty-states.md](lifecycle/empty-states.md) — All views with no data
+- [keyboard-shortcuts.md](lifecycle/keyboard-shortcuts.md) — Ctrl+N, Ctrl+K, Escape
+- [dialogs.md](lifecycle/dialogs.md) — Dialog open/close behavior across all views
+- [sync.md](lifecycle/sync.md) — CLI↔Electron sync for all entity types
