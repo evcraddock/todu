@@ -14,6 +14,40 @@ import {
 // Storage layer — Automerge repo + document management
 // ============================================================================
 
+/** Sync message throttle interval in Automerge (see helpers/throttle.js) */
+const SYNC_THROTTLE_MS = 100;
+/** Extra time after sync message generation for WebSocket delivery */
+const SYNC_DELIVERY_MS = 20;
+
+/**
+ * Wait for pending sync messages to be generated and delivered.
+ *
+ * Automerge batches sync messages on a ~100ms throttle. After a mutation,
+ * we wait for the "generate-sync-message" event (confirming the change was
+ * packaged for sending), then yield briefly for the WebSocket to deliver
+ * the bytes. If no sync message arrives within the throttle window,
+ * there's nothing pending — return immediately.
+ */
+async function waitForSyncFlush(repo: Repo, documentId: DocumentId): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      repo.off("doc-metrics", onMetrics);
+      resolve();
+    }, SYNC_THROTTLE_MS + SYNC_DELIVERY_MS);
+
+    function onMetrics(m: { type: string; documentId: DocumentId }) {
+      if (m.type === "generate-sync-message" && m.documentId === documentId) {
+        repo.off("doc-metrics", onMetrics);
+        clearTimeout(timeout);
+        // Yield for WebSocket to deliver the bytes
+        setTimeout(resolve, SYNC_DELIVERY_MS);
+      }
+    }
+
+    repo.on("doc-metrics", onMetrics);
+  });
+}
+
 export interface Storage {
   /** The Automerge repo instance */
   repo: Repo;
@@ -110,8 +144,14 @@ export async function initEphemeralStorage(storagePath: string): Promise<
         catalog,
         ephemeral: true,
         async close() {
-          // Shutdown may trigger disconnect on adapters that are already
-          // closed. Wrap to avoid assertion errors from WebSocket adapter.
+          // Wait for any pending mutations to be synced to the server.
+          // Automerge throttles sync messages (~100ms batches), so after
+          // a change() call the sync message won't be sent immediately.
+          // We listen for the "generate-sync-message" event to know the
+          // message was queued, then yield briefly for the WebSocket to
+          // deliver the bytes before shutting down.
+          await waitForSyncFlush(repo, docId);
+
           try {
             await repo.shutdown();
           } catch {
