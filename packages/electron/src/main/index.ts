@@ -2,6 +2,7 @@ import { resolveStoragePath } from "@todu/core";
 import { createTodu } from "@todu/engine";
 import type { Todu } from "@todu/engine";
 import { BrowserWindow, app } from "electron";
+import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from "./shortcuts.js";
@@ -44,6 +45,9 @@ async function init(): Promise<void> {
   // Forward Automerge change events to renderer
   setupChangeNotifications(todu, mainWindow);
 
+  // Initialize agent with todu tools
+  setupAgent(todu, mainWindow);
+
   // Set up system tray
   setupTray(todu, getMainWindow, () => showWindowWithAction("new-task"));
 
@@ -81,6 +85,7 @@ app.on("before-quit", () => {
 app.on("window-all-closed", async () => {
   unregisterGlobalShortcuts();
   destroyTray();
+  teardownAgent();
   if (todu) {
     await todu.close();
     todu = null;

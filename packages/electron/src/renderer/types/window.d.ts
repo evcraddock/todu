@@ -95,6 +95,12 @@ export interface ToduHabitApi {
   history(id: HabitId, days?: number): Promise<Result<HabitHistoryEntry[]>>;
 }
 
+export interface ToduAgentApi {
+  send(message: string): Promise<void>;
+  abort(): Promise<void>;
+  clear(): Promise<void>;
+}
+
 export interface ToduApi {
   project: ToduProjectApi;
   task: ToduTaskApi;
@@ -102,6 +108,7 @@ export interface ToduApi {
   note: ToduNoteApi;
   recurring: ToduRecurringApi;
   habit: ToduHabitApi;
+  agent: ToduAgentApi;
   on(channel: string, callback: (data: unknown) => void): () => void;
 }
 

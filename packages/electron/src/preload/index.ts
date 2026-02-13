@@ -72,6 +72,13 @@ const api = {
     history: (id: string, days?: number) => ipcRenderer.invoke("todu:habit:history", id, days),
   },
 
+  // ── Agent ──────────────────────────────────────────────────────────
+  agent: {
+    send: (message: string) => ipcRenderer.invoke("todu:agent:send", message),
+    abort: () => ipcRenderer.invoke("todu:agent:abort"),
+    clear: () => ipcRenderer.invoke("todu:agent:clear"),
+  },
+
   // ── Events ─────────────────────────────────────────────────────────
   // For change notifications and future agent events.
   // Restricted to an allowlist of known channels for security.

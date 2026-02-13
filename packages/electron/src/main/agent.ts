@@ -1,0 +1,114 @@
+import { Agent } from "@mariozechner/pi-agent-core";
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import { getModel } from "@mariozechner/pi-ai";
+import type { Todu } from "@todu/engine";
+import type { BrowserWindow } from "electron";
+import { ipcMain } from "electron";
+import { createToduTools } from "./tools.js";
+
+// ============================================================================
+// System Prompt
+// ============================================================================
+
+const TODU_SYSTEM_PROMPT = `You are a task management assistant for todu. You help plan, organize, and reason about work.
+
+You have access to tools for managing tasks, projects, habits, recurring templates, labels, and notes. Use them to:
+- Answer questions about current work status
+- Create and organize tasks
+- Break features into subtasks
+- Track habit consistency
+- Suggest priorities and next actions
+- Add notes and comments
+
+You do NOT have access to the file system, code, or terminal. For coding work, the user works with a separate coding agent in the terminal.
+
+## Data Model
+
+- **Projects** contain tasks. Each project has a status (active/done/canceled) and priority.
+- **Tasks** have a title, status (active/inprogress/waiting/done/canceled), priority (low/medium/high), optional due date, scheduled date, labels, and description.
+- **Labels** are tags that can be applied to tasks.
+- **Habits** are recurring check-in items with streaks (e.g., "Exercise daily").
+- **Recurring templates** generate tasks on a schedule (e.g., "Weekly review every Friday").
+- **Notes** are freeform text, optionally attached to a task, project, or habit.
+
+## Guidelines
+
+- Be concise and direct
+- When listing items, format them clearly
+- When creating tasks, confirm what was created
+- Suggest next actions when appropriate
+- If asked about something outside your capabilities, say so clearly`;
+
+// ============================================================================
+// Agent Setup
+// ============================================================================
+
+/** Default model used when no settings are configured yet. */
+const DEFAULT_PROVIDER = "anthropic";
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
+let agent: Agent | null = null;
+let unsubscribe: (() => void) | null = null;
+
+/**
+ * Initialize the agent with todu tools and wire up IPC handlers.
+ * Call this once during app startup after the engine and window are ready.
+ */
+export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
+  const tools = createToduTools(todu);
+  const model = getModel(DEFAULT_PROVIDER, DEFAULT_MODEL);
+
+  agent = new Agent({
+    initialState: {
+      systemPrompt: TODU_SYSTEM_PROMPT,
+      model,
+      tools,
+    },
+  });
+
+  // Forward agent events to renderer
+  unsubscribe = agent.subscribe((event: AgentEvent) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("todu:agent:event", event);
+    }
+  });
+
+  // ── IPC Handlers ─────────────────────────────────────────────────
+  ipcMain.handle("todu:agent:send", async (_event, message: string) => {
+    if (!agent) throw new Error("Agent not initialized");
+    try {
+      await agent.prompt(message);
+    } catch (err) {
+      // Agent errors are emitted as events, but re-throw for invoke error handling
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(msg);
+    }
+  });
+
+  ipcMain.handle("todu:agent:abort", () => {
+    if (!agent) return;
+    agent.abort();
+  });
+
+  ipcMain.handle("todu:agent:clear", () => {
+    if (!agent) return;
+    agent.clearMessages();
+  });
+}
+
+/**
+ * Clean up the agent and remove IPC handlers.
+ * Call this during app shutdown.
+ */
+export function teardownAgent(): void {
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+
+  ipcMain.removeHandler("todu:agent:send");
+  ipcMain.removeHandler("todu:agent:abort");
+  ipcMain.removeHandler("todu:agent:clear");
+
+  agent = null;
+}
