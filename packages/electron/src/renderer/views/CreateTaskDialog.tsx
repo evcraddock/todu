@@ -1,3 +1,4 @@
+import { type TaskPriority, createProjectId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { useCreateTask, useProjects } from "../hooks/useTodu.js";
 
@@ -27,8 +28,8 @@ export function CreateTaskDialog({ onClose }: { onClose: () => void }): ReactNod
     createTask.mutate(
       {
         title: title.trim(),
-        projectId: effectiveProjectId as never,
-        priority: priority as never,
+        projectId: createProjectId(effectiveProjectId),
+        priority: priority as TaskPriority,
         description: description.trim() || undefined,
         dueDate: dueDate || undefined,
       },

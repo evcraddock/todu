@@ -1,4 +1,10 @@
-import { ALLOWED_STATUS_TRANSITIONS, type TaskId, type TaskStatus } from "@todu/core/browser";
+import {
+  ALLOWED_STATUS_TRANSITIONS,
+  type TaskId,
+  type TaskPriority,
+  type TaskStatus,
+  createProjectId,
+} from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { PriorityChip } from "../components/PriorityChip.js";
@@ -181,7 +187,7 @@ export function TaskDetail({
   };
 
   const handleMove = (projectId: string) => {
-    moveTask.mutate({ id: task.id as TaskId, projectId: projectId as never });
+    moveTask.mutate({ id: task.id as TaskId, projectId: createProjectId(projectId) });
   };
 
   const projectName = projects?.find((p) => p.id === task.projectId)?.name ?? "—";
@@ -242,7 +248,7 @@ export function TaskDetail({
           onChange={(e) =>
             updateTask.mutate({
               id: task.id as TaskId,
-              input: { priority: e.target.value as never },
+              input: { priority: e.target.value as TaskPriority },
             })
           }
         >

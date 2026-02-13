@@ -1,4 +1,12 @@
-import type { Task, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
+import type {
+  Task,
+  TaskFilter,
+  TaskPriority,
+  TaskSortField,
+  TaskSortOptions,
+  TaskStatus,
+} from "@todu/core/browser";
+import { createProjectId } from "@todu/core/browser";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { StatusChip } from "../components/StatusChip.js";
@@ -8,7 +16,7 @@ import { useProjects, useSearchTasks, useTasks } from "../hooks/useTodu.js";
 // Filter Bar
 // ============================================================================
 
-const STATUS_OPTIONS = ["active", "inprogress", "waiting", "done", "canceled"] as const;
+const STATUS_OPTIONS: TaskStatus[] = ["active", "inprogress", "waiting", "done", "canceled"];
 
 function FilterBar({
   filter,
@@ -23,16 +31,16 @@ function FilterBar({
 }): ReactNode {
   const { data: projects } = useProjects();
 
-  const toggleStatus = (status: string) => {
-    const current = Array.isArray(filter.status)
+  const toggleStatus = (status: TaskStatus) => {
+    const current: TaskStatus[] = Array.isArray(filter.status)
       ? filter.status
       : filter.status
         ? [filter.status]
         : [];
-    const next = current.includes(status as never)
+    const next = current.includes(status)
       ? current.filter((s) => s !== status)
       : [...current, status];
-    onFilterChange({ ...filter, status: next.length > 0 ? (next as never) : undefined });
+    onFilterChange({ ...filter, status: next.length > 0 ? next : undefined });
   };
 
   return (
@@ -51,7 +59,7 @@ function FilterBar({
           onChange={(e) =>
             onFilterChange({
               ...filter,
-              priority: e.target.value ? (e.target.value as never) : undefined,
+              priority: (e.target.value as TaskPriority) || undefined,
             })
           }
         >
@@ -66,7 +74,7 @@ function FilterBar({
           onChange={(e) =>
             onFilterChange({
               ...filter,
-              projectId: e.target.value ? (e.target.value as never) : undefined,
+              projectId: e.target.value ? createProjectId(e.target.value) : undefined,
             })
           }
         >
@@ -97,7 +105,7 @@ function FilterBar({
       <div className="filter-status-chips">
         {STATUS_OPTIONS.map((s) => {
           const active = Array.isArray(filter.status)
-            ? filter.status.includes(s as never)
+            ? filter.status.includes(s)
             : filter.status === s;
           return (
             <button
