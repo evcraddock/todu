@@ -1,4 +1,4 @@
-import type { Task, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core";
+import type { Task, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { StatusChip } from "../components/StatusChip.js";

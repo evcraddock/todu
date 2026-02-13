@@ -1,4 +1,4 @@
-import { ALLOWED_STATUS_TRANSITIONS, type TaskId, type TaskStatus } from "@todu/core";
+import { ALLOWED_STATUS_TRANSITIONS, type TaskId, type TaskStatus } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { PriorityChip } from "../components/PriorityChip.js";

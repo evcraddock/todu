@@ -13,7 +13,7 @@ import type {
   ToduError,
   UpdateProjectInput,
   UpdateTaskInput,
-} from "@todu/core";
+} from "@todu/core/browser";
 
 // ============================================================================
 // Query Keys
