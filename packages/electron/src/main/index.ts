@@ -1,3 +1,4 @@
+import { resolveStoragePath } from "@todu/core";
 import { createTodu } from "@todu/engine";
 import type { Todu } from "@todu/engine";
 import { BrowserWindow, app } from "electron";
@@ -9,8 +10,11 @@ let mainWindow: BrowserWindow | null = null;
 let todu: Todu | null = null;
 
 async function init(): Promise<void> {
+  // Resolve storage path using the same config chain as CLI
+  const storagePath = resolveStoragePath();
+
   // Initialize engine with sync server so CLI can connect
-  todu = await createTodu({ syncServer: true });
+  todu = await createTodu({ storagePath, syncServer: true });
 
   // Register all IPC handlers
   registerIpcHandlers(todu);

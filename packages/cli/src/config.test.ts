@@ -131,7 +131,8 @@ describe("config", () => {
     it("reports --config flag as source", () => {
       const configPath = path.join(tmpDir, "config.yaml");
       fs.writeFileSync(configPath, "data_dir: ./mydata\n");
-      const sources = resolveConfigSources(configPath);
+      const config = loadConfig(configPath);
+      const sources = resolveConfigSources(configPath, config);
       expect(sources.configSource).toBe("--config flag");
       expect(sources.dataDirSource).toContain("config file");
       expect(sources.dataDir).toBe(path.join(tmpDir, "mydata"));
