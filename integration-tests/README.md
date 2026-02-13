@@ -121,6 +121,16 @@ rm -rf "$TODU_DATA_DIR"
 - [delete.md](cli-habit/delete.md) — Delete habits
 - [errors.md](cli-habit/errors.md) — Error cases
 
+### [cli-recurring/](cli-recurring/)
+- [create.md](cli-recurring/create.md) — Create recurring templates
+- [list.md](cli-recurring/list.md) — List/filter templates by status and project
+- [show.md](cli-recurring/show.md) — Show template detail with upcoming occurrences
+- [update.md](cli-recurring/update.md) — Update title, schedule, priority, project
+- [pause-resume.md](cli-recurring/pause-resume.md) — Pause and resume templates
+- [generate.md](cli-recurring/generate.md) — Generate tasks from occurrences
+- [delete.md](cli-recurring/delete.md) — Delete templates
+- [errors.md](cli-recurring/errors.md) — Error cases
+
 ### [cli-config/](cli-config/)
 - [init.md](cli-config/init.md) — Initialize a dev config
 - [show.md](cli-config/show.md) — Display resolved configuration
