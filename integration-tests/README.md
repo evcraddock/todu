@@ -1,6 +1,6 @@
 # Integration Tests
 
-Manual integration test scripts for the `toduai` CLI. Designed for LLM agents to execute step-by-step to verify CLI behavior end-to-end.
+Prompt-based integration test scripts for the todu CLI and Electron app. Designed for LLM agents to execute step-by-step, verifying both CLI behavior and CLI↔Electron sync.
 
 ## Prerequisites
 
@@ -10,30 +10,75 @@ Manual integration test scripts for the `toduai` CLI. Designed for LLM agents to
    npm link --workspace=packages/cli
    ```
 
-2. Verify it works:
+2. Build the Electron app:
+   ```bash
+   npm run --workspace=packages/electron build
+   ```
+
+3. Verify CLI works:
    ```bash
    toduai --version
    ```
 
+4. Ensure the `electron-testing` skill is available (scripts in `~/.pi/agent/skills/electron-testing/`).
+
 ## Running Tests
 
-Each test uses a temporary data directory so it won't affect your real data. Set `TODU_DATA_DIR` before running:
+Each test uses a temporary data directory shared between CLI and Electron. The standard setup block in each test handles this.
+
+### Standard Setup (CLI + Electron)
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+
+# Launch Electron against the same data dir
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
-Then follow the steps in any test file. Each test is self-contained with setup, commands, expected output, and cleanup.
+### Standard Teardown
 
-To reset between tests:
 ```bash
-rm -rf "$TODU_DATA_DIR" && export TODU_DATA_DIR=$(mktemp -d)
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
+rm -rf "$TODU_DATA_DIR"
+```
+
+### Electron Interaction
+
+Use the interact.js script to verify Electron state:
+
+```bash
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+# Navigate to a view
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
+
+# Take a screenshot
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test.png
+
+# Read visible text
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
+
+# Discover interactive elements
+NODE_PATH=$NODE_PATH node $INTERACT discover
+```
+
+### CLI-Only Tests
+
+If you only need to test CLI behavior (no Electron), use the simpler setup:
+
+```bash
+export TODU_DATA_DIR=$(mktemp -d)
+# ... run CLI commands ...
+rm -rf "$TODU_DATA_DIR"
 ```
 
 ## Test Index
 
 ### [cli-project/](cli-project/)
-- [create.md](cli-project/create.md) — Create projects
+- [create.md](cli-project/create.md) — Create projects (CLI + Electron sync)
 - [list.md](cli-project/list.md) — List projects with filters
 - [show.md](cli-project/show.md) — Show project details
 - [update.md](cli-project/update.md) — Update project fields

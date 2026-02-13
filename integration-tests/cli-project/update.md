@@ -4,10 +4,17 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+
 toduai project create --name "My App" --priority medium
 ```
 
-## Update Name
+## 1. Update Name (CLI)
 
 ```bash
 toduai project update "My App" --name "My Application"
@@ -26,7 +33,7 @@ Created:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ```
 
-## Update Priority
+## 2. Update Priority (CLI)
 
 ```bash
 toduai project update "My Application" --priority high
@@ -34,7 +41,7 @@ toduai project update "My Application" --priority high
 
 **Expected:** Shows priority changed to `high`.
 
-## Update Status
+## 3. Update Status (CLI)
 
 ```bash
 toduai project update "My Application" --status done
@@ -42,7 +49,7 @@ toduai project update "My Application" --status done
 
 **Expected:** Shows status changed to `done`.
 
-## Update Multiple Fields
+## 4. Update Multiple Fields (CLI)
 
 ```bash
 toduai project update "My Application" --name "Legacy App" --priority low
@@ -50,16 +57,119 @@ toduai project update "My Application" --name "Legacy App" --priority low
 
 **Expected:** Both name and priority updated.
 
-## Verify
+## 5. Verify Final State (CLI)
 
 ```bash
 toduai project show "Legacy App"
 ```
 
-**Expected:** Shows name=Legacy App, status=done, priority=low.
+**Expected:** name=Legacy App, status=done, priority=low.
 
-## Cleanup
+## 6. Verify Electron Reflects Updates
 
 ```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
+```
+
+**Expected:** Project list shows "Legacy App" with status "done" and priority "low".
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update.png
+```
+
+**Expected:** Screenshot confirms updated name, status, and priority.
+
+## 7. Update Project in Electron, Verify CLI
+
+Click into project detail view.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Legacy App"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-detail.png
+```
+
+**Expected:** Detail view shows "Legacy App" with status=done, priority=low.
+
+### 7a. Edit Name Inline
+
+Click the project name to enter inline edit mode, clear it, and type a new name.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-title"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title-input" --timeout 3000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-edit.png
+```
+
+**Expected:** Name field becomes an editable input with current value.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT press "Control+a"
+NODE_PATH=$NODE_PATH node $INTERACT type "Renamed In Electron"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-typed.png
+```
+
+**Verify:** Input shows "Renamed In Electron". No characters leaked elsewhere.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT press "Enter"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title.clickable" --timeout 3000
+```
+
+**Expected:** Inline edit saves and reverts to display mode.
+
+### 7b. Edit Description Inline
+
+Click the description area to enter edit mode and type a description.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-description"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-description-input" --timeout 3000
+NODE_PATH=$NODE_PATH node $INTERACT type "Updated from Electron detail view"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-desc-typed.png
+```
+
+**Verify:** Textarea shows the full typed text. No characters leaked to the name field. If characters leak, this indicates the focus-stealing bug (#1762).
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-label"
+```
+
+**Expected:** Blur triggers save.
+
+### 7c. Check Priority Dropdown
+
+```bash
+# Inline select dropdowns: [0] = Status, [1] = Priority
+NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.inline-select')[1].value"
+```
+
+**Expected:** Current priority value (should be "low").
+
+### 7d. Verify CLI Sees All Electron Changes
+
+```bash
+toduai project show "Renamed In Electron" --no-color
+```
+
+**Expected:**
+
+```
+ID:          proj-XXXXXXXX
+Name:        Renamed In Electron
+Status:      done
+Priority:    low
+...
+Description: Updated from Electron detail view
+```
+
+If the name shows garbled text or the description is truncated, this indicates input focus issues.
+
+## Teardown
+
+```bash
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
 rm -rf "$TODU_DATA_DIR"
 ```

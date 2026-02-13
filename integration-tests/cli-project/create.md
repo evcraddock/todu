@@ -4,9 +4,15 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
-## Create with Name Only
+## 1. Create with Name Only (CLI)
 
 ```bash
 toduai project create --name "My App"
@@ -27,7 +33,7 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 
 Defaults: status=active, priority=medium, sync=none.
 
-## Create with All Options
+## 2. Create with All Options (CLI)
 
 ```bash
 toduai project create --name "Backend API" --priority high --description "REST API service"
@@ -47,13 +53,13 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Description: REST API service
 ```
 
-## Create with JSON Output
+## 3. Create with JSON Output (CLI)
 
 ```bash
 toduai --format json project create --name "Frontend"
 ```
 
-**Expected:** JSON object with id, name, status, priority, syncStrategy, createdAt, updatedAt fields.
+**Expected:** JSON with id, name, status, priority, syncStrategy, createdAt, updatedAt.
 
 ```json
 {
@@ -67,16 +73,100 @@ toduai --format json project create --name "Frontend"
 }
 ```
 
-## Verify
+## 4. Verify CLI List
 
 ```bash
-toduai project list
+toduai project list --no-color
 ```
 
 **Expected:** All three projects shown in table format.
 
-## Cleanup
+## 5. Verify Electron Shows CLI-Created Projects
+
+Navigate to Projects view and check that all three projects are visible.
 
 ```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
+```
+
+**Expected:** Output contains "My App", "Backend API", and "Frontend".
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-cli.png
+```
+
+**Expected:** Screenshot shows all three projects in the table with correct status/priority.
+
+## 6. Create Project in Electron
+
+Open the "New Project" dialog, fill in the form, and submit.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=+ New Project"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".dialog" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-dialog.png
+```
+
+**Expected:** Screenshot shows the "New Project" dialog with Name, Priority, and Description fields.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-name"
+NODE_PATH=$NODE_PATH node $INTERACT type "Electron Project"
+NODE_PATH=$NODE_PATH node $INTERACT wait "#proj-name" --timeout 2000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-name.png
+```
+
+**Verify:** Screenshot shows "Electron Project" in the Name field only — no characters leaked to other fields.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-desc"
+NODE_PATH=$NODE_PATH node $INTERACT type "Created from the Electron UI"
+NODE_PATH=$NODE_PATH node $INTERACT wait "#proj-desc" --timeout 2000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-desc.png
+```
+
+**Verify:** Screenshot shows full description text in the Description field. Name field still reads "Electron Project" unchanged. If characters leak to the name field, this indicates a focus-stealing bug (see #1762).
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-primary"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-electron.png
+```
+
+**Expected:** Dialog closes. Project list now shows 4 projects including "Electron Project".
+
+> **Note:** Use `click` + `type` (real keystrokes) instead of `fill` (programmatic) to catch focus/input bugs. Don't use `text=Create` — it matches the "Created" table header. Use `.dialog-actions .btn-primary` for dialog submit buttons.
+
+## 7. Verify CLI Sees Electron-Created Project
+
+```bash
+toduai project list --no-color
+```
+
+**Expected:** Four projects shown, including "Electron Project".
+
+```bash
+toduai project show "Electron Project" --no-color
+```
+
+**Expected:**
+
+```
+ID:          proj-XXXXXXXX
+Name:        Electron Project
+Status:      active
+Priority:    medium
+...
+Description: Created from the Electron UI
+```
+
+Verify the description field is present — this confirms Electron correctly passes all form fields through IPC.
+
+## Teardown
+
+```bash
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
 rm -rf "$TODU_DATA_DIR"
 ```
