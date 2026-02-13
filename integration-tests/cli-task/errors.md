@@ -118,10 +118,12 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-errors-ty
 - If title got corrupted, confirms focus-stealing bug (#1762)
 
 ```bash
-NODE_PATH=$NODE_PATH node $INTERACT press "Escape"
+NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 ```
 
 **Expected:** Dialog closes.
+
+> **Note:** Escape key doesn't work on CreateTaskDialog (#1764). Use the Cancel button (`.dialog-actions .btn-secondary`) instead.
 
 ## Teardown
 
