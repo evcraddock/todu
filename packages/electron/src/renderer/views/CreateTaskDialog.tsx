@@ -2,18 +2,24 @@ import { type TaskPriority, createProjectId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { useCreateTask, useProjects } from "../hooks/useTodu.js";
 
-export function CreateTaskDialog({ onClose }: { onClose: () => void }): ReactNode {
+export function CreateTaskDialog({
+  onClose,
+  defaultProjectId,
+}: {
+  onClose: () => void;
+  defaultProjectId?: string;
+}): ReactNode {
   const { data: projects } = useProjects();
   const createTask = useCreateTask();
   const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState("");
 
-  // Default to first project
-  const effectiveProjectId = projectId || projects?.[0]?.id || "";
+  // Default to specified project or first project
+  const effectiveProjectId = projectId || defaultProjectId || projects?.[0]?.id || "";
 
   const handleSubmit = () => {
     if (!title.trim()) {

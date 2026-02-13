@@ -1,39 +1,30 @@
 import type { ReactNode } from "react";
-import { useProjects } from "../hooks/useTodu.js";
+import { PriorityChip } from "../components/PriorityChip.js";
+import { StatusChip } from "../components/StatusChip.js";
+import { useProjects, useTasks } from "../hooks/useTodu.js";
 
-function priorityClass(priority: string): string {
-  switch (priority) {
-    case "high":
-      return "priority-high";
-    case "medium":
-      return "priority-medium";
-    case "low":
-      return "priority-low";
-    default:
-      return "";
-  }
-}
-
-function statusClass(status: string): string {
-  switch (status) {
-    case "active":
-      return "status-active";
-    case "done":
-      return "status-done";
-    case "canceled":
-      return "status-canceled";
-    default:
-      return "";
-  }
-}
-
-export function ProjectList(): ReactNode {
+export function ProjectList({
+  onSelectProject,
+  onCreateProject,
+}: {
+  onSelectProject: (id: string) => void;
+  onCreateProject: () => void;
+}): ReactNode {
   const { data: projects, isLoading, isError, error } = useProjects();
+  const { data: allTasks } = useTasks();
+
+  // Count tasks per project
+  const taskCounts = new Map<string, number>();
+  for (const task of allTasks ?? []) {
+    taskCounts.set(task.projectId, (taskCounts.get(task.projectId) ?? 0) + 1);
+  }
 
   if (isLoading) {
     return (
       <div className="view-container">
-        <h2 className="view-title">Projects</h2>
+        <div className="view-header">
+          <h2 className="view-title">Projects</h2>
+        </div>
         <div className="loading-state">Loading projects…</div>
       </div>
     );
@@ -42,7 +33,9 @@ export function ProjectList(): ReactNode {
   if (isError) {
     return (
       <div className="view-container">
-        <h2 className="view-title">Projects</h2>
+        <div className="view-header">
+          <h2 className="view-title">Projects</h2>
+        </div>
         <div className="error-state">
           <p>Failed to load projects</p>
           <p className="error-detail">{error instanceof Error ? error.message : "Unknown error"}</p>
@@ -54,12 +47,14 @@ export function ProjectList(): ReactNode {
   if (!projects || projects.length === 0) {
     return (
       <div className="view-container">
-        <h2 className="view-title">Projects</h2>
+        <div className="view-header">
+          <h2 className="view-title">Projects</h2>
+          <button type="button" className="btn btn-primary" onClick={onCreateProject}>
+            + New Project
+          </button>
+        </div>
         <div className="empty-state">
           <p>No projects yet</p>
-          <p className="empty-hint">
-            Create a project using the CLI: <code>toduai project create</code>
-          </p>
         </div>
       </div>
     );
@@ -67,28 +62,40 @@ export function ProjectList(): ReactNode {
 
   return (
     <div className="view-container">
-      <h2 className="view-title">Projects</h2>
+      <div className="view-header">
+        <h2 className="view-title">Projects</h2>
+        <button type="button" className="btn btn-primary" onClick={onCreateProject}>
+          + New Project
+        </button>
+      </div>
       <table className="data-table">
         <thead>
           <tr>
             <th>Name</th>
             <th>Status</th>
             <th>Priority</th>
+            <th>Tasks</th>
             <th>Created</th>
           </tr>
         </thead>
         <tbody>
           {projects.map((project) => (
-            <tr key={project.id}>
+            <tr
+              key={project.id}
+              className="clickable-row"
+              onClick={() => onSelectProject(project.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSelectProject(project.id);
+              }}
+            >
               <td className="cell-name">{project.name}</td>
               <td>
-                <span className={`chip ${statusClass(project.status)}`}>{project.status}</span>
+                <StatusChip status={project.status} />
               </td>
               <td>
-                <span className={`chip ${priorityClass(project.priority)}`}>
-                  {project.priority}
-                </span>
+                <PriorityChip priority={project.priority} />
               </td>
+              <td className="cell-count">{taskCounts.get(project.id) ?? 0}</td>
               <td className="cell-date">{project.createdAt.slice(0, 10)}</td>
             </tr>
           ))}

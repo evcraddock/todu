@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
   CreateTaskInput,
+  LabelId,
   NoteFilter,
   NoteId,
   ProjectId,
@@ -11,6 +13,7 @@ import type {
   TaskId,
   TaskSortOptions,
   ToduError,
+  UpdateLabelInput,
   UpdateProjectInput,
   UpdateTaskInput,
 } from "@todu/core/browser";
@@ -226,5 +229,36 @@ export function useLabels() {
   return useQuery({
     queryKey: queryKeys.labels,
     queryFn: async () => unwrap(await window.todu.label.list()),
+  });
+}
+
+export function useCreateLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateLabelInput) => unwrap(await window.todu.label.create(input)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+    },
+  });
+}
+
+export function useUpdateLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: LabelId; input: UpdateLabelInput }) =>
+      unwrap(await window.todu.label.update(id, input)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+    },
+  });
+}
+
+export function useDeleteLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: LabelId) => unwrap(await window.todu.label.delete(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+    },
   });
 }
