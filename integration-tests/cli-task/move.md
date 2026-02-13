@@ -88,14 +88,15 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 **Expected:** Shows which select has project options and current value.
 
 ```bash
-# Select "Source" from the project dropdown
+# Select "Source" from the project dropdown (use native setter for React controlled select)
 NODE_PATH=$NODE_PATH node $INTERACT eval "
   const selects = document.querySelectorAll('.inline-select');
   for (const s of selects) {
     const opts = Array.from(s.options).map(o => o.text);
     if (opts.includes('Source')) {
       const sourceOpt = Array.from(s.options).find(o => o.text === 'Source');
-      s.value = sourceOpt.value;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(s, sourceOpt.value);
       s.dispatchEvent(new Event('change', { bubbles: true }));
       return 'moved to Source';
     }

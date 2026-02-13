@@ -134,7 +134,27 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".detail-label"
 NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.inline-select')[0].value"
 ```
 
-**Expected:** Current priority value.
+**Expected:** Current priority value (e.g. `"low"`).
+
+```bash
+# Change priority to high using native setter for React controlled select
+NODE_PATH=$NODE_PATH node $INTERACT eval "
+  const s = document.querySelectorAll('.inline-select')[0];
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(s, 'high');
+  s.dispatchEvent(new Event('change', { bubbles: true }));
+  return s.value;
+"
+```
+
+**Expected:** Returns `"high"`.
+
+```bash
+# Verify CLI sees priority change
+toduai task show "$TASK_ID" --no-color | grep "Priority"
+```
+
+**Expected:** `Priority: high`
 
 ### 9d. Verify CLI Sees Electron Changes
 
