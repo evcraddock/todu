@@ -5,13 +5,14 @@ import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
 import { ProjectList } from "./views/ProjectList.js";
+import { TasksView } from "./views/TasksView.js";
 
 function ViewRouter({ activeView }: { activeView: string }): ReactNode {
   switch (activeView) {
     case "projects":
       return <ProjectList />;
     case "tasks":
-      return <Placeholder title="Tasks" />;
+      return <TasksView />;
     case "habits":
       return <Placeholder title="Habits" />;
     case "recurring":
