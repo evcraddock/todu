@@ -1,4 +1,4 @@
-import type { RecurringId } from "@todu/core/browser";
+import { type RecurringId, createProjectId } from "@todu/core/browser";
 import { type ReactNode, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { PriorityChip } from "../components/PriorityChip.js";
@@ -291,7 +291,7 @@ export function RecurringDetail({
           onChange={(e) =>
             updateRecurring.mutate({
               id: template.id as RecurringId,
-              input: { projectId: e.target.value as RecurringId },
+              input: { projectId: createProjectId(e.target.value) },
             })
           }
         >
