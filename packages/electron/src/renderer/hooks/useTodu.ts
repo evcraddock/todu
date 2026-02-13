@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  HabitFilter,
+  HabitId,
   LabelId,
   NoteFilter,
   NoteId,
@@ -16,6 +19,7 @@ import type {
   TaskId,
   TaskSortOptions,
   ToduError,
+  UpdateHabitInput,
   UpdateLabelInput,
   UpdateProjectInput,
   UpdateRecurringInput,
@@ -363,6 +367,122 @@ export function useGenerateOccurrence() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+}
+
+// ============================================================================
+// Habit Hooks
+// ============================================================================
+
+export function useHabitList(filter?: HabitFilter) {
+  return useQuery({
+    queryKey: queryKeys.habits(filter),
+    queryFn: async () => unwrap(await window.todu.habit.list(filter)),
+  });
+}
+
+export function useHabitDetail(id: string) {
+  return useQuery({
+    queryKey: queryKeys.habit(id),
+    queryFn: async () => unwrap(await window.todu.habit.get(id as HabitId)),
+    enabled: !!id,
+  });
+}
+
+export function useHabitStreak(id: string) {
+  return useQuery({
+    queryKey: queryKeys.habitStreak(id),
+    queryFn: async () => unwrap(await window.todu.habit.streak(id as HabitId)),
+    enabled: !!id,
+  });
+}
+
+export function useHabitHistory(id: string, days = 30) {
+  return useQuery({
+    queryKey: queryKeys.habitHistory(id, days),
+    queryFn: async () => unwrap(await window.todu.habit.history(id as HabitId, days)),
+    enabled: !!id,
+  });
+}
+
+export function useCreateHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateHabitInput) => unwrap(await window.todu.habit.create(input)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+    },
+  });
+}
+
+export function useUpdateHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: HabitId; input: UpdateHabitInput }) =>
+      unwrap(await window.todu.habit.update(id, input)),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habitStreak(id) });
+    },
+  });
+}
+
+export function useDeleteHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: HabitId) => unwrap(await window.todu.habit.delete(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+    },
+  });
+}
+
+export function usePauseHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: HabitId) => unwrap(await window.todu.habit.pause(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
+    },
+  });
+}
+
+export function useResumeHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: HabitId) => unwrap(await window.todu.habit.resume(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
+    },
+  });
+}
+
+export function useCheckHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: HabitId) => unwrap(await window.todu.habit.check(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habitStreak(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habitHistory(id) });
+    },
+  });
+}
+
+export function useUncheckHabit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: HabitId) => unwrap(await window.todu.habit.uncheck(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["habits"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habitStreak(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habitHistory(id) });
     },
   });
 }
