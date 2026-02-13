@@ -111,6 +111,16 @@ rm -rf "$TODU_DATA_DIR"
 - [delete.md](cli-note/delete.md) — Delete notes
 - [errors.md](cli-note/errors.md) — Error cases
 
+### [cli-habit/](cli-habit/)
+- [create.md](cli-habit/create.md) — Create habits with various schedules
+- [list.md](cli-habit/list.md) — List habits, filter active/paused
+- [show.md](cli-habit/show.md) — Show habit detail with streak stats
+- [update.md](cli-habit/update.md) — Update title, schedule, description
+- [check.md](cli-habit/check.md) — Check-in/uncheck, verify streaks
+- [pause-resume.md](cli-habit/pause-resume.md) — Pause and resume habits
+- [delete.md](cli-habit/delete.md) — Delete habits
+- [errors.md](cli-habit/errors.md) — Error cases
+
 ### [cli-config/](cli-config/)
 - [init.md](cli-config/init.md) — Initialize a dev config
 - [show.md](cli-config/show.md) — Display resolved configuration
