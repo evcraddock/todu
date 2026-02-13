@@ -1,0 +1,170 @@
+import path from "node:path";
+import type { Todu } from "@todu/engine";
+import { type BrowserWindow, Menu, Tray, app, nativeImage } from "electron";
+
+let tray: Tray | null = null;
+
+/**
+ * Create a tray icon from the resources directory.
+ */
+function createTrayIcon(): Tray {
+  const iconPath = path.join(__dirname, "../../resources/tray-icon.png");
+  const img = nativeImage.createFromPath(iconPath);
+
+  if (process.platform === "darwin") {
+    img.setTemplateImage(true);
+  }
+
+  // Resize if needed — tray icons should be ~22-24px on most platforms
+  const resized = img.resize({ width: 24, height: 24 });
+  return new Tray(resized);
+}
+
+/**
+ * Build the tray context menu with live counts.
+ */
+async function buildContextMenu(
+  todu: Todu,
+  mainWindow: BrowserWindow | null,
+  onNewTask: () => void,
+): Promise<Menu> {
+  let dueToday = 0;
+  let habitsToCheck = 0;
+
+  try {
+    const tasksResult = await todu.task.list({ today: true });
+    if (tasksResult.ok) {
+      dueToday = tasksResult.value.filter(
+        (t) => t.status !== "done" && t.status !== "canceled",
+      ).length;
+    }
+  } catch {
+    // Ignore errors in tray menu
+  }
+
+  try {
+    const habitsResult = await todu.habit.list({ paused: false });
+    if (habitsResult.ok) {
+      for (const habit of habitsResult.value) {
+        try {
+          const streakResult = await todu.habit.streak(habit.id);
+          if (streakResult.ok && !streakResult.value.completedToday) {
+            habitsToCheck++;
+          }
+        } catch {
+          // Ignore per-habit errors
+        }
+      }
+    }
+  } catch {
+    // Ignore errors in tray menu
+  }
+
+  const isVisible = mainWindow?.isVisible() ?? false;
+
+  return Menu.buildFromTemplate([
+    {
+      label: isVisible ? "Hide todu" : "Show todu",
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isVisible()) {
+            mainWindow.hide();
+          } else {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "+ New Task…",
+      click: () => {
+        onNewTask();
+      },
+    },
+    { type: "separator" },
+    {
+      label: `📋 ${dueToday} task${dueToday === 1 ? "" : "s"} due today`,
+      enabled: false,
+    },
+    {
+      label: `🔥 ${habitsToCheck} habit${habitsToCheck === 1 ? "" : "s"} to check`,
+      enabled: false,
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+}
+
+/**
+ * Refresh the static context menu on the tray.
+ * Used on Linux where click events don't fire (libappindicator/SNI).
+ */
+async function refreshTrayMenu(
+  todu: Todu,
+  getMainWindow: () => BrowserWindow | null,
+  onNewTask: () => void,
+): Promise<void> {
+  if (!tray) return;
+  const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
+  tray.setContextMenu(menu);
+}
+
+/**
+ * Set up the system tray icon and context menu.
+ */
+export function setupTray(
+  todu: Todu,
+  getMainWindow: () => BrowserWindow | null,
+  onNewTask: () => void,
+): void {
+  tray = createTrayIcon();
+  tray.setToolTip("todu");
+
+  if (process.platform === "linux") {
+    // Linux: libappindicator/SNI doesn't support click events.
+    // Set a static context menu and refresh it periodically.
+    refreshTrayMenu(todu, getMainWindow, onNewTask);
+    // Refresh counts every 60 seconds
+    setInterval(() => refreshTrayMenu(todu, getMainWindow, onNewTask), 60_000);
+  } else if (process.platform === "darwin") {
+    // macOS: click shows context menu (standard macOS tray behavior)
+    tray.on("click", async () => {
+      const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
+      tray?.popUpContextMenu(menu);
+    });
+  } else {
+    // Windows: click toggles window, right-click shows menu
+    tray.on("click", () => {
+      const win = getMainWindow();
+      if (win) {
+        if (win.isVisible()) {
+          win.hide();
+        } else {
+          win.show();
+          win.focus();
+        }
+      }
+    });
+    tray.on("right-click", async () => {
+      const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
+      tray?.popUpContextMenu(menu);
+    });
+  }
+}
+
+/**
+ * Destroy the tray icon.
+ */
+export function destroyTray(): void {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}

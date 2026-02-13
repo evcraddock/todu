@@ -76,7 +76,7 @@ const api = {
   // For change notifications and future agent events.
   // Restricted to an allowlist of known channels for security.
   on: (channel: string, callback: (data: unknown) => void) => {
-    const ALLOWED_CHANNELS = ["todu:data:changed", "todu:agent:event"];
+    const ALLOWED_CHANNELS = ["todu:data:changed", "todu:agent:event", "todu:action"];
     if (!ALLOWED_CHANNELS.includes(channel)) {
       console.warn(`Blocked listen on unknown channel: ${channel}`);
       return () => {};
