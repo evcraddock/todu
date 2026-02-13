@@ -32,7 +32,7 @@ import type {
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
-} from "@todu/core";
+} from "@todu/core/browser";
 import type { UpcomingOccurrence } from "@todu/engine";
 
 export interface ToduProjectApi {
