@@ -1,25 +1,23 @@
+import path from "node:path";
 import type { Todu } from "@todu/engine";
 import { type BrowserWindow, Menu, Tray, app, nativeImage } from "electron";
 
 let tray: Tray | null = null;
 
 /**
- * Create a tray icon from an embedded 16x16 PNG.
+ * Create a tray icon from the resources directory.
  */
 function createTrayIcon(): Tray {
-  const img = nativeImage.createFromDataURL(
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA" +
-      "jklEQVQ4T2NkoBAwUqifAacBf/78+c/AwMDIQIoBjMguwGZAeHg4w5UrVxjOnTvH8P37" +
-      "dwYGBgYGLS0thvDwcIaIiAiGsLAwBmxqsRqAyyBkQ7AagMsgdENwGkDIIGwuwGoAIYOI" +
-      "MgCfQdgMwWkAPoPQDcJpAD6D0A0iyQBsBmEzhGgDsBmEbAgAg5RJEUfYDJkAAAAASUVO" +
-      "RK5CYII=",
-  );
+  const iconPath = path.join(__dirname, "../../resources/tray-icon.png");
+  const img = nativeImage.createFromPath(iconPath);
 
   if (process.platform === "darwin") {
     img.setTemplateImage(true);
   }
 
-  return new Tray(img);
+  // Resize if needed — tray icons should be ~22-24px on most platforms
+  const resized = img.resize({ width: 24, height: 24 });
+  return new Tray(resized);
 }
 
 /**
@@ -105,6 +103,20 @@ async function buildContextMenu(
 }
 
 /**
+ * Refresh the static context menu on the tray.
+ * Used on Linux where click events don't fire (libappindicator/SNI).
+ */
+async function refreshTrayMenu(
+  todu: Todu,
+  getMainWindow: () => BrowserWindow | null,
+  onNewTask: () => void,
+): Promise<void> {
+  if (!tray) return;
+  const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
+  tray.setContextMenu(menu);
+}
+
+/**
  * Set up the system tray icon and context menu.
  */
 export function setupTray(
@@ -115,14 +127,20 @@ export function setupTray(
   tray = createTrayIcon();
   tray.setToolTip("todu");
 
-  if (process.platform === "darwin") {
+  if (process.platform === "linux") {
+    // Linux: libappindicator/SNI doesn't support click events.
+    // Set a static context menu and refresh it periodically.
+    refreshTrayMenu(todu, getMainWindow, onNewTask);
+    // Refresh counts every 60 seconds
+    setInterval(() => refreshTrayMenu(todu, getMainWindow, onNewTask), 60_000);
+  } else if (process.platform === "darwin") {
     // macOS: click shows context menu (standard macOS tray behavior)
     tray.on("click", async () => {
       const menu = await buildContextMenu(todu, getMainWindow(), onNewTask);
       tray?.popUpContextMenu(menu);
     });
   } else {
-    // Linux/Windows: click toggles window, right-click shows menu
+    // Windows: click toggles window, right-click shows menu
     tray.on("click", () => {
       const win = getMainWindow();
       if (win) {
