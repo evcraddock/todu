@@ -3,10 +3,11 @@
 ## Setup
 
 ```bash
-cd $(mktemp -d)
+WORK_DIR=$(mktemp -d)
+cd "$WORK_DIR"
 ```
 
-## Initialize Dev Config
+## 1. Initialize Dev Config
 
 ```bash
 toduai config init
@@ -22,7 +23,7 @@ Usage:
   toduai --config /path/to/.todu/config.yaml task list
 ```
 
-## Verify Files Created
+## 2. Verify Files Created
 
 ```bash
 cat .todu/config.yaml
@@ -45,7 +46,7 @@ cat .todu/.gitignore
 data/
 ```
 
-## Init is Idempotent
+## 3. Init is Idempotent
 
 ```bash
 toduai config init
@@ -57,8 +58,11 @@ toduai config init
 Config already exists: /path/to/.todu/config.yaml
 ```
 
-## Cleanup
+Exit code: 0 (not an error).
+
+## Teardown
 
 ```bash
-cd - && rm -rf /tmp/tmp.*
+cd -
+rm -rf "$WORK_DIR"
 ```
