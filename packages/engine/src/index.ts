@@ -1,3 +1,4 @@
+import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
@@ -124,10 +125,7 @@ export async function createTodu(
       stop: () => Promise.resolve(),
     },
     onChange(callback: () => void): () => void {
-      storage.catalog.on("change", callback);
-      return () => {
-        storage.catalog.off("change", callback);
-      };
+      return observeAllChanges(storage.repo, callback);
     },
     async close() {
       // repo.shutdown() handles disconnecting network adapters.
