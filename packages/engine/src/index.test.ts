@@ -79,10 +79,11 @@ describe("createTodu", () => {
     expect(config.storagePath).toBe(tmpDir);
   });
 
-  it("reports sync as disconnected by default", async () => {
+  it("reports sync status as standalone/disconnected by default", async () => {
     todu = await createTodu({ storagePath: tmpDir });
     const status = todu.sync.status();
-    expect(status.connected).toBe(false);
+    expect(status.local.mode).toBe("standalone");
+    expect(status.remote.state).toBe("disconnected");
   });
 
   it("closes without error", async () => {
