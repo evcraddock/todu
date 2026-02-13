@@ -8,6 +8,7 @@ import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
 import { registerProjectCommands } from "./commands/project.js";
 import { registerRecurringCommands } from "./commands/recurring.js";
+import { registerSyncCommands } from "./commands/sync.js";
 import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
 import { setColorEnabled } from "./format.js";
@@ -46,6 +47,7 @@ registerLabelCommands(program, getTodu);
 registerNoteCommands(program, getTodu);
 registerRecurringCommands(program, getTodu);
 registerHabitCommands(program, getTodu);
+registerSyncCommands(program, getTodu);
 registerConfigCommands(program);
 
 program.parse();

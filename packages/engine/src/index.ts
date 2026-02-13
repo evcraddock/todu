@@ -8,9 +8,15 @@ import { type Storage, initEphemeralStorage, initStorage } from "./storage.js";
 import { connectSyncClient } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
-import { type Todu, type ToduConfig, createStubNamespaces } from "./todu.js";
+import {
+  type LocalSyncMode,
+  type SyncStatus,
+  type Todu,
+  type ToduConfig,
+  createStubNamespaces,
+} from "./todu.js";
 
-export type { Todu, ToduConfig } from "./todu.js";
+export type { Todu, ToduConfig, SyncStatus, LocalSyncMode, RemoteSyncState } from "./todu.js";
 export type {
   HabitNamespace,
   LabelNamespace,
@@ -89,6 +95,19 @@ export async function createTodu(
   // and Electron launch triggers template processing.
   await processTemplates(storage.catalog);
 
+  // Determine local sync mode
+  const localMode: LocalSyncMode = config?.syncClient
+    ? "ephemeral-client"
+    : config?.syncServer
+      ? "sync-server"
+      : "standalone";
+
+  const syncStatus: SyncStatus = {
+    local: { mode: localMode },
+    // Remote multi-device sync is not yet implemented (phase 3)
+    remote: { state: "disconnected" },
+  };
+
   const stubs = createStubNamespaces(resolvedConfig);
 
   return {
@@ -99,6 +118,11 @@ export async function createTodu(
     note: createNoteNamespace(storage.catalog, storage.repo),
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),
+    sync: {
+      status: () => syncStatus,
+      start: () => Promise.resolve(),
+      stop: () => Promise.resolve(),
+    },
     onChange(callback: () => void): () => void {
       storage.catalog.on("change", callback);
       return () => {

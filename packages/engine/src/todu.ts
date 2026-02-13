@@ -119,10 +119,38 @@ export interface HabitNamespace {
   history(id: HabitId, days?: number): Promise<Result<HabitHistoryEntry[]>>;
 }
 
+// ============================================================================
+// Sync status types
+// ============================================================================
+
+/** How this instance coordinates with other local processes. */
+export type LocalSyncMode = "standalone" | "ephemeral-client" | "sync-server";
+
+/** Remote multi-device sync connection state. */
+export type RemoteSyncState = "disconnected" | "connected" | "syncing";
+
+export interface SyncStatus {
+  /** Local coordination mode with other processes on this machine. */
+  local: {
+    mode: LocalSyncMode;
+  };
+  /** Multi-device replication state (phase 3 — currently always disconnected). */
+  remote: {
+    state: RemoteSyncState;
+    /** Sync server URL if configured. */
+    server?: string;
+    /** ISO timestamp of last successful sync. */
+    lastSync?: string;
+  };
+}
+
 export interface SyncNamespace {
+  /** Start remote multi-device sync connection. */
   start(): Promise<void>;
+  /** Stop remote multi-device sync connection. */
   stop(): Promise<void>;
-  status(): { connected: boolean };
+  /** Get current sync status (local mode + remote state). */
+  status(): SyncStatus;
 }
 
 export interface ConfigNamespace {
@@ -215,7 +243,10 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
     sync: {
       start: () => Promise.resolve(),
       stop: () => Promise.resolve(),
-      status: () => ({ connected: false }),
+      status: () => ({
+        local: { mode: "standalone" as LocalSyncMode },
+        remote: { state: "disconnected" as RemoteSyncState },
+      }),
     },
     config: {
       get: () => config,
