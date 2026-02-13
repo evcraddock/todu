@@ -1,4 +1,3 @@
-import { DEFAULT_DATA_DIR } from "@todu/core";
 import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
@@ -50,9 +49,11 @@ export type { SchedulableItem, ProcessingContext, TemplateProcessor } from "./sc
  *   propagate bidirectionally via Automerge sync protocol. Used by CLI.
  * - Neither — Standalone, no sync. Used by tests.
  */
-export async function createTodu(config?: Partial<ToduConfig>): Promise<Todu> {
+export async function createTodu(
+  config: Pick<ToduConfig, "storagePath"> & Partial<Omit<ToduConfig, "storagePath">>,
+): Promise<Todu> {
   const resolvedConfig: ToduConfig = {
-    storagePath: config?.storagePath ?? DEFAULT_DATA_DIR,
+    storagePath: config.storagePath,
   };
 
   const storage = await initStorage(resolvedConfig.storagePath);

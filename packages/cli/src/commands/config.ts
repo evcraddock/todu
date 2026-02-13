@@ -13,7 +13,9 @@ export function registerConfigCommands(program: Command): void {
     .description("Show resolved configuration")
     .action(() => {
       const opts = program.opts();
-      const sources = resolveConfigSources(opts.config);
+      const configPath = getConfigPath(opts.config);
+      const fileConfig = loadConfig(configPath);
+      const sources = resolveConfigSources(opts.config, fileConfig);
       const configExists = fs.existsSync(sources.configPath);
 
       if (opts.format === "json") {
