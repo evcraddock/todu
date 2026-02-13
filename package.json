@@ -13,9 +13,9 @@
     "build:cli": "npm run --workspace=packages/cli build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "biome check --write --error-on-warnings . && tsgo --noEmit",
-    "check:ci": "biome check --error-on-warnings . && tsgo --noEmit",
-    "typecheck": "tsgo --noEmit",
+    "check": "biome check --write --error-on-warnings . && npm run typecheck",
+    "check:ci": "biome check --error-on-warnings . && npm run typecheck",
+    "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/cli typecheck",
     "prepare": "husky"
   },
   "devDependencies": {
