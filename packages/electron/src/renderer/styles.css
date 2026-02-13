@@ -1389,3 +1389,82 @@ button.detail-description {
 .agent-input:disabled {
   opacity: 0.6;
 }
+
+/* ============================================================================
+ * Settings
+ * ============================================================================ */
+
+.settings-section {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.settings-hint {
+  font-size: 13px;
+  color: #808090;
+  margin-bottom: 16px;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.settings-message {
+  font-size: 13px;
+  color: #4ade80;
+}
+
+.settings-message-error {
+  color: #f87171;
+}
+
+/* API key rows */
+
+.settings-key-row {
+  margin-bottom: 16px;
+}
+
+.settings-key-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.settings-key-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #c0c0d0;
+}
+
+.settings-key-status {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-key-stored {
+  color: #4ade80;
+}
+
+.settings-key-missing {
+  color: #808090;
+}
+
+.settings-key-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-key-input {
+  flex: 1;
+  max-width: 400px;
+}

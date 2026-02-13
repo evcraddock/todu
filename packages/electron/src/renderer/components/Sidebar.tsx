@@ -51,6 +51,14 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps): ReactNode {
           <span className="sidebar-nav-icon">💬</span>
           <span className="sidebar-nav-label">Agent</span>
         </button>
+        <button
+          type="button"
+          className={`sidebar-nav-item ${activeView === "settings" ? "active" : ""}`}
+          onClick={() => onNavigate("settings")}
+        >
+          <span className="sidebar-nav-icon">⚙</span>
+          <span className="sidebar-nav-label">Settings</span>
+        </button>
       </div>
     </nav>
   );

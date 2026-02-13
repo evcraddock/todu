@@ -11,6 +11,7 @@ import { LabelsView } from "./views/LabelsView.js";
 import { NotesView } from "./views/NotesView.js";
 import { ProjectsView } from "./views/ProjectsView.js";
 import { RecurringView } from "./views/RecurringView.js";
+import { SettingsView } from "./views/SettingsView.js";
 import { TasksView } from "./views/TasksView.js";
 
 function ViewRouter({
@@ -37,6 +38,8 @@ function ViewRouter({
       return <LabelsView />;
     case "agent":
       return <AgentView />;
+    case "settings":
+      return <SettingsView />;
     default:
       return <Placeholder title="Unknown" />;
   }

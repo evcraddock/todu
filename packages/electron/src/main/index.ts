@@ -5,6 +5,7 @@ import { BrowserWindow, app } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { registerIpcHandlers } from "./ipc.js";
+import { registerSettingsIpc, unregisterSettingsIpc } from "./settings.js";
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from "./shortcuts.js";
 import { destroyTray, setupTray } from "./tray.js";
 import { createWindow, restoreWindowState, saveWindowState } from "./window.js";
@@ -45,7 +46,8 @@ async function init(): Promise<void> {
   // Forward Automerge change events to renderer
   setupChangeNotifications(todu, mainWindow);
 
-  // Initialize agent with todu tools
+  // Initialize settings and agent
+  registerSettingsIpc();
   setupAgent(todu, mainWindow);
 
   // Set up system tray
@@ -86,6 +88,7 @@ app.on("window-all-closed", async () => {
   unregisterGlobalShortcuts();
   destroyTray();
   teardownAgent();
+  unregisterSettingsIpc();
   if (todu) {
     await todu.close();
     todu = null;

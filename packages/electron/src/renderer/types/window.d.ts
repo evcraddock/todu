@@ -99,6 +99,20 @@ export interface ToduAgentApi {
   send(message: string): Promise<void>;
   abort(): Promise<void>;
   clear(): Promise<void>;
+  setModel(provider: string, modelId: string): Promise<void>;
+}
+
+export interface AgentSettings {
+  provider: string;
+  modelId: string;
+}
+
+export interface ToduSettingsApi {
+  get(): Promise<AgentSettings>;
+  save(settings: AgentSettings): Promise<void>;
+  setApiKey(provider: string, key: string): Promise<void>;
+  removeApiKey(provider: string): Promise<void>;
+  storedProviders(): Promise<Record<string, boolean>>;
 }
 
 export interface ToduApi {
@@ -109,6 +123,7 @@ export interface ToduApi {
   recurring: ToduRecurringApi;
   habit: ToduHabitApi;
   agent: ToduAgentApi;
+  settings: ToduSettingsApi;
   on(channel: string, callback: (data: unknown) => void): () => void;
 }
 

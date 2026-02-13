@@ -4,6 +4,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
+import { getApiKey, loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";
 
 // ============================================================================
@@ -43,10 +44,6 @@ You do NOT have access to the file system, code, or terminal. For coding work, t
 // Agent Setup
 // ============================================================================
 
-/** Default model used when no settings are configured yet. */
-const DEFAULT_PROVIDER = "anthropic";
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
-
 let agent: Agent | null = null;
 let unsubscribe: (() => void) | null = null;
 
@@ -56,7 +53,8 @@ let unsubscribe: (() => void) | null = null;
  */
 export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
   const tools = createToduTools(todu);
-  const model = getModel(DEFAULT_PROVIDER, DEFAULT_MODEL);
+  const settings = loadSettings();
+  const model = getModel(settings.provider, settings.modelId);
 
   agent = new Agent({
     initialState: {
@@ -64,6 +62,7 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
       model,
       tools,
     },
+    getApiKey: (provider: string) => getApiKey(provider),
   });
 
   // Forward agent events to renderer
@@ -94,6 +93,14 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
     if (!agent) return;
     agent.clearMessages();
   });
+
+  ipcMain.handle("todu:agent:set-model", (_event, provider: string, modelId: string) => {
+    if (!agent) return;
+    const newModel = getModel(provider, modelId);
+    if (newModel) {
+      agent.setModel(newModel);
+    }
+  });
 }
 
 /**
@@ -109,6 +116,7 @@ export function teardownAgent(): void {
   ipcMain.removeHandler("todu:agent:send");
   ipcMain.removeHandler("todu:agent:abort");
   ipcMain.removeHandler("todu:agent:clear");
+  ipcMain.removeHandler("todu:agent:set-model");
 
   agent = null;
 }
