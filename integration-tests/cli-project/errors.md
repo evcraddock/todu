@@ -83,6 +83,35 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-errors
 
 **Expected:** The "Create" button should be disabled when the name field is empty.
 
+## 7. Electron Multi-Field Typing
+
+Test that typing flows correctly across all form fields.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-name"
+NODE_PATH=$NODE_PATH node $INTERACT type "Error Test Project"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-name').value"
+```
+
+**Expected:** Returns `"Error Test Project"`.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-desc"
+NODE_PATH=$NODE_PATH node $INTERACT type "A longer description to verify no focus stealing"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-desc').value"
+NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-name').value"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-errors-typing.png
+```
+
+**Expected:**
+- Description returns `"A longer description to verify no focus stealing"`
+- Name still returns `"Error Test Project"` (unchanged)
+- Screenshot confirms both fields have their correct values
+
+If the name field contains extra characters or the description is truncated, this confirms the focus-stealing bug (#1762).
+
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT press "Escape"
 ```

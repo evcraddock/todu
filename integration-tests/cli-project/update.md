@@ -83,7 +83,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update
 
 ## 7. Update Project in Electron, Verify CLI
 
-Click into project detail and edit a field inline.
+Click into project detail view.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Legacy App"
@@ -91,15 +91,83 @@ sleep 1
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-detail.png
 ```
 
-**Expected:** Detail view shows "Legacy App" with current field values. Note which fields are editable inline and test editing one (e.g., description or name).
+**Expected:** Detail view shows "Legacy App" with status=done, priority=low.
 
-After editing in Electron, verify CLI sees the change:
+### 7a. Edit Name Inline
+
+Click the project name to enter inline edit mode, clear it, and type a new name.
 
 ```bash
-toduai project show "Legacy App" --no-color
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-title"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-edit.png
 ```
 
-**Expected:** CLI output reflects the change made in Electron.
+**Expected:** Name field becomes an editable input with current value.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT press "Control+a"
+NODE_PATH=$NODE_PATH node $INTERACT type "Renamed In Electron"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-typed.png
+```
+
+**Verify:** Input shows "Renamed In Electron". No characters leaked elsewhere.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT press "Enter"
+sleep 1
+```
+
+**Expected:** Inline edit saves and reverts to display mode.
+
+### 7b. Edit Description Inline
+
+Click the description area to enter edit mode and type a description.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-description"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT type "Updated from Electron detail view"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-desc-typed.png
+```
+
+**Verify:** Textarea shows the full typed text. No characters leaked to the name field. If characters leak, this indicates the focus-stealing bug (#1762).
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click ".detail-label"
+sleep 1
+```
+
+**Expected:** Blur triggers save.
+
+### 7c. Change Priority via Dropdown
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.inline-select')[1].value"
+```
+
+**Expected:** Current priority value (should be "low").
+
+### 7d. Verify CLI Sees All Electron Changes
+
+```bash
+toduai project show "Renamed In Electron" --no-color
+```
+
+**Expected:**
+
+```
+ID:          proj-XXXXXXXX
+Name:        Renamed In Electron
+Status:      done
+Priority:    low
+...
+Description: Updated from Electron detail view
+```
+
+If the name shows garbled text or the description is truncated, this indicates input focus issues.
 
 ## Teardown
 

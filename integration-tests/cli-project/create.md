@@ -112,8 +112,24 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 **Expected:** Screenshot shows the "New Project" dialog with Name, Priority, and Description fields.
 
 ```bash
-NODE_PATH=$NODE_PATH node $INTERACT fill "#proj-name" "Electron Project"
-NODE_PATH=$NODE_PATH node $INTERACT fill "#proj-desc" "Created from the Electron UI"
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-name"
+NODE_PATH=$NODE_PATH node $INTERACT type "Electron Project"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-name.png
+```
+
+**Verify:** Screenshot shows "Electron Project" in the Name field only — no characters leaked to other fields.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "#proj-desc"
+NODE_PATH=$NODE_PATH node $INTERACT type "Created from the Electron UI"
+sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-desc.png
+```
+
+**Verify:** Screenshot shows full description text in the Description field. Name field still reads "Electron Project" unchanged. If characters leak to the name field, this indicates a focus-stealing bug (see #1762).
+
+```bash
 NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-primary"
 sleep 2
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-electron.png
@@ -121,7 +137,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 
 **Expected:** Dialog closes. Project list now shows 4 projects including "Electron Project".
 
-> **Note:** Don't use `text=Create` — it matches the "Created" table header. Use `.dialog-actions .btn-primary` for dialog submit buttons.
+> **Note:** Use `click` + `type` (real keystrokes) instead of `fill` (programmatic) to catch focus/input bugs. Don't use `text=Create` — it matches the "Created" table header. Use `.dialog-actions .btn-primary` for dialog submit buttons.
 
 ## 7. Verify CLI Sees Electron-Created Project
 
