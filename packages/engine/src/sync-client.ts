@@ -7,12 +7,15 @@ export const DEFAULT_SYNC_URL = "ws://127.0.0.1:24377";
  * Add a sync client adapter to a Repo, connecting to a remote sync server.
  * Waits for the adapter to be ready before returning.
  * Returns a disconnect function.
+ *
+ * @param retryInterval - Retry interval in ms if connection fails (default: 500ms for local)
  */
 export async function connectSyncClient(
   repo: Repo,
   url: string = DEFAULT_SYNC_URL,
+  retryInterval = 500,
 ): Promise<() => void> {
-  const adapter = new WebSocketClientAdapter(url);
+  const adapter = new WebSocketClientAdapter(url, retryInterval);
   repo.networkSubsystem.addNetworkAdapter(adapter);
 
   // Wait for the WebSocket connection to establish

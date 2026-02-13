@@ -4,7 +4,7 @@ import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
-import { initStorage } from "./storage.js";
+import { type Storage, initEphemeralStorage, initStorage } from "./storage.js";
 import { connectSyncClient } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
@@ -56,17 +56,28 @@ export async function createTodu(
     storagePath: config.storagePath,
   };
 
-  const storage = await initStorage(resolvedConfig.storagePath);
-
-  // Start sync server or connect as client
+  // Sync client mode: ephemeral in-memory repo that syncs with server
+  // Sync server mode: persistent repo that serves sync clients
+  // Standalone: persistent repo, no sync
   let syncServer: SyncServer | null = null;
-  let disconnectSync: (() => void) | null = null;
+  let storage: Storage;
 
-  if (config?.syncServer) {
-    syncServer = startSyncServer(storage.repo, config.syncPort);
-  } else if (config?.syncClient) {
+  if (config?.syncClient) {
+    // Mode 2: CLI as ephemeral sync client
+    // 1. Create ephemeral repo (no storage)
+    // 2. Connect sync adapter so the repo has a peer
+    // 3. Find catalog document — sync peer provides the data
+    const ephemeral = await initEphemeralStorage(resolvedConfig.storagePath);
     const port = config.syncPort ?? 24377;
-    disconnectSync = await connectSyncClient(storage.repo, `ws://127.0.0.1:${port}`);
+    await connectSyncClient(ephemeral.repo, `ws://127.0.0.1:${port}`);
+    storage = await ephemeral.findCatalog();
+  } else {
+    // Mode 1 (standalone) or Electron (sync server)
+    storage = await initStorage(resolvedConfig.storagePath);
+
+    if (config?.syncServer) {
+      syncServer = startSyncServer(storage.repo, config.syncPort);
+    }
   }
 
   // Register processors before processing

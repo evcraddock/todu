@@ -21,6 +21,9 @@ export interface Storage {
   /** The catalog document handle */
   catalog: DocHandle<CatalogDocument>;
 
+  /** Whether this storage is ephemeral (in-memory, no persistence) */
+  ephemeral: boolean;
+
   /** Shut down the repo */
   close(): Promise<void>;
 }
@@ -44,9 +47,78 @@ export async function initStorage(storagePath: string): Promise<Storage> {
   return {
     repo,
     catalog,
+    ephemeral: false,
     async close() {
       await repo.flush();
       await repo.shutdown();
+    },
+  };
+}
+
+/**
+ * Initialize ephemeral storage with no filesystem persistence.
+ * Used by CLI when syncing with a running Electron instance.
+ *
+ * Creates an in-memory Automerge repo and reads the catalog document ID
+ * from the marker file (written by the persistent owner).
+ *
+ * IMPORTANT: The caller must connect a sync adapter to the repo BEFORE
+ * calling `findCatalog()`. The ephemeral repo has no local data — it
+ * needs a sync peer to provide the document contents.
+ */
+export async function initEphemeralStorage(storagePath: string): Promise<
+  Omit<Storage, "catalog"> & {
+    /** Find the catalog document via sync. Call AFTER connecting a sync adapter. */
+    findCatalog(): Promise<Storage>;
+  }
+> {
+  // Read the catalog document ID from the marker file
+  const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
+  if (!fs.existsSync(markerPath)) {
+    throw new Error(
+      "No catalog marker found. Run the Electron app or CLI standalone first to create data.",
+    );
+  }
+  const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
+
+  // Create repo with no storage — purely in-memory
+  const repo = new Repo({});
+
+  return {
+    repo,
+    ephemeral: true,
+    async close() {
+      try {
+        await repo.shutdown();
+      } catch {
+        // Safe to ignore — adapters may already be disconnected
+      }
+    },
+    async findCatalog(): Promise<Storage> {
+      // Now that sync is connected, find the catalog document.
+      // Allow "requesting" state so find() doesn't fail while waiting
+      // for the sync peer to deliver the document data.
+      const catalog = await repo.find<CatalogDocument>(docId, {
+        allowableStates: ["ready", "requesting", "loading"],
+      });
+
+      // Wait for the document to actually be ready (populated via sync)
+      await catalog.whenReady();
+
+      return {
+        repo,
+        catalog,
+        ephemeral: true,
+        async close() {
+          // Shutdown may trigger disconnect on adapters that are already
+          // closed. Wrap to avoid assertion errors from WebSocket adapter.
+          try {
+            await repo.shutdown();
+          } catch {
+            // Safe to ignore — adapters may already be disconnected
+          }
+        },
+      };
     },
   };
 }
