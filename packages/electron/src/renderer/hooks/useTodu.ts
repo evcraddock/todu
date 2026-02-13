@@ -3,11 +3,14 @@ import type {
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
+  CreateRecurringInput,
   CreateTaskInput,
   LabelId,
   NoteFilter,
   NoteId,
   ProjectId,
+  RecurringFilter,
+  RecurringId,
   Result,
   TaskFilter,
   TaskId,
@@ -15,6 +18,7 @@ import type {
   ToduError,
   UpdateLabelInput,
   UpdateProjectInput,
+  UpdateRecurringInput,
   UpdateTaskInput,
 } from "@todu/core/browser";
 
@@ -259,6 +263,106 @@ export function useDeleteLabel() {
     mutationFn: async (id: LabelId) => unwrap(await window.todu.label.delete(id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.labels });
+    },
+  });
+}
+
+// ============================================================================
+// Recurring Hooks
+// ============================================================================
+
+export function useRecurringList(filter?: RecurringFilter) {
+  return useQuery({
+    queryKey: queryKeys.recurring(filter),
+    queryFn: async () => unwrap(await window.todu.recurring.list(filter)),
+  });
+}
+
+export function useRecurringDetail(id: string) {
+  return useQuery({
+    queryKey: queryKeys.recurringDetail(id),
+    queryFn: async () => unwrap(await window.todu.recurring.get(id as RecurringId)),
+    enabled: !!id,
+  });
+}
+
+export function useUpcoming(options?: { templateId?: string; days?: number }) {
+  return useQuery({
+    queryKey: queryKeys.recurringUpcoming(options),
+    queryFn: async () =>
+      unwrap(
+        await window.todu.recurring.upcoming(
+          options?.templateId
+            ? { templateId: options.templateId as RecurringId, days: options.days }
+            : { days: options?.days },
+        ),
+      ),
+  });
+}
+
+export function useCreateRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateRecurringInput) =>
+      unwrap(await window.todu.recurring.create(input)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+    },
+  });
+}
+
+export function useUpdateRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: RecurringId; input: UpdateRecurringInput }) =>
+      unwrap(await window.todu.recurring.update(id, input)),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurringDetail(id) });
+    },
+  });
+}
+
+export function useDeleteRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: RecurringId) => unwrap(await window.todu.recurring.delete(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+    },
+  });
+}
+
+export function usePauseRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: RecurringId) => unwrap(await window.todu.recurring.pause(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurringDetail(id) });
+    },
+  });
+}
+
+export function useResumeRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: RecurringId) => unwrap(await window.todu.recurring.resume(id)),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recurringDetail(id) });
+    },
+  });
+}
+
+export function useGenerateOccurrence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ templateId, date }: { templateId: RecurringId; date: string }) =>
+      unwrap(await window.todu.recurring.generate(templateId, date)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recurring"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }
