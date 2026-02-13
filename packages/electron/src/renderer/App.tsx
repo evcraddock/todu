@@ -4,13 +4,14 @@ import { Placeholder } from "./components/Placeholder.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
-import { ProjectList } from "./views/ProjectList.js";
+import { LabelsView } from "./views/LabelsView.js";
+import { ProjectsView } from "./views/ProjectsView.js";
 import { TasksView } from "./views/TasksView.js";
 
 function ViewRouter({ activeView }: { activeView: string }): ReactNode {
   switch (activeView) {
     case "projects":
-      return <ProjectList />;
+      return <ProjectsView />;
     case "tasks":
       return <TasksView />;
     case "habits":
@@ -20,7 +21,7 @@ function ViewRouter({ activeView }: { activeView: string }): ReactNode {
     case "notes":
       return <Placeholder title="Notes" />;
     case "labels":
-      return <Placeholder title="Labels" />;
+      return <LabelsView />;
     case "agent":
       return <Placeholder title="Agent" />;
     default:
