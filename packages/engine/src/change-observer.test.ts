@@ -98,7 +98,7 @@ describe("change notifications", () => {
     let called = 0;
     const cleanup = todu.onChange(() => called++);
 
-    await todu.habit.check(habitResult.value.id, new Date().toISOString().slice(0, 10));
+    await todu.habit.check(habitResult.value.id);
     await waitForNotification();
 
     expect(called).toBeGreaterThan(0);
