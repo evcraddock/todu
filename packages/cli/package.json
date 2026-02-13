@@ -7,7 +7,8 @@
   },
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsgo -p tsconfig.build.json"
+    "build": "tsgo -p tsconfig.build.json",
+    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
     "@todu/engine": "^0.0.1",

@@ -22,9 +22,10 @@ check-ci: ## Lint + format + typecheck (no auto-fix, CI mode)
 typecheck: ## Run TypeScript type checking only
 	npm run typecheck
 
-pre-pr: ## Run pre-PR checks (check + test)
+pre-pr: ## Run pre-PR checks (check + test + build)
 	npm run check:ci
 	npm test
+	npm run build
 
 clean: ## Remove build artifacts
 	rm -rf packages/*/dist packages/*/*.tsbuildinfo
