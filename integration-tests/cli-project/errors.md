@@ -64,7 +64,7 @@ With no projects created, verify the Electron app shows an empty state.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".empty-state" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-errors-empty.png
 ```
@@ -77,7 +77,7 @@ Open the create dialog and try to submit without a name.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=+ New Project"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".dialog" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-errors-dialog.png
 ```
 
@@ -90,7 +90,6 @@ Test that typing flows correctly across all form fields.
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "#proj-name"
 NODE_PATH=$NODE_PATH node $INTERACT type "Error Test Project"
-sleep 1
 NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-name').value"
 ```
 
@@ -99,7 +98,6 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-name').v
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "#proj-desc"
 NODE_PATH=$NODE_PATH node $INTERACT type "A longer description to verify no focus stealing"
-sleep 1
 NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-desc').value"
 NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelector('#proj-name').value"
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-errors-typing.png

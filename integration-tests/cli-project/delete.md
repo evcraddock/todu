@@ -20,7 +20,7 @@ toduai project create --name "Also Delete"
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```
 
@@ -50,7 +50,7 @@ toduai project list --no-color
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```
 
@@ -83,7 +83,7 @@ toduai project list --no-color
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```
 
@@ -104,7 +104,7 @@ No results.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".empty-state" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-delete-empty.png
 ```

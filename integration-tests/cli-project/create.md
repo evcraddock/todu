@@ -87,7 +87,7 @@ Navigate to Projects view and check that all three projects are visible.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```
 
@@ -105,7 +105,7 @@ Open the "New Project" dialog, fill in the form, and submit.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=+ New Project"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".dialog" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-dialog.png
 ```
 
@@ -114,7 +114,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "#proj-name"
 NODE_PATH=$NODE_PATH node $INTERACT type "Electron Project"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait "#proj-name" --timeout 2000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-name.png
 ```
 
@@ -123,7 +123,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "#proj-desc"
 NODE_PATH=$NODE_PATH node $INTERACT type "Created from the Electron UI"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait "#proj-desc" --timeout 2000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-desc.png
 ```
 
@@ -131,7 +131,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-primary"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-electron.png
 ```
 

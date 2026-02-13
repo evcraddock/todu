@@ -56,9 +56,9 @@ Click into the project detail in Electron.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT click "text=My App"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-show.png
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```

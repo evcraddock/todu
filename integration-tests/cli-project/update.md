@@ -69,7 +69,7 @@ toduai project show "Legacy App"
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Projects"
-sleep 2
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ```
 
@@ -87,7 +87,7 @@ Click into project detail view.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Legacy App"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-detail.png
 ```
 
@@ -99,7 +99,7 @@ Click the project name to enter inline edit mode, clear it, and type a new name.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click ".detail-title"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title-input" --timeout 3000
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-edit.png
 ```
 
@@ -108,7 +108,6 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT press "Control+a"
 NODE_PATH=$NODE_PATH node $INTERACT type "Renamed In Electron"
-sleep 1
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-name-typed.png
 ```
 
@@ -116,7 +115,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT press "Enter"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-title.clickable" --timeout 3000
 ```
 
 **Expected:** Inline edit saves and reverts to display mode.
@@ -127,9 +126,8 @@ Click the description area to enter edit mode and type a description.
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click ".detail-description"
-sleep 1
+NODE_PATH=$NODE_PATH node $INTERACT wait ".detail-description-input" --timeout 3000
 NODE_PATH=$NODE_PATH node $INTERACT type "Updated from Electron detail view"
-sleep 1
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update-desc-typed.png
 ```
 
@@ -137,14 +135,14 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-update
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT click ".detail-label"
-sleep 1
 ```
 
 **Expected:** Blur triggers save.
 
-### 7c. Change Priority via Dropdown
+### 7c. Check Priority Dropdown
 
 ```bash
+# Inline select dropdowns: [0] = Status, [1] = Priority
 NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.inline-select')[1].value"
 ```
 
