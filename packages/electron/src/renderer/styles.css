@@ -977,3 +977,134 @@ button.detail-description {
   color: #888;
   margin-top: 2px;
 }
+
+/* ============================================================================
+ * Habit — Check-in Toggle
+ * ============================================================================ */
+
+.checkin-toggle {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: transform 0.15s;
+}
+
+.checkin-toggle:hover {
+  transform: scale(1.2);
+}
+
+.checkin-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.streak-count {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+ * Habit — Streak Stats
+ * ============================================================================ */
+
+.streak-stats {
+  display: flex;
+  gap: 24px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+
+.streak-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.streak-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.streak-stat-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.streak-checkin-btn {
+  font-size: 18px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.streak-checkin-btn:hover {
+  transform: scale(1.05);
+}
+
+.streak-checkin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.streak-checkin-btn.checkin-done {
+  background: #166534;
+  color: #bbf7d0;
+}
+
+.streak-checkin-btn.checkin-pending {
+  background: #374151;
+  color: #d1d5db;
+}
+
+/* ============================================================================
+ * Habit — History Calendar Grid
+ * ============================================================================ */
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.history-day {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.history-day-num {
+  pointer-events: none;
+}
+
+.history-day-completed {
+  background: #166534;
+  color: #bbf7d0;
+}
+
+.history-day-missed {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.history-day-unscheduled {
+  background: #1f2937;
+  color: #6b7280;
+}

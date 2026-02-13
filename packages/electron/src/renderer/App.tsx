@@ -4,6 +4,7 @@ import { Placeholder } from "./components/Placeholder.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
+import { HabitsView } from "./views/HabitsView.js";
 import { LabelsView } from "./views/LabelsView.js";
 import { NotesView } from "./views/NotesView.js";
 import { ProjectsView } from "./views/ProjectsView.js";
@@ -23,7 +24,7 @@ function ViewRouter({
     case "tasks":
       return <TasksView />;
     case "habits":
-      return <Placeholder title="Habits" />;
+      return <HabitsView />;
     case "recurring":
       return <RecurringView />;
     case "notes":
