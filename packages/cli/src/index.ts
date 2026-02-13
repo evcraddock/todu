@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createTodu } from "@todu/engine";
+import { createTodu, isSyncServerAvailable } from "@todu/engine";
 import { Command } from "commander";
 import { registerConfigCommands } from "./commands/config.js";
 import { registerHabitCommands } from "./commands/habit.js";
@@ -27,13 +27,16 @@ program
     }
   });
 
-// Lazy initialization — resolve config, then create Todu instance
-const getTodu = () => {
+// Lazy initialization — resolve config, then create Todu instance.
+// Tries to connect to a running sync server (Electron) first so
+// both share the same Automerge data in real-time.
+const getTodu = async () => {
   const opts = program.opts();
   const configPath = getConfigPath(opts.config);
   const config = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, config);
-  return createTodu({ storagePath });
+  const syncClient = await isSyncServerAvailable();
+  return createTodu({ storagePath, syncClient });
 };
 
 // Register command groups

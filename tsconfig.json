@@ -15,6 +15,9 @@
     "isolatedModules": true,
     "types": ["node"]
   },
+  "exclude": [
+    "packages/electron/**/*"
+  ],
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/engine" },

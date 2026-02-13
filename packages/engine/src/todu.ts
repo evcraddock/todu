@@ -43,6 +43,15 @@ import type { UpcomingOccurrence } from "./recurring.js";
 export interface ToduConfig {
   /** Path to data storage directory */
   storagePath: string;
+
+  /** Start a local WebSocket sync server (used by Electron) */
+  syncServer?: boolean;
+
+  /** Port for sync server/client (default: 24377) */
+  syncPort?: number;
+
+  /** Try to connect to a running sync server (used by CLI) */
+  syncClient?: boolean;
 }
 
 // ============================================================================
@@ -129,6 +138,13 @@ export interface Todu {
   habit: HabitNamespace;
   sync: SyncNamespace;
   config: ConfigNamespace;
+
+  /**
+   * Register a callback to be notified when data changes.
+   * Returns a cleanup function to unsubscribe.
+   */
+  onChange(callback: () => void): () => void;
+
   close(): Promise<void>;
 }
 
@@ -140,7 +156,7 @@ function notImplemented(): Promise<Result<never, ToduError>> {
   return Promise.reject(new Error("Not implemented"));
 }
 
-export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close"> {
+export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "onChange"> {
   const stub = () => notImplemented();
 
   return {

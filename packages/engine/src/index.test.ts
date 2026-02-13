@@ -91,6 +91,32 @@ describe("createTodu", () => {
     todu = null; // prevent double-close in afterEach
   });
 
+  it("onChange fires callback on data change and cleanup unsubscribes", async () => {
+    todu = await createTodu({ storagePath: tmpDir });
+
+    let callCount = 0;
+    const cleanup = todu.onChange(() => {
+      callCount++;
+    });
+
+    // Trigger a change by creating a project
+    await todu.project.create({ name: "test-project" });
+    // Allow async change event to propagate
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(callCount).toBeGreaterThan(0);
+
+    // Unsubscribe
+    const countBeforeCleanup = callCount;
+    cleanup();
+
+    // Trigger another change — callback should NOT fire
+    await todu.project.create({ name: "another-project" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(callCount).toBe(countBeforeCleanup);
+  });
+
   it("migrates old catalog missing fields", async () => {
     // Simulate an old catalog with only projects and version
     const repo = new Repo({
