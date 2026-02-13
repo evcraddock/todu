@@ -5,6 +5,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { ToastContainer } from "./components/ToastContainer.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
+import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { LabelsView } from "./views/LabelsView.js";
 import { NotesView } from "./views/NotesView.js";
@@ -35,7 +36,7 @@ function ViewRouter({
     case "labels":
       return <LabelsView />;
     case "agent":
-      return <Placeholder title="Agent" />;
+      return <AgentView />;
     default:
       return <Placeholder title="Unknown" />;
   }
