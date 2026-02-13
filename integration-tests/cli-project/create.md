@@ -113,12 +113,14 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 
 ```bash
 NODE_PATH=$NODE_PATH node $INTERACT fill "#proj-name" "Electron Project"
-NODE_PATH=$NODE_PATH node $INTERACT click "text=Create"
+NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-primary"
 sleep 2
 NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create-electron.png
 ```
 
 **Expected:** Dialog closes. Project list now shows 4 projects including "Electron Project".
+
+> **Note:** Don't use `text=Create` — it matches the "Created" table header. Use `.dialog-actions .btn-primary` for dialog submit buttons.
 
 ## 7. Verify CLI Sees Electron-Created Project
 
