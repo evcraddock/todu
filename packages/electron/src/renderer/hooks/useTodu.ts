@@ -469,7 +469,7 @@ export function useCheckHabit() {
       queryClient.invalidateQueries({ queryKey: ["habits"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.habitStreak(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.habitHistory(id) });
+      queryClient.invalidateQueries({ queryKey: ["habits", id, "history"] });
     },
   });
 }
@@ -482,7 +482,7 @@ export function useUncheckHabit() {
       queryClient.invalidateQueries({ queryKey: ["habits"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.habit(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.habitStreak(id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.habitHistory(id) });
+      queryClient.invalidateQueries({ queryKey: ["habits", id, "history"] });
     },
   });
 }
