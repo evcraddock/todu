@@ -43,7 +43,7 @@ export function CreateProjectDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Project name"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
         <div className="form-field">

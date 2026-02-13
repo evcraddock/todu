@@ -8,6 +8,9 @@
         "noNonNullAssertion": "off",
         "useConst": "error"
       },
+      "a11y": {
+        "noAutofocus": "off"
+      },
       "suspicious": {
         "noExplicitAny": "error"
       }

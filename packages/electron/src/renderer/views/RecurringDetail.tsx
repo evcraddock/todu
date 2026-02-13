@@ -207,7 +207,7 @@ export function RecurringDetail({
               if (e.key === "Enter") handleInlineSave("title");
               if (e.key === "Escape") setEditingField(null);
             }}
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         ) : (
           <button
@@ -349,7 +349,7 @@ export function RecurringDetail({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={() => handleInlineSave("description")}
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         ) : (
           <button

@@ -58,7 +58,7 @@ export function CreateNoteDialog({ onClose }: { onClose: () => void }): ReactNod
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your note…"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
 

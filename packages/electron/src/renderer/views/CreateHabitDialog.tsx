@@ -67,7 +67,7 @@ export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNo
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Habit name"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
 
