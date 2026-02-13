@@ -142,7 +142,7 @@ export function ProjectDetail({
               if (e.key === "Enter") handleInlineSave("name");
               if (e.key === "Escape") setEditingField(null);
             }}
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         ) : (
           <button
@@ -203,7 +203,7 @@ export function ProjectDetail({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={() => handleInlineSave("description")}
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         ) : (
           <button

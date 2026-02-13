@@ -70,7 +70,7 @@ export function CreateTaskDialog({
               if (e.key === "Enter") handleSubmit();
             }}
             placeholder="Task title"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
 

@@ -102,7 +102,7 @@ export function LabelDialog({
               if (e.key === "Enter") handleSubmit();
             }}
             placeholder="Label name"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
 

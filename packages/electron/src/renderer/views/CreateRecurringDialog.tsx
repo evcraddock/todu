@@ -79,7 +79,7 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Recurring task title"
-            ref={(el) => el?.focus()}
+            autoFocus
           />
         </div>
 
