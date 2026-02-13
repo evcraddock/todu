@@ -1,4 +1,5 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { showToast } from "../components/ToastContainer.js";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -11,6 +12,12 @@ export const queryClient = new QueryClient({
       retry: 1,
     },
   },
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      showToast(message, "error");
+    },
+  }),
 });
 
 /**

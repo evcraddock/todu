@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Placeholder } from "./components/Placeholder.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
+import { ToastContainer } from "./components/ToastContainer.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { LabelsView } from "./views/LabelsView.js";
@@ -14,15 +15,17 @@ import { TasksView } from "./views/TasksView.js";
 function ViewRouter({
   activeView,
   onNavigateToEntity,
+  triggerCreateTask,
 }: {
   activeView: string;
   onNavigateToEntity: (entityType: string, entityId: string) => void;
+  triggerCreateTask: number;
 }): ReactNode {
   switch (activeView) {
     case "projects":
       return <ProjectsView />;
     case "tasks":
-      return <TasksView />;
+      return <TasksView triggerCreateTask={triggerCreateTask} />;
     case "habits":
       return <HabitsView />;
     case "recurring":
@@ -40,15 +43,53 @@ function ViewRouter({
 
 export function App(): ReactNode {
   const [activeView, setActiveView] = useState("projects");
+  const [triggerCreateTask, setTriggerCreateTask] = useState(0);
 
   useEffect(() => {
     const cleanup = setupChangeListener();
     return cleanup;
   }, []);
 
-  // Navigate to an entity from notes or other cross-view links.
-  // For now, switches to the appropriate top-level view.
-  // TODO: deep-link to specific entity detail (needs view-level state lifting)
+  // Listen for actions from the main process (tray menu, etc.)
+  useEffect(() => {
+    const cleanup = window.todu.on("todu:action", (data) => {
+      const action = data as string;
+      if (action === "new-task") {
+        setActiveView("tasks");
+        setTriggerCreateTask((c) => c + 1);
+      }
+    });
+    return cleanup;
+  }, []);
+
+  // In-app keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Ctrl/Cmd+N — new task
+      if (mod && e.key === "n") {
+        e.preventDefault();
+        setActiveView("tasks");
+        setTriggerCreateTask((c) => c + 1);
+      }
+
+      // Ctrl/Cmd+K — focus search (navigate to tasks view)
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        setActiveView("tasks");
+        // Focus the search input after view renders
+        setTimeout(() => {
+          const searchInput = document.querySelector<HTMLInputElement>(".search-input");
+          searchInput?.focus();
+        }, 50);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleNavigateToEntity = useCallback((entityType: string, _entityId: string) => {
     switch (entityType) {
       case "task":
@@ -70,10 +111,15 @@ export function App(): ReactNode {
       <div className="app-layout">
         <Sidebar activeView={activeView} onNavigate={setActiveView} />
         <main className="content-area">
-          <ViewRouter activeView={activeView} onNavigateToEntity={handleNavigateToEntity} />
+          <ViewRouter
+            activeView={activeView}
+            onNavigateToEntity={handleNavigateToEntity}
+            triggerCreateTask={triggerCreateTask}
+          />
         </main>
       </div>
       <StatusBar />
+      <ToastContainer />
     </QueryClientProvider>
   );
 }
