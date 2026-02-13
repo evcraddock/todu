@@ -4,6 +4,13 @@
 
 ```bash
 export TODU_DATA_DIR=$(mktemp -d)
+export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
+export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
+
+~/.pi/agent/skills/electron-testing/scripts/launch.sh \
+  --app-path ./packages/electron/dist/main/index.js \
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+
 toduai project create --name "App"
 toduai project create --name "Infra"
 toduai label create --name bug --color "#ff0000"
@@ -21,7 +28,7 @@ TASK5_ID=$(echo "$TASK5" | jq -r .id)
 toduai task done "$TASK5_ID"
 ```
 
-## List All (No Filter)
+## 1. List All (CLI)
 
 ```bash
 toduai task list --no-color
@@ -29,7 +36,7 @@ toduai task list --no-color
 
 **Expected:** All 5 tasks shown, sorted by priority desc then createdAt desc.
 
-## Filter by Status
+## 2. Filter by Status (CLI)
 
 ```bash
 toduai task list --status active --no-color
@@ -37,7 +44,7 @@ toduai task list --status active --no-color
 
 **Expected:** Only tasks with status=active (Fix crash, Add search, Write docs).
 
-## Filter by Multiple Statuses
+## 3. Filter by Multiple Statuses (CLI)
 
 ```bash
 toduai task list --status active,inprogress --no-color
@@ -45,7 +52,7 @@ toduai task list --status active,inprogress --no-color
 
 **Expected:** Tasks that are active or inprogress (Fix crash, Add search, Setup CI, Write docs).
 
-## Filter by Priority
+## 4. Filter by Priority (CLI)
 
 ```bash
 toduai task list --priority high --no-color
@@ -53,7 +60,7 @@ toduai task list --priority high --no-color
 
 **Expected:** Only "Fix crash".
 
-## Filter by Project
+## 5. Filter by Project (CLI)
 
 ```bash
 toduai task list --project "Infra" --no-color
@@ -61,7 +68,7 @@ toduai task list --project "Infra" --no-color
 
 **Expected:** Only "Setup CI".
 
-## Filter by Label
+## 6. Filter by Label (CLI)
 
 ```bash
 toduai task list --label bug --no-color
@@ -69,7 +76,7 @@ toduai task list --label bug --no-color
 
 **Expected:** Only "Fix crash".
 
-## Filter Overdue
+## 7. Filter Overdue (CLI)
 
 ```bash
 toduai task list --overdue --no-color
@@ -77,7 +84,7 @@ toduai task list --overdue --no-color
 
 **Expected:** Only "Fix crash" (due 2020-01-01, still active).
 
-## Filter Today
+## 8. Filter Today (CLI)
 
 ```bash
 toduai task list --today --no-color
@@ -85,7 +92,7 @@ toduai task list --today --no-color
 
 **Expected:** "Add search" (due today) and "Write docs" (scheduled today).
 
-## Combined Filters
+## 9. Combined Filters (CLI)
 
 ```bash
 toduai task list --status active --priority medium --no-color
@@ -93,7 +100,7 @@ toduai task list --status active --priority medium --no-color
 
 **Expected:** Only "Add search" (active + medium priority). "Old task" is medium but done.
 
-## List as JSON
+## 10. List as JSON (CLI)
 
 ```bash
 toduai --format json task list --status active
@@ -101,8 +108,45 @@ toduai --format json task list --status active
 
 **Expected:** JSON array of task objects with status=active.
 
-## Cleanup
+## 11. Verify Electron Shows All Tasks
 
 ```bash
+NODE_PATH=$NODE_PATH node $INTERACT click "text=Tasks"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
+```
+
+**Expected:** All 5 tasks visible with correct statuses and priorities.
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-filters-all.png
+```
+
+## 12. Verify Electron Filter Chips
+
+Test the status filter chips in the Electron UI.
+
+```bash
+# Click the "active" status chip to filter
+NODE_PATH=$NODE_PATH node $INTERACT click "text=active"
+NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
+NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-filters-active.png
+```
+
+**Expected:** Only active tasks shown (Fix crash, Add search, Write docs).
+
+## 13. Verify Electron Overdue Highlight
+
+```bash
+NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-filters-overdue.png
+```
+
+**Expected:** "Fix crash" due date (2020-01-01) should be highlighted in red as overdue.
+
+## Teardown
+
+```bash
+~/.pi/agent/skills/electron-testing/scripts/stop.sh
 rm -rf "$TODU_DATA_DIR"
 ```
