@@ -47,7 +47,13 @@ export function CreateTaskDialog({
   };
 
   return (
-    <div className="dialog-overlay" onClick={onClose} onKeyDown={undefined}>
+    <div
+      className="dialog-overlay"
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
       <div
         className="dialog dialog-wide"
         onClick={(e) => e.stopPropagation()}
