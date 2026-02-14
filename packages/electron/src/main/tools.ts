@@ -63,18 +63,20 @@ const UpdateProjectParams = Type.Object({
   ),
 });
 
+const TaskStatusEnum = Type.Union([
+  Type.Literal("active"),
+  Type.Literal("inprogress"),
+  Type.Literal("waiting"),
+  Type.Literal("done"),
+  Type.Literal("canceled"),
+]);
+
 const ListTasksParams = Type.Object({
   status: Type.Optional(
-    Type.Union(
-      [
-        Type.Literal("active"),
-        Type.Literal("inprogress"),
-        Type.Literal("waiting"),
-        Type.Literal("done"),
-        Type.Literal("canceled"),
-      ],
-      { description: "Filter by task status" },
-    ),
+    Type.Union([TaskStatusEnum, Type.Array(TaskStatusEnum)], {
+      description:
+        "Filter by task status. Pass a single status or an array of statuses (e.g. ['active', 'inprogress']).",
+    }),
   ),
   priority: Type.Optional(
     Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")], {

@@ -149,10 +149,26 @@ describe("todu agent tools", () => {
       expect(data).toHaveLength(2);
     });
 
-    it("filters by status", async () => {
+    it("filters by single status", async () => {
       await exec("create_task", { title: "Active", projectId });
       const data = await execJson("list_tasks", { status: "done" });
       expect(data).toHaveLength(0);
+    });
+
+    it("filters by multiple statuses", async () => {
+      await exec("create_task", { title: "Task A", projectId });
+      // Task A is active by default — update one to inprogress
+      const created = await execJson("create_task", { title: "Task B", projectId });
+      await exec("update_task", { id: created.id, status: "inprogress" });
+
+      // Both active and inprogress should be returned
+      const data = await execJson("list_tasks", { status: ["active", "inprogress"] });
+      expect(data).toHaveLength(2);
+
+      // Only inprogress
+      const inProgress = await execJson("list_tasks", { status: ["inprogress"] });
+      expect(inProgress).toHaveLength(1);
+      expect(inProgress[0].title).toBe("Task B");
     });
 
     it("sorts by title", async () => {
