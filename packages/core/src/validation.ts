@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   UpdateHabitInput,
   UpdateLabelInput,
+  UpdateNoteInput,
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
@@ -304,6 +305,15 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
   }
   if (input.entityId !== undefined && !input.entityType) {
     return validationError("entityType", "Entity type is required when entity ID is specified");
+  }
+
+  return null;
+}
+
+export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError | null {
+  if (input.content !== undefined) {
+    const contentError = validateNoteContent(input.content);
+    if (contentError) return contentError;
   }
 
   return null;

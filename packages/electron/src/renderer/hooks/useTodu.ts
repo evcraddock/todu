@@ -22,6 +22,7 @@ import type {
   ToduError,
   UpdateHabitInput,
   UpdateLabelInput,
+  UpdateNoteInput,
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
@@ -231,6 +232,17 @@ export function useCreateNote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateNoteInput) => unwrap(await window.todu.note.create(input)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notes"] });
+    },
+  });
+}
+
+export function useUpdateNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: NoteId; input: UpdateNoteInput }) =>
+      unwrap(await window.todu.note.update(id, input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
     },

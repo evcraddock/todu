@@ -1449,7 +1449,165 @@ button.detail-description {
 }
 
 /* ============================================================================
- * Notes
+ * Journal
+ * ============================================================================ */
+
+.journal-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.journal-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.journal-day-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.journal-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.journal-entry-row:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+
+.journal-entry-time {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Journal Detail — rendered markdown view */
+
+.journal-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 24px;
+  gap: 12px;
+}
+
+.journal-detail-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journal-detail-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.journal-detail-date {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.journal-detail-time {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.journal-detail-tags {
+  padding-bottom: 4px;
+}
+
+.journal-detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Journal Editor — full-screen writing view */
+
+.journal-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 24px;
+  gap: 12px;
+}
+
+.journal-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journal-editor-date {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.journal-editor-error {
+  color: var(--danger);
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--danger-bg);
+  border-radius: 4px;
+}
+
+.journal-editor-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.journal-editor-content .md-editor {
+  height: 100%;
+}
+
+.journal-editor-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.journal-editor-tags .form-label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.journal-editor-tags .input {
+  flex: 1;
+}
+
+.journal-editor-tags .form-hint {
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+ * Notes (legacy — kept for entity-linked notes elsewhere)
  * ============================================================================ */
 
 .cell-content {

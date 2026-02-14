@@ -39,6 +39,7 @@ const api = {
   note: {
     list: (filter?: unknown) => ipcRenderer.invoke("todu:note:list", filter),
     create: (input: unknown) => ipcRenderer.invoke("todu:note:create", input),
+    update: (id: string, input: unknown) => ipcRenderer.invoke("todu:note:update", id, input),
     delete: (id: string) => ipcRenderer.invoke("todu:note:delete", id),
   },
 

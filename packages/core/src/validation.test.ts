@@ -18,6 +18,7 @@ import {
   validateProjectName,
   validateTaskTitle,
   validateUpdateLabelInput,
+  validateUpdateNoteInput,
   validateUpdateProjectInput,
   validateUpdateTaskInput,
 } from "./validation.js";
@@ -431,5 +432,33 @@ describe("validateCreateNoteInput", () => {
   it("rejects entityId without entityType", () => {
     const error = validateCreateNoteInput({ content: "Note", entityId: "task-123" });
     expect(error?.field).toBe("entityType");
+  });
+});
+
+describe("validateUpdateNoteInput", () => {
+  it("accepts content update", () => {
+    expect(validateUpdateNoteInput({ content: "Updated content" })).toBeNull();
+  });
+
+  it("accepts tags update", () => {
+    expect(validateUpdateNoteInput({ tags: ["idea", "review"] })).toBeNull();
+  });
+
+  it("accepts both content and tags", () => {
+    expect(validateUpdateNoteInput({ content: "New", tags: ["tag"] })).toBeNull();
+  });
+
+  it("accepts empty update (no fields)", () => {
+    expect(validateUpdateNoteInput({})).toBeNull();
+  });
+
+  it("rejects empty content string", () => {
+    const error = validateUpdateNoteInput({ content: "" });
+    expect(error?.field).toBe("content");
+  });
+
+  it("rejects content exceeding max length", () => {
+    const error = validateUpdateNoteInput({ content: "x".repeat(MAX_NOTE_CONTENT_LENGTH + 1) });
+    expect(error?.field).toBe("content");
   });
 });

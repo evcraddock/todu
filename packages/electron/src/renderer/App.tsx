@@ -10,8 +10,8 @@ import { queryClient, setupChangeListener } from "./lib/query-client.js";
 import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { HomeView } from "./views/HomeView.js";
+import { JournalView } from "./views/JournalView.js";
 import { LabelsView } from "./views/LabelsView.js";
-import { NotesView } from "./views/NotesView.js";
 import { ProjectsView } from "./views/ProjectsView.js";
 import { RecurringView } from "./views/RecurringView.js";
 import { SettingsView } from "./views/SettingsView.js";
@@ -41,8 +41,8 @@ function ViewRouter({
       return <HabitsView />;
     case "recurring":
       return <RecurringView />;
-    case "notes":
-      return <NotesView onNavigateToEntity={onNavigateToEntity} />;
+    case "journal":
+      return <JournalView />;
     case "labels":
       return <LabelsView />;
     case "agent":
