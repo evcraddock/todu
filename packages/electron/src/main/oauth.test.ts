@@ -1,0 +1,50 @@
+import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai";
+import { describe, expect, it } from "vitest";
+
+// ============================================================================
+// OAuth provider registry (from pi-ai)
+// ============================================================================
+
+describe("OAuth provider registry", () => {
+  it("returns available providers", () => {
+    const providers = getOAuthProviders();
+    expect(providers.length).toBeGreaterThan(0);
+  });
+
+  it("includes anthropic provider", () => {
+    const provider = getOAuthProvider("anthropic");
+    expect(provider).toBeDefined();
+    expect(provider!.id).toBe("anthropic");
+    expect(provider!.name).toBe("Anthropic (Claude Pro/Max)");
+  });
+
+  it("anthropic provider has required methods", () => {
+    const provider = getOAuthProvider("anthropic");
+    expect(provider).toBeDefined();
+    expect(typeof provider!.login).toBe("function");
+    expect(typeof provider!.refreshToken).toBe("function");
+    expect(typeof provider!.getApiKey).toBe("function");
+  });
+
+  it("anthropic does not use callback server", () => {
+    const provider = getOAuthProvider("anthropic");
+    expect(provider).toBeDefined();
+    expect(provider!.usesCallbackServer).toBeFalsy();
+  });
+
+  it("getApiKey returns the access token", () => {
+    const provider = getOAuthProvider("anthropic");
+    expect(provider).toBeDefined();
+    const key = provider!.getApiKey({
+      refresh: "refresh-token",
+      access: "access-token-123",
+      expires: Date.now() + 3600000,
+    });
+    expect(key).toBe("access-token-123");
+  });
+
+  it("returns undefined for unknown provider", () => {
+    const provider = getOAuthProvider("nonexistent-provider");
+    expect(provider).toBeUndefined();
+  });
+});

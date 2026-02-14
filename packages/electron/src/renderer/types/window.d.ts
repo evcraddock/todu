@@ -95,6 +95,29 @@ export interface ToduHabitApi {
   history(id: HabitId, days?: number): Promise<Result<HabitHistoryEntry[]>>;
 }
 
+export interface OAuthStatus {
+  id: string;
+  name: string;
+  connected: boolean;
+  expired: boolean;
+}
+
+export interface OAuthEvent {
+  type: "auth-opened" | "prompt" | "progress" | "login-complete" | "login-error";
+  providerId: string;
+  url?: string;
+  message?: string;
+  placeholder?: string;
+}
+
+export interface ToduOAuthApi {
+  login(providerId: string): Promise<void>;
+  promptResponse(code: string): Promise<void>;
+  cancel(): Promise<void>;
+  status(): Promise<OAuthStatus[]>;
+  disconnect(providerId: string): Promise<void>;
+}
+
 export interface ToduAgentApi {
   send(message: string): Promise<void>;
   abort(): Promise<void>;
@@ -130,6 +153,7 @@ export interface ToduApi {
   recurring: ToduRecurringApi;
   habit: ToduHabitApi;
   agent: ToduAgentApi;
+  oauth: ToduOAuthApi;
   settings: ToduSettingsApi;
   on(channel: string, callback: (data: unknown) => void): () => void;
 }
