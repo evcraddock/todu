@@ -1,55 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { AgentSettings } from "../types/window.js";
-
-// ============================================================================
-// Provider / Model options
-// ============================================================================
-
-interface ProviderOption {
-  id: string;
-  label: string;
-  models: ModelOption[];
-}
-
-interface ModelOption {
-  id: string;
-  label: string;
-}
-
-const PROVIDERS: ProviderOption[] = [
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    models: [
-      { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { id: "claude-opus-4-20250514", label: "Claude Opus 4" },
-      { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
-    ],
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    models: [
-      { id: "gpt-4o", label: "GPT-4o" },
-      { id: "gpt-4o-mini", label: "GPT-4o Mini" },
-      { id: "o3-mini", label: "o3-mini" },
-    ],
-  },
-  {
-    id: "google",
-    label: "Google",
-    models: [
-      { id: "gemini-2.5-flash-preview-05-20", label: "Gemini 2.5 Flash" },
-      { id: "gemini-2.5-pro-preview-05-06", label: "Gemini 2.5 Pro" },
-    ],
-  },
-];
+import type { AgentSettings, ProviderInfo } from "../types/window.js";
 
 // ============================================================================
 // Component
 // ============================================================================
 
 export function SettingsView(): ReactNode {
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [storedKeys, setStoredKeys] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -58,22 +15,25 @@ export function SettingsView(): ReactNode {
   // API key input state — one per provider
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
 
-  // Load settings on mount
+  // Load settings and provider list on mount
   useEffect(() => {
-    Promise.all([window.todu.settings.get(), window.todu.settings.storedProviders()]).then(
-      ([s, keys]) => {
-        setSettings(s);
-        setStoredKeys(keys);
-      },
-    );
+    Promise.all([
+      window.todu.settings.get(),
+      window.todu.settings.storedProviders(),
+      window.todu.settings.providers(),
+    ]).then(([s, keys, providerList]) => {
+      setSettings(s);
+      setStoredKeys(keys);
+      setProviders(providerList);
+    });
   }, []);
 
   // Get models for current provider
-  const currentProvider = PROVIDERS.find((p) => p.id === settings?.provider) ?? PROVIDERS[0];
+  const currentProvider = providers.find((p) => p.id === settings?.provider) ?? providers[0];
 
   const handleProviderChange = useCallback(
     (providerId: string) => {
-      const provider = PROVIDERS.find((p) => p.id === providerId);
+      const provider = providers.find((p) => p.id === providerId);
       if (provider && settings) {
         const newSettings = {
           provider: providerId,
@@ -82,7 +42,7 @@ export function SettingsView(): ReactNode {
         setSettings(newSettings);
       }
     },
-    [settings],
+    [providers, settings],
   );
 
   const handleModelChange = useCallback(
@@ -136,9 +96,12 @@ export function SettingsView(): ReactNode {
     }
   }, []);
 
-  if (!settings) {
+  if (!settings || providers.length === 0) {
     return <div className="loading-state">Loading settings...</div>;
   }
+
+  // Providers that have a stored key or are currently selected
+  const keyProviders = providers.filter((p) => storedKeys[p.id] || p.id === settings.provider);
 
   return (
     <div className="view-container">
@@ -158,7 +121,7 @@ export function SettingsView(): ReactNode {
             value={settings.provider}
             onChange={(e) => handleProviderChange(e.target.value)}
           >
-            {PROVIDERS.map((p) => (
+            {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
               </option>
@@ -176,7 +139,7 @@ export function SettingsView(): ReactNode {
             value={settings.modelId}
             onChange={(e) => handleModelChange(e.target.value)}
           >
-            {currentProvider.models.map((m) => (
+            {currentProvider?.models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
@@ -206,7 +169,7 @@ export function SettingsView(): ReactNode {
           provider&apos;s API.
         </p>
 
-        {PROVIDERS.map((provider) => (
+        {keyProviders.map((provider) => (
           <div key={provider.id} className="settings-key-row">
             <div className="settings-key-header">
               <span className="settings-key-label">{provider.label}</span>

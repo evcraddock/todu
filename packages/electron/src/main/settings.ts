@@ -1,19 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
+import { getModels, getProviders } from "@mariozechner/pi-ai";
 import { app, ipcMain, safeStorage } from "electron";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-/** Providers we expose in the settings UI. */
-export const SUPPORTED_PROVIDERS = ["anthropic", "openai", "google"] as const;
-export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
-
 /** Persisted settings (JSON on disk). API keys stored separately via safeStorage. */
 export interface AgentSettings {
-  provider: SupportedProvider;
+  provider: string;
   modelId: string;
+}
+
+/** Shape returned by the providers IPC endpoint. */
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  models: { id: string; label: string }[];
 }
 
 const DEFAULT_SETTINGS: AgentSettings = {
@@ -59,8 +63,36 @@ export function saveSettings(settings: AgentSettings): void {
   fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), "utf-8");
 }
 
-function isValidProvider(v: unknown): v is SupportedProvider {
-  return typeof v === "string" && (SUPPORTED_PROVIDERS as readonly string[]).includes(v);
+function isValidProvider(v: unknown): v is string {
+  return typeof v === "string" && (getProviders() as string[]).includes(v);
+}
+
+/**
+ * Query the pi-ai model registry for all available providers and their models.
+ */
+export function listProviders(): ProviderInfo[] {
+  return getProviders().map((id) => ({
+    id,
+    label: formatProviderLabel(id),
+    models: getModels(id).map((m) => ({ id: m.id, label: m.name ?? m.id })),
+  }));
+}
+
+/** Known brand casings for provider ID segments. */
+const BRAND_CASING: Record<string, string> = {
+  openai: "OpenAI",
+  github: "GitHub",
+  ai: "AI",
+  xai: "xAI",
+  cn: "CN",
+};
+
+/** Turn provider IDs like "openai-codex" into "OpenAI Codex". */
+export function formatProviderLabel(id: string): string {
+  return id
+    .split("-")
+    .map((w) => BRAND_CASING[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 // ============================================================================
@@ -135,8 +167,8 @@ export function getApiKey(provider: string): string | undefined {
 export function getStoredProviders(): Record<string, boolean> {
   const keys = loadEncryptedKeys();
   const result: Record<string, boolean> = {};
-  for (const p of SUPPORTED_PROVIDERS) {
-    result[p] = !!keys[p];
+  for (const p of Object.keys(keys)) {
+    result[p] = !!getApiKey(p);
   }
   return result;
 }
@@ -174,6 +206,10 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("todu:settings:stored-providers", () => {
     return getStoredProviders();
   });
+
+  ipcMain.handle("todu:settings:providers", () => {
+    return listProviders();
+  });
 }
 
 export function unregisterSettingsIpc(): void {
@@ -182,4 +218,5 @@ export function unregisterSettingsIpc(): void {
   ipcMain.removeHandler("todu:settings:set-api-key");
   ipcMain.removeHandler("todu:settings:remove-api-key");
   ipcMain.removeHandler("todu:settings:stored-providers");
+  ipcMain.removeHandler("todu:settings:providers");
 }
