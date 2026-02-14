@@ -72,6 +72,27 @@ const api = {
     history: (id: string, days?: number) => ipcRenderer.invoke("todu:habit:history", id, days),
   },
 
+  // ── Agent ──────────────────────────────────────────────────────────
+  agent: {
+    send: (message: string) => ipcRenderer.invoke("todu:agent:send", message),
+    abort: () => ipcRenderer.invoke("todu:agent:abort"),
+    clear: () => ipcRenderer.invoke("todu:agent:clear"),
+    setModel: (provider: string, modelId: string) =>
+      ipcRenderer.invoke("todu:agent:set-model", provider, modelId),
+  },
+
+  // ── Settings ─────────────────────────────────────────────────────
+  settings: {
+    get: () => ipcRenderer.invoke("todu:settings:get"),
+    save: (settings: { provider: string; modelId: string }) =>
+      ipcRenderer.invoke("todu:settings:save", settings),
+    setApiKey: (provider: string, key: string) =>
+      ipcRenderer.invoke("todu:settings:set-api-key", provider, key),
+    removeApiKey: (provider: string) =>
+      ipcRenderer.invoke("todu:settings:remove-api-key", provider),
+    storedProviders: () => ipcRenderer.invoke("todu:settings:stored-providers"),
+  },
+
   // ── Events ─────────────────────────────────────────────────────────
   // For change notifications and future agent events.
   // Restricted to an allowlist of known channels for security.

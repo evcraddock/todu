@@ -5,11 +5,13 @@ import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { ToastContainer } from "./components/ToastContainer.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
+import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { LabelsView } from "./views/LabelsView.js";
 import { NotesView } from "./views/NotesView.js";
 import { ProjectsView } from "./views/ProjectsView.js";
 import { RecurringView } from "./views/RecurringView.js";
+import { SettingsView } from "./views/SettingsView.js";
 import { TasksView } from "./views/TasksView.js";
 
 function ViewRouter({
@@ -35,7 +37,9 @@ function ViewRouter({
     case "labels":
       return <LabelsView />;
     case "agent":
-      return <Placeholder title="Agent" />;
+      return <AgentView />;
+    case "settings":
+      return <SettingsView />;
     default:
       return <Placeholder title="Unknown" />;
   }
