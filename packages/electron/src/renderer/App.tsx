@@ -100,17 +100,6 @@ export function App(): ReactNode {
         e.preventDefault();
         agentPane.toggle();
       }
-
-      // Ctrl/Cmd+K — focus search (navigate to tasks view)
-      if (mod && e.key === "k") {
-        e.preventDefault();
-        setActiveView("tasks");
-        // Focus the search input after view renders
-        setTimeout(() => {
-          const searchInput = document.querySelector<HTMLInputElement>(".search-input");
-          searchInput?.focus();
-        }, 50);
-      }
     };
 
     document.addEventListener("keydown", handleKeyDown);

@@ -8,20 +8,10 @@ const STATUS_OPTIONS: TaskStatus[] = ["active", "inprogress", "waiting", "done",
 export function FilterBar({
   filter,
   onFilterChange,
-  searchQuery,
-  onSearchChange,
-  onAgentSearch,
-  isAgentSearching,
-  isAgentMode,
   hideProject = false,
 }: {
   filter: TaskFilter;
   onFilterChange: (filter: TaskFilter) => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  onAgentSearch: (query: string) => void;
-  isAgentSearching: boolean;
-  isAgentMode: boolean;
   hideProject?: boolean;
 }): ReactNode {
   const { data: projects } = useProjects();
@@ -38,42 +28,9 @@ export function FilterBar({
     onFilterChange({ ...filter, status: next.length > 0 ? next : undefined });
   };
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && searchQuery.trim()) {
-      e.preventDefault();
-      onAgentSearch(searchQuery.trim());
-    }
-  };
-
   return (
     <div className="filter-bar">
       <div className="filter-row">
-        <div className="search-wrapper">
-          <input
-            type="text"
-            className={`search-input ${isAgentMode ? "search-input-agent" : ""}`}
-            placeholder={
-              isAgentMode
-                ? "AI search active — edit and press Enter"
-                : "Search tasks… (Enter for AI search)"
-            }
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            disabled={isAgentSearching}
-          />
-          {isAgentSearching && <span className="search-spinner">⏳</span>}
-          {isAgentMode && !isAgentSearching && (
-            <button
-              type="button"
-              className="search-clear-btn"
-              onClick={() => onSearchChange("")}
-              title="Clear AI search"
-            >
-              ✕
-            </button>
-          )}
-        </div>
         <select
           className="filter-select"
           value={filter.priority ?? ""}

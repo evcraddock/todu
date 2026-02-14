@@ -863,49 +863,9 @@ body,
   border: 1px solid var(--border);
 }
 
-/* ── Search wrapper ─────────────────────────────────────────────── */
 
-.search-wrapper {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-}
 
-.search-wrapper .search-input {
-  width: 100%;
-  padding-right: 32px;
-}
 
-.search-input-agent {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.search-spinner {
-  position: absolute;
-  right: 8px;
-  font-size: 14px;
-  pointer-events: none;
-}
-
-.search-clear-btn {
-  position: absolute;
-  right: 6px;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-  border-radius: 3px;
-}
-
-.search-clear-btn:hover {
-  color: var(--text);
-  background: var(--bg-hover);
-}
 
 
 

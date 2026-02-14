@@ -1,32 +1,37 @@
-import type { Task, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import type { TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilterBar } from "../components/FilterBar.js";
 import { TaskTable } from "../components/TaskTable.js";
-import { useAgentSearch, useProjects, useTasks } from "../hooks/useTodu.js";
+import { useProjects, useTasks } from "../hooks/useTodu.js";
 import { loadFilter, saveFilter } from "../lib/filter-persistence.js";
 import { defaultTaskComparator } from "../lib/task-sort.js";
 
 export function TaskList({
   onSelectTask,
   onCreateTask,
+  externalFilter,
 }: {
   onSelectTask: (id: string) => void;
   onCreateTask: () => void;
+  externalFilter?: TaskFilter | null;
 }): ReactNode {
   // Load persisted filter on mount
   const [filter, setFilter] = useState<TaskFilter>(loadFilter);
   const [sort, setSort] = useState<TaskSortOptions | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [agentResults, setAgentResults] = useState<Task[] | null>(null);
+
+  // Track the last externalFilter we applied so we only react to new ones
+  const appliedExternalRef = useRef<TaskFilter | null | undefined>(undefined);
+
+  // Apply external filter when it changes (e.g., from agent ui-action)
+  useEffect(() => {
+    if (externalFilter && externalFilter !== appliedExternalRef.current) {
+      appliedExternalRef.current = externalFilter;
+      setFilter(externalFilter);
+    }
+  }, [externalFilter]);
 
   const { data: tasks, isLoading, isError, error } = useTasks(filter, sort);
   const { data: projects } = useProjects();
-  const {
-    mutate: searchMutate,
-    isPending: isSearchPending,
-    isError: isSearchError,
-    error: searchError,
-  } = useAgentSearch();
 
   // Persist filter changes
   useEffect(() => {
@@ -52,40 +57,16 @@ export function TaskList({
     [sort],
   );
 
-  const handleAgentSearch = useCallback(
-    (query: string) => {
-      searchMutate(query, {
-        onSuccess: (results) => {
-          setAgentResults(results);
-        },
-      });
-    },
-    [searchMutate],
-  );
-
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    // Clear agent results when user modifies the search
-    if (query === "") {
-      setAgentResults(null);
-    }
-  }, []);
-
-  // Determine which tasks to display:
-  // 1. Agent results if an AI search was performed
-  // 2. Otherwise, filtered tasks with default sort applied
-  const isAgentMode = agentResults !== null;
+  // Determine which tasks to display with default sort applied
   const displayTasks = useMemo(() => {
-    if (isAgentMode) return agentResults;
     if (!tasks) return undefined;
-    // Apply default multi-field sort when no explicit sort is set
     if (!sort) {
       return [...tasks].sort(defaultTaskComparator);
     }
     return tasks;
-  }, [isAgentMode, agentResults, tasks, sort]);
+  }, [tasks, sort]);
 
-  if (isLoading && !isAgentMode) {
+  if (isLoading) {
     return (
       <div className="view-container">
         <div className="view-header">
@@ -96,7 +77,7 @@ export function TaskList({
     );
   }
 
-  if (isError && !isAgentMode) {
+  if (isError) {
     return (
       <div className="view-container">
         <div className="view-header">
@@ -118,26 +99,10 @@ export function TaskList({
           + New Task
         </button>
       </div>
-      <FilterBar
-        filter={filter}
-        onFilterChange={setFilter}
-        searchQuery={searchQuery}
-        onSearchChange={handleSearchChange}
-        onAgentSearch={handleAgentSearch}
-        isAgentSearching={isSearchPending}
-        isAgentMode={isAgentMode}
-      />
-      {isSearchError && (
-        <div className="error-state">
-          <p>AI search failed</p>
-          <p className="error-detail">
-            {searchError instanceof Error ? searchError.message : "Unknown error"}
-          </p>
-        </div>
-      )}
+      <FilterBar filter={filter} onFilterChange={setFilter} />
       {!displayTasks || displayTasks.length === 0 ? (
         <div className="empty-state">
-          <p>{isAgentMode ? "No tasks found for your search" : "No tasks match your filters"}</p>
+          <p>No tasks match your filters</p>
         </div>
       ) : (
         <TaskTable
