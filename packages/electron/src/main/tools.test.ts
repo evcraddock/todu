@@ -558,5 +558,59 @@ describe("todu agent tools", () => {
         filter: {},
       });
     });
+
+    it("list_habits emits show_habits ui-action with filter", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listHabits = toolsWithWindow.find((t) => t.name === "list_habits")!;
+
+      await listHabits.execute("test-call", { paused: false });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_habits",
+        filter: { paused: false },
+      });
+    });
+
+    it("list_habits emits empty filter when called without params", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listHabits = toolsWithWindow.find((t) => t.name === "list_habits")!;
+
+      await listHabits.execute("test-call", {});
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_habits",
+        filter: {},
+      });
+    });
   });
 });

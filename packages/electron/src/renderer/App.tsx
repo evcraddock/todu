@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { ProjectFilter, TaskFilter } from "@todu/core/browser";
+import type { HabitFilter, ProjectFilter, TaskFilter } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AgentPane } from "./components/AgentPane.js";
 import { Placeholder } from "./components/Placeholder.js";
@@ -25,6 +25,7 @@ function ViewRouter({
   triggerCreateTask,
   agentTaskFilter,
   agentProjectFilter,
+  agentHabitFilter,
   themePreference,
   onThemeChange,
 }: {
@@ -33,6 +34,8 @@ function ViewRouter({
   triggerCreateTask: number;
   agentTaskFilter: TaskFilter | null;
   agentProjectFilter: ProjectFilter | null;
+  agentHabitFilter: HabitFilter | null;
+  agentHabitFilter: HabitFilter | null;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -44,7 +47,7 @@ function ViewRouter({
     case "tasks":
       return <TasksView triggerCreateTask={triggerCreateTask} externalFilter={agentTaskFilter} />;
     case "habits":
-      return <HabitsView />;
+      return <HabitsView externalFilter={agentHabitFilter} />;
     case "recurring":
       return <RecurringView />;
     case "journal":
@@ -63,6 +66,7 @@ export function App(): ReactNode {
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
   const [agentTaskFilter, setAgentTaskFilter] = useState<TaskFilter | null>(null);
   const [agentProjectFilter, setAgentProjectFilter] = useState<ProjectFilter | null>(null);
+  const [agentHabitFilter, setAgentHabitFilter] = useState<HabitFilter | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -82,6 +86,9 @@ export function App(): ReactNode {
       } else if (uiAction.action === "show_projects") {
         setActiveView("projects");
         setAgentProjectFilter((uiAction.filter as ProjectFilter) ?? {});
+      } else if (uiAction.action === "show_habits") {
+        setActiveView("habits");
+        setAgentHabitFilter((uiAction.filter as HabitFilter) ?? {});
       }
     });
     return cleanup;
@@ -164,6 +171,7 @@ export function App(): ReactNode {
             triggerCreateTask={triggerCreateTask}
             agentTaskFilter={agentTaskFilter}
             agentProjectFilter={agentProjectFilter}
+            agentHabitFilter={agentHabitFilter}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />

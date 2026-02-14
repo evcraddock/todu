@@ -131,6 +131,10 @@ export function createHabitNamespace(
       if (filter?.paused !== undefined) {
         habits = habits.filter((h) => h.paused === filter.paused);
       }
+      if (filter?.search) {
+        const lowerQuery = filter.search.toLowerCase();
+        habits = habits.filter((h) => h.title.toLowerCase().includes(lowerQuery));
+      }
 
       return ok(habits.map(cloneHabit));
     },

@@ -401,6 +401,7 @@ export interface UpdateHabitInput {
 
 export interface HabitFilter {
   paused?: boolean;
+  search?: string;
 }
 
 // ============================================================================

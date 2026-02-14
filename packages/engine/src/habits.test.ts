@@ -136,6 +136,28 @@ describe("habits", () => {
       }
     });
 
+    it("filters by search", async () => {
+      await todu.habit.create({
+        title: "Morning Meditation",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      await todu.habit.create({
+        title: "Evening Jog",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+
+      const result = await todu.habit.list({ search: "meditation" });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toHaveLength(1);
+        expect(result.value[0].title).toBe("Morning Meditation");
+      }
+    });
+
     it("gets a habit by ID", async () => {
       const create = await todu.habit.create({
         title: "Get me",
