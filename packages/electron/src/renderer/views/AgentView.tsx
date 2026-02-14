@@ -106,7 +106,11 @@ type DisplayItem = UserItem | AssistantItem | ToolCallItem;
 // Component
 // ============================================================================
 
-export function AgentView(): ReactNode {
+interface AgentViewProps {
+  onClose?: () => void;
+}
+
+export function AgentView({ onClose }: AgentViewProps): ReactNode {
   const [items, setItems] = useState<DisplayItem[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -309,11 +313,23 @@ export function AgentView(): ReactNode {
     <div className="agent-view">
       <div className="agent-header">
         <h2 className="view-title">Agent</h2>
-        {items.length > 0 && (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleClear}>
-            Clear
-          </button>
-        )}
+        <div className="agent-header-actions">
+          {items.length > 0 && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={handleClear}>
+              Clear
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              className="btn-icon agent-close-btn"
+              onClick={onClose}
+              title="Close agent pane (⌘J)"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="agent-messages">
