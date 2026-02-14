@@ -1,5 +1,6 @@
 import type { Note, NoteId } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { useCreateNote, useUpdateNote } from "../hooks/useTodu.js";
 
@@ -22,12 +23,25 @@ export function JournalEditor({ note, onClose }: JournalEditorProps): ReactNode 
   const [content, setContent] = useState(note?.content ?? "");
   const [tagsInput, setTagsInput] = useState(note?.tags.join(", ") ?? "");
   const [error, setError] = useState("");
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const createNote = useCreateNote();
   const updateNote = useUpdateNote();
 
   const isEditing = !!note;
   const isPending = createNote.isPending || updateNote.isPending;
+
+  const isDirty = isEditing
+    ? content !== note.content || tagsInput !== note.tags.join(", ")
+    : content.trim() !== "" || tagsInput.trim() !== "";
+
+  const handleBack = useCallback(() => {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [isDirty, onClose]);
 
   const parseTags = (): string[] =>
     tagsInput
@@ -81,7 +95,7 @@ export function JournalEditor({ note, onClose }: JournalEditorProps): ReactNode 
     <div className="journal-editor">
       {/* Toolbar */}
       <div className="journal-editor-toolbar">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handleBack}>
           ← Back
         </button>
         <button
@@ -124,6 +138,15 @@ export function JournalEditor({ note, onClose }: JournalEditorProps): ReactNode 
         />
         <span className="form-hint">Comma-separated</span>
       </div>
+
+      {showDiscardConfirm && (
+        <ConfirmDialog
+          title="Discard changes?"
+          message="You have unsaved changes. Discard them and go back?"
+          onConfirm={onClose}
+          onCancel={() => setShowDiscardConfirm(false)}
+        />
+      )}
     </div>
   );
 }

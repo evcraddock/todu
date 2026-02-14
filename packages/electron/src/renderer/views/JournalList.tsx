@@ -48,21 +48,30 @@ export function formatDayHeader(dateStr: string): string {
 export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
   const [filterTag, setFilterTag] = useState("");
 
-  // Always fetch all notes (no entityType filter), then filter client-side
-  const filter = filterTag ? { tag: filterTag } : {};
-  const { data: notes, isLoading, isError, error } = useNotes(filter);
+  // Always fetch all notes (unfiltered) so we can derive the full tag list
+  const { data: allNotes, isLoading, isError, error } = useNotes({});
 
   // Filter to standalone notes only (no entityType)
-  const standaloneNotes = useMemo(() => notes?.filter((n) => !n.entityType) ?? [], [notes]);
+  const allStandaloneNotes = useMemo(
+    () => allNotes?.filter((n) => !n.entityType) ?? [],
+    [allNotes],
+  );
 
-  // Collect all tags from standalone notes
+  // Collect all tags from ALL standalone notes (not filtered subset)
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    for (const note of standaloneNotes) {
+    for (const note of allStandaloneNotes) {
       for (const tag of note.tags) tags.add(tag);
     }
     return Array.from(tags).sort();
-  }, [standaloneNotes]);
+  }, [allStandaloneNotes]);
+
+  // Apply tag filter client-side
+  const standaloneNotes = useMemo(
+    () =>
+      filterTag ? allStandaloneNotes.filter((n) => n.tags.includes(filterTag)) : allStandaloneNotes,
+    [allStandaloneNotes, filterTag],
+  );
 
   // Group by day (already sorted newest first from engine)
   const dayGroups = useMemo(() => groupByDay(standaloneNotes), [standaloneNotes]);
