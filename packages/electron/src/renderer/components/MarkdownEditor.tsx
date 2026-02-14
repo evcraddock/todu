@@ -139,7 +139,9 @@ export function MarkdownEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        link: false,
+      }),
       Link.configure({
         openOnClick: !editable,
         HTMLAttributes: {
@@ -202,7 +204,13 @@ export function MarkdownEditor({
       className={`md-editor ${editable ? "md-editor-editable" : "md-editor-readonly"}`}
       style={minHeight ? { minHeight: `${minHeight}px` } : undefined}
       onClick={handleClick}
-      onKeyDown={undefined}
+      onKeyDown={(e) => {
+        // Focus editor on Enter/Space when the container is focused (a11y)
+        if ((e.key === "Enter" || e.key === " ") && editable && editor && !editor.isFocused) {
+          e.preventDefault();
+          editor.commands.focus();
+        }
+      }}
     >
       {editable && <Toolbar editor={editor} />}
       <EditorContent editor={editor} className="md-editor-content" />
