@@ -21,7 +21,12 @@ export function TaskList({
 
   const { data: tasks, isLoading, isError, error } = useTasks(filter, sort);
   const { data: projects } = useProjects();
-  const agentSearch = useAgentSearch();
+  const {
+    mutate: searchMutate,
+    isPending: isSearchPending,
+    isError: isSearchError,
+    error: searchError,
+  } = useAgentSearch();
 
   // Persist filter changes
   useEffect(() => {
@@ -49,13 +54,13 @@ export function TaskList({
 
   const handleAgentSearch = useCallback(
     (query: string) => {
-      agentSearch.mutate(query, {
+      searchMutate(query, {
         onSuccess: (results) => {
           setAgentResults(results);
         },
       });
     },
-    [agentSearch],
+    [searchMutate],
   );
 
   const handleSearchChange = useCallback((query: string) => {
@@ -119,14 +124,14 @@ export function TaskList({
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         onAgentSearch={handleAgentSearch}
-        isAgentSearching={agentSearch.isPending}
+        isAgentSearching={isSearchPending}
         isAgentMode={isAgentMode}
       />
-      {agentSearch.isError && (
+      {isSearchError && (
         <div className="error-state">
           <p>AI search failed</p>
           <p className="error-detail">
-            {agentSearch.error instanceof Error ? agentSearch.error.message : "Unknown error"}
+            {searchError instanceof Error ? searchError.message : "Unknown error"}
           </p>
         </div>
       )}

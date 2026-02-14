@@ -5,6 +5,7 @@ import type { Task } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
+import { extractTasksFromResult } from "../shared/extract-tasks.js";
 import { resolveModel } from "./agent.js";
 import { getOAuthApiKeyForProvider } from "./oauth.js";
 import { getApiKey, loadSettings } from "./settings.js";
@@ -103,37 +104,4 @@ export function setupSearchAgent(todu: Todu, _mainWindow: BrowserWindow): void {
 export function teardownSearchAgent(): void {
   ipcMain.removeHandler("todu:agent:search-tasks");
   searchAgent = null;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Extract Task[] from a tool execution result.
- * The tool returns { content: [{ type: "text", text: jsonString }], details: {} }.
- */
-function extractTasksFromResult(result: unknown): Task[] {
-  if (!result || typeof result !== "object") return [];
-
-  const r = result as { content?: Array<{ type: string; text?: string }>; details?: unknown };
-  if (!r.content || !Array.isArray(r.content)) return [];
-
-  for (const block of r.content) {
-    if (block.type !== "text" || !block.text) continue;
-    try {
-      const parsed = JSON.parse(block.text);
-      if (Array.isArray(parsed)) {
-        // Verify it looks like tasks (has id and title)
-        return parsed.filter(
-          (item: unknown) =>
-            typeof item === "object" && item !== null && "id" in item && "title" in item,
-        ) as Task[];
-      }
-    } catch {
-      // Not JSON, skip
-    }
-  }
-
-  return [];
 }
