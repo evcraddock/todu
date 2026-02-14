@@ -1,3 +1,4 @@
+import type { ProjectFilter } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { CreateProjectDialog } from "./CreateProjectDialog.js";
 import { CreateTaskDialog } from "./CreateTaskDialog.js";
@@ -12,7 +13,11 @@ type ProjectViewState =
   | { view: "createTask"; projectId: string }
   | { view: "taskDetail"; taskId: string; projectId: string };
 
-export function ProjectsView(): ReactNode {
+export function ProjectsView({
+  externalFilter,
+}: {
+  externalFilter?: ProjectFilter | null;
+}): ReactNode {
   const [state, setState] = useState<ProjectViewState>({ view: "list" });
 
   switch (state.view) {
@@ -22,6 +27,7 @@ export function ProjectsView(): ReactNode {
           <ProjectList
             onSelectProject={(id) => setState({ view: "detail", projectId: id })}
             onCreateProject={() => setState({ view: "create" })}
+            externalFilter={externalFilter}
           />
         </>
       );
@@ -44,6 +50,7 @@ export function ProjectsView(): ReactNode {
           <ProjectList
             onSelectProject={(id) => setState({ view: "detail", projectId: id })}
             onCreateProject={() => setState({ view: "create" })}
+            externalFilter={externalFilter}
           />
           <CreateProjectDialog onClose={() => setState({ view: "list" })} />
         </>

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { TaskFilter } from "@todu/core/browser";
+import type { ProjectFilter, TaskFilter } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AgentPane } from "./components/AgentPane.js";
 import { Placeholder } from "./components/Placeholder.js";
@@ -31,6 +31,7 @@ function ViewRouter({
   onNavigateToEntity: (entityType: string, entityId: string) => void;
   triggerCreateTask: number;
   agentTaskFilter: TaskFilter | null;
+  agentProjectFilter: ProjectFilter | null;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -38,7 +39,7 @@ function ViewRouter({
     case "home":
       return <HomeView onNavigateToTask={(id) => onNavigateToEntity("task", id)} />;
     case "projects":
-      return <ProjectsView />;
+      return <ProjectsView externalFilter={agentProjectFilter} />;
     case "tasks":
       return <TasksView triggerCreateTask={triggerCreateTask} externalFilter={agentTaskFilter} />;
     case "habits":
@@ -60,6 +61,7 @@ export function App(): ReactNode {
   const [activeView, setActiveView] = useState("home");
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
   const [agentTaskFilter, setAgentTaskFilter] = useState<TaskFilter | null>(null);
+  const [agentProjectFilter, setAgentProjectFilter] = useState<ProjectFilter | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -72,10 +74,13 @@ export function App(): ReactNode {
   // Listen for UI actions from agent tools (e.g., list_tasks → navigate to Tasks with filter)
   useEffect(() => {
     const cleanup = window.todu.on("todu:ui-action", (data) => {
-      const uiAction = data as { action: string; filter?: TaskFilter };
+      const uiAction = data as { action: string; filter?: Record<string, unknown> };
       if (uiAction.action === "show_tasks") {
         setActiveView("tasks");
-        setAgentTaskFilter(uiAction.filter ?? {});
+        setAgentTaskFilter((uiAction.filter as TaskFilter) ?? {});
+      } else if (uiAction.action === "show_projects") {
+        setActiveView("projects");
+        setAgentProjectFilter((uiAction.filter as ProjectFilter) ?? {});
       }
     });
     return cleanup;
@@ -157,6 +162,7 @@ export function App(): ReactNode {
             onNavigateToEntity={handleNavigateToEntity}
             triggerCreateTask={triggerCreateTask}
             agentTaskFilter={agentTaskFilter}
+            agentProjectFilter={agentProjectFilter}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />

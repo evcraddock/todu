@@ -17,6 +17,7 @@ import type {
   NoteFilter,
   NoteId,
   Project,
+  ProjectFilter,
   ProjectId,
   RecurringFilter,
   RecurringId,
@@ -36,7 +37,7 @@ import type {
 import type { UpcomingOccurrence } from "@todu/engine";
 
 export interface ToduProjectApi {
-  list(): Promise<Result<Project[]>>;
+  list(filter?: ProjectFilter): Promise<Result<Project[]>>;
   get(id: ProjectId): Promise<Result<Project>>;
   create(input: CreateProjectInput): Promise<Result<Project>>;
   update(id: ProjectId, input: UpdateProjectInput): Promise<Result<Project>>;

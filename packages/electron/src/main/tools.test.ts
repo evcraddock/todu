@@ -84,6 +84,27 @@ describe("todu agent tools", () => {
       expect(data).toHaveLength(1);
       expect(data[0].name).toBe("Test Project");
     });
+
+    it("filters by status", async () => {
+      const data = await execJson("list_projects", { status: ["active"] });
+      expect(data).toHaveLength(1);
+      expect(data[0].name).toBe("Test Project");
+    });
+
+    it("filters by status with no matches", async () => {
+      const data = await execJson("list_projects", { status: ["done"] });
+      expect(data).toHaveLength(0);
+    });
+
+    it("filters by search", async () => {
+      const data = await execJson("list_projects", { search: "Test" });
+      expect(data).toHaveLength(1);
+    });
+
+    it("filters by search with no matches", async () => {
+      const data = await execJson("list_projects", { search: "nonexistent" });
+      expect(data).toHaveLength(0);
+    });
   });
 
   describe("create_project", () => {
@@ -482,6 +503,60 @@ describe("todu agent tools", () => {
       const listTasks = tools.find((t) => t.name === "list_tasks")!;
       const result = await listTasks.execute("test-call", {});
       expect(result.content[0].type).toBe("text");
+    });
+
+    it("list_projects emits show_projects ui-action with filter", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listProjects = toolsWithWindow.find((t) => t.name === "list_projects")!;
+
+      await listProjects.execute("test-call", { status: ["active"], priority: "high" });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_projects",
+        filter: { status: ["active"], priority: "high" },
+      });
+    });
+
+    it("list_projects emits empty filter when called without params", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listProjects = toolsWithWindow.find((t) => t.name === "list_projects")!;
+
+      await listProjects.execute("test-call", {});
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_projects",
+        filter: {},
+      });
     });
   });
 });

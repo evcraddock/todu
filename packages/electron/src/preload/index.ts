@@ -9,7 +9,7 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   // ── Project ────────────────────────────────────────────────────────
   project: {
-    list: () => ipcRenderer.invoke("todu:project:list"),
+    list: (filter?: unknown) => ipcRenderer.invoke("todu:project:list", filter),
     get: (id: string) => ipcRenderer.invoke("todu:project:get", id),
     create: (input: unknown) => ipcRenderer.invoke("todu:project:create", input),
     update: (id: string, input: unknown) => ipcRenderer.invoke("todu:project:update", id, input),

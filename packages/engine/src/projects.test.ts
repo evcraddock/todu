@@ -96,6 +96,60 @@ describe("project namespace", () => {
       expect(result.value.map((p) => p.name)).toContain("Project A");
       expect(result.value.map((p) => p.name)).toContain("Project B");
     });
+
+    it("filters by status", async () => {
+      await todu.project.create({ name: "Active Project" });
+      const created = await todu.project.create({ name: "Done Project" });
+      if (created.ok) {
+        await todu.project.update(created.value.id, { status: "done" });
+      }
+
+      const active = await todu.project.list({ status: ["active"] });
+      expect(active.ok).toBe(true);
+      if (!active.ok) return;
+      expect(active.value).toHaveLength(1);
+      expect(active.value[0].name).toBe("Active Project");
+
+      const done = await todu.project.list({ status: ["done"] });
+      expect(done.ok).toBe(true);
+      if (!done.ok) return;
+      expect(done.value).toHaveLength(1);
+      expect(done.value[0].name).toBe("Done Project");
+    });
+
+    it("filters by priority", async () => {
+      await todu.project.create({ name: "High", priority: "high" });
+      await todu.project.create({ name: "Low", priority: "low" });
+
+      const result = await todu.project.list({ priority: "high" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].name).toBe("High");
+    });
+
+    it("filters by search", async () => {
+      await todu.project.create({ name: "Alpha Release" });
+      await todu.project.create({ name: "Beta Testing" });
+
+      const result = await todu.project.list({ search: "alpha" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].name).toBe("Alpha Release");
+    });
+
+    it("combines multiple filters", async () => {
+      await todu.project.create({ name: "Alpha High", priority: "high" });
+      await todu.project.create({ name: "Alpha Low", priority: "low" });
+      await todu.project.create({ name: "Beta High", priority: "high" });
+
+      const result = await todu.project.list({ search: "alpha", priority: "high" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].name).toBe("Alpha High");
+    });
   });
 
   describe("get", () => {
