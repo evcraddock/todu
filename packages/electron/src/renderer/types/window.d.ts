@@ -107,12 +107,19 @@ export interface AgentSettings {
   modelId: string;
 }
 
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  models: { id: string; label: string }[];
+}
+
 export interface ToduSettingsApi {
   get(): Promise<AgentSettings>;
   save(settings: AgentSettings): Promise<void>;
   setApiKey(provider: string, key: string): Promise<void>;
   removeApiKey(provider: string): Promise<void>;
   storedProviders(): Promise<Record<string, boolean>>;
+  providers(): Promise<ProviderInfo[]>;
 }
 
 export interface ToduApi {
