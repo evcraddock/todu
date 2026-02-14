@@ -1,11 +1,18 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import type { ThemePreference } from "../hooks/useTheme.js";
 import type { AgentSettings, OAuthEvent, OAuthStatus, ProviderInfo } from "../types/window.js";
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function SettingsView(): ReactNode {
+export function SettingsView({
+  themePreference,
+  onThemeChange,
+}: {
+  themePreference: ThemePreference;
+  onThemeChange: (pref: ThemePreference) => void;
+}): ReactNode {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [storedKeys, setStoredKeys] = useState<Record<string, boolean>>({});
@@ -187,6 +194,26 @@ export function SettingsView(): ReactNode {
   return (
     <div className="view-container">
       <h2 className="view-title">Settings</h2>
+
+      {/* ── Appearance ──────────────────────────────────────────────── */}
+      <div className="settings-section">
+        <h3 className="section-title">Appearance</h3>
+        <div className="form-field">
+          <label className="form-label" htmlFor="theme-select">
+            Theme
+          </label>
+          <select
+            id="theme-select"
+            className="input inline-select"
+            value={themePreference}
+            onChange={(e) => onThemeChange(e.target.value as ThemePreference)}
+          >
+            <option value="system">System</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
 
       {/* ── Model Selection ─────────────────────────────────────────── */}
       <div className="settings-section">

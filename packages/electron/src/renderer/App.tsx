@@ -4,6 +4,7 @@ import { Placeholder } from "./components/Placeholder.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { ToastContainer } from "./components/ToastContainer.js";
+import { type ThemePreference, useTheme } from "./hooks/useTheme.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
 import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
@@ -18,10 +19,14 @@ function ViewRouter({
   activeView,
   onNavigateToEntity,
   triggerCreateTask,
+  themePreference,
+  onThemeChange,
 }: {
   activeView: string;
   onNavigateToEntity: (entityType: string, entityId: string) => void;
   triggerCreateTask: number;
+  themePreference: ThemePreference;
+  onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
   switch (activeView) {
     case "projects":
@@ -39,7 +44,7 @@ function ViewRouter({
     case "agent":
       return <AgentView />;
     case "settings":
-      return <SettingsView />;
+      return <SettingsView themePreference={themePreference} onThemeChange={onThemeChange} />;
     default:
       return <Placeholder title="Unknown" />;
   }
@@ -48,6 +53,7 @@ function ViewRouter({
 export function App(): ReactNode {
   const [activeView, setActiveView] = useState("projects");
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
+  const theme = useTheme();
 
   useEffect(() => {
     const cleanup = setupChangeListener();
@@ -119,6 +125,8 @@ export function App(): ReactNode {
             activeView={activeView}
             onNavigateToEntity={handleNavigateToEntity}
             triggerCreateTask={triggerCreateTask}
+            themePreference={theme.preference}
+            onThemeChange={theme.setPreference}
           />
         </main>
       </div>
