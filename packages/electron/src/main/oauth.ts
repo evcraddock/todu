@@ -150,9 +150,10 @@ export function getOAuthStatus(): OAuthStatus[] {
 // Login Flow
 // ============================================================================
 
-/** Active login state — tracks pending prompt resolution */
+/** Active login state — tracks pending prompt resolution and abort */
 let pendingPromptResolve: ((value: string) => void) | null = null;
 let pendingPromptReject: ((reason: Error) => void) | null = null;
+let pendingAbortController: AbortController | null = null;
 
 /**
  * Run the OAuth login flow for a provider.
@@ -167,7 +168,7 @@ async function runOAuthLogin(
     throw new Error(`Unknown OAuth provider: ${providerId}`);
   }
 
-  const controller = new AbortController();
+  pendingAbortController = new AbortController();
 
   const credentials = await provider.login({
     onAuth: (info) => {
@@ -203,9 +204,10 @@ async function runOAuthLogin(
         });
       }
     },
-    signal: controller.signal,
+    signal: pendingAbortController.signal,
   });
 
+  pendingAbortController = null;
   return credentials;
 }
 
@@ -258,6 +260,10 @@ export function registerOAuthIpc(mainWindow: BrowserWindow): void {
 
   /** Cancel an in-progress login. */
   ipcMain.handle("todu:oauth:cancel", () => {
+    if (pendingAbortController) {
+      pendingAbortController.abort();
+      pendingAbortController = null;
+    }
     if (pendingPromptReject) {
       pendingPromptReject(new Error("Login cancelled by user"));
       pendingPromptResolve = null;
@@ -280,6 +286,10 @@ export function unregisterOAuthIpc(): void {
   registeredWindow = null;
   pendingPromptResolve = null;
   pendingPromptReject = null;
+  if (pendingAbortController) {
+    pendingAbortController.abort();
+    pendingAbortController = null;
+  }
 
   ipcMain.removeHandler("todu:oauth:login");
   ipcMain.removeHandler("todu:oauth:prompt-response");
