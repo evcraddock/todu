@@ -73,9 +73,9 @@ const TaskStatusEnum = Type.Union([
 
 const ListTasksParams = Type.Object({
   status: Type.Optional(
-    Type.Union([TaskStatusEnum, Type.Array(TaskStatusEnum)], {
+    Type.Array(TaskStatusEnum, {
       description:
-        "Filter by task status. Pass a single status or an array of statuses (e.g. ['active', 'inprogress']).",
+        'Filter by task status. Pass one or more statuses, e.g. ["inprogress"] or ["active", "inprogress"].',
     }),
   ),
   priority: Type.Optional(

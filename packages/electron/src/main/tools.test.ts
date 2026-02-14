@@ -151,7 +151,7 @@ describe("todu agent tools", () => {
 
     it("filters by single status", async () => {
       await exec("create_task", { title: "Active", projectId });
-      const data = await execJson("list_tasks", { status: "done" });
+      const data = await execJson("list_tasks", { status: ["done"] });
       expect(data).toHaveLength(0);
     });
 
@@ -435,13 +435,13 @@ describe("todu agent tools", () => {
       );
       const listTasks = toolsWithWindow.find((t) => t.name === "list_tasks")!;
 
-      await listTasks.execute("test-call", { priority: "high", status: "active" });
+      await listTasks.execute("test-call", { priority: "high", status: ["active"] });
 
       const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
       expect(uiActions).toHaveLength(1);
       expect(uiActions[0].data).toEqual({
         action: "show_tasks",
-        filter: { priority: "high", status: "active" },
+        filter: { priority: "high", status: ["active"] },
       });
     });
 
