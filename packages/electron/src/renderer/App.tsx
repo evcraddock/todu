@@ -24,6 +24,7 @@ function ViewRouter({
   onNavigateToEntity,
   triggerCreateTask,
   agentTaskFilter,
+  agentProjectFilter,
   themePreference,
   onThemeChange,
 }: {
