@@ -1,6 +1,6 @@
 import type { TaskFilter, TaskPriority, TaskStatus } from "@todu/core/browser";
 import { createProjectId } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { useProjects } from "../hooks/useTodu.js";
 
 const STATUS_OPTIONS: TaskStatus[] = ["active", "inprogress", "waiting", "done", "canceled"];
@@ -25,7 +25,6 @@ export function FilterBar({
   hideProject?: boolean;
 }): ReactNode {
   const { data: projects } = useProjects();
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const toggleStatus = (status: TaskStatus) => {
     const current: TaskStatus[] = Array.isArray(filter.status)
@@ -75,73 +74,65 @@ export function FilterBar({
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className={`btn btn-sm ${showAdvanced ? "btn-primary" : "btn-secondary"}`}
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          disabled={isAgentMode}
-          title={isAgentMode ? "Filters disabled during AI search" : "Toggle advanced filters"}
-        >
-          Filters {showAdvanced ? "▾" : "▸"}
-        </button>
-      </div>
-
-      {showAdvanced && !isAgentMode && (
-        <div className="filter-advanced">
-          <select
-            className="filter-select"
-            value={filter.priority ?? ""}
-            onChange={(e) =>
-              onFilterChange({
-                ...filter,
-                priority: (e.target.value as TaskPriority) || undefined,
-              })
-            }
-          >
-            <option value="">All priorities</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-          {!hideProject && (
+        {!isAgentMode && (
+          <>
             <select
               className="filter-select"
-              value={filter.projectId ?? ""}
+              value={filter.priority ?? ""}
               onChange={(e) =>
                 onFilterChange({
                   ...filter,
-                  projectId: e.target.value ? createProjectId(e.target.value) : undefined,
+                  priority: (e.target.value as TaskPriority) || undefined,
                 })
               }
             >
-              <option value="">All projects</option>
-              {projects?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <option value="">All priorities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
-          )}
-          <label className="filter-toggle">
-            <input
-              type="checkbox"
-              checked={filter.overdue ?? false}
-              onChange={(e) =>
-                onFilterChange({ ...filter, overdue: e.target.checked || undefined })
-              }
-            />
-            Overdue
-          </label>
-          <label className="filter-toggle">
-            <input
-              type="checkbox"
-              checked={filter.today ?? false}
-              onChange={(e) => onFilterChange({ ...filter, today: e.target.checked || undefined })}
-            />
-            Today
-          </label>
-        </div>
-      )}
+            {!hideProject && (
+              <select
+                className="filter-select"
+                value={filter.projectId ?? ""}
+                onChange={(e) =>
+                  onFilterChange({
+                    ...filter,
+                    projectId: e.target.value ? createProjectId(e.target.value) : undefined,
+                  })
+                }
+              >
+                <option value="">All projects</option>
+                {projects?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <label className="filter-toggle">
+              <input
+                type="checkbox"
+                checked={filter.overdue ?? false}
+                onChange={(e) =>
+                  onFilterChange({ ...filter, overdue: e.target.checked || undefined })
+                }
+              />
+              Overdue
+            </label>
+            <label className="filter-toggle">
+              <input
+                type="checkbox"
+                checked={filter.today ?? false}
+                onChange={(e) =>
+                  onFilterChange({ ...filter, today: e.target.checked || undefined })
+                }
+              />
+              Today
+            </label>
+          </>
+        )}
+      </div>
 
       {!isAgentMode && (
         <div className="filter-status-chips">
