@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { SidebarMode } from "../hooks/useSidebar.js";
 
 export interface NavItem {
   id: string;
@@ -18,13 +19,39 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarProps {
   activeView: string;
   onNavigate: (viewId: string) => void;
+  mode: SidebarMode;
+  cssWidth: number;
+  onToggleCollapse: () => void;
+  onDragStart: (e: React.MouseEvent) => void;
 }
 
-export function Sidebar({ activeView, onNavigate }: SidebarProps): ReactNode {
+export function Sidebar({
+  activeView,
+  onNavigate,
+  mode,
+  cssWidth,
+  onToggleCollapse,
+  onDragStart,
+}: SidebarProps): ReactNode {
+  if (mode === "hidden") return null;
+
+  const collapsed = mode === "collapsed";
+
   return (
-    <nav className="sidebar">
+    <nav
+      className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}
+      style={{ width: cssWidth, minWidth: cssWidth }}
+    >
       <div className="sidebar-header">
-        <h1 className="sidebar-title">todu</h1>
+        {!collapsed && <h1 className="sidebar-title">todu</h1>}
+        <button
+          type="button"
+          className="btn-icon sidebar-collapse-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? "»" : "«"}
+        </button>
       </div>
 
       <ul className="sidebar-nav">
@@ -34,9 +61,10 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps): ReactNode {
               type="button"
               className={`sidebar-nav-item ${activeView === item.id ? "active" : ""}`}
               onClick={() => onNavigate(item.id)}
+              title={collapsed ? item.label : undefined}
             >
               <span className="sidebar-nav-icon">{item.icon}</span>
-              <span className="sidebar-nav-label">{item.label}</span>
+              {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
             </button>
           </li>
         ))}
@@ -47,19 +75,33 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps): ReactNode {
           type="button"
           className={`sidebar-nav-item ${activeView === "agent" ? "active" : ""}`}
           onClick={() => onNavigate("agent")}
+          title={collapsed ? "Agent" : undefined}
         >
           <span className="sidebar-nav-icon">💬</span>
-          <span className="sidebar-nav-label">Agent</span>
+          {!collapsed && <span className="sidebar-nav-label">Agent</span>}
         </button>
         <button
           type="button"
           className={`sidebar-nav-item ${activeView === "settings" ? "active" : ""}`}
           onClick={() => onNavigate("settings")}
+          title={collapsed ? "Settings" : undefined}
         >
           <span className="sidebar-nav-icon">⚙</span>
-          <span className="sidebar-nav-label">Settings</span>
+          {!collapsed && <span className="sidebar-nav-label">Settings</span>}
         </button>
       </div>
+
+      {/* Drag handle — only when expanded */}
+      {!collapsed && (
+        <div
+          className="sidebar-resize-handle"
+          onMouseDown={onDragStart}
+          role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+        />
+      )}
     </nav>
   );
 }
