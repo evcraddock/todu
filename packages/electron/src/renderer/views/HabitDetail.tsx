@@ -2,7 +2,9 @@ import type { HabitId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
+import { TabBar } from "../components/TabBar.js";
 import {
   useCheckHabit,
   useDeleteHabit,
@@ -20,11 +22,7 @@ import { describeSchedule } from "../lib/describe-schedule.js";
 // Streak Stats
 // ============================================================================
 
-function StreakStats({
-  habitId,
-}: {
-  habitId: string;
-}): ReactNode {
+function StreakStats({ habitId }: { habitId: string }): ReactNode {
   const { data: streak, isLoading } = useHabitStreak(habitId);
   const checkHabit = useCheckHabit();
   const uncheckHabit = useUncheckHabit();
@@ -81,7 +79,6 @@ function HistoryCalendar({ habitId }: { habitId: string }): ReactNode {
   if (isLoading) return <div className="loading-state">Loading history…</div>;
   if (!history || history.length === 0) return <div className="empty-hint">No history yet</div>;
 
-  // Build a set of completed dates and scheduled dates
   const completedDates = new Set<string>();
   const scheduledDates = new Set<string>();
   for (const entry of history) {
@@ -89,13 +86,15 @@ function HistoryCalendar({ habitId }: { habitId: string }): ReactNode {
     if (entry.completed) completedDates.add(entry.date);
   }
 
-  // Generate last 30 days grid
   const today = new Date();
   const days: { date: string; scheduled: boolean; completed: boolean }[] = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const dateStr = `${y}-${m}-${day}`;
     days.push({
       date: dateStr,
       scheduled: scheduledDates.has(dateStr),
@@ -126,6 +125,16 @@ function HistoryCalendar({ habitId }: { habitId: string }): ReactNode {
 }
 
 // ============================================================================
+// Content tabs
+// ============================================================================
+
+const TABS = [
+  { id: "history", label: "History" },
+  { id: "description", label: "Description" },
+  { id: "comments", label: "Comments" },
+];
+
+// ============================================================================
 // Habit Detail View
 // ============================================================================
 
@@ -143,8 +152,12 @@ export function HabitDetail({
   const resumeHabit = useResumeHabit();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [scheduleValue, setScheduleValue] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [activeTab, setActiveTab] = useState("history");
 
   if (isLoading) {
     return (
@@ -170,18 +183,23 @@ export function HabitDetail({
     );
   }
 
-  const handleInlineEdit = (field: string, currentValue: string) => {
-    setEditingField(field);
-    setEditValue(currentValue);
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    if (titleValue.trim() && titleValue !== habit.title) {
+      updateHabit.mutate({ id: habit.id as HabitId, input: { title: titleValue.trim() } });
+    }
   };
 
-  const handleInlineSave = (field: string) => {
-    setEditingField(null);
-    if (editValue !== (habit as Record<string, unknown>)[field]) {
-      updateHabit.mutate({
-        id: habit.id as HabitId,
-        input: { [field]: editValue },
-      });
+  const handleScheduleSave = () => {
+    setEditingSchedule(false);
+    if (scheduleValue !== habit.schedule) {
+      updateHabit.mutate({ id: habit.id as HabitId, input: { schedule: scheduleValue } });
+    }
+  };
+
+  const handleDescriptionSave = (markdown: string) => {
+    if (markdown !== (habit.description ?? "")) {
+      updateHabit.mutate({ id: habit.id as HabitId, input: { description: markdown } });
     }
   };
 
@@ -199,6 +217,7 @@ export function HabitDetail({
 
   return (
     <div className="view-container">
+      {/* Toolbar */}
       <div className="detail-toolbar">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
           ← Back
@@ -223,15 +242,15 @@ export function HabitDetail({
 
       {/* Title */}
       <div className="detail-title-row">
-        {editingField === "title" ? (
+        {editingTitle ? (
           <input
             className="input detail-title-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("title")}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={handleTitleSave}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleInlineSave("title");
-              if (e.key === "Escape") setEditingField(null);
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") setEditingTitle(false);
             }}
             autoFocus
           />
@@ -239,7 +258,10 @@ export function HabitDetail({
           <button
             type="button"
             className="detail-title clickable"
-            onClick={() => handleInlineEdit("title", habit.title)}
+            onClick={() => {
+              setTitleValue(habit.title);
+              setEditingTitle(true);
+            }}
           >
             {habit.title}
             {habit.paused && <span className="chip status-paused detail-paused-badge">paused</span>}
@@ -247,109 +269,114 @@ export function HabitDetail({
         )}
       </div>
 
-      {/* Streak Stats */}
-      <div className="detail-section">
-        <StreakStats habitId={habitId} />
-      </div>
+      {/* Streak Stats — prominent, above metadata */}
+      <StreakStats habitId={habitId} />
 
-      {/* Schedule */}
-      <div className="detail-field">
-        <span className="detail-label">Schedule</span>
-        {editingField === "schedule" ? (
-          <div className="inline-schedule-edit">
-            <SchedulePresetPicker value={editValue} onChange={(v) => setEditValue(v)} />
+      {/* Compressed metadata */}
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Schedule</span>
+          {editingSchedule ? (
+            <div className="inline-schedule-edit">
+              <SchedulePresetPicker value={scheduleValue} onChange={setScheduleValue} />
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleScheduleSave}>
+                Save
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setEditingSchedule(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="clickable-value"
               onClick={() => {
-                setEditingField(null);
-                if (editValue !== habit.schedule) {
-                  updateHabit.mutate({
-                    id: habit.id as HabitId,
-                    input: { schedule: editValue },
-                  });
-                }
+                setScheduleValue(habit.schedule);
+                setEditingSchedule(true);
               }}
             >
-              Save
+              {describeSchedule(habit.schedule)}
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setEditingField(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="clickable-value"
-            onClick={() => handleInlineEdit("schedule", habit.schedule)}
-          >
-            {describeSchedule(habit.schedule)}
-          </button>
-        )}
-      </div>
-
-      {/* Dates */}
-      <div className="detail-field">
-        <span className="detail-label">Start Date</span>
-        <span>{habit.startDate}</span>
-      </div>
-      {habit.endDate && (
-        <div className="detail-field">
-          <span className="detail-label">End Date</span>
-          <span>{habit.endDate}</span>
+          )}
         </div>
-      )}
-      <div className="detail-field">
-        <span className="detail-label">Next Due</span>
-        <span>{habit.nextDue ?? "—"}</span>
-      </div>
-      <div className="detail-field">
-        <span className="detail-label">Timezone</span>
-        <span>{habit.timezone}</span>
       </div>
 
-      {/* Description */}
-      <div className="detail-section">
-        <h3 className="section-title">Description</h3>
-        {editingField === "description" ? (
-          <textarea
-            className="input detail-description-input"
-            rows={3}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("description")}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            className="detail-description clickable"
-            onClick={() => handleInlineEdit("description", habit.description ?? "")}
-          >
-            {habit.description || <span className="empty-hint">Click to add description…</span>}
-          </button>
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Start</span>
+          <span>{habit.startDate}</span>
+        </div>
+        {habit.endDate && (
+          <div className="detail-meta-cell">
+            <span className="detail-meta-label">End</span>
+            <span>{habit.endDate}</span>
+          </div>
+        )}
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Next Due</span>
+          <span>{habit.nextDue ?? "—"}</span>
+        </div>
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Timezone</span>
+          <span>{habit.timezone}</span>
+        </div>
+      </div>
+
+      {/* Tabbed content */}
+      <div className="detail-tabs">
+        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {activeTab === "history" && (
+          <div className="detail-tab-content">
+            <h3 className="section-title">Last 30 Days</h3>
+            <HistoryCalendar habitId={habitId} />
+          </div>
+        )}
+
+        {activeTab === "description" && (
+          <div className="detail-tab-content">
+            {editingDescription ? (
+              <MarkdownEditor
+                value={habit.description ?? ""}
+                onChange={handleDescriptionSave}
+                placeholder="Add a description…"
+                minHeight={200}
+                autoFocus
+                onBlur={() => setEditingDescription(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="detail-description clickable"
+                onClick={() => setEditingDescription(true)}
+              >
+                {habit.description ? (
+                  <MarkdownEditor value={habit.description} editable={false} minHeight={60} />
+                ) : (
+                  <span className="empty-hint">Click to add description…</span>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {activeTab === "comments" && (
+          <div className="detail-tab-content">
+            <CommentThread entityType="habit" entityId={habitId} />
+          </div>
         )}
       </div>
 
-      {/* History */}
-      <div className="detail-section">
-        <h3 className="section-title">Last 30 Days</h3>
-        <HistoryCalendar habitId={habitId} />
-      </div>
-
-      {/* Metadata */}
+      {/* Footer metadata */}
       <div className="detail-meta">
         <span>Created: {habit.createdAt.slice(0, 10)}</span>
         <span>Updated: {habit.updatedAt.slice(0, 10)}</span>
         <span>ID: {habit.id}</span>
       </div>
-
-      {/* Comments */}
-      <CommentThread entityType="habit" entityId={habitId} />
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
