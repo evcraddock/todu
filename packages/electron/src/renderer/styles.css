@@ -2049,6 +2049,68 @@ button.detail-description {
   opacity: 0.6;
 }
 
+/* Agent header actions row */
+
+.agent-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-close-btn {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 4px 6px;
+}
+
+.agent-close-btn:hover {
+  color: var(--text);
+}
+
+/* ============================================================================
+ * Agent Pane (right-side resizable panel)
+ * ============================================================================ */
+
+.agent-pane {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  overflow: hidden;
+  transition: width 0.15s, min-width 0.15s;
+}
+
+.agent-pane-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.agent-pane-resize-handle:hover,
+.agent-pane-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+.agent-pane-content {
+  flex: 1;
+  overflow: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Override agent-view styles when inside the pane for tighter spacing */
+
+.agent-pane .agent-bubble {
+  max-width: 90%;
+}
+
 /* ============================================================================
  * Settings
  * ============================================================================ */

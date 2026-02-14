@@ -1,13 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { AgentPane } from "./components/AgentPane.js";
 import { Placeholder } from "./components/Placeholder.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { ToastContainer } from "./components/ToastContainer.js";
+import { useAgentPane } from "./hooks/useAgentPane.js";
 import { useSidebar } from "./hooks/useSidebar.js";
 import { type ThemePreference, useTheme } from "./hooks/useTheme.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
-import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { HomeView } from "./views/HomeView.js";
 import { JournalView } from "./views/JournalView.js";
@@ -45,8 +46,6 @@ function ViewRouter({
       return <JournalView />;
     case "labels":
       return <LabelsView />;
-    case "agent":
-      return <AgentView />;
     case "settings":
       return <SettingsView themePreference={themePreference} onThemeChange={onThemeChange} />;
     default:
@@ -59,6 +58,7 @@ export function App(): ReactNode {
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
   const theme = useTheme();
   const sidebar = useSidebar();
+  const agentPane = useAgentPane();
 
   useEffect(() => {
     const cleanup = setupChangeListener();
@@ -95,6 +95,12 @@ export function App(): ReactNode {
         sidebar.toggleHidden();
       }
 
+      // Ctrl/Cmd+J — toggle agent pane
+      if (mod && e.key === "j") {
+        e.preventDefault();
+        agentPane.toggle();
+      }
+
       // Ctrl/Cmd+K — focus search (navigate to tasks view)
       if (mod && e.key === "k") {
         e.preventDefault();
@@ -109,7 +115,7 @@ export function App(): ReactNode {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [sidebar.toggleHidden]);
+  }, [sidebar.toggleHidden, agentPane.toggle]);
 
   const handleNavigateToEntity = useCallback((entityType: string, _entityId: string) => {
     switch (entityType) {
@@ -137,6 +143,8 @@ export function App(): ReactNode {
           cssWidth={sidebar.cssWidth}
           onToggleCollapse={sidebar.toggleCollapse}
           onDragStart={sidebar.onDragStart}
+          agentPaneVisible={agentPane.visible}
+          onToggleAgentPane={agentPane.toggle}
         />
         <main className="content-area">
           <ViewRouter
@@ -147,6 +155,12 @@ export function App(): ReactNode {
             onThemeChange={theme.setPreference}
           />
         </main>
+        <AgentPane
+          visible={agentPane.visible}
+          width={agentPane.cssWidth}
+          onDragStart={agentPane.onDragStart}
+          onClose={agentPane.hide}
+        />
       </div>
       <StatusBar />
       <ToastContainer />

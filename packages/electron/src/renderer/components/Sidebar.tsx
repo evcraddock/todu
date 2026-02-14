@@ -24,6 +24,8 @@ interface SidebarProps {
   cssWidth: number;
   onToggleCollapse: () => void;
   onDragStart: (e: React.MouseEvent) => void;
+  agentPaneVisible: boolean;
+  onToggleAgentPane: () => void;
 }
 
 export function Sidebar({
@@ -33,6 +35,8 @@ export function Sidebar({
   cssWidth,
   onToggleCollapse,
   onDragStart,
+  agentPaneVisible,
+  onToggleAgentPane,
 }: SidebarProps): ReactNode {
   if (mode === "hidden") return null;
 
@@ -74,9 +78,9 @@ export function Sidebar({
       <div className="sidebar-footer">
         <button
           type="button"
-          className={`sidebar-nav-item ${activeView === "agent" ? "active" : ""}`}
-          onClick={() => onNavigate("agent")}
-          title={collapsed ? "Agent" : undefined}
+          className={`sidebar-nav-item ${agentPaneVisible ? "active" : ""}`}
+          onClick={onToggleAgentPane}
+          title={collapsed ? "Agent (⌘J)" : undefined}
         >
           <span className="sidebar-nav-icon">💬</span>
           {!collapsed && <span className="sidebar-nav-label">Agent</span>}
