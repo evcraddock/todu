@@ -139,14 +139,12 @@ export function AgentView(): ReactNode {
         case "message_start": {
           const msg = event.message;
           if (msg.role === "assistant") {
-            const text = extractText(msg.content);
-            if (text !== undefined) {
-              setItems((prev) => [
-                ...prev,
-                { kind: "assistant", text, isStreaming: true, isError: false },
-              ]);
-              scrollToBottom();
-            }
+            const text = extractText(msg.content) ?? "";
+            setItems((prev) => [
+              ...prev,
+              { kind: "assistant", text, isStreaming: true, isError: false },
+            ]);
+            scrollToBottom();
           }
           break;
         }
@@ -154,21 +152,21 @@ export function AgentView(): ReactNode {
         case "message_update": {
           const msg = event.message;
           if (msg.role === "assistant") {
-            const text = extractText(msg.content);
-            if (text !== undefined) {
-              setItems((prev) => {
-                const updated = [...prev];
-                const lastAssistant = findLastAssistant(updated);
-                if (lastAssistant >= 0) {
-                  updated[lastAssistant] = {
-                    ...updated[lastAssistant],
-                    text,
-                  } as AssistantItem;
-                }
-                return updated;
-              });
-              scrollToBottom();
-            }
+            const text = extractText(msg.content) ?? "";
+            setItems((prev) => {
+              const updated = [...prev];
+              const lastAssistant = findLastAssistant(updated);
+              if (lastAssistant >= 0) {
+                updated[lastAssistant] = {
+                  ...updated[lastAssistant],
+                  text,
+                } as AssistantItem;
+              } else {
+                updated.push({ kind: "assistant", text, isStreaming: true, isError: false });
+              }
+              return updated;
+            });
+            scrollToBottom();
           }
           break;
         }
@@ -182,19 +180,32 @@ export function AgentView(): ReactNode {
               const updated = [...prev];
               const lastAssistant = findLastAssistant(updated);
               if (lastAssistant >= 0) {
-                updated[lastAssistant] = {
-                  kind: "assistant",
-                  text: isError ? (msg.errorMessage ?? "Unknown error") : text,
-                  isStreaming: false,
-                  isError,
-                };
+                const finalText = isError ? (msg.errorMessage ?? "Unknown error") : text;
+                if (!finalText && !isError) {
+                  // Empty non-error message (tool-call-only turn) — remove the placeholder
+                  updated.splice(lastAssistant, 1);
+                } else {
+                  updated[lastAssistant] = {
+                    kind: "assistant",
+                    text: finalText,
+                    isStreaming: false,
+                    isError,
+                  };
+                }
               } else if (isError) {
-                // Error message without a prior message_start
                 updated.push({
                   kind: "assistant",
                   text: msg.errorMessage ?? "Unknown error",
                   isStreaming: false,
                   isError: true,
+                });
+              } else if (text) {
+                // Text response without a prior message_start
+                updated.push({
+                  kind: "assistant",
+                  text,
+                  isStreaming: false,
+                  isError: false,
                 });
               }
               return updated;
