@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 
 export type ThemePreference = "system" | "dark" | "light";
 
-const STORAGE_KEY = "todu-theme-preference";
+export const STORAGE_KEY = "todu-theme-preference";
 
-function getStoredPreference(): ThemePreference {
+export function getStoredPreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "dark" || stored === "light" || stored === "system") {
@@ -16,7 +16,7 @@ function getStoredPreference(): ThemePreference {
   return "system";
 }
 
-function storePreference(pref: ThemePreference): void {
+export function storePreference(pref: ThemePreference): void {
   try {
     localStorage.setItem(STORAGE_KEY, pref);
   } catch {
@@ -24,12 +24,12 @@ function storePreference(pref: ThemePreference): void {
   }
 }
 
-function resolveTheme(pref: ThemePreference): "dark" | "light" {
+export function resolveTheme(pref: ThemePreference): "dark" | "light" {
   if (pref === "dark" || pref === "light") return pref;
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
-function applyTheme(theme: "dark" | "light"): void {
+export function applyTheme(theme: "dark" | "light"): void {
   document.documentElement.setAttribute("data-theme", theme);
 }
 
