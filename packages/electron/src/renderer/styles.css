@@ -2108,3 +2108,110 @@ button.detail-description {
 .md-editor-content .tiptap s {
   color: var(--text-muted);
 }
+
+/* ============================================================================
+ * Home / Dashboard
+ * ============================================================================ */
+
+.home-view {
+  max-width: 800px;
+}
+
+.home-section {
+  margin-bottom: 24px;
+}
+
+.home-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.home-section-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.home-section-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.home-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.1s;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.home-task-row:hover {
+  background: var(--bg-hover);
+}
+
+.home-task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.home-task-project {
+  color: var(--text-muted);
+}
+
+.home-task-due {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.home-habit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.home-habit-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -8,6 +8,7 @@ export interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { id: "home", label: "Home", icon: "⌂" },
   { id: "tasks", label: "Tasks", icon: "☐" },
   { id: "projects", label: "Projects", icon: "▦" },
   { id: "habits", label: "Habits", icon: "🔥" },

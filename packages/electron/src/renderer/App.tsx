@@ -9,6 +9,7 @@ import { type ThemePreference, useTheme } from "./hooks/useTheme.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
 import { AgentView } from "./views/AgentView.js";
 import { HabitsView } from "./views/HabitsView.js";
+import { HomeView } from "./views/HomeView.js";
 import { LabelsView } from "./views/LabelsView.js";
 import { NotesView } from "./views/NotesView.js";
 import { ProjectsView } from "./views/ProjectsView.js";
@@ -30,6 +31,8 @@ function ViewRouter({
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
   switch (activeView) {
+    case "home":
+      return <HomeView onNavigateToTask={(id) => onNavigateToEntity("task", id)} />;
     case "projects":
       return <ProjectsView />;
     case "tasks":
@@ -52,7 +55,7 @@ function ViewRouter({
 }
 
 export function App(): ReactNode {
-  const [activeView, setActiveView] = useState("projects");
+  const [activeView, setActiveView] = useState("home");
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
   const theme = useTheme();
   const sidebar = useSidebar();
