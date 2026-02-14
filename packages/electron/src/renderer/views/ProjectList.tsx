@@ -59,22 +59,6 @@ export function ProjectList({
     );
   }
 
-  if (!projects || projects.length === 0) {
-    return (
-      <div className="view-container">
-        <div className="view-header">
-          <h2 className="view-title">Projects</h2>
-          <button type="button" className="btn btn-primary" onClick={onCreateProject}>
-            + New Project
-          </button>
-        </div>
-        <div className="empty-state">
-          <p>No projects yet</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="view-container">
       <div className="view-header">
