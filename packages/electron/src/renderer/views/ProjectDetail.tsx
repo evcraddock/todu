@@ -4,8 +4,10 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { FilterBar } from "../components/FilterBar.js";
+import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { StatusChip } from "../components/StatusChip.js";
+import { TabBar } from "../components/TabBar.js";
 import { TaskTable } from "../components/TaskTable.js";
 import {
   useDeleteProject,
@@ -15,6 +17,16 @@ import {
   useTasks,
   useUpdateProject,
 } from "../hooks/useTodu.js";
+
+// ============================================================================
+// Content tabs
+// ============================================================================
+
+const TABS = [
+  { id: "tasks", label: "Tasks" },
+  { id: "description", label: "Description" },
+  { id: "comments", label: "Comments" },
+];
 
 // ============================================================================
 // Project Detail View
@@ -62,10 +74,12 @@ export function ProjectDetail({
     [sort],
   );
 
-  // Inline edit state
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  // UI state
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState("tasks");
 
   if (isLoading) {
     return (
@@ -91,15 +105,16 @@ export function ProjectDetail({
     );
   }
 
-  const handleInlineEdit = (field: string, currentValue: string) => {
-    setEditingField(field);
-    setEditValue(currentValue);
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    if (titleValue.trim() && titleValue !== project.name) {
+      updateProject.mutate({ id: project.id as ProjectId, input: { name: titleValue.trim() } });
+    }
   };
 
-  const handleInlineSave = (field: string) => {
-    setEditingField(null);
-    if (editValue !== (project as Record<string, unknown>)[field]) {
-      updateProject.mutate({ id: project.id as ProjectId, input: { [field]: editValue } });
+  const handleDescriptionSave = (markdown: string) => {
+    if (markdown !== (project.description ?? "")) {
+      updateProject.mutate({ id: project.id as ProjectId, input: { description: markdown } });
     }
   };
 
@@ -117,6 +132,7 @@ export function ProjectDetail({
 
   return (
     <div className="view-container">
+      {/* Toolbar */}
       <div className="detail-toolbar">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
           ← Back
@@ -132,15 +148,15 @@ export function ProjectDetail({
 
       {/* Name */}
       <div className="detail-title-row">
-        {editingField === "name" ? (
+        {editingTitle ? (
           <input
             className="input detail-title-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("name")}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={handleTitleSave}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleInlineSave("name");
-              if (e.key === "Escape") setEditingField(null);
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") setEditingTitle(false);
             }}
             autoFocus
           />
@@ -148,118 +164,134 @@ export function ProjectDetail({
           <button
             type="button"
             className="detail-title clickable"
-            onClick={() => handleInlineEdit("name", project.name)}
+            onClick={() => {
+              setTitleValue(project.name);
+              setEditingTitle(true);
+            }}
           >
             {project.name}
           </button>
         )}
       </div>
 
-      {/* Status */}
-      <div className="detail-field">
-        <span className="detail-label">Status</span>
-        <select
-          className="filter-select inline-select"
-          value={project.status}
-          onChange={(e) =>
-            updateProject.mutate({
-              id: project.id as ProjectId,
-              input: { status: e.target.value as "active" | "done" | "canceled" },
-            })
-          }
-        >
-          <option value="active">Active</option>
-          <option value="done">Done</option>
-          <option value="canceled">Canceled</option>
-        </select>
-      </div>
-
-      {/* Priority */}
-      <div className="detail-field">
-        <span className="detail-label">Priority</span>
-        <select
-          className="filter-select inline-select"
-          value={project.priority}
-          onChange={(e) =>
-            updateProject.mutate({
-              id: project.id as ProjectId,
-              input: { priority: e.target.value as "high" | "medium" | "low" },
-            })
-          }
-        >
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      {/* Description */}
-      <div className="detail-section">
-        <h3 className="section-title">Description</h3>
-        {editingField === "description" ? (
-          <textarea
-            className="input detail-description-input"
-            rows={3}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("description")}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            className="detail-description clickable"
-            onClick={() => handleInlineEdit("description", project.description ?? "")}
+      {/* Compressed metadata row: Status + Priority */}
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <StatusChip status={project.status} />
+          <select
+            className="filter-select inline-select"
+            value={project.status}
+            onChange={(e) =>
+              updateProject.mutate({
+                id: project.id as ProjectId,
+                input: { status: e.target.value as "active" | "done" | "canceled" },
+              })
+            }
           >
-            {project.description || <span className="empty-hint">Click to add description…</span>}
-          </button>
+            <option value="active">Active</option>
+            <option value="done">Done</option>
+            <option value="canceled">Canceled</option>
+          </select>
+        </div>
+        <div className="detail-meta-cell">
+          <PriorityChip priority={project.priority} />
+          <select
+            className="filter-select inline-select"
+            value={project.priority}
+            onChange={(e) =>
+              updateProject.mutate({
+                id: project.id as ProjectId,
+                input: { priority: e.target.value as "high" | "medium" | "low" },
+              })
+            }
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Tabbed content */}
+      <div className="detail-tabs">
+        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {activeTab === "tasks" && (
+          <div className="detail-tab-content">
+            <div className="view-header">
+              <h3 className="section-title">Tasks ({taskCount})</h3>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => onCreateTask(projectId)}
+              >
+                + Add Task
+              </button>
+            </div>
+            <FilterBar
+              filter={filter}
+              onFilterChange={handleFilterChange}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              hideProject
+            />
+            {!displayTasks || displayTasks.length === 0 ? (
+              <div className="empty-state">
+                <p>{searchQuery ? "No tasks match your search" : "No tasks in this project"}</p>
+              </div>
+            ) : (
+              <TaskTable
+                tasks={displayTasks}
+                sort={sort}
+                onSort={handleSort}
+                onSelectTask={onSelectTask}
+                projectMap={projectMap}
+                showProject={false}
+              />
+            )}
+          </div>
+        )}
+
+        {activeTab === "description" && (
+          <div className="detail-tab-content">
+            {editingDescription ? (
+              <MarkdownEditor
+                value={project.description ?? ""}
+                onChange={handleDescriptionSave}
+                placeholder="Add a description…"
+                minHeight={200}
+                autoFocus
+                onBlur={() => setEditingDescription(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="detail-description clickable"
+                onClick={() => setEditingDescription(true)}
+              >
+                {project.description ? (
+                  <MarkdownEditor value={project.description} editable={false} minHeight={60} />
+                ) : (
+                  <span className="empty-hint">Click to add description…</span>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {activeTab === "comments" && (
+          <div className="detail-tab-content">
+            <CommentThread entityType="project" entityId={projectId} />
+          </div>
         )}
       </div>
 
-      {/* Metadata */}
+      {/* Footer metadata */}
       <div className="detail-meta">
         <span>Created: {project.createdAt.slice(0, 10)}</span>
         <span>Updated: {project.updatedAt.slice(0, 10)}</span>
         <span>ID: {project.id}</span>
       </div>
-
-      {/* Tasks */}
-      <div className="detail-section">
-        <div className="view-header">
-          <h3 className="section-title">Tasks ({taskCount})</h3>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => onCreateTask(projectId)}
-          >
-            + Add Task
-          </button>
-        </div>
-        <FilterBar
-          filter={filter}
-          onFilterChange={handleFilterChange}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          hideProject
-        />
-        {!displayTasks || displayTasks.length === 0 ? (
-          <div className="empty-state">
-            <p>{searchQuery ? "No tasks match your search" : "No tasks in this project"}</p>
-          </div>
-        ) : (
-          <TaskTable
-            tasks={displayTasks}
-            sort={sort}
-            onSort={handleSort}
-            onSelectTask={onSelectTask}
-            projectMap={projectMap}
-            showProject={false}
-          />
-        )}
-      </div>
-
-      {/* Comments */}
-      <CommentThread entityType="project" entityId={projectId} />
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
