@@ -411,17 +411,22 @@ body,
  * ============================================================================ */
 
 .sidebar {
-  width: 200px;
-  min-width: 200px;
+  position: relative;
   background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
+  transition: width 0.15s, min-width 0.15s;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .sidebar-header {
   padding: 16px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .sidebar-title {
@@ -475,6 +480,52 @@ body,
   padding: 8px 0;
 }
 
+/* Collapsed state */
+
+.sidebar-collapsed .sidebar-header {
+  justify-content: center;
+  padding: 16px 8px;
+}
+
+.sidebar-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar-collapsed .sidebar-nav-icon {
+  width: auto;
+}
+
+/* Collapse toggle button */
+
+.sidebar-collapse-btn {
+  color: var(--text-muted) !important;
+  font-size: 14px !important;
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-btn:hover {
+  color: var(--text) !important;
+  background: var(--bg-hover) !important;
+}
+
+/* Resize drag handle */
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--accent);
+}
+
 /* ============================================================================
  * Content Area
  * ============================================================================ */
@@ -507,10 +558,6 @@ body,
 /* ============================================================================
  * Views
  * ============================================================================ */
-
-.view-container {
-  max-width: 900px;
-}
 
 .view-title {
   font-size: 20px;
@@ -1564,7 +1611,6 @@ button.detail-description {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-width: 900px;
 }
 
 .agent-header {
