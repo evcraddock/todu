@@ -149,10 +149,26 @@ describe("todu agent tools", () => {
       expect(data).toHaveLength(2);
     });
 
-    it("filters by status", async () => {
+    it("filters by single status", async () => {
       await exec("create_task", { title: "Active", projectId });
-      const data = await execJson("list_tasks", { status: "done" });
+      const data = await execJson("list_tasks", { status: ["done"] });
       expect(data).toHaveLength(0);
+    });
+
+    it("filters by multiple statuses", async () => {
+      await exec("create_task", { title: "Task A", projectId });
+      // Task A is active by default — update one to inprogress
+      const created = await execJson("create_task", { title: "Task B", projectId });
+      await exec("update_task", { id: created.id, status: "inprogress" });
+
+      // Both active and inprogress should be returned
+      const data = await execJson("list_tasks", { status: ["active", "inprogress"] });
+      expect(data).toHaveLength(2);
+
+      // Only inprogress
+      const inProgress = await execJson("list_tasks", { status: ["inprogress"] });
+      expect(inProgress).toHaveLength(1);
+      expect(inProgress[0].title).toBe("Task B");
     });
 
     it("sorts by title", async () => {
@@ -396,6 +412,76 @@ describe("todu agent tools", () => {
         expect(text.text).toMatch(/Not found|error/i);
       }
       expect(result.details).toEqual({ isError: true });
+    });
+  });
+
+  // ── UI Action emission ──────────────────────────────────────────────
+
+  describe("ui-action emission", () => {
+    it("list_tasks emits show_tasks ui-action with filter", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listTasks = toolsWithWindow.find((t) => t.name === "list_tasks")!;
+
+      await listTasks.execute("test-call", { priority: "high", status: ["active"] });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_tasks",
+        filter: { priority: "high", status: ["active"] },
+      });
+    });
+
+    it("list_tasks emits filter without sort fields", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listTasks = toolsWithWindow.find((t) => t.name === "list_tasks")!;
+
+      await listTasks.execute("test-call", {
+        priority: "high",
+        sortField: "title",
+        sortDirection: "asc",
+      });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      // Filter should NOT include sortField/sortDirection
+      expect(uiActions[0].data).toEqual({
+        action: "show_tasks",
+        filter: { priority: "high" },
+      });
+    });
+
+    it("list_tasks does not emit when no mainWindow provided", async () => {
+      // The default tools (no mainWindow) should not throw
+      const listTasks = tools.find((t) => t.name === "list_tasks")!;
+      const result = await listTasks.execute("test-call", {});
+      expect(result.content[0].type).toBe("text");
     });
   });
 });

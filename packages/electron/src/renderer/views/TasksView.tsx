@@ -1,3 +1,4 @@
+import type { TaskFilter } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { CreateTaskDialog } from "./CreateTaskDialog.js";
 import { TaskDetail } from "./TaskDetail.js";
@@ -6,8 +7,15 @@ import { TaskList } from "./TaskList.js";
 /**
  * Top-level task view — manages navigation between list, detail, and create.
  * `triggerCreateTask` is a counter — incrementing it opens the create dialog.
+ * `externalFilter` is set by agent ui-actions to apply filters from the chat pane.
  */
-export function TasksView({ triggerCreateTask = 0 }: { triggerCreateTask?: number }): ReactNode {
+export function TasksView({
+  triggerCreateTask = 0,
+  externalFilter,
+}: {
+  triggerCreateTask?: number;
+  externalFilter?: TaskFilter | null;
+}): ReactNode {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -25,7 +33,11 @@ export function TasksView({ triggerCreateTask = 0 }: { triggerCreateTask?: numbe
 
   return (
     <>
-      <TaskList onSelectTask={setSelectedTaskId} onCreateTask={() => setShowCreateDialog(true)} />
+      <TaskList
+        onSelectTask={setSelectedTaskId}
+        onCreateTask={() => setShowCreateDialog(true)}
+        externalFilter={externalFilter}
+      />
       {showCreateDialog && <CreateTaskDialog onClose={() => setShowCreateDialog(false)} />}
     </>
   );

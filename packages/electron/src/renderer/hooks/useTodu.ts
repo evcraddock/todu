@@ -199,23 +199,6 @@ export function useSearchTasks(query: string) {
   });
 }
 
-/**
- * Agent-powered search: sends a natural language query to the search agent
- * which interprets it and returns matching tasks.
- *
- * Unlike useSearchTasks (instant text search), this is triggered explicitly
- * and uses the LLM to translate queries like "overdue bugs in todu" into
- * structured tool calls.
- */
-export function useAgentSearch() {
-  return useMutation({
-    mutationFn: async (query: string) => {
-      const results = await window.todu.agent.searchTasks(query);
-      return results as Task[];
-    },
-  });
-}
-
 // ============================================================================
 // Note Hooks (used for task comments)
 // ============================================================================

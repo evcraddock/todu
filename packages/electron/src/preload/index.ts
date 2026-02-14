@@ -80,7 +80,6 @@ const api = {
     clear: () => ipcRenderer.invoke("todu:agent:clear"),
     setModel: (provider: string, modelId: string) =>
       ipcRenderer.invoke("todu:agent:set-model", provider, modelId),
-    searchTasks: (query: string) => ipcRenderer.invoke("todu:agent:search-tasks", query),
   },
 
   // ── OAuth ──────────────────────────────────────────────────────
@@ -114,6 +113,7 @@ const api = {
       "todu:agent:event",
       "todu:oauth:event",
       "todu:action",
+      "todu:ui-action",
     ];
     if (!ALLOWED_CHANNELS.includes(channel)) {
       console.warn(`Blocked listen on unknown channel: ${channel}`);

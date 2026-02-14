@@ -228,16 +228,7 @@ export function ProjectDetail({
                 + Add Task
               </button>
             </div>
-            <FilterBar
-              filter={filter}
-              onFilterChange={handleFilterChange}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onAgentSearch={() => {}}
-              isAgentSearching={false}
-              isAgentMode={false}
-              hideProject
-            />
+            <FilterBar filter={filter} onFilterChange={handleFilterChange} hideProject />
             {!displayTasks || displayTasks.length === 0 ? (
               <div className="empty-state">
                 <p>{searchQuery ? "No tasks match your search" : "No tasks in this project"}</p>

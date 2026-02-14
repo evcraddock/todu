@@ -44,7 +44,13 @@ You do NOT have access to the file system, code, or terminal. For coding work, t
 - When listing items, format them clearly
 - When creating tasks, confirm what was created
 - Suggest next actions when appropriate
-- If asked about something outside your capabilities, say so clearly`;
+- If asked about something outside your capabilities, say so clearly
+
+## Tool Usage
+
+- **Always use tool filter parameters** when the user specifies criteria. For example, if the user asks for "inprogress tasks", call list_tasks with status: "inprogress" — do NOT fetch all tasks and filter in your response.
+- When the user asks for multiple statuses (e.g., "active or inprogress"), pass them as an array: status: ["active", "inprogress"].
+- The UI updates based on the filter parameters you pass to tools. If you don't pass filters, the UI won't reflect the user's intent.`;
 
 // ============================================================================
 // Model Resolution
@@ -97,7 +103,7 @@ let unsubscribe: (() => void) | null = null;
  * Call this once during app startup after the engine and window are ready.
  */
 export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
-  const tools = createToduTools(todu);
+  const tools = createToduTools(todu, mainWindow);
   const settings = loadSettings();
   const model = resolveModel(settings.provider, settings.modelId);
 

@@ -3,6 +3,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import type { Result, ToduError } from "@todu/core";
 import type { Todu } from "@todu/engine";
+import type { BrowserWindow } from "electron";
 
 // ============================================================================
 // Helpers
@@ -62,18 +63,20 @@ const UpdateProjectParams = Type.Object({
   ),
 });
 
+const TaskStatusEnum = Type.Union([
+  Type.Literal("active"),
+  Type.Literal("inprogress"),
+  Type.Literal("waiting"),
+  Type.Literal("done"),
+  Type.Literal("canceled"),
+]);
+
 const ListTasksParams = Type.Object({
   status: Type.Optional(
-    Type.Union(
-      [
-        Type.Literal("active"),
-        Type.Literal("inprogress"),
-        Type.Literal("waiting"),
-        Type.Literal("done"),
-        Type.Literal("canceled"),
-      ],
-      { description: "Filter by task status" },
-    ),
+    Type.Array(TaskStatusEnum, {
+      description:
+        'Filter by task status. Pass one or more statuses, e.g. ["inprogress"] or ["active", "inprogress"].',
+    }),
   ),
   priority: Type.Optional(
     Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")], {
@@ -223,7 +226,7 @@ const ListNotesParams = Type.Object({
  * Create all todu agent tools from a Todu engine instance.
  * Each tool wraps an engine SDK method and returns structured results.
  */
-export function createToduTools(todu: Todu): AgentTool<TSchema>[] {
+export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTool<TSchema>[] {
   return [
     // ── Projects ─────────────────────────────────────────────────────
     {
@@ -261,7 +264,17 @@ export function createToduTools(todu: Todu): AgentTool<TSchema>[] {
         const sort = sortField
           ? { field: sortField, direction: sortDirection ?? "asc" }
           : undefined;
-        return formatResult(await todu.task.list(filter, sort));
+        const result = await todu.task.list(filter, sort);
+
+        // Emit UI action to navigate Tasks view with the same filters
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_tasks",
+            filter,
+          });
+        }
+
+        return formatResult(result);
       },
     },
     {

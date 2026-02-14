@@ -7,7 +7,7 @@
  * The JSON text may contain a Task array from list_tasks or search_tasks.
  * Returns an empty array if the result can't be parsed or doesn't contain tasks.
  *
- * Shared between main process (search-agent) and renderer (if needed).
+ * Shared between main process and renderer.
  */
 export function extractTasksFromResult<T = unknown>(result: unknown): T[] {
   if (!result || typeof result !== "object") return [];

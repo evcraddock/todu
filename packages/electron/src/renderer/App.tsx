@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { TaskFilter } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AgentPane } from "./components/AgentPane.js";
 import { Placeholder } from "./components/Placeholder.js";
@@ -22,12 +23,14 @@ function ViewRouter({
   activeView,
   onNavigateToEntity,
   triggerCreateTask,
+  agentTaskFilter,
   themePreference,
   onThemeChange,
 }: {
   activeView: string;
   onNavigateToEntity: (entityType: string, entityId: string) => void;
   triggerCreateTask: number;
+  agentTaskFilter: TaskFilter | null;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -37,7 +40,7 @@ function ViewRouter({
     case "projects":
       return <ProjectsView />;
     case "tasks":
-      return <TasksView triggerCreateTask={triggerCreateTask} />;
+      return <TasksView triggerCreateTask={triggerCreateTask} externalFilter={agentTaskFilter} />;
     case "habits":
       return <HabitsView />;
     case "recurring":
@@ -56,12 +59,25 @@ function ViewRouter({
 export function App(): ReactNode {
   const [activeView, setActiveView] = useState("home");
   const [triggerCreateTask, setTriggerCreateTask] = useState(0);
+  const [agentTaskFilter, setAgentTaskFilter] = useState<TaskFilter | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
 
   useEffect(() => {
     const cleanup = setupChangeListener();
+    return cleanup;
+  }, []);
+
+  // Listen for UI actions from agent tools (e.g., list_tasks → navigate to Tasks with filter)
+  useEffect(() => {
+    const cleanup = window.todu.on("todu:ui-action", (data) => {
+      const uiAction = data as { action: string; filter?: TaskFilter };
+      if (uiAction.action === "show_tasks") {
+        setActiveView("tasks");
+        setAgentTaskFilter(uiAction.filter ?? {});
+      }
+    });
     return cleanup;
   }, []);
 
@@ -99,17 +115,6 @@ export function App(): ReactNode {
       if (mod && e.key === "j") {
         e.preventDefault();
         agentPane.toggle();
-      }
-
-      // Ctrl/Cmd+K — focus search (navigate to tasks view)
-      if (mod && e.key === "k") {
-        e.preventDefault();
-        setActiveView("tasks");
-        // Focus the search input after view renders
-        setTimeout(() => {
-          const searchInput = document.querySelector<HTMLInputElement>(".search-input");
-          searchInput?.focus();
-        }, 50);
       }
     };
 
@@ -151,6 +156,7 @@ export function App(): ReactNode {
             activeView={activeView}
             onNavigateToEntity={handleNavigateToEntity}
             triggerCreateTask={triggerCreateTask}
+            agentTaskFilter={agentTaskFilter}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />
