@@ -103,22 +103,19 @@ export function removeOAuthCredentials(providerId: string): void {
 // ============================================================================
 
 /**
- * Get a valid API key from OAuth credentials for a provider.
+ * Get a valid API key from OAuth credentials for a specific OAuth provider.
  * Automatically refreshes expired tokens.
  * Returns null if no credentials are stored.
  */
-export async function getOAuthApiKeyForProvider(providerId: string): Promise<string | null> {
-  const provider = getOAuthProvider(providerId);
-  if (!provider) return null;
-
-  const creds = loadOAuthCredentials(providerId);
+async function getKeyFromOAuthProvider(provider: OAuthProviderInterface): Promise<string | null> {
+  const creds = loadOAuthCredentials(provider.id);
   if (!creds) return null;
 
   // Check if expired
   if (Date.now() >= creds.expires) {
     try {
       const refreshed = await provider.refreshToken(creds);
-      saveOAuthCredentials(providerId, refreshed);
+      saveOAuthCredentials(provider.id, refreshed);
       return provider.getApiKey(refreshed);
     } catch {
       // Refresh failed — credentials are stale
@@ -127,6 +124,48 @@ export async function getOAuthApiKeyForProvider(providerId: string): Promise<str
   }
 
   return provider.getApiKey(creds);
+}
+
+/**
+ * Model provider → OAuth provider mapping.
+ *
+ * Some model providers (e.g. "openai") have a corresponding OAuth provider
+ * with a different ID (e.g. "openai-codex"). When the agent requests an API
+ * key for a model provider, we also need to check related OAuth providers.
+ */
+export const OAUTH_PROVIDER_ALIASES: Record<string, string[]> = {
+  openai: ["openai-codex"],
+  google: ["google-gemini-cli", "google-antigravity"],
+};
+
+/**
+ * Get a valid API key from OAuth credentials for a provider.
+ * Checks the exact provider first, then falls back to related OAuth providers
+ * (e.g. "openai" also checks "openai-codex" credentials).
+ * Automatically refreshes expired tokens.
+ * Returns null if no credentials are stored.
+ */
+export async function getOAuthApiKeyForProvider(providerId: string): Promise<string | null> {
+  // Try exact match first
+  const exactProvider = getOAuthProvider(providerId);
+  if (exactProvider) {
+    const key = await getKeyFromOAuthProvider(exactProvider);
+    if (key) return key;
+  }
+
+  // Try aliases (e.g. "openai" → "openai-codex")
+  const aliases = OAUTH_PROVIDER_ALIASES[providerId];
+  if (aliases) {
+    for (const alias of aliases) {
+      const aliasProvider = getOAuthProvider(alias);
+      if (aliasProvider) {
+        const key = await getKeyFromOAuthProvider(aliasProvider);
+        if (key) return key;
+      }
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================
