@@ -1,8 +1,10 @@
-import type { TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import type { Task, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { FilterBar } from "../components/FilterBar.js";
 import { TaskTable } from "../components/TaskTable.js";
-import { useProjects, useSearchTasks, useTasks } from "../hooks/useTodu.js";
+import { useAgentSearch, useProjects, useTasks } from "../hooks/useTodu.js";
+import { loadFilter, saveFilter } from "../lib/filter-persistence.js";
+import { defaultTaskComparator } from "../lib/task-sort.js";
 
 export function TaskList({
   onSelectTask,
@@ -11,13 +13,25 @@ export function TaskList({
   onSelectTask: (id: string) => void;
   onCreateTask: () => void;
 }): ReactNode {
-  const [filter, setFilter] = useState<TaskFilter>({});
+  // Load persisted filter on mount
+  const [filter, setFilter] = useState<TaskFilter>(loadFilter);
   const [sort, setSort] = useState<TaskSortOptions | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
+  const [agentResults, setAgentResults] = useState<Task[] | null>(null);
 
   const { data: tasks, isLoading, isError, error } = useTasks(filter, sort);
-  const { data: searchResults } = useSearchTasks(searchQuery);
   const { data: projects } = useProjects();
+  const {
+    mutate: searchMutate,
+    isPending: isSearchPending,
+    isError: isSearchError,
+    error: searchError,
+  } = useAgentSearch();
+
+  // Persist filter changes
+  useEffect(() => {
+    saveFilter(filter);
+  }, [filter]);
 
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -38,9 +52,40 @@ export function TaskList({
     [sort],
   );
 
-  const displayTasks = searchQuery.length > 0 ? searchResults : tasks;
+  const handleAgentSearch = useCallback(
+    (query: string) => {
+      searchMutate(query, {
+        onSuccess: (results) => {
+          setAgentResults(results);
+        },
+      });
+    },
+    [searchMutate],
+  );
 
-  if (isLoading) {
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    // Clear agent results when user modifies the search
+    if (query === "") {
+      setAgentResults(null);
+    }
+  }, []);
+
+  // Determine which tasks to display:
+  // 1. Agent results if an AI search was performed
+  // 2. Otherwise, filtered tasks with default sort applied
+  const isAgentMode = agentResults !== null;
+  const displayTasks = useMemo(() => {
+    if (isAgentMode) return agentResults;
+    if (!tasks) return undefined;
+    // Apply default multi-field sort when no explicit sort is set
+    if (!sort) {
+      return [...tasks].sort(defaultTaskComparator);
+    }
+    return tasks;
+  }, [isAgentMode, agentResults, tasks, sort]);
+
+  if (isLoading && !isAgentMode) {
     return (
       <div className="view-container">
         <div className="view-header">
@@ -51,7 +96,7 @@ export function TaskList({
     );
   }
 
-  if (isError) {
+  if (isError && !isAgentMode) {
     return (
       <div className="view-container">
         <div className="view-header">
@@ -77,11 +122,22 @@ export function TaskList({
         filter={filter}
         onFilterChange={setFilter}
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
+        onAgentSearch={handleAgentSearch}
+        isAgentSearching={isSearchPending}
+        isAgentMode={isAgentMode}
       />
+      {isSearchError && (
+        <div className="error-state">
+          <p>AI search failed</p>
+          <p className="error-detail">
+            {searchError instanceof Error ? searchError.message : "Unknown error"}
+          </p>
+        </div>
+      )}
       {!displayTasks || displayTasks.length === 0 ? (
         <div className="empty-state">
-          <p>{searchQuery ? "No tasks match your search" : "No tasks match your filters"}</p>
+          <p>{isAgentMode ? "No tasks found for your search" : "No tasks match your filters"}</p>
         </div>
       ) : (
         <TaskTable
