@@ -17,6 +17,7 @@ import type {
   NoteFilter,
   NoteId,
   Project,
+  ProjectFilter,
   ProjectId,
   RecurringFilter,
   RecurringId,
@@ -62,7 +63,7 @@ export interface ToduConfig {
 
 export interface ProjectNamespace {
   create(input: CreateProjectInput): Promise<Result<Project>>;
-  list(): Promise<Result<Project[]>>;
+  list(filter?: ProjectFilter): Promise<Result<Project[]>>;
   get(id: ProjectId): Promise<Result<Project>>;
   update(id: ProjectId, input: UpdateProjectInput): Promise<Result<Project>>;
   delete(id: ProjectId): Promise<Result<void>>;

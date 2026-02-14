@@ -131,6 +131,12 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface ProjectFilter {
+  status?: ProjectStatus | ProjectStatus[];
+  priority?: TaskPriority;
+  search?: string;
+}
+
 // ============================================================================
 // Task entity — metadata stored in TaskListDocument
 // ============================================================================

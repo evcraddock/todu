@@ -4,6 +4,7 @@ import {
   type CatalogDocument,
   type CreateProjectInput,
   type Project,
+  type ProjectFilter,
   type ProjectId,
   type Result,
   type UpdateProjectInput,
@@ -50,11 +51,25 @@ export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): Pro
       return ok(project);
     },
 
-    async list(): Promise<Result<Project[]>> {
+    async list(filter?: ProjectFilter): Promise<Result<Project[]>> {
       const doc = catalog.doc();
       if (!doc) return ok([]);
-      // Return a plain copy to avoid Automerge proxies leaking
-      return ok(doc.projects.map(cloneProject));
+
+      let filtered = doc.projects.map(cloneProject);
+
+      if (filter?.status) {
+        const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
+        filtered = filtered.filter((p) => statuses.includes(p.status));
+      }
+      if (filter?.priority) {
+        filtered = filtered.filter((p) => p.priority === filter.priority);
+      }
+      if (filter?.search) {
+        const lowerQuery = filter.search.toLowerCase();
+        filtered = filtered.filter((p) => p.name.toLowerCase().includes(lowerQuery));
+      }
+
+      return ok(filtered);
     },
 
     async get(id: ProjectId): Promise<Result<Project>> {
