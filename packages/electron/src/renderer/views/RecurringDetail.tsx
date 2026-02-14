@@ -1,5 +1,5 @@
 import { type RecurringId, createProjectId } from "@todu/core/browser";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
@@ -130,12 +130,6 @@ export function RecurringDetail({
   const [scheduleValue, setScheduleValue] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
-
-  const projectMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of projects ?? []) map.set(p.id, p.name);
-    return map;
-  }, [projects]);
 
   if (isLoading) {
     return (
