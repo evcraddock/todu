@@ -36,7 +36,8 @@ const getTodu = async () => {
   const configPath = getConfigPath(opts.config);
   const config = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, config);
-  const syncClient = await isSyncServerAvailable();
+  // Skip sync detection when TODU_NO_SYNC is set (used by tests to force standalone mode)
+  const syncClient = process.env.TODU_NO_SYNC ? false : await isSyncServerAvailable();
   return createTodu({ storagePath, syncClient });
 };
 
