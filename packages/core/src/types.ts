@@ -266,6 +266,11 @@ export interface CreateNoteInput {
   tags?: string[];
 }
 
+export interface UpdateNoteInput {
+  content?: string;
+  tags?: string[];
+}
+
 export interface NoteFilter {
   entityType?: NoteEntityType;
   entityId?: string;

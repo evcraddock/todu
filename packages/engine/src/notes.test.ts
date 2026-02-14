@@ -199,6 +199,80 @@ describe("note namespace", () => {
     });
   });
 
+  describe("update", () => {
+    it("updates note content", async () => {
+      const created = await todu.note.create({ content: "Original" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, { content: "Updated" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.content).toBe("Updated");
+      expect(result.value.id).toBe(created.value.id);
+    });
+
+    it("updates note tags", async () => {
+      const created = await todu.note.create({ content: "Note", tags: ["old"] });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, { tags: ["new", "updated"] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.tags).toEqual(["new", "updated"]);
+    });
+
+    it("updates both content and tags", async () => {
+      const created = await todu.note.create({ content: "Old", tags: ["a"] });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, {
+        content: "New",
+        tags: ["b", "c"],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.content).toBe("New");
+      expect(result.value.tags).toEqual(["b", "c"]);
+    });
+
+    it("returns NotFound for nonexistent note", async () => {
+      const result = await todu.note.update(createNoteId("note-nope"), { content: "x" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+
+    it("rejects empty content", async () => {
+      const created = await todu.note.create({ content: "Note" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, { content: "" });
+      expect(result.ok).toBe(false);
+    });
+
+    it("trims content on save", async () => {
+      const created = await todu.note.create({ content: "Note" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, { content: "  Trimmed  " });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.content).toBe("Trimmed");
+    });
+
+    it("persists update after list", async () => {
+      const created = await todu.note.create({ content: "Before" });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.note.update(created.value.id, { content: "After" });
+
+      const list = await todu.note.list();
+      expect(list.ok).toBe(true);
+      if (!list.ok) return;
+      expect(list.value[0].content).toBe("After");
+    });
+  });
+
   describe("delete", () => {
     it("deletes a note", async () => {
       const created = await todu.note.create({ content: "To delete" });

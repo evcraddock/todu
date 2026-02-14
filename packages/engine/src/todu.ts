@@ -30,6 +30,7 @@ import type {
   ToduError,
   UpdateHabitInput,
   UpdateLabelInput,
+  UpdateNoteInput,
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
@@ -87,6 +88,7 @@ export interface LabelNamespace {
 export interface NoteNamespace {
   create(input: CreateNoteInput): Promise<Result<Note>>;
   list(filter?: NoteFilter): Promise<Result<Note[]>>;
+  update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>>;
   delete(id: NoteId): Promise<Result<void>>;
 }
 
@@ -213,6 +215,7 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
     note: {
       create: stub,
       list: stub,
+      update: stub,
       delete: stub,
     },
     recurring: {

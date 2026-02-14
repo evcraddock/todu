@@ -10,12 +10,14 @@ import {
   type NotesDocument,
   type Result,
   type TaskListDocument,
+  type UpdateNoteInput,
   createNoteId,
   createNotesDocument,
   err,
   notFound,
   ok,
   validateCreateNoteInput,
+  validateUpdateNoteInput,
 } from "@todu/core";
 import type { NoteNamespace } from "./todu.js";
 
@@ -137,6 +139,34 @@ export function createNoteNamespace(
       notes.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
       return ok(notes);
+    },
+
+    async update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>> {
+      const validationErr = validateUpdateNoteInput(input);
+      if (validationErr) return err(validationErr);
+
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc?.notesDocId) return err(notFound("note", id));
+
+      const notesHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
+      const notesDoc = notesHandle.doc();
+      if (!notesDoc) return err(notFound("note", id));
+
+      const index = notesDoc.notes.findIndex((n) => n.id === id);
+      if (index === -1) return err(notFound("note", id));
+
+      notesHandle.change((doc) => {
+        const note = doc.notes[index];
+        if (input.content !== undefined) note.content = input.content.trim();
+        if (input.tags !== undefined) {
+          // Clear and repopulate tags array for Automerge compatibility
+          while (note.tags.length > 0) note.tags.pop();
+          for (const tag of input.tags) note.tags.push(tag);
+        }
+      });
+
+      const updated = notesHandle.doc()!.notes[index];
+      return ok(cloneNote(updated));
     },
 
     async delete(id: NoteId): Promise<Result<void>> {

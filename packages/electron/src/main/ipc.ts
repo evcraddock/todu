@@ -34,6 +34,7 @@ export function registerIpcHandlers(todu: Todu): void {
   // ── Note ─────────────────────────────────────────────────────────────
   ipcMain.handle("todu:note:list", (_, filter) => todu.note.list(filter));
   ipcMain.handle("todu:note:create", (_, input) => todu.note.create(input));
+  ipcMain.handle("todu:note:update", (_, id, input) => todu.note.update(id, input));
   ipcMain.handle("todu:note:delete", (_, id) => todu.note.delete(id));
 
   // ── Recurring ────────────────────────────────────────────────────────
