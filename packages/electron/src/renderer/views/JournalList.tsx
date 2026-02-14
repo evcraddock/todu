@@ -8,7 +8,7 @@ import { useNotes } from "../hooks/useTodu.js";
 
 interface JournalListProps {
   onCreateEntry: () => void;
-  onEditEntry: (note: Note) => void;
+  onViewEntry: (note: Note) => void;
 }
 
 // ============================================================================
@@ -45,7 +45,7 @@ export function formatDayHeader(dateStr: string): string {
 // JournalList
 // ============================================================================
 
-export function JournalList({ onCreateEntry, onEditEntry }: JournalListProps): ReactNode {
+export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
   const [filterTag, setFilterTag] = useState("");
 
   // Always fetch all notes (no entityType filter), then filter client-side
@@ -128,11 +128,14 @@ export function JournalList({ onCreateEntry, onEditEntry }: JournalListProps): R
             <div key={day} className="journal-day-group">
               <h3 className="journal-day-header">{formatDayHeader(day)}</h3>
               {dayNotes.map((note) => (
-                <div key={note.id} className="journal-entry-card">
-                  <div className="journal-entry-content">
-                    {note.content.length > 200 ? `${note.content.slice(0, 200)}…` : note.content}
-                  </div>
-                  <div className="journal-entry-footer">
+                <button
+                  key={note.id}
+                  type="button"
+                  className="journal-entry-row"
+                  onClick={() => onViewEntry(note)}
+                >
+                  <span className="journal-entry-time">{note.createdAt.slice(11, 16)}</span>
+                  {note.tags.length > 0 && (
                     <div className="label-chips">
                       {note.tags.map((tag) => (
                         <span key={tag} className="chip chip-label">
@@ -140,16 +143,8 @@ export function JournalList({ onCreateEntry, onEditEntry }: JournalListProps): R
                         </span>
                       ))}
                     </div>
-                    <span className="journal-entry-time">{note.createdAt.slice(11, 16)}</span>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onEditEntry(note)}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
+                  )}
+                </button>
               ))}
             </div>
           ))}
