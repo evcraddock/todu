@@ -233,6 +233,9 @@ export function ProjectDetail({
               onFilterChange={handleFilterChange}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              onAgentSearch={() => {}}
+              isAgentSearching={false}
+              isAgentMode={false}
               hideProject
             />
             {!displayTasks || displayTasks.length === 0 ? (

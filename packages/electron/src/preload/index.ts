@@ -79,6 +79,7 @@ const api = {
     clear: () => ipcRenderer.invoke("todu:agent:clear"),
     setModel: (provider: string, modelId: string) =>
       ipcRenderer.invoke("todu:agent:set-model", provider, modelId),
+    searchTasks: (query: string) => ipcRenderer.invoke("todu:agent:search-tasks", query),
   },
 
   // ── OAuth ──────────────────────────────────────────────────────

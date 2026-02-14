@@ -6,6 +6,7 @@ import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerOAuthIpc, unregisterOAuthIpc } from "./oauth.js";
+import { setupSearchAgent, teardownSearchAgent } from "./search-agent.js";
 import { registerSettingsIpc, unregisterSettingsIpc } from "./settings.js";
 import { registerGlobalShortcuts, unregisterGlobalShortcuts } from "./shortcuts.js";
 import { destroyTray, setupTray } from "./tray.js";
@@ -51,6 +52,7 @@ async function init(): Promise<void> {
   registerSettingsIpc();
   registerOAuthIpc(mainWindow);
   setupAgent(todu, mainWindow);
+  setupSearchAgent(todu, mainWindow);
 
   // Set up system tray
   setupTray(todu, getMainWindow, () => showWindowWithAction("new-task"));
@@ -90,6 +92,7 @@ app.on("window-all-closed", async () => {
   unregisterGlobalShortcuts();
   destroyTray();
   teardownAgent();
+  teardownSearchAgent();
   unregisterOAuthIpc();
   unregisterSettingsIpc();
   if (todu) {
