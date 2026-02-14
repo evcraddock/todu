@@ -60,13 +60,14 @@ function HabitCheckIn({ habitId }: { habitId: string }): ReactNode {
 function TaskRow({
   task,
   projectName,
+  today,
   onSelect,
 }: {
   task: Task;
   projectName?: string;
+  today: string;
   onSelect: (id: string) => void;
 }): ReactNode {
-  const today = todayStr();
   const dueLabel = formatDueLabel(task, today);
   const overdue = isOverdue(task, today);
 
@@ -93,6 +94,7 @@ function Section({
   icon,
   tasks,
   projectMap,
+  today,
   onSelectTask,
   emptyText,
 }: {
@@ -100,6 +102,7 @@ function Section({
   icon: string;
   tasks: Task[];
   projectMap: Map<string, string>;
+  today: string;
   onSelectTask: (id: string) => void;
   emptyText?: string;
 }): ReactNode {
@@ -128,6 +131,7 @@ function Section({
             key={task.id}
             task={task}
             projectName={projectMap.get(task.projectId)}
+            today={today}
             onSelect={onSelectTask}
           />
         ))}
@@ -190,6 +194,7 @@ export function HomeView({
             icon="▶"
             tasks={inProgressSection}
             projectMap={projectMap}
+            today={today}
             onSelectTask={onNavigateToTask}
             emptyText="Nothing in progress right now"
           />
@@ -199,6 +204,7 @@ export function HomeView({
             icon="📅"
             tasks={comingSoon}
             projectMap={projectMap}
+            today={today}
             onSelectTask={onNavigateToTask}
           />
 
@@ -207,6 +213,7 @@ export function HomeView({
             icon="⚡"
             tasks={next}
             projectMap={projectMap}
+            today={today}
             onSelectTask={onNavigateToTask}
           />
 
@@ -215,6 +222,7 @@ export function HomeView({
             icon="⏳"
             tasks={waiting}
             projectMap={projectMap}
+            today={today}
             onSelectTask={onNavigateToTask}
           />
 

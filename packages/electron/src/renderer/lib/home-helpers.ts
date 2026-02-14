@@ -1,13 +1,20 @@
 import type { Task } from "@todu/core/browser";
 
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d + days);
+  const ry = date.getFullYear();
+  const rm = String(date.getMonth() + 1).padStart(2, "0");
+  const rd = String(date.getDate()).padStart(2, "0");
+  return `${ry}-${rm}-${rd}`;
 }
 
 export function isOverdue(task: Task, today: string): boolean {
