@@ -1,10 +1,15 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import type { Api, Model } from "@mariozechner/pi-ai";
 import { getModel } from "@mariozechner/pi-ai";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
-import { getOAuthApiKeyForProvider } from "./oauth.js";
+import {
+  OAUTH_PROVIDER_ALIASES,
+  getOAuthApiKeyForProvider,
+  loadOAuthCredentials,
+} from "./oauth.js";
 import { getApiKey, loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";
 
@@ -42,6 +47,45 @@ You do NOT have access to the file system, code, or terminal. For coding work, t
 - If asked about something outside your capabilities, say so clearly`;
 
 // ============================================================================
+// Model Resolution
+// ============================================================================
+
+/**
+ * Resolve a model, preferring an OAuth-connected alias provider when available.
+ *
+ * Example: if provider is "openai" and modelId is "gpt-5.1", but the user has
+ * OAuth credentials for "openai-codex" and the model also exists there, return
+ * the "openai-codex" variant (which uses the correct chatgpt.com base URL).
+ */
+export function resolveModel(
+  provider: string,
+  modelId: string,
+  deps: {
+    aliases: Record<string, string[]>;
+    hasOAuthCreds: (providerId: string) => boolean;
+    getModelFn: (provider: string, modelId: string) => Model<Api> | undefined;
+  } = {
+    aliases: OAUTH_PROVIDER_ALIASES,
+    hasOAuthCreds: (id) => loadOAuthCredentials(id) !== null,
+    getModelFn: getModel,
+  },
+): Model<Api> | undefined {
+  // Check if an OAuth alias provider has credentials and the model
+  const providerAliases = deps.aliases[provider];
+  if (providerAliases) {
+    for (const alias of providerAliases) {
+      if (deps.hasOAuthCreds(alias)) {
+        const aliasModel = deps.getModelFn(alias, modelId);
+        if (aliasModel) return aliasModel;
+      }
+    }
+  }
+
+  // Fall through to direct lookup
+  return deps.getModelFn(provider, modelId);
+}
+
+// ============================================================================
 // Agent Setup
 // ============================================================================
 
@@ -55,7 +99,7 @@ let unsubscribe: (() => void) | null = null;
 export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
   const tools = createToduTools(todu);
   const settings = loadSettings();
-  const model = getModel(settings.provider, settings.modelId);
+  const model = resolveModel(settings.provider, settings.modelId);
 
   agent = new Agent({
     initialState: {
@@ -102,7 +146,7 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
 
   ipcMain.handle("todu:agent:set-model", (_event, provider: string, modelId: string) => {
     if (!agent) return;
-    const newModel = getModel(provider, modelId);
+    const newModel = resolveModel(provider, modelId);
     if (newModel) {
       agent.setModel(newModel);
     }
