@@ -78,11 +78,20 @@ export function listProviders(): ProviderInfo[] {
   }));
 }
 
+/** Known brand casings for provider ID segments. */
+const BRAND_CASING: Record<string, string> = {
+  openai: "OpenAI",
+  github: "GitHub",
+  ai: "AI",
+  xai: "xAI",
+  cn: "CN",
+};
+
 /** Turn provider IDs like "openai-codex" into "OpenAI Codex". */
-function formatProviderLabel(id: string): string {
+export function formatProviderLabel(id: string): string {
   return id
     .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => BRAND_CASING[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
