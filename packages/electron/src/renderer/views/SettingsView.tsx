@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { AgentSettings, ProviderInfo } from "../types/window.js";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import type { AgentSettings, OAuthEvent, OAuthStatus, ProviderInfo } from "../types/window.js";
 
 // ============================================================================
 // Component
@@ -15,17 +15,64 @@ export function SettingsView(): ReactNode {
   // API key input state — one per provider
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
 
-  // Load settings and provider list on mount
+  // OAuth state
+  const [oauthStatuses, setOauthStatuses] = useState<OAuthStatus[]>([]);
+  const [oauthLoggingIn, setOauthLoggingIn] = useState<string | null>(null);
+  const [oauthPrompt, setOauthPrompt] = useState<{
+    providerId: string;
+    message: string;
+    placeholder?: string;
+  } | null>(null);
+  const [oauthCode, setOauthCode] = useState("");
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  // Load settings, provider list, and OAuth status on mount
   useEffect(() => {
     Promise.all([
       window.todu.settings.get(),
       window.todu.settings.storedProviders(),
       window.todu.settings.providers(),
-    ]).then(([s, keys, providerList]) => {
+      window.todu.oauth.status(),
+    ]).then(([s, keys, providerList, statuses]) => {
       setSettings(s);
       setStoredKeys(keys);
       setProviders(providerList);
+      setOauthStatuses(statuses);
     });
+  }, []);
+
+  // Listen for OAuth events
+  useEffect(() => {
+    const cleanup = window.todu.on("todu:oauth:event", (data) => {
+      const event = data as OAuthEvent;
+      switch (event.type) {
+        case "prompt":
+          setOauthPrompt({
+            providerId: event.providerId,
+            message: event.message ?? "Paste authorization code:",
+            placeholder: event.placeholder,
+          });
+          // Focus the code input after render
+          setTimeout(() => codeInputRef.current?.focus(), 50);
+          break;
+        case "login-complete":
+          setOauthLoggingIn(null);
+          setOauthPrompt(null);
+          setOauthCode("");
+          setOauthError(null);
+          // Refresh statuses
+          window.todu.oauth.status().then(setOauthStatuses);
+          break;
+        case "login-error":
+          setOauthLoggingIn(null);
+          setOauthPrompt(null);
+          setOauthCode("");
+          setOauthError(event.message ?? "Login failed");
+          break;
+      }
+    });
+    return cleanup;
   }, []);
 
   // Get models for current provider
@@ -96,6 +143,40 @@ export function SettingsView(): ReactNode {
     }
   }, []);
 
+  // ── OAuth handlers ───────────────────────────────────────────────
+
+  const handleOAuthLogin = useCallback(async (providerId: string) => {
+    setOauthLoggingIn(providerId);
+    setOauthError(null);
+    try {
+      await window.todu.oauth.login(providerId);
+    } catch {
+      // Error is handled via the oauth:event listener
+    }
+  }, []);
+
+  const handleOAuthSubmitCode = useCallback(async () => {
+    const code = oauthCode.trim();
+    if (!code) return;
+    await window.todu.oauth.promptResponse(code);
+    setOauthPrompt(null);
+    setOauthCode("");
+  }, [oauthCode]);
+
+  const handleOAuthCancel = useCallback(async () => {
+    await window.todu.oauth.cancel();
+    setOauthLoggingIn(null);
+    setOauthPrompt(null);
+    setOauthCode("");
+  }, []);
+
+  const handleOAuthDisconnect = useCallback(async (providerId: string) => {
+    await window.todu.oauth.disconnect(providerId);
+    setOauthStatuses((prev) =>
+      prev.map((s) => (s.id === providerId ? { ...s, connected: false, expired: false } : s)),
+    );
+  }, []);
+
   if (!settings || providers.length === 0) {
     return <div className="loading-state">Loading settings...</div>;
   }
@@ -161,12 +242,108 @@ export function SettingsView(): ReactNode {
         </div>
       </div>
 
+      {/* ── Subscriptions ───────────────────────────────────────────── */}
+      <div className="settings-section">
+        <h3 className="section-title">Subscriptions</h3>
+        <p className="settings-hint">
+          Log in with your existing AI subscription. OAuth credentials are encrypted and stored
+          locally. When connected, subscriptions take priority over API keys.
+        </p>
+
+        {oauthError && <div className="settings-oauth-error">{oauthError}</div>}
+
+        {oauthStatuses.map((status) => (
+          <div key={status.id} className="settings-key-row">
+            <div className="settings-key-header">
+              <span className="settings-key-label">{status.name}</span>
+              <span
+                className={`settings-key-status ${
+                  status.connected
+                    ? status.expired
+                      ? "settings-key-missing"
+                      : "settings-key-stored"
+                    : "settings-key-missing"
+                }`}
+              >
+                {status.connected
+                  ? status.expired
+                    ? "⚠ Expired"
+                    : "✓ Connected"
+                  : "Not connected"}
+              </span>
+            </div>
+
+            <div className="settings-key-input-row">
+              {/* Show prompt input during login flow */}
+              {oauthPrompt?.providerId === status.id ? (
+                <>
+                  <input
+                    ref={codeInputRef}
+                    type="text"
+                    className="input settings-key-input"
+                    placeholder={oauthPrompt.placeholder ?? "Paste authorization code"}
+                    value={oauthCode}
+                    onChange={(e) => setOauthCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleOAuthSubmitCode();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!oauthCode.trim()}
+                    onClick={handleOAuthSubmitCode}
+                  >
+                    Submit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={handleOAuthCancel}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Login / Re-login button */}
+                  {(!status.connected || status.expired) && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={oauthLoggingIn !== null}
+                      onClick={() => handleOAuthLogin(status.id)}
+                    >
+                      {oauthLoggingIn === status.id
+                        ? "Opening browser..."
+                        : status.expired
+                          ? "Re-login"
+                          : "Login"}
+                    </button>
+                  )}
+                  {/* Disconnect button */}
+                  {status.connected && (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleOAuthDisconnect(status.id)}
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* ── API Keys ────────────────────────────────────────────────── */}
       <div className="settings-section">
         <h3 className="section-title">API Keys</h3>
         <p className="settings-hint">
           Keys are encrypted and stored locally. They are never sent anywhere except to the
-          provider&apos;s API.
+          provider&apos;s API. Subscriptions above take priority when connected.
         </p>
 
         {keyProviders.map((provider) => (

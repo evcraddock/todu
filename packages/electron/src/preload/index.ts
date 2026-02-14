@@ -81,6 +81,15 @@ const api = {
       ipcRenderer.invoke("todu:agent:set-model", provider, modelId),
   },
 
+  // ── OAuth ──────────────────────────────────────────────────────
+  oauth: {
+    login: (providerId: string) => ipcRenderer.invoke("todu:oauth:login", providerId),
+    promptResponse: (code: string) => ipcRenderer.invoke("todu:oauth:prompt-response", code),
+    cancel: () => ipcRenderer.invoke("todu:oauth:cancel"),
+    status: () => ipcRenderer.invoke("todu:oauth:status"),
+    disconnect: (providerId: string) => ipcRenderer.invoke("todu:oauth:disconnect", providerId),
+  },
+
   // ── Settings ─────────────────────────────────────────────────────
   settings: {
     get: () => ipcRenderer.invoke("todu:settings:get"),
@@ -98,7 +107,12 @@ const api = {
   // For change notifications and future agent events.
   // Restricted to an allowlist of known channels for security.
   on: (channel: string, callback: (data: unknown) => void) => {
-    const ALLOWED_CHANNELS = ["todu:data:changed", "todu:agent:event", "todu:action"];
+    const ALLOWED_CHANNELS = [
+      "todu:data:changed",
+      "todu:agent:event",
+      "todu:oauth:event",
+      "todu:action",
+    ];
     if (!ALLOWED_CHANNELS.includes(channel)) {
       console.warn(`Blocked listen on unknown channel: ${channel}`);
       return () => {};

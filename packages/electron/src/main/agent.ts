@@ -4,6 +4,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
+import { getOAuthApiKeyForProvider } from "./oauth.js";
 import { getApiKey, loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";
 
@@ -62,7 +63,12 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
       model,
       tools,
     },
-    getApiKey: (provider: string) => getApiKey(provider),
+    getApiKey: async (provider: string) => {
+      // OAuth credentials take priority over manual API keys
+      const oauthKey = await getOAuthApiKeyForProvider(provider);
+      if (oauthKey) return oauthKey;
+      return getApiKey(provider);
+    },
   });
 
   // Forward agent events to renderer
