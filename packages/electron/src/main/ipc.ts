@@ -10,7 +10,7 @@ import { ipcMain } from "electron";
  */
 export function registerIpcHandlers(todu: Todu): void {
   // ── Project ──────────────────────────────────────────────────────────
-  ipcMain.handle("todu:project:list", () => todu.project.list());
+  ipcMain.handle("todu:project:list", (_, filter) => todu.project.list(filter));
   ipcMain.handle("todu:project:get", (_, id) => todu.project.get(id));
   ipcMain.handle("todu:project:create", (_, input) => todu.project.create(input));
   ipcMain.handle("todu:project:update", (_, id, input) => todu.project.update(id, input));

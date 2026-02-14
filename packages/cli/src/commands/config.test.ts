@@ -24,7 +24,7 @@ describe("config CLI commands", () => {
   function run(args: string): string {
     return execSync(`node ${cliPath} ${args}`, {
       cwd: tmpDir,
-      env: { ...process.env, TODU_DATA_DIR: "", TODU_CONFIG: "" },
+      env: { ...process.env, TODU_DATA_DIR: "", TODU_CONFIG: "", TODU_NO_SYNC: "1" },
       encoding: "utf-8",
       timeout: 15000,
     }).trim();

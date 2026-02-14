@@ -11,6 +11,7 @@ import type {
   LabelId,
   NoteFilter,
   NoteId,
+  ProjectFilter,
   ProjectId,
   RecurringFilter,
   RecurringId,
@@ -81,10 +82,10 @@ function unwrap<T>(result: Result<T>): T {
 // Project Hooks
 // ============================================================================
 
-export function useProjects() {
+export function useProjects(filter?: ProjectFilter) {
   return useQuery({
-    queryKey: queryKeys.projects,
-    queryFn: async () => unwrap(await window.todu.project.list()),
+    queryKey: filter ? [...queryKeys.projects, filter] : queryKeys.projects,
+    queryFn: async () => unwrap(await window.todu.project.list(filter)),
   });
 }
 

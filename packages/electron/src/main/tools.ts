@@ -35,7 +35,26 @@ function formatResult<T>(result: Result<T, ToduError>): AgentToolResult<unknown>
 // Parameter Schemas
 // ============================================================================
 
-const ListProjectsParams = Type.Object({});
+const ProjectStatusEnum = Type.Union([
+  Type.Literal("active"),
+  Type.Literal("done"),
+  Type.Literal("canceled"),
+]);
+
+const ListProjectsParams = Type.Object({
+  status: Type.Optional(
+    Type.Array(ProjectStatusEnum, {
+      description:
+        'Filter by project status. Pass one or more statuses, e.g. ["active"] or ["active", "done"].',
+    }),
+  ),
+  priority: Type.Optional(
+    Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")], {
+      description: "Filter by priority",
+    }),
+  ),
+  search: Type.Optional(Type.String({ description: "Search projects by name" })),
+});
 
 const CreateProjectParams = Type.Object({
   name: Type.String({ description: "Project name" }),
@@ -231,10 +250,23 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     // ── Projects ─────────────────────────────────────────────────────
     {
       name: "list_projects",
-      description: "List all projects with their status, priority, and IDs.",
+      description:
+        "List projects with optional filtering by status, priority, or name search. Use filter parameters so the UI updates to show matching projects.",
       label: "List Projects",
       parameters: ListProjectsParams,
-      execute: async () => formatResult(await todu.project.list()),
+      execute: async (_toolCallId, params) => {
+        const filter = Object.keys(params).length > 0 ? params : undefined;
+        const result = await todu.project.list(filter);
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_projects",
+            filter: filter ?? {},
+          });
+        }
+
+        return formatResult(result);
+      },
     },
     {
       name: "create_project",

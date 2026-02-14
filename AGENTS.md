@@ -125,6 +125,19 @@ If CI fails:
 - Fix the issue, commit, and push
 - Wait for CI to pass before requesting review
 
+## Test Failures
+
+**ALL tests must pass. No exceptions.**
+
+If `make pre-pr` shows failing tests, fix them — even if you didn't cause the failure. Pre-existing test failures are not someone else's problem. If you're touching the codebase, you own the test suite.
+
+- Do NOT dismiss failures as "pre-existing" or "unrelated"
+- Do NOT skip or ignore failing tests to get a green PR
+- If a fix is non-trivial, explain the root cause and fix it properly
+- If a test is genuinely obsolete, remove it with justification — don't just disable it
+
+The bar is simple: `make pre-pr` passes with zero failures before creating a PR.
+
 ## Conventions
 
 - Use TypeScript strict mode
