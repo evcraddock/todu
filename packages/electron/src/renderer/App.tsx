@@ -158,6 +158,7 @@ export function App(): ReactNode {
         <AgentPane
           visible={agentPane.visible}
           width={agentPane.cssWidth}
+          isDragging={agentPane.isDragging}
           onDragStart={agentPane.onDragStart}
           onClose={agentPane.hide}
         />

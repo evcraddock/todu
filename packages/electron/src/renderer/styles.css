@@ -2081,6 +2081,10 @@ button.detail-description {
   transition: width 0.15s, min-width 0.15s;
 }
 
+.agent-pane-dragging {
+  transition: none;
+}
+
 .agent-pane-resize-handle {
   position: absolute;
   top: 0;

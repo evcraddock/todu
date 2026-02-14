@@ -45,6 +45,7 @@ function saveState(state: AgentPaneState): void {
 export interface UseAgentPaneResult {
   width: number;
   visible: boolean;
+  isDragging: boolean;
   cssWidth: number;
   toggle: () => void;
   show: () => void;
@@ -54,7 +55,8 @@ export interface UseAgentPaneResult {
 
 export function useAgentPane(): UseAgentPaneResult {
   const [state, setState] = useState<AgentPaneState>(loadAgentPaneState);
-  const isDragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
 
@@ -80,12 +82,13 @@ export function useAgentPane(): UseAgentPaneResult {
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      isDragging.current = true;
+      isDraggingRef.current = true;
+      setIsDragging(true);
       dragStartX.current = e.clientX;
       dragStartWidth.current = state.width;
 
       const onMouseMove = (ev: MouseEvent): void => {
-        if (!isDragging.current) return;
+        if (!isDraggingRef.current) return;
         // Dragging left (negative delta) → wider pane
         const delta = dragStartX.current - ev.clientX;
         const newWidth = dragStartWidth.current + delta;
@@ -97,7 +100,8 @@ export function useAgentPane(): UseAgentPaneResult {
       };
 
       const onMouseUp = (): void => {
-        isDragging.current = false;
+        isDraggingRef.current = false;
+        setIsDragging(false);
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
         document.body.style.cursor = "";
@@ -117,6 +121,7 @@ export function useAgentPane(): UseAgentPaneResult {
   return {
     width: state.width,
     visible: state.visible,
+    isDragging,
     cssWidth,
     toggle,
     show,

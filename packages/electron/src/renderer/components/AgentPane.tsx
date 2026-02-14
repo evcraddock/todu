@@ -4,15 +4,28 @@ import { AgentView } from "../views/AgentView.js";
 interface AgentPaneProps {
   visible: boolean;
   width: number;
+  isDragging: boolean;
   onDragStart: (e: React.MouseEvent) => void;
   onClose: () => void;
 }
 
-export function AgentPane({ visible, width, onDragStart, onClose }: AgentPaneProps): ReactNode {
-  if (!visible) return null;
+export function AgentPane({
+  visible,
+  width,
+  isDragging,
+  onDragStart,
+  onClose,
+}: AgentPaneProps): ReactNode {
+  const style: React.CSSProperties = visible
+    ? { width, minWidth: width }
+    : { width: 0, minWidth: 0, display: "none" };
+
+  const className = ["agent-pane", isDragging ? "agent-pane-dragging" : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <aside className="agent-pane" style={{ width, minWidth: width }}>
+    <aside className={className} style={style}>
       <div
         className="agent-pane-resize-handle"
         onMouseDown={onDragStart}
