@@ -96,6 +96,7 @@ export function Sidebar({
         <div
           className="sidebar-resize-handle"
           onMouseDown={onDragStart}
+          onDoubleClick={onToggleCollapse}
           role="separator"
           tabIndex={0}
           aria-orientation="vertical"
