@@ -57,21 +57,32 @@ You do NOT have access to the file system, code, or terminal. For coding work, t
  * OAuth credentials for "openai-codex" and the model also exists there, return
  * the "openai-codex" variant (which uses the correct chatgpt.com base URL).
  */
-function resolveModel(provider: string, modelId: string): Model<Api> | undefined {
+export function resolveModel(
+  provider: string,
+  modelId: string,
+  deps: {
+    aliases: Record<string, string[]>;
+    hasOAuthCreds: (providerId: string) => boolean;
+    getModelFn: (provider: string, modelId: string) => Model<Api> | undefined;
+  } = {
+    aliases: OAUTH_PROVIDER_ALIASES,
+    hasOAuthCreds: (id) => loadOAuthCredentials(id) !== null,
+    getModelFn: getModel,
+  },
+): Model<Api> | undefined {
   // Check if an OAuth alias provider has credentials and the model
-  const aliases = OAUTH_PROVIDER_ALIASES[provider];
-  if (aliases) {
-    for (const alias of aliases) {
-      if (loadOAuthCredentials(alias)) {
-        const aliasModel = getModel(alias, modelId);
+  const providerAliases = deps.aliases[provider];
+  if (providerAliases) {
+    for (const alias of providerAliases) {
+      if (deps.hasOAuthCreds(alias)) {
+        const aliasModel = deps.getModelFn(alias, modelId);
         if (aliasModel) return aliasModel;
       }
     }
   }
 
-  // Also check the reverse: if provider is "openai-codex" but no OAuth creds,
-  // fall back to the base provider model
-  return getModel(provider, modelId);
+  // Fall through to direct lookup
+  return deps.getModelFn(provider, modelId);
 }
 
 // ============================================================================
