@@ -1077,6 +1077,41 @@ button.detail-description {
   min-height: 100px;
 }
 
+/* Compressed metadata rows */
+
+.detail-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.detail-meta-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-meta-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Tabbed detail content */
+
+.detail-tabs {
+  margin-top: 20px;
+}
+
+.detail-tab-content {
+  padding-top: 4px;
+}
+
+/* Footer metadata */
+
 .detail-meta {
   display: flex;
   gap: 16px;

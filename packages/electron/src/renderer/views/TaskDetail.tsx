@@ -8,8 +8,10 @@ import {
 import { type ReactNode, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { StatusChip } from "../components/StatusChip.js";
+import { TabBar } from "../components/TabBar.js";
 import {
   useDeleteTask,
   useMoveTask,
@@ -57,6 +59,15 @@ function StatusShortcuts({
 }
 
 // ============================================================================
+// Content tabs
+// ============================================================================
+
+const TABS = [
+  { id: "description", label: "Description" },
+  { id: "comments", label: "Comments" },
+];
+
+// ============================================================================
 // Task Detail View
 // ============================================================================
 
@@ -73,8 +84,10 @@ export function TaskDetail({
   const deleteTask = useDeleteTask();
   const moveTask = useMoveTask();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [activeTab, setActiveTab] = useState("description");
 
   if (isLoading) {
     return (
@@ -100,20 +113,21 @@ export function TaskDetail({
     );
   }
 
-  const handleInlineEdit = (field: string, currentValue: string) => {
-    setEditingField(field);
-    setEditValue(currentValue);
-  };
-
-  const handleInlineSave = (field: string) => {
-    setEditingField(null);
-    if (editValue !== (task as Record<string, unknown>)[field]) {
-      updateTask.mutate({ id: task.id as TaskId, input: { [field]: editValue } });
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    if (titleValue.trim() && titleValue !== task.title) {
+      updateTask.mutate({ id: task.id as TaskId, input: { title: titleValue.trim() } });
     }
   };
 
   const handleStatusChange = (status: TaskStatus) => {
     updateTask.mutate({ id: task.id as TaskId, input: { status } });
+  };
+
+  const handleDescriptionSave = (markdown: string) => {
+    if (markdown !== (task.description ?? "")) {
+      updateTask.mutate({ id: task.id as TaskId, input: { description: markdown } });
+    }
   };
 
   const handleDelete = () => {
@@ -124,10 +138,9 @@ export function TaskDetail({
     moveTask.mutate({ id: task.id as TaskId, projectId: createProjectId(projectId) });
   };
 
-  const projectName = projects?.find((p) => p.id === task.projectId)?.name ?? "—";
-
   return (
     <div className="view-container">
+      {/* Toolbar */}
       <div className="detail-toolbar">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
           ← Back
@@ -143,15 +156,15 @@ export function TaskDetail({
 
       {/* Title */}
       <div className="detail-title-row">
-        {editingField === "title" ? (
+        {editingTitle ? (
           <input
             className="input detail-title-input"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("title")}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={handleTitleSave}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleInlineSave("title");
-              if (e.key === "Escape") setEditingField(null);
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") setEditingTitle(false);
             }}
             autoFocus
           />
@@ -159,119 +172,131 @@ export function TaskDetail({
           <button
             type="button"
             className="detail-title clickable"
-            onClick={() => handleInlineEdit("title", task.title)}
+            onClick={() => {
+              setTitleValue(task.title);
+              setEditingTitle(true);
+            }}
           >
             {task.title}
           </button>
         )}
       </div>
 
-      {/* Status + shortcuts */}
-      <div className="detail-field">
-        <span className="detail-label">Status</span>
-        <StatusChip status={task.status} />
-        <StatusShortcuts currentStatus={task.status} onStatusChange={handleStatusChange} />
-      </div>
-
-      {/* Priority */}
-      <div className="detail-field">
-        <span className="detail-label">Priority</span>
-        <select
-          className="filter-select inline-select"
-          value={task.priority}
-          onChange={(e) =>
-            updateTask.mutate({
-              id: task.id as TaskId,
-              input: { priority: e.target.value as TaskPriority },
-            })
-          }
-        >
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      {/* Project */}
-      <div className="detail-field">
-        <span className="detail-label">Project</span>
-        <select
-          className="filter-select inline-select"
-          value={task.projectId}
-          onChange={(e) => handleMove(e.target.value)}
-        >
-          {projects?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Due Date */}
-      <div className="detail-field">
-        <span className="detail-label">Due Date</span>
-        <input
-          type="date"
-          className="input inline-input"
-          value={task.dueDate?.slice(0, 10) ?? ""}
-          onChange={(e) =>
-            updateTask.mutate({
-              id: task.id as TaskId,
-              input: { dueDate: e.target.value || undefined },
-            })
-          }
-        />
-      </div>
-
-      {/* Labels */}
-      <div className="detail-field">
-        <span className="detail-label">Labels</span>
-        <div className="label-chips">
-          {task.labels.length > 0 ? (
-            task.labels.map((l) => (
-              <span key={l} className="chip chip-label">
-                {l}
-              </span>
-            ))
-          ) : (
-            <span className="empty-hint">None</span>
-          )}
+      {/* Compressed metadata — Row 1: Status + Priority */}
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <StatusChip status={task.status} />
+          <StatusShortcuts currentStatus={task.status} onStatusChange={handleStatusChange} />
+        </div>
+        <div className="detail-meta-cell">
+          <PriorityChip priority={task.priority} />
+          <select
+            className="filter-select inline-select"
+            value={task.priority}
+            onChange={(e) =>
+              updateTask.mutate({
+                id: task.id as TaskId,
+                input: { priority: e.target.value as TaskPriority },
+              })
+            }
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
         </div>
       </div>
 
-      {/* Description */}
-      <div className="detail-section">
-        <h3 className="section-title">Description</h3>
-        {editingField === "description" ? (
-          <textarea
-            className="input detail-description-input"
-            rows={5}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={() => handleInlineSave("description")}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            className="detail-description clickable"
-            onClick={() => handleInlineEdit("description", task.description ?? "")}
+      {/* Compressed metadata — Row 2: Project, Due Date, Labels */}
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Project</span>
+          <select
+            className="filter-select inline-select"
+            value={task.projectId}
+            onChange={(e) => handleMove(e.target.value)}
           >
-            {task.description || <span className="empty-hint">Click to add description…</span>}
-          </button>
+            {projects?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Due</span>
+          <input
+            type="date"
+            className="input inline-input"
+            value={task.dueDate?.slice(0, 10) ?? ""}
+            onChange={(e) =>
+              updateTask.mutate({
+                id: task.id as TaskId,
+                input: { dueDate: e.target.value || undefined },
+              })
+            }
+          />
+        </div>
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Labels</span>
+          <div className="label-chips">
+            {task.labels.length > 0 ? (
+              task.labels.map((l) => (
+                <span key={l} className="chip chip-label">
+                  {l}
+                </span>
+              ))
+            ) : (
+              <span className="empty-hint">None</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabbed content */}
+      <div className="detail-tabs">
+        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {activeTab === "description" && (
+          <div className="detail-tab-content">
+            {editingDescription ? (
+              <MarkdownEditor
+                value={task.description ?? ""}
+                onChange={handleDescriptionSave}
+                placeholder="Add a description…"
+                minHeight={200}
+                autoFocus
+                onBlur={() => setEditingDescription(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="detail-description clickable"
+                onClick={() => setEditingDescription(true)}
+              >
+                {task.description ? (
+                  <MarkdownEditor value={task.description} editable={false} minHeight={60} />
+                ) : (
+                  <span className="empty-hint">Click to add description…</span>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {activeTab === "comments" && (
+          <div className="detail-tab-content">
+            <CommentThread entityType="task" entityId={taskId} />
+          </div>
         )}
       </div>
 
-      {/* Metadata */}
+      {/* Footer metadata */}
       <div className="detail-meta">
         <span>Created: {task.createdAt.slice(0, 10)}</span>
         <span>Updated: {task.updatedAt.slice(0, 10)}</span>
         <span>ID: {task.id}</span>
       </div>
-
-      {/* Comments */}
-      <CommentThread entityType="task" entityId={taskId} />
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
