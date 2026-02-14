@@ -398,4 +398,74 @@ describe("todu agent tools", () => {
       expect(result.details).toEqual({ isError: true });
     });
   });
+
+  // ── UI Action emission ──────────────────────────────────────────────
+
+  describe("ui-action emission", () => {
+    it("list_tasks emits show_tasks ui-action with filter", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listTasks = toolsWithWindow.find((t) => t.name === "list_tasks")!;
+
+      await listTasks.execute("test-call", { priority: "high", status: "active" });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_tasks",
+        filter: { priority: "high", status: "active" },
+      });
+    });
+
+    it("list_tasks emits filter without sort fields", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listTasks = toolsWithWindow.find((t) => t.name === "list_tasks")!;
+
+      await listTasks.execute("test-call", {
+        priority: "high",
+        sortField: "title",
+        sortDirection: "asc",
+      });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      // Filter should NOT include sortField/sortDirection
+      expect(uiActions[0].data).toEqual({
+        action: "show_tasks",
+        filter: { priority: "high" },
+      });
+    });
+
+    it("list_tasks does not emit when no mainWindow provided", async () => {
+      // The default tools (no mainWindow) should not throw
+      const listTasks = tools.find((t) => t.name === "list_tasks")!;
+      const result = await listTasks.execute("test-call", {});
+      expect(result.content[0].type).toBe("text");
+    });
+  });
 });

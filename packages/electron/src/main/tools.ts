@@ -3,6 +3,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import type { Result, ToduError } from "@todu/core";
 import type { Todu } from "@todu/engine";
+import type { BrowserWindow } from "electron";
 
 // ============================================================================
 // Helpers
@@ -223,7 +224,7 @@ const ListNotesParams = Type.Object({
  * Create all todu agent tools from a Todu engine instance.
  * Each tool wraps an engine SDK method and returns structured results.
  */
-export function createToduTools(todu: Todu): AgentTool<TSchema>[] {
+export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTool<TSchema>[] {
   return [
     // ── Projects ─────────────────────────────────────────────────────
     {
@@ -261,7 +262,17 @@ export function createToduTools(todu: Todu): AgentTool<TSchema>[] {
         const sort = sortField
           ? { field: sortField, direction: sortDirection ?? "asc" }
           : undefined;
-        return formatResult(await todu.task.list(filter, sort));
+        const result = await todu.task.list(filter, sort);
+
+        // Emit UI action to navigate Tasks view with the same filters
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_tasks",
+            filter,
+          });
+        }
+
+        return formatResult(result);
       },
     },
     {

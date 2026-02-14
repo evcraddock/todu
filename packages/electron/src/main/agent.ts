@@ -97,7 +97,7 @@ let unsubscribe: (() => void) | null = null;
  * Call this once during app startup after the engine and window are ready.
  */
 export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
-  const tools = createToduTools(todu);
+  const tools = createToduTools(todu, mainWindow);
   const settings = loadSettings();
   const model = resolveModel(settings.provider, settings.modelId);
 

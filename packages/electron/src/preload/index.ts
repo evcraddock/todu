@@ -113,6 +113,7 @@ const api = {
       "todu:agent:event",
       "todu:oauth:event",
       "todu:action",
+      "todu:ui-action",
     ];
     if (!ALLOWED_CHANNELS.includes(channel)) {
       console.warn(`Blocked listen on unknown channel: ${channel}`);
