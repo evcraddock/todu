@@ -23,7 +23,7 @@
     "@automerge/automerge-repo": "^2.5.1",
     "@automerge/automerge-repo-network-websocket": "^2.5.1",
     "@automerge/automerge-repo-storage-nodefs": "^2.5.1",
-    "@todu/core": "^0.0.1",
+    "@todu/core": "*",
     "rrule": "^2.8.1",
     "ws": "^8.19.0"
   },
