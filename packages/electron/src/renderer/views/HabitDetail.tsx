@@ -1,5 +1,5 @@
 import type { HabitId } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
@@ -150,6 +150,14 @@ export function HabitDetail({
   const deleteHabit = useDeleteHabit();
   const pauseHabit = usePauseHabit();
   const resumeHabit = useResumeHabit();
+
+  // Focus entity context for agent
+  useEffect(() => {
+    window.todu.agent.focusEntity("habit", habitId);
+    return () => {
+      window.todu.agent.clearFocusedEntity();
+    };
+  }, [habitId]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);

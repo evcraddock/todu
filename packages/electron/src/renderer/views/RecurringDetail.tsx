@@ -1,5 +1,5 @@
 import { type RecurringId, createProjectId } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
@@ -122,6 +122,14 @@ export function RecurringDetail({
   const deleteRecurring = useDeleteRecurring();
   const pauseRecurring = usePauseRecurring();
   const resumeRecurring = useResumeRecurring();
+
+  // Focus entity context for agent
+  useEffect(() => {
+    window.todu.agent.focusEntity("recurring", templateId);
+    return () => {
+      window.todu.agent.clearFocusedEntity();
+    };
+  }, [templateId]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);

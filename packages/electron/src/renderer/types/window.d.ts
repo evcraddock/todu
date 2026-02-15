@@ -124,6 +124,8 @@ export interface ToduAgentApi {
   abort(): Promise<void>;
   clear(): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
+  focusEntity(entityType: string, entityId: string): Promise<void>;
+  clearFocusedEntity(): Promise<void>;
 }
 
 export interface AgentSettings {

@@ -1,6 +1,6 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { describe, expect, it } from "vitest";
-import { resolveModel } from "./agent.js";
+import { type FocusedEntity, buildSystemPrompt, resolveModel } from "./agent.js";
 
 // ============================================================================
 // Test helpers
@@ -100,5 +100,56 @@ describe("resolveModel", () => {
       getModelFn: fakeGetModel,
     });
     expect(model?.provider).toBe("anthropic");
+  });
+});
+
+// ============================================================================
+// buildSystemPrompt
+// ============================================================================
+
+describe("buildSystemPrompt", () => {
+  it("returns base prompt when no focused entity", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(prompt).not.toContain("Currently Focused");
+  });
+
+  it("returns base prompt when focused entity but no data", () => {
+    const focused: FocusedEntity = { entityType: "task", entityId: "t-123" };
+    const prompt = buildSystemPrompt(focused, undefined);
+    expect(prompt).not.toContain("Currently Focused");
+  });
+
+  it("appends focused task context to system prompt", () => {
+    const focused: FocusedEntity = { entityType: "task", entityId: "t-123" };
+    const entityData = '```json\n{"id":"t-123","title":"Test task"}\n```';
+    const prompt = buildSystemPrompt(focused, entityData);
+    expect(prompt).toContain("Currently Focused Task");
+    expect(prompt).toContain('use ID "t-123"');
+    expect(prompt).toContain("Test task");
+  });
+
+  it("appends focused project context to system prompt", () => {
+    const focused: FocusedEntity = { entityType: "project", entityId: "p-456" };
+    const entityData = '```json\n{"id":"p-456","name":"My Project"}\n```';
+    const prompt = buildSystemPrompt(focused, entityData);
+    expect(prompt).toContain("Currently Focused Project");
+    expect(prompt).toContain('use ID "p-456"');
+    expect(prompt).toContain("My Project");
+  });
+
+  it("appends focused habit context to system prompt", () => {
+    const focused: FocusedEntity = { entityType: "habit", entityId: "h-789" };
+    const entityData = '```json\n{"id":"h-789","title":"Exercise"}\n```';
+    const prompt = buildSystemPrompt(focused, entityData);
+    expect(prompt).toContain("Currently Focused Habit");
+    expect(prompt).toContain('use ID "h-789"');
+  });
+
+  it("appends focused recurring context to system prompt", () => {
+    const focused: FocusedEntity = { entityType: "recurring", entityId: "r-101" };
+    const entityData = '```json\n{"id":"r-101","title":"Weekly review"}\n```';
+    const prompt = buildSystemPrompt(focused, entityData);
+    expect(prompt).toContain("Currently Focused Recurring");
+    expect(prompt).toContain('use ID "r-101"');
   });
 });
