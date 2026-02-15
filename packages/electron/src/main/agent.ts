@@ -102,12 +102,15 @@ let unsubscribe: (() => void) | null = null;
 // Focused Entity Context
 // ============================================================================
 
+export type FocusedEntityType = "task" | "project" | "habit" | "recurring";
+
 export interface FocusedEntity {
-  entityType: string;
+  entityType: FocusedEntityType;
   entityId: string;
 }
 
 let focusedEntity: FocusedEntity | null = null;
+let focusGeneration = 0;
 
 export function buildSystemPrompt(focused: FocusedEntity | null, entityData?: string): string {
   if (!focused || !entityData) return TODU_SYSTEM_PROMPT;
@@ -162,11 +165,13 @@ ${JSON.stringify({ id: r.id, title: r.title, paused: r.paused, schedule: r.sched
 
 async function updateAgentContext(todu: Todu): Promise<void> {
   if (!agent) return;
+  const gen = ++focusGeneration;
   if (!focusedEntity) {
     agent.setSystemPrompt(TODU_SYSTEM_PROMPT);
     return;
   }
   const entityData = await loadEntityData(todu, focusedEntity);
+  if (gen !== focusGeneration) return; // stale, skip
   agent.setSystemPrompt(buildSystemPrompt(focusedEntity, entityData));
 }
 
@@ -233,7 +238,9 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
   ipcMain.handle(
     "todu:agent:focus-entity",
     async (_event, entityType: string, entityId: string) => {
-      focusedEntity = { entityType, entityId };
+      const validTypes: FocusedEntityType[] = ["task", "project", "habit", "recurring"];
+      if (!validTypes.includes(entityType as FocusedEntityType)) return;
+      focusedEntity = { entityType: entityType as FocusedEntityType, entityId };
       await updateAgentContext(todu);
     },
   );
@@ -262,5 +269,6 @@ export function teardownAgent(): void {
   ipcMain.removeHandler("todu:agent:clear-focused-entity");
 
   focusedEntity = null;
+  focusGeneration = 0;
   agent = null;
 }

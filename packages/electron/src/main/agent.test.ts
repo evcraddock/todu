@@ -1,6 +1,11 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { describe, expect, it } from "vitest";
-import { type FocusedEntity, buildSystemPrompt, resolveModel } from "./agent.js";
+import {
+  type FocusedEntity,
+  type FocusedEntityType,
+  buildSystemPrompt,
+  resolveModel,
+} from "./agent.js";
 
 // ============================================================================
 // Test helpers
