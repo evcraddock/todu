@@ -12,9 +12,13 @@ import { TaskList } from "./TaskList.js";
 export function TasksView({
   triggerCreateTask = 0,
   externalFilter,
+  focusTaskId,
+  onFocusConsumed,
 }: {
   triggerCreateTask?: number;
   externalFilter?: TaskFilter | null;
+  focusTaskId?: string | null;
+  onFocusConsumed?: () => void;
 }): ReactNode {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -26,6 +30,14 @@ export function TasksView({
       setShowCreateDialog(true);
     }
   }, [triggerCreateTask]);
+
+  // Navigate to task detail when agent creates a task
+  useEffect(() => {
+    if (focusTaskId) {
+      setSelectedTaskId(focusTaskId);
+      onFocusConsumed?.();
+    }
+  }, [focusTaskId, onFocusConsumed]);
 
   if (selectedTaskId) {
     return <TaskDetail taskId={selectedTaskId} onBack={() => setSelectedTaskId(null)} />;

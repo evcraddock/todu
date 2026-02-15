@@ -27,6 +27,8 @@ function ViewRouter({
   agentProjectFilter,
   agentHabitFilter,
   agentRecurringFilter,
+  focusTaskId,
+  onFocusTaskConsumed,
   themePreference,
   onThemeChange,
 }: {
@@ -37,8 +39,8 @@ function ViewRouter({
   agentProjectFilter: ProjectFilter | null;
   agentHabitFilter: HabitFilter | null;
   agentRecurringFilter: RecurringFilter | null;
-  agentHabitFilter: HabitFilter | null;
-  agentRecurringFilter: RecurringFilter | null;
+  focusTaskId: string | null;
+  onFocusTaskConsumed: () => void;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -48,7 +50,14 @@ function ViewRouter({
     case "projects":
       return <ProjectsView externalFilter={agentProjectFilter} />;
     case "tasks":
-      return <TasksView triggerCreateTask={triggerCreateTask} externalFilter={agentTaskFilter} />;
+      return (
+        <TasksView
+          triggerCreateTask={triggerCreateTask}
+          externalFilter={agentTaskFilter}
+          focusTaskId={focusTaskId}
+          onFocusConsumed={onFocusTaskConsumed}
+        />
+      );
     case "habits":
       return <HabitsView externalFilter={agentHabitFilter} />;
     case "recurring":
@@ -71,6 +80,7 @@ export function App(): ReactNode {
   const [agentProjectFilter, setAgentProjectFilter] = useState<ProjectFilter | null>(null);
   const [agentHabitFilter, setAgentHabitFilter] = useState<HabitFilter | null>(null);
   const [agentRecurringFilter, setAgentRecurringFilter] = useState<RecurringFilter | null>(null);
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -96,6 +106,12 @@ export function App(): ReactNode {
       } else if (uiAction.action === "show_recurring") {
         setActiveView("recurring");
         setAgentRecurringFilter((uiAction.filter as RecurringFilter) ?? {});
+      } else if (uiAction.action === "show_task_detail") {
+        const { taskId } = uiAction as { action: string; taskId?: string };
+        if (taskId) {
+          setActiveView("tasks");
+          setFocusTaskId(taskId);
+        }
       }
     });
     return cleanup;
@@ -180,6 +196,8 @@ export function App(): ReactNode {
             agentProjectFilter={agentProjectFilter}
             agentHabitFilter={agentHabitFilter}
             agentRecurringFilter={agentRecurringFilter}
+            focusTaskId={focusTaskId}
+            onFocusTaskConsumed={() => setFocusTaskId(null)}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />

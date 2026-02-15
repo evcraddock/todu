@@ -331,7 +331,18 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
       description: "Create a new task in a project.",
       label: "Create Task",
       parameters: CreateTaskParams,
-      execute: async (_toolCallId, params) => formatResult(await todu.task.create(params)),
+      execute: async (_toolCallId, params) => {
+        const result = await todu.task.create(params);
+
+        if (result.ok && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_task_detail",
+            taskId: result.value.id,
+          });
+        }
+
+        return formatResult(result);
+      },
     },
     {
       name: "update_task",
