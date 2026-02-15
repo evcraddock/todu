@@ -158,9 +158,10 @@ export function App(): ReactNode {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [sidebar.toggleHidden, agentPane.toggle]);
 
-  const handleNavigateToEntity = useCallback((entityType: string, _entityId: string) => {
+  const handleNavigateToEntity = useCallback((entityType: string, entityId: string) => {
     switch (entityType) {
       case "task":
+        setFocusTaskId(entityId);
         setActiveView("tasks");
         break;
       case "project":
