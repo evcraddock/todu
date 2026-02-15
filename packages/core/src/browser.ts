@@ -8,6 +8,7 @@
  *
  * Use this entry point in Electron renderer and other browser contexts.
  */
-export * from "./types.js";
-export * from "./schema.js";
+
 export * from "./constants.js";
+export * from "./schema.js";
+export * from "./types.js";

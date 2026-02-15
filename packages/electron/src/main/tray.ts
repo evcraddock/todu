@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Todu } from "@todu/engine";
-import { type BrowserWindow, Menu, Tray, app, nativeImage } from "electron";
+import { app, type BrowserWindow, Menu, nativeImage, Tray } from "electron";
 
 let tray: Tray | null = null;
 

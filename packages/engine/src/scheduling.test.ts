@@ -3,9 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  type ProcessingContext,
   clearProcessors,
   getRegisteredProcessors,
+  type ProcessingContext,
   registerProcessor,
 } from "./scheduling.js";
 
@@ -46,13 +46,13 @@ describe("scheduling framework", () => {
   });
 
   it("replaces processor with same type", () => {
-    let callCount = 0;
+    let _callCount = 0;
     registerProcessor("recurring", async () => {
-      callCount = 1;
+      _callCount = 1;
       return 0;
     });
     registerProcessor("recurring", async () => {
-      callCount = 2;
+      _callCount = 2;
       return 0;
     });
     expect(getRegisteredProcessors()).toHaveLength(1);

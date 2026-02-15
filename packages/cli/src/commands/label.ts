@@ -1,5 +1,4 @@
-import type { Label, LabelId } from "@todu/core";
-import { createLabelId } from "@todu/core";
+import type { Label } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
 import { formatError, formatJSON, formatTable } from "../format.js";

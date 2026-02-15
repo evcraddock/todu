@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  SCHEMA_VERSION,
   createEmptyCatalog,
   createNotesDocument,
   createTaskDetailDocument,
   createTaskListDocument,
+  SCHEMA_VERSION,
 } from "./schema.js";
 import { createProjectId } from "./types.js";
 

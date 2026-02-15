@@ -1,4 +1,4 @@
-import { type RecurringId, createProjectId } from "@todu/core/browser";
+import { createProjectId, type RecurringId } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";

@@ -6,11 +6,7 @@ import { HabitList } from "./HabitList.js";
 
 type HabitsViewState = { view: "list" } | { view: "detail"; habitId: string } | { view: "create" };
 
-export function HabitsView({
-  externalFilter,
-}: {
-  externalFilter?: HabitFilter | null;
-}): ReactNode {
+export function HabitsView({ externalFilter }: { externalFilter?: HabitFilter | null }): ReactNode {
   const [state, setState] = useState<HabitsViewState>({ view: "list" });
 
   switch (state.view) {

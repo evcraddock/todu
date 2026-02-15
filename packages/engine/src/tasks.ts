@@ -1,9 +1,14 @@
 import crypto from "node:crypto";
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import {
   type CatalogDocument,
   type CreateTaskInput,
+  createTaskDetailDocument,
+  createTaskId,
+  createTaskListDocument,
+  err,
+  notFound,
+  ok,
   type ProjectId,
   type Result,
   type Task,
@@ -15,12 +20,6 @@ import {
   type TaskSortOptions,
   type TaskWithDetail,
   type UpdateTaskInput,
-  createTaskDetailDocument,
-  createTaskId,
-  createTaskListDocument,
-  err,
-  notFound,
-  ok,
   validateCreateTaskInput,
   validateUpdateTaskInput,
   validationError,

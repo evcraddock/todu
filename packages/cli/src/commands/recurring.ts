@@ -1,6 +1,6 @@
 import type { RecurringId, RecurringTemplate } from "@todu/core";
 import { createProjectId, createRecurringId } from "@todu/core";
-import { type Todu, describeSchedule } from "@todu/engine";
+import { describeSchedule, type Todu } from "@todu/engine";
 import type { Command } from "commander";
 import { colorPriority, formatError, formatJSON, formatTable } from "../format.js";
 

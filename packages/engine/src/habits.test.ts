@@ -114,7 +114,7 @@ describe("habits", () => {
     });
 
     it("filters by paused status", async () => {
-      const createA = await todu.habit.create({
+      const _createA = await todu.habit.create({
         title: "Active",
         schedule: "FREQ=DAILY",
         timezone: "UTC",

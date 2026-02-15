@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Repo } from "@automerge/automerge-repo";
 import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
+import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   CATALOG_DOC_KEY,
   type CatalogDocument,
-  SCHEMA_VERSION,
   createEmptyCatalog,
+  SCHEMA_VERSION,
 } from "@todu/core";
 
 // ============================================================================

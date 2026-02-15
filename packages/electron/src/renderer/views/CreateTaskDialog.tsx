@@ -1,4 +1,4 @@
-import { type TaskPriority, createProjectId } from "@todu/core/browser";
+import { createProjectId, type TaskPriority } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { useCreateTask, useProjects } from "../hooks/useTodu.js";
 

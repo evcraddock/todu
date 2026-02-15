@@ -16,7 +16,6 @@ import type {
   RecurringFilter,
   RecurringId,
   Result,
-  Task,
   TaskFilter,
   TaskId,
   TaskSortOptions,

@@ -3,10 +3,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  STORAGE_KEY,
   applyTheme,
   getStoredPreference,
   resolveTheme,
+  STORAGE_KEY,
   storePreference,
 } from "./useTheme.js";
 

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Test the pub/sub mechanism directly (no DOM needed)
 describe("toast pub/sub", () => {
   let showToast: (message: string, type?: "error" | "success" | "info") => void;
-  let listeners: Set<(toast: { id: number; message: string; type: string }) => void>;
+  let _listeners: Set<(toast: { id: number; message: string; type: string }) => void>;
 
   beforeEach(async () => {
     // Reset module state between tests

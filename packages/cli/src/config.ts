@@ -1,11 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-  type ToduFileConfig,
-  resolveConfigPath,
-  resolveConfigSources,
-  resolveDataDir,
-} from "@todu/core";
+import type { ToduFileConfig } from "@todu/core";
 import { parse, stringify } from "yaml";
 
 // ============================================================================
