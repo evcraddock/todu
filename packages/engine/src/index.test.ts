@@ -2,12 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
-import type { DocumentId } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createTodu } from "./index.js";
 import type { Todu } from "./index.js";
+import { createTodu } from "./index.js";
 
 describe("createTodu", () => {
   let tmpDir: string;

@@ -1,7 +1,7 @@
 import { resolveStoragePath } from "@todu/core";
-import { createTodu } from "@todu/engine";
 import type { Todu } from "@todu/engine";
-import { BrowserWindow, app } from "electron";
+import { createTodu } from "@todu/engine";
+import { app, BrowserWindow } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { registerIpcHandlers } from "./ipc.js";

@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { createLabelId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createTodu } from "./index.js";
 import type { Todu } from "./index.js";
+import { createTodu } from "./index.js";
 
 describe("label namespace", () => {
   let tmpDir: string;

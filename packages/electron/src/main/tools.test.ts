@@ -4,8 +4,8 @@ import path from "node:path";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { TSchema } from "@sinclair/typebox";
 import type { ProjectId } from "@todu/core";
-import { createTodu } from "@todu/engine";
 import type { Todu } from "@todu/engine";
+import { createTodu } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createToduTools } from "./tools.js";
 

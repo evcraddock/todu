@@ -1,14 +1,14 @@
-import { Agent } from "@mariozechner/pi-agent-core";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import { Agent } from "@mariozechner/pi-agent-core";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { getModel } from "@mariozechner/pi-ai";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
 import {
-  OAUTH_PROVIDER_ALIASES,
   getOAuthApiKeyForProvider,
   loadOAuthCredentials,
+  OAUTH_PROVIDER_ALIASES,
 } from "./oauth.js";
 import { getApiKey, loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";

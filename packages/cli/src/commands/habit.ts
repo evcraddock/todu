@@ -1,6 +1,5 @@
 import type { Habit, HabitId } from "@todu/core";
-import { createHabitId } from "@todu/core";
-import { type Todu, describeSchedule } from "@todu/engine";
+import { describeSchedule, type Todu } from "@todu/engine";
 import type { Command } from "commander";
 import { formatError, formatJSON, formatTable } from "../format.js";
 

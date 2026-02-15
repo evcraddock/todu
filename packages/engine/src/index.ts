@@ -5,32 +5,19 @@ import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
-import { type Storage, initEphemeralStorage, initStorage } from "./storage.js";
+import { initEphemeralStorage, initStorage, type Storage } from "./storage.js";
 import { connectSyncClient } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import {
+  createStubNamespaces,
   type LocalSyncMode,
   type SyncStatus,
   type Todu,
   type ToduConfig,
-  createStubNamespaces,
 } from "./todu.js";
 
-export type { Todu, ToduConfig, SyncStatus, LocalSyncMode, RemoteSyncState } from "./todu.js";
-export type {
-  HabitNamespace,
-  LabelNamespace,
-  NoteNamespace,
-  ProjectNamespace,
-  RecurringNamespace,
-  TaskNamespace,
-} from "./todu.js";
-export type { Storage } from "./storage.js";
 export type { UpcomingOccurrence } from "./recurring.js";
-export { DEFAULT_SYNC_PORT } from "./sync-server.js";
-export { isSyncServerAvailable } from "./sync-client.js";
-
 // Re-export schedule utilities for consumers
 export {
   describeSchedule,
@@ -39,8 +26,24 @@ export {
   nextOccurrences,
   todayInTimezone,
 } from "./schedule.js";
-export { registerProcessor, clearProcessors, getRegisteredProcessors } from "./scheduling.js";
-export type { SchedulableItem, ProcessingContext, TemplateProcessor } from "./scheduling.js";
+export type { ProcessingContext, SchedulableItem, TemplateProcessor } from "./scheduling.js";
+export { clearProcessors, getRegisteredProcessors, registerProcessor } from "./scheduling.js";
+export type { Storage } from "./storage.js";
+export { isSyncServerAvailable } from "./sync-client.js";
+export { DEFAULT_SYNC_PORT } from "./sync-server.js";
+export type {
+  HabitNamespace,
+  LabelNamespace,
+  LocalSyncMode,
+  NoteNamespace,
+  ProjectNamespace,
+  RecurringNamespace,
+  RemoteSyncState,
+  SyncStatus,
+  TaskNamespace,
+  Todu,
+  ToduConfig,
+} from "./todu.js";
 
 /**
  * Create a Todu SDK instance.

@@ -59,7 +59,7 @@ export function ProjectDetail({
   // Task list for this project
   const [filter, setFilter] = useState<TaskFilter>({ projectId: createProjectId(projectId) });
   const [sort, setSort] = useState<TaskSortOptions | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, _setSearchQuery] = useState("");
   const { data: tasks } = useTasks(filter, sort);
   const { data: searchResults } = useSearchTasks(searchQuery);
 

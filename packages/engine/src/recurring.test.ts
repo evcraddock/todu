@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { type ProjectId, type RecurringId, createProjectId } from "@todu/core";
+import { createProjectId, type ProjectId, type RecurringId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 import { clearProcessors } from "./scheduling.js";

@@ -1,21 +1,20 @@
 import crypto from "node:crypto";
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import {
   type CatalogDocument,
   type CreateNoteInput,
+  createNoteId,
+  createNotesDocument,
+  err,
   type Note,
   type NoteFilter,
   type NoteId,
   type NotesDocument,
+  notFound,
+  ok,
   type Result,
   type TaskListDocument,
   type UpdateNoteInput,
-  createNoteId,
-  createNotesDocument,
-  err,
-  notFound,
-  ok,
   validateCreateNoteInput,
   validateUpdateNoteInput,
 } from "@todu/core";

@@ -4,8 +4,8 @@ import path from "node:path";
 import type { ProjectId } from "@todu/core";
 import { createNoteId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createTodu } from "./index.js";
 import type { Todu } from "./index.js";
+import { createTodu } from "./index.js";
 
 describe("note namespace", () => {
   let tmpDir: string;

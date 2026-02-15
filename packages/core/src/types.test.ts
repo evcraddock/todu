@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { HabitId, LabelId, NoteId, ProjectId, RecurringId, TaskId } from "./types.js";
 import {
   createHabitId,
   createLabelId,
@@ -19,7 +20,6 @@ import {
   storageError,
   validationError,
 } from "./types.js";
-import type { HabitId, LabelId, NoteId, ProjectId, RecurringId, TaskId } from "./types.js";
 
 describe("branded IDs", () => {
   it("creates a branded TaskId", () => {

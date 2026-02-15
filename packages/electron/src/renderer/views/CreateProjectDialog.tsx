@@ -1,11 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { useCreateProject } from "../hooks/useTodu.js";
 
-export function CreateProjectDialog({
-  onClose,
-}: {
-  onClose: () => void;
-}): ReactNode {
+export function CreateProjectDialog({ onClose }: { onClose: () => void }): ReactNode {
   const createProject = useCreateProject();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

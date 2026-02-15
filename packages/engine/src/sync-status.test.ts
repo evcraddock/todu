@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
-import type { Todu } from "./todu.js";
 
 const TEST_SYNC_PORT = 24398;
 

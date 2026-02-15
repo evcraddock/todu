@@ -1,10 +1,14 @@
 import crypto from "node:crypto";
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import {
   type CatalogDocument,
   type CreateRecurringInput,
   type CreateTaskInput,
+  createRecurringId,
+  err,
+  generateScheduledTaskId,
+  notFound,
+  ok,
   type ProjectId,
   type RecurringFilter,
   type RecurringId,
@@ -13,11 +17,6 @@ import {
   type Task,
   type TaskListDocument,
   type UpdateRecurringInput,
-  createRecurringId,
-  err,
-  generateScheduledTaskId,
-  notFound,
-  ok,
   validateCreateRecurringInput,
   validateUpdateRecurringInput,
   validationError,
@@ -253,9 +252,10 @@ export function createRecurringNamespace(
       return ok(cloneTemplate(catalog.doc()!.recurringTemplates[index]));
     },
 
-    async upcoming(options?: { templateId?: RecurringId; days?: number }): Promise<
-      Result<UpcomingOccurrence[]>
-    > {
+    async upcoming(options?: {
+      templateId?: RecurringId;
+      days?: number;
+    }): Promise<Result<UpcomingOccurrence[]>> {
       const doc = catalog.doc();
       if (!doc) return ok([]);
 

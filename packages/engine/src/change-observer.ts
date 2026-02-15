@@ -1,5 +1,4 @@
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 
 /**
  * Observe changes across all documents in a Repo.

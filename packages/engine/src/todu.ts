@@ -101,9 +101,10 @@ export interface RecurringNamespace {
   delete(id: RecurringId): Promise<Result<void>>;
   pause(id: RecurringId): Promise<Result<RecurringTemplate>>;
   resume(id: RecurringId): Promise<Result<RecurringTemplate>>;
-  upcoming(options?: { templateId?: RecurringId; days?: number }): Promise<
-    Result<UpcomingOccurrence[]>
-  >;
+  upcoming(options?: {
+    templateId?: RecurringId;
+    days?: number;
+  }): Promise<Result<UpcomingOccurrence[]>>;
   generate(templateId: RecurringId, date: string): Promise<Result<Task>>;
   process(): Promise<Result<Task[]>>;
 }

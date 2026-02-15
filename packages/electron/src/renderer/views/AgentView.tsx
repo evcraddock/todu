@@ -378,6 +378,8 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
                   result={item.result}
                 />
               );
+            default:
+              return null;
           }
         })}
 
@@ -427,7 +429,11 @@ function AssistantBubble({
   text,
   isStreaming,
   isError,
-}: { text: string; isStreaming: boolean; isError: boolean }): ReactNode {
+}: {
+  text: string;
+  isStreaming: boolean;
+  isError: boolean;
+}): ReactNode {
   return (
     <div className="agent-msg agent-msg-assistant">
       <div className={`agent-bubble agent-bubble-assistant ${isError ? "agent-bubble-error" : ""}`}>

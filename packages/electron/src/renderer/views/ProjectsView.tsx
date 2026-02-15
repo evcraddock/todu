@@ -23,13 +23,11 @@ export function ProjectsView({
   switch (state.view) {
     case "list":
       return (
-        <>
-          <ProjectList
-            onSelectProject={(id) => setState({ view: "detail", projectId: id })}
-            onCreateProject={() => setState({ view: "create" })}
-            externalFilter={externalFilter}
-          />
-        </>
+        <ProjectList
+          onSelectProject={(id) => setState({ view: "detail", projectId: id })}
+          onCreateProject={() => setState({ view: "create" })}
+          externalFilter={externalFilter}
+        />
       );
 
     case "detail":

@@ -1,18 +1,17 @@
 import crypto from "node:crypto";
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import {
   type CatalogDocument,
   type CreateLabelInput,
+  createLabelId,
+  err,
   type Label,
   type LabelId,
+  notFound,
+  ok,
   type Result,
   type TaskListDocument,
   type UpdateLabelInput,
-  createLabelId,
-  err,
-  notFound,
-  ok,
   validateCreateLabelInput,
   validateUpdateLabelInput,
   validationError,

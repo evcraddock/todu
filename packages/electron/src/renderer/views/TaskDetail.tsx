@@ -1,9 +1,9 @@
 import {
   ALLOWED_STATUS_TRANSITIONS,
+  createProjectId,
   type TaskId,
   type TaskPriority,
   type TaskStatus,
-  createProjectId,
 } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
@@ -71,13 +71,7 @@ const TABS = [
 // Task Detail View
 // ============================================================================
 
-export function TaskDetail({
-  taskId,
-  onBack,
-}: {
-  taskId: string;
-  onBack: () => void;
-}): ReactNode {
+export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => void }): ReactNode {
   const { data: task, isLoading, isError, error } = useTask(taskId);
   const { data: projects } = useProjects();
   const updateTask = useUpdateTask();

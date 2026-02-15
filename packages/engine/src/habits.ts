@@ -1,8 +1,10 @@
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import type { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId, Repo } from "@automerge/automerge-repo";
 import {
   type CatalogDocument,
   type CreateHabitInput,
+  createHabitId,
+  createHabitLogDocument,
+  err,
   type Habit,
   type HabitEntry,
   type HabitFilter,
@@ -10,13 +12,10 @@ import {
   type HabitId,
   type HabitLogDocument,
   type HabitStreak,
-  type Result,
-  type UpdateHabitInput,
-  createHabitId,
-  createHabitLogDocument,
-  err,
   notFound,
   ok,
+  type Result,
+  type UpdateHabitInput,
   validateCreateHabitInput,
   validateUpdateHabitInput,
   validationError,
@@ -431,7 +430,7 @@ export function createHabitNamespace(
 // Habit processor for processTemplates()
 // ============================================================================
 
-export function registerHabitProcessor(catalog: DocHandle<CatalogDocument>, _repo: Repo): void {
+export function registerHabitProcessor(_catalog: DocHandle<CatalogDocument>, _repo: Repo): void {
   registerProcessor("habit", async (context) => {
     const doc = context.catalog.doc();
     if (!doc?.habits) return 0;

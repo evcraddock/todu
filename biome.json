@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.0/schema.json",
   "linter": {
     "enabled": true,
     "rules": {
@@ -9,7 +9,10 @@
         "useConst": "error"
       },
       "a11y": {
-        "noAutofocus": "off"
+        "noAutofocus": "off",
+        "noStaticElementInteractions": "off",
+        "useSemanticElements": "off",
+        "useAriaPropsForRole": "off"
       },
       "suspicious": {
         "noExplicitAny": "error"
@@ -23,6 +26,6 @@
     "lineWidth": 100
   },
   "files": {
-    "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"]
+    "includes": ["**/packages/**/*/src/**/*.ts", "**/packages/**/*/src/**/*.tsx"]
   }
 }
