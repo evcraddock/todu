@@ -191,6 +191,12 @@ const ListHabitsParams = Type.Object({
   paused: Type.Optional(
     Type.Boolean({ description: "Filter by paused state (true = paused, false = active)" }),
   ),
+  checkedToday: Type.Optional(
+    Type.Boolean({
+      description:
+        "Filter by today's check-in (true = completed today, false = not yet done today)",
+    }),
+  ),
   search: Type.Optional(Type.String({ description: "Search habits by title" })),
 });
 

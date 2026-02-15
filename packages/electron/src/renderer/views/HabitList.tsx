@@ -61,6 +61,7 @@ export function HabitList({
   externalFilter?: HabitFilter | null;
 }): ReactNode {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
+  const [filterChecked, setFilterChecked] = useState<"all" | "done" | "pending">("all");
   const [searchText, setSearchText] = useState("");
   const appliedExternalRef = useRef<HabitFilter | null | undefined>(undefined);
 
@@ -71,6 +72,9 @@ export function HabitList({
       if (externalFilter.paused === true) setFilterStatus("paused");
       else if (externalFilter.paused === false) setFilterStatus("active");
       else setFilterStatus("all");
+      if (externalFilter.checkedToday === true) setFilterChecked("done");
+      else if (externalFilter.checkedToday === false) setFilterChecked("pending");
+      else setFilterChecked("all");
       setSearchText(externalFilter.search ?? "");
     }
   }, [externalFilter]);
@@ -78,6 +82,8 @@ export function HabitList({
   const filter: HabitFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
     ...(filterStatus === "paused" ? { paused: true } : {}),
+    ...(filterChecked === "done" ? { checkedToday: true } : {}),
+    ...(filterChecked === "pending" ? { checkedToday: false } : {}),
     ...(searchText ? { search: searchText } : {}),
   };
 
@@ -134,6 +140,15 @@ export function HabitList({
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
             <option value="paused">Paused only</option>
+          </select>
+          <select
+            className="filter-select"
+            value={filterChecked}
+            onChange={(e) => setFilterChecked(e.target.value as "all" | "done" | "pending")}
+          >
+            <option value="all">All check-ins</option>
+            <option value="done">Done today</option>
+            <option value="pending">Not done today</option>
           </select>
         </div>
       </div>

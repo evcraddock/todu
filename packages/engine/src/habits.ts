@@ -135,6 +135,19 @@ export function createHabitNamespace(
         const lowerQuery = filter.search.toLowerCase();
         habits = habits.filter((h) => h.title.toLowerCase().includes(lowerQuery));
       }
+      if (filter?.checkedToday !== undefined) {
+        const checked: Habit[] = [];
+        for (const h of habits) {
+          const logHandle = await getLogHandle(h.id);
+          const logDoc = logHandle?.doc();
+          const today = todayInTimezone(h.timezone);
+          const completedToday = logDoc?.entries[today]?.completed === true;
+          if (completedToday === filter.checkedToday) {
+            checked.push(h);
+          }
+        }
+        habits = checked;
+      }
 
       return ok(habits.map(cloneHabit));
     },
