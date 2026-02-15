@@ -193,8 +193,8 @@ jobs:
         run: |
           npm run build
           mkdir -p dist/cli
-          bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
-          copy dist\cli\todu-cli-windows-x64.exe dist\cli\todu.exe
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
+          cp dist/cli/todu-cli-windows-x64.exe dist/cli/todu.exe
         shell: bash
 
       - name: Build Electron (Windows)
@@ -331,8 +331,19 @@ jobs:
       - name: Verify publish
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
-          sleep 10
-          npm view @todu/core@${VERSION} version
-          npm view @todu/engine@${VERSION} version
-          npm view @todu/cli@${VERSION} version
+          verify_package() {
+            local pkg=$1
+            for attempt in 1 2 3 4 5; do
+              if npm view "${pkg}@${VERSION}" version 2>/dev/null; then
+                return 0
+              fi
+              echo "Waiting for ${pkg}@${VERSION} to propagate (attempt ${attempt}/5)..."
+              sleep 15
+            done
+            echo "::error::${pkg}@${VERSION} not found on registry after 5 attempts"
+            return 1
+          }
+          verify_package @todu/core
+          verify_package @todu/engine
+          verify_package @todu/cli
           echo "✅ All packages published at ${VERSION}"
