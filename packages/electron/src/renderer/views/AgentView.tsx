@@ -61,7 +61,8 @@ type AgentEvent =
   | AgentEventToolEnd
   | { type: "turn_start" }
   | { type: "turn_end" }
-  | { type: "tool_execution_update" };
+  | { type: "tool_execution_update" }
+  | { type: "messages_cleared" };
 
 // Simplified message shape from the LLM
 interface ChatMessage {
@@ -131,6 +132,12 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
       const event = data as AgentEvent;
 
       switch (event.type) {
+        case "messages_cleared":
+          setItems([]);
+          setSendError(null);
+          setIsStreaming(false);
+          break;
+
         case "agent_start":
           setIsStreaming(true);
           setSendError(null);
