@@ -1,13 +1,23 @@
 {
   "name": "@todu/electron",
   "version": "0.0.1",
+  "description": "todu desktop app — local-first task management",
+  "author": {
+    "name": "evcraddock",
+    "email": "erik@craddock.org"
+  },
+  "homepage": "https://github.com/evcraddock/todu",
   "private": true,
   "type": "module",
   "main": "./dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "dist": "electron-builder --config electron-builder.yml",
+    "dist:linux": "electron-builder --config electron-builder.yml --linux",
+    "dist:mac": "electron-builder --config electron-builder.yml --mac",
+    "dist:win": "electron-builder --config electron-builder.yml --win"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.52.12",

@@ -1,0 +1,94 @@
+appId: com.todu.app
+productName: todu
+copyright: Copyright © 2026 todu
+electronVersion: "40.4.1"
+
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
+directories:
+  output: ../../dist/installers
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+  - "!dist/**/*.map"
+
+extraMetadata:
+  main: dist/main/index.js
+
+# Include CLI binary built by make build-cli-binary (current platform)
+extraResources:
+  - from: ../../dist/cli/todu
+    to: cli/todu
+
+# Linux
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+    - target: rpm
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  category: Office
+  icon: build/icons
+  desktop:
+    entry:
+      StartupWMClass: todu
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+  afterInstall: build/linux/after-install.sh
+  afterRemove: build/linux/after-remove.sh
+
+rpm:
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - libXtst
+    - xdg-utils
+    - at-spi2-core
+    - libuuid
+
+# macOS
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.productivity
+  icon: build/icons/icon.icns
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Windows
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icons/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  include: build/win/installer.nsh
+  perMachine: true
