@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { HabitFilter, ProjectFilter, TaskFilter } from "@todu/core/browser";
+import type { HabitFilter, ProjectFilter, RecurringFilter, TaskFilter } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AgentPane } from "./components/AgentPane.js";
 import { Placeholder } from "./components/Placeholder.js";
@@ -26,6 +26,7 @@ function ViewRouter({
   agentTaskFilter,
   agentProjectFilter,
   agentHabitFilter,
+  agentRecurringFilter,
   themePreference,
   onThemeChange,
 }: {
@@ -35,7 +36,9 @@ function ViewRouter({
   agentTaskFilter: TaskFilter | null;
   agentProjectFilter: ProjectFilter | null;
   agentHabitFilter: HabitFilter | null;
+  agentRecurringFilter: RecurringFilter | null;
   agentHabitFilter: HabitFilter | null;
+  agentRecurringFilter: RecurringFilter | null;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -49,7 +52,7 @@ function ViewRouter({
     case "habits":
       return <HabitsView externalFilter={agentHabitFilter} />;
     case "recurring":
-      return <RecurringView />;
+      return <RecurringView externalFilter={agentRecurringFilter} />;
     case "journal":
       return <JournalView />;
     case "labels":
@@ -67,6 +70,7 @@ export function App(): ReactNode {
   const [agentTaskFilter, setAgentTaskFilter] = useState<TaskFilter | null>(null);
   const [agentProjectFilter, setAgentProjectFilter] = useState<ProjectFilter | null>(null);
   const [agentHabitFilter, setAgentHabitFilter] = useState<HabitFilter | null>(null);
+  const [agentRecurringFilter, setAgentRecurringFilter] = useState<RecurringFilter | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -89,6 +93,9 @@ export function App(): ReactNode {
       } else if (uiAction.action === "show_habits") {
         setActiveView("habits");
         setAgentHabitFilter((uiAction.filter as HabitFilter) ?? {});
+      } else if (uiAction.action === "show_recurring") {
+        setActiveView("recurring");
+        setAgentRecurringFilter((uiAction.filter as RecurringFilter) ?? {});
       }
     });
     return cleanup;
@@ -172,6 +179,7 @@ export function App(): ReactNode {
             agentTaskFilter={agentTaskFilter}
             agentProjectFilter={agentProjectFilter}
             agentHabitFilter={agentHabitFilter}
+            agentRecurringFilter={agentRecurringFilter}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />

@@ -179,6 +179,30 @@ describe("recurring templates", () => {
       }
     });
 
+    it("filters list by search", async () => {
+      await todu.recurring.create({
+        title: "Weekly Review",
+        projectId,
+        schedule: "FREQ=WEEKLY;BYDAY=FR",
+        timezone: "UTC",
+        startDate: "2026-01-01",
+      });
+      await todu.recurring.create({
+        title: "Daily Standup",
+        projectId,
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-01-01",
+      });
+
+      const result = await todu.recurring.list({ search: "review" });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toHaveLength(1);
+        expect(result.value[0].title).toBe("Weekly Review");
+      }
+    });
+
     it("gets a template by ID", async () => {
       const createResult = await todu.recurring.create({
         title: "Get me",

@@ -358,6 +358,7 @@ export interface UpdateRecurringInput {
 export interface RecurringFilter {
   paused?: boolean;
   projectId?: ProjectId;
+  search?: string;
 }
 
 // ============================================================================
