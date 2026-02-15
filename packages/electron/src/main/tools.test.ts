@@ -667,6 +667,59 @@ describe("todu agent tools", () => {
       });
     });
 
+    it("get_task emits show_task_detail ui-action", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      // Create a task first
+      const created = JSON.parse(
+        (
+          (await exec("create_task", { title: "Get nav test", projectId })).content[0] as {
+            type: "text";
+            text: string;
+          }
+        ).text,
+      );
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const getTask = toolsWithWindow.find((t) => t.name === "get_task")!;
+
+      await getTask.execute("test-call", { id: created.id });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_task_detail",
+        taskId: created.id,
+      });
+    });
+
+    it("get_task does not emit when no mainWindow provided", async () => {
+      const created = JSON.parse(
+        (
+          (await exec("create_task", { title: "No window get test", projectId })).content[0] as {
+            type: "text";
+            text: string;
+          }
+        ).text,
+      );
+
+      const result = await exec("get_task", { id: created.id });
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      expect(data.title).toBe("No window get test");
+      // No crash, no ui-action emitted (no window)
+    });
+
     it("create_task emits show_task_detail ui-action with task ID", async () => {
       const sentMessages: Array<{ channel: string; data: unknown }> = [];
       const mockWindow = {
