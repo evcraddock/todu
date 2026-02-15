@@ -98,6 +98,83 @@ export function resolveModel(
 let agent: Agent | null = null;
 let unsubscribe: (() => void) | null = null;
 
+// ============================================================================
+// Focused Entity Context
+// ============================================================================
+
+export type FocusedEntityType = "task" | "project" | "habit" | "recurring";
+
+export interface FocusedEntity {
+  entityType: FocusedEntityType;
+  entityId: string;
+}
+
+let focusedEntity: FocusedEntity | null = null;
+let focusGeneration = 0;
+
+export function buildSystemPrompt(focused: FocusedEntity | null, entityData?: string): string {
+  if (!focused || !entityData) return TODU_SYSTEM_PROMPT;
+
+  return `${TODU_SYSTEM_PROMPT}
+
+## Currently Focused ${focused.entityType.charAt(0).toUpperCase() + focused.entityType.slice(1)}
+
+The user is currently viewing this ${focused.entityType}. When they say "this", "it", or refer to the current ${focused.entityType} without specifying an ID, use ID "${focused.entityId}".
+
+${entityData}`;
+}
+
+async function loadEntityData(todu: Todu, entity: FocusedEntity): Promise<string | undefined> {
+  switch (entity.entityType) {
+    case "task": {
+      const result = await todu.task.get(entity.entityId);
+      if (!result.ok) return undefined;
+      const t = result.value;
+      return `\`\`\`json
+${JSON.stringify({ id: t.id, title: t.title, status: t.status, priority: t.priority, description: t.description, labels: t.labels, dueDate: t.dueDate, projectId: t.projectId }, null, 2)}
+\`\`\``;
+    }
+    case "project": {
+      const result = await todu.project.get(entity.entityId);
+      if (!result.ok) return undefined;
+      const p = result.value;
+      return `\`\`\`json
+${JSON.stringify({ id: p.id, name: p.name, status: p.status, priority: p.priority, description: p.description }, null, 2)}
+\`\`\``;
+    }
+    case "habit": {
+      const result = await todu.habit.get(entity.entityId);
+      if (!result.ok) return undefined;
+      const h = result.value;
+      return `\`\`\`json
+${JSON.stringify({ id: h.id, title: h.title, paused: h.paused, schedule: h.schedule, description: h.description }, null, 2)}
+\`\`\``;
+    }
+    case "recurring": {
+      const result = await todu.recurring.get(entity.entityId);
+      if (!result.ok) return undefined;
+      const r = result.value;
+      return `\`\`\`json
+${JSON.stringify({ id: r.id, title: r.title, paused: r.paused, schedule: r.schedule, priority: r.priority, projectId: r.projectId, description: r.description }, null, 2)}
+\`\`\``;
+    }
+    default:
+      return undefined;
+  }
+}
+
+async function updateAgentContext(todu: Todu): Promise<void> {
+  if (!agent) return;
+  const gen = ++focusGeneration;
+  if (!focusedEntity) {
+    agent.setSystemPrompt(TODU_SYSTEM_PROMPT);
+    return;
+  }
+  const entityData = await loadEntityData(todu, focusedEntity);
+  if (gen !== focusGeneration) return; // stale, skip
+  agent.setSystemPrompt(buildSystemPrompt(focusedEntity, entityData));
+}
+
 /**
  * Initialize the agent with todu tools and wire up IPC handlers.
  * Call this once during app startup after the engine and window are ready.
@@ -157,6 +234,21 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
       agent.setModel(newModel);
     }
   });
+
+  ipcMain.handle(
+    "todu:agent:focus-entity",
+    async (_event, entityType: string, entityId: string) => {
+      const validTypes: FocusedEntityType[] = ["task", "project", "habit", "recurring"];
+      if (!validTypes.includes(entityType as FocusedEntityType)) return;
+      focusedEntity = { entityType: entityType as FocusedEntityType, entityId };
+      await updateAgentContext(todu);
+    },
+  );
+
+  ipcMain.handle("todu:agent:clear-focused-entity", async () => {
+    focusedEntity = null;
+    await updateAgentContext(todu);
+  });
 }
 
 /**
@@ -173,6 +265,10 @@ export function teardownAgent(): void {
   ipcMain.removeHandler("todu:agent:abort");
   ipcMain.removeHandler("todu:agent:clear");
   ipcMain.removeHandler("todu:agent:set-model");
+  ipcMain.removeHandler("todu:agent:focus-entity");
+  ipcMain.removeHandler("todu:agent:clear-focused-entity");
 
+  focusedEntity = null;
+  focusGeneration = 0;
   agent = null;
 }

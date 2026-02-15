@@ -1,6 +1,6 @@
 import type { ProjectId, TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import { createProjectId } from "@todu/core/browser";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { FilterBar } from "../components/FilterBar.js";
@@ -47,6 +47,14 @@ export function ProjectDetail({
   const { data: projects } = useProjects();
   const deleteProject = useDeleteProject();
   const updateProject = useUpdateProject();
+
+  // Focus entity context for agent
+  useEffect(() => {
+    window.todu.agent.focusEntity("project", projectId);
+    return () => {
+      window.todu.agent.clearFocusedEntity();
+    };
+  }, [projectId]);
 
   // Task list for this project
   const [filter, setFilter] = useState<TaskFilter>({ projectId: createProjectId(projectId) });

@@ -80,6 +80,9 @@ const api = {
     clear: () => ipcRenderer.invoke("todu:agent:clear"),
     setModel: (provider: string, modelId: string) =>
       ipcRenderer.invoke("todu:agent:set-model", provider, modelId),
+    focusEntity: (entityType: string, entityId: string) =>
+      ipcRenderer.invoke("todu:agent:focus-entity", entityType, entityId),
+    clearFocusedEntity: () => ipcRenderer.invoke("todu:agent:clear-focused-entity"),
   },
 
   // ── OAuth ──────────────────────────────────────────────────────
