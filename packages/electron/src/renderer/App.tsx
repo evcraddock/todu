@@ -28,6 +28,7 @@ function ViewRouter({
   agentHabitFilter,
   agentRecurringFilter,
   focusTaskId,
+  onFocusTaskConsumed,
   themePreference,
   onThemeChange,
 }: {
@@ -39,8 +40,7 @@ function ViewRouter({
   agentHabitFilter: HabitFilter | null;
   agentRecurringFilter: RecurringFilter | null;
   focusTaskId: string | null;
-  agentHabitFilter: HabitFilter | null;
-  agentRecurringFilter: RecurringFilter | null;
+  onFocusTaskConsumed: () => void;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -55,6 +55,7 @@ function ViewRouter({
           triggerCreateTask={triggerCreateTask}
           externalFilter={agentTaskFilter}
           focusTaskId={focusTaskId}
+          onFocusConsumed={onFocusTaskConsumed}
         />
       );
     case "habits":
@@ -196,6 +197,7 @@ export function App(): ReactNode {
             agentHabitFilter={agentHabitFilter}
             agentRecurringFilter={agentRecurringFilter}
             focusTaskId={focusTaskId}
+            onFocusTaskConsumed={() => setFocusTaskId(null)}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />
