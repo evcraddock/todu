@@ -65,6 +65,6 @@ export function registerConfigCommands(program: Command): void {
       }
       console.log("");
       console.log("Usage:");
-      console.log(`  toduai --config ${configPath} task list`);
+      console.log(`  todu --config ${configPath} task list`);
     });
 }

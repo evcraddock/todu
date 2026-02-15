@@ -34,7 +34,7 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
         return (error.stderr || error.stdout || "").toString();
       }
       throw new Error(
-        `Command failed: toduai ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
+        `Command failed: todu ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
       );
     }
   }
