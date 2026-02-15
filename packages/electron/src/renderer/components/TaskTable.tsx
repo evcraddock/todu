@@ -60,6 +60,7 @@ export function TaskTable({
       <thead>
         <tr>
           <SortHeader label="Title" field="title" sort={sort} onSort={onSort} />
+          <th>ID</th>
           <th>Status</th>
           <SortHeader label="Priority" field="priority" sort={sort} onSort={onSort} />
           {showProject && <th>Project</th>}
@@ -84,6 +85,7 @@ export function TaskTable({
               }}
             >
               <td className="cell-name">{task.title}</td>
+              <td className="cell-id">{task.id}</td>
               <td>
                 <StatusChip status={task.status} />
               </td>
