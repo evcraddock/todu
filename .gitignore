@@ -5,6 +5,7 @@ bun.lock
 # Build
 dist/
 build/
+!packages/electron/build/
 *.tsbuildinfo
 
 # Environment

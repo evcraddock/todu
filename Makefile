@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -65,6 +65,22 @@ dev-electron: ## Launch Electron app in dev mode (hot reload)
 
 build-electron: ## Build Electron app for distribution
 	npm run --workspace=packages/electron build
+
+# =============================================================================
+# Distribution
+# =============================================================================
+
+dist: build build-electron build-cli-binary ## Build installer for current platform
+	npm run --workspace=packages/electron dist
+
+dist-linux: build build-electron ## Build Linux installers (.deb, .rpm, .AppImage)
+	npm run --workspace=packages/electron dist:linux
+
+dist-mac: build build-electron ## Build macOS installer (.dmg)
+	npm run --workspace=packages/electron dist:mac
+
+dist-win: build build-electron ## Build Windows installer (.exe)
+	npm run --workspace=packages/electron dist:win
 
 dev-status: ## Check if dev environment is running
 	@echo "n/a"
