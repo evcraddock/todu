@@ -1,5 +1,5 @@
-import type { HabitId } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import type { HabitFilter, HabitId } from "@todu/core/browser";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useCheckHabit, useHabitList, useHabitStreak, useUncheckHabit } from "../hooks/useTodu.js";
 import { describeSchedule } from "../lib/describe-schedule.js";
 
@@ -54,15 +54,37 @@ function CheckInToggle({ habitId }: { habitId: string }): ReactNode {
 export function HabitList({
   onSelectHabit,
   onCreateHabit,
+  externalFilter,
 }: {
   onSelectHabit: (id: string) => void;
   onCreateHabit: () => void;
+  externalFilter?: HabitFilter | null;
 }): ReactNode {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
+  const [filterChecked, setFilterChecked] = useState<"all" | "done" | "pending">("all");
+  const [searchText, setSearchText] = useState("");
+  const appliedExternalRef = useRef<HabitFilter | null | undefined>(undefined);
 
-  const filter = {
+  // Apply external filter when it changes (e.g., from agent ui-action)
+  useEffect(() => {
+    if (externalFilter && externalFilter !== appliedExternalRef.current) {
+      appliedExternalRef.current = externalFilter;
+      if (externalFilter.paused === true) setFilterStatus("paused");
+      else if (externalFilter.paused === false) setFilterStatus("active");
+      else setFilterStatus("all");
+      if (externalFilter.checkedToday === true) setFilterChecked("done");
+      else if (externalFilter.checkedToday === false) setFilterChecked("pending");
+      else setFilterChecked("all");
+      setSearchText(externalFilter.search ?? "");
+    }
+  }, [externalFilter]);
+
+  const filter: HabitFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
     ...(filterStatus === "paused" ? { paused: true } : {}),
+    ...(filterChecked === "done" ? { checkedToday: true } : {}),
+    ...(filterChecked === "pending" ? { checkedToday: false } : {}),
+    ...(searchText ? { search: searchText } : {}),
   };
 
   const { data: habits, isLoading, isError, error } = useHabitList(filter);
@@ -103,6 +125,13 @@ export function HabitList({
 
       <div className="filter-bar">
         <div className="filter-row">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search habits…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
           <select
             className="filter-select"
             value={filterStatus}
@@ -112,12 +141,21 @@ export function HabitList({
             <option value="active">Active only</option>
             <option value="paused">Paused only</option>
           </select>
+          <select
+            className="filter-select"
+            value={filterChecked}
+            onChange={(e) => setFilterChecked(e.target.value as "all" | "done" | "pending")}
+          >
+            <option value="all">All check-ins</option>
+            <option value="done">Done today</option>
+            <option value="pending">Not done today</option>
+          </select>
         </div>
       </div>
 
       {!habits || habits.length === 0 ? (
         <div className="empty-state">
-          <p>No habits yet</p>
+          <p>No habits match your filters</p>
         </div>
       ) : (
         <table className="data-table">

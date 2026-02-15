@@ -136,6 +136,58 @@ describe("habits", () => {
       }
     });
 
+    it("filters by checkedToday", async () => {
+      const createA = await todu.habit.create({
+        title: "Checked Habit",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      await todu.habit.create({
+        title: "Unchecked Habit",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      if (createA.ok) await todu.habit.check(createA.value.id);
+
+      const checked = await todu.habit.list({ checkedToday: true });
+      expect(checked.ok).toBe(true);
+      if (checked.ok) {
+        expect(checked.value).toHaveLength(1);
+        expect(checked.value[0].title).toBe("Checked Habit");
+      }
+
+      const unchecked = await todu.habit.list({ checkedToday: false });
+      expect(unchecked.ok).toBe(true);
+      if (unchecked.ok) {
+        expect(unchecked.value).toHaveLength(1);
+        expect(unchecked.value[0].title).toBe("Unchecked Habit");
+      }
+    });
+
+    it("filters by search", async () => {
+      await todu.habit.create({
+        title: "Morning Meditation",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      await todu.habit.create({
+        title: "Evening Jog",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+
+      const result = await todu.habit.list({ search: "meditation" });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toHaveLength(1);
+        expect(result.value[0].title).toBe("Morning Meditation");
+      }
+    });
+
     it("gets a habit by ID", async () => {
       const create = await todu.habit.create({
         title: "Get me",
