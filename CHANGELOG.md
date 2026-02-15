@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-15
+
+Release pipeline fixes — all three platform builds should now complete successfully.
+
+### Fixed
+
+- App icon replaced with properly formatted 1024x1024 RGBA PNG plus pre-built .icns and .ico formats, fixing electron-builder icon converter crash on macOS and Windows
+- Windows CLI binary build uses native compilation instead of cross-compile target that failed to download
+- npm publish step tolerates re-runs when packages are already published at the current version
+- npm verify step retries with backoff instead of failing on registry propagation delay
+- Workspace dependency versions use wildcard to prevent resolution failures when version numbers change
+
 ## [0.1.0] - 2026-02-15
 
 First release of todu — a local-first task manager with an AI agent assistant. Includes a CLI, an Electron desktop app, and standalone binaries for all major platforms.
