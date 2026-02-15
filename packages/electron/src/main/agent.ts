@@ -110,6 +110,7 @@ export interface FocusedEntity {
 }
 
 let focusedEntity: FocusedEntity | null = null;
+let previousFocusedEntity: FocusedEntity | null = null;
 let focusGeneration = 0;
 
 export function buildSystemPrompt(focused: FocusedEntity | null, entityData?: string): string {
@@ -240,7 +241,24 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
     async (_event, entityType: string, entityId: string) => {
       const validTypes: FocusedEntityType[] = ["task", "project", "habit", "recurring"];
       if (!validTypes.includes(entityType as FocusedEntityType)) return;
+
+      // Clear conversation when switching between different entities.
+      // previousFocusedEntity persists across list views so that
+      // Task A → list → Task B still clears.
+      if (
+        agent &&
+        previousFocusedEntity &&
+        (previousFocusedEntity.entityType !== entityType ||
+          previousFocusedEntity.entityId !== entityId)
+      ) {
+        agent.clearMessages();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:agent:event", { type: "messages_cleared" });
+        }
+      }
+
       focusedEntity = { entityType: entityType as FocusedEntityType, entityId };
+      previousFocusedEntity = focusedEntity;
       await updateAgentContext(todu);
     },
   );
@@ -269,6 +287,7 @@ export function teardownAgent(): void {
   ipcMain.removeHandler("todu:agent:clear-focused-entity");
 
   focusedEntity = null;
+  previousFocusedEntity = null;
   focusGeneration = 0;
   agent = null;
 }
