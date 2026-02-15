@@ -1,13 +1,16 @@
-import { createRequire } from "node:module";
 import {
   validateRRule as coreValidateRRule,
   type ValidationError,
   validationError,
 } from "@todu/core";
 
-// rrule is a CJS package — use createRequire for ESM compatibility
-const require = createRequire(import.meta.url);
-const rruleModule = require("rrule");
+// rrule is CJS. Node wraps it in { default: ... }, Bun resolves ESM named exports.
+// Use namespace import and unwrap at runtime to support both.
+import * as rruleNs from "rrule";
+
+// biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop requires runtime detection
+const rruleMod = (rruleNs as any).default ?? rruleNs;
+const RRule = rruleMod.RRule as typeof rruleNs.RRule;
 
 /** Internal RRule instance type (not exposed in public API) */
 interface RRuleInstance {
@@ -17,12 +20,12 @@ interface RRuleInstance {
 
 /** Internal: create an RRule from parsed options */
 function createRRule(options: Record<string, unknown>): RRuleInstance {
-  return new rruleModule.RRule(options) as RRuleInstance;
+  return new RRule(options) as unknown as RRuleInstance;
 }
 
 /** Internal: parse an RRULE string into options */
 function parseRRuleString(rule: string): Record<string, unknown> {
-  return rruleModule.RRule.parseString(rule) as Record<string, unknown>;
+  return RRule.parseString(rule) as Record<string, unknown>;
 }
 
 // ============================================================================
