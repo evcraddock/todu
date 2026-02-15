@@ -612,5 +612,59 @@ describe("todu agent tools", () => {
         filter: {},
       });
     });
+
+    it("list_recurring emits show_recurring ui-action with filter", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listRecurring = toolsWithWindow.find((t) => t.name === "list_recurring")!;
+
+      await listRecurring.execute("test-call", { paused: false, search: "weekly" });
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_recurring",
+        filter: { paused: false, search: "weekly" },
+      });
+    });
+
+    it("list_recurring emits empty filter when called without params", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const listRecurring = toolsWithWindow.find((t) => t.name === "list_recurring")!;
+
+      await listRecurring.execute("test-call", {});
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_recurring",
+        filter: {},
+      });
+    });
   });
 });

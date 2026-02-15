@@ -121,6 +121,10 @@ export function createRecurringNamespace(
       if (filter?.projectId !== undefined) {
         templates = templates.filter((t) => t.projectId === filter.projectId);
       }
+      if (filter?.search) {
+        const lowerQuery = filter.search.toLowerCase();
+        templates = templates.filter((t) => t.title.toLowerCase().includes(lowerQuery));
+      }
 
       return ok(templates);
     },

@@ -216,6 +216,7 @@ const HabitHistoryParams = Type.Object({
 const ListRecurringParams = Type.Object({
   paused: Type.Optional(Type.Boolean({ description: "Filter by paused state" })),
   projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
+  search: Type.Optional(Type.String({ description: "Search recurring templates by title" })),
 });
 
 const RecurringUpcomingParams = Type.Object({
@@ -419,12 +420,22 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     // ── Recurring ────────────────────────────────────────────────────
     {
       name: "list_recurring",
-      description: "List recurring task templates with their schedule and pause status.",
+      description:
+        "List recurring task templates with optional filtering by paused state, project, or title search. Use filter parameters so the UI updates.",
       label: "List Recurring",
       parameters: ListRecurringParams,
       execute: async (_toolCallId, params) => {
         const filter = Object.keys(params).length > 0 ? params : undefined;
-        return formatResult(await todu.recurring.list(filter));
+        const result = await todu.recurring.list(filter);
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_recurring",
+            filter: filter ?? {},
+          });
+        }
+
+        return formatResult(result);
       },
     },
     {
