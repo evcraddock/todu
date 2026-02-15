@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win version version-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -81,6 +81,29 @@ dist-mac: build build-electron ## Build macOS installer (.dmg)
 
 dist-win: build build-electron ## Build Windows installer (.exe)
 	npm run --workspace=packages/electron dist:win
+
+# =============================================================================
+# Version Management
+# =============================================================================
+
+version: ## Show current version of all packages
+	@echo "Versions:"
+	@echo "  core:     $$(node -p "require('./packages/core/package.json').version")"
+	@echo "  engine:   $$(node -p "require('./packages/engine/package.json').version")"
+	@echo "  cli:      $$(node -p "require('./packages/cli/package.json').version")"
+	@echo "  electron: $$(node -p "require('./packages/electron/package.json').version")"
+
+version-check: ## Verify all package versions match
+	@V1=$$(node -p "require('./packages/core/package.json').version") && \
+	V2=$$(node -p "require('./packages/engine/package.json').version") && \
+	V3=$$(node -p "require('./packages/cli/package.json').version") && \
+	V4=$$(node -p "require('./packages/electron/package.json').version") && \
+	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ]; then \
+		echo "✅ All packages at version $$V1"; \
+	else \
+		echo "❌ Version mismatch: core=$$V1 engine=$$V2 cli=$$V3 electron=$$V4"; \
+		exit 1; \
+	fi
 
 dev-status: ## Check if dev environment is running
 	@echo "n/a"

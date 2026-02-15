@@ -1,0 +1,338 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.0.0)"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  BUN_VERSION: "latest"
+
+jobs:
+  # ===========================================================================
+  # Validate: version consistency check
+  # ===========================================================================
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract and validate version
+        id: version
+        run: |
+          # Get tag (from push event or manual input)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          # Strip v prefix
+          VERSION="${TAG#v}"
+          echo "Tag: $TAG, Version: $VERSION"
+
+          # Check all package.json versions match
+          for pkg in packages/core packages/engine packages/cli; do
+            PKG_VERSION=$(node -p "require('./$pkg/package.json').version")
+            if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "::error::Version mismatch: $pkg has $PKG_VERSION, expected $VERSION"
+              exit 1
+            fi
+          done
+
+          echo "✅ All package versions match: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Detect pre-release
+          if echo "$VERSION" | grep -qE '(alpha|beta|rc|dev)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ===========================================================================
+  # Build: platform-specific parallel builds
+  # ===========================================================================
+  build-linux:
+    name: Build Linux
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check (lint + test)
+        run: make check-ci && make test
+
+      - name: Build CLI binaries (linux)
+        run: |
+          npm run build
+          mkdir -p dist/cli
+          bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
+          bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
+          # Also build native binary for electron bundling
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+
+      - name: Build Electron (linux)
+        run: |
+          make build-electron
+          npm run --workspace=packages/electron dist:linux -- --linux AppImage deb
+
+      - name: Upload CLI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-linux
+          path: |
+            dist/cli/todu-cli-linux-x64
+            dist/cli/todu-cli-linux-arm64
+
+      - name: Upload Electron installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-linux
+          path: |
+            dist/installers/*.AppImage
+            dist/installers/*.deb
+
+  build-macos:
+    name: Build macOS
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI binaries (macOS)
+        run: |
+          npm run build
+          mkdir -p dist/cli
+          bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
+          bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
+          # Native binary for electron bundling
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+
+      - name: Build Electron (macOS)
+        run: |
+          make build-electron
+          npm run --workspace=packages/electron dist:mac
+
+      - name: Upload CLI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-macos
+          path: |
+            dist/cli/todu-cli-darwin-x64
+            dist/cli/todu-cli-darwin-arm64
+
+      - name: Upload Electron installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos
+          path: dist/installers/*.dmg
+
+  build-windows:
+    name: Build Windows
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI binary (Windows)
+        run: |
+          npm run build
+          mkdir -p dist/cli
+          bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
+          copy dist\cli\todu-cli-windows-x64.exe dist\cli\todu.exe
+        shell: bash
+
+      - name: Build Electron (Windows)
+        run: |
+          make build-electron
+          npm run --workspace=packages/electron dist:win
+        shell: bash
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-windows
+          path: dist/cli/todu-cli-windows-x64.exe
+
+      - name: Upload Electron installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows
+          path: dist/installers/*.exe
+
+  # ===========================================================================
+  # Release: create GitHub Release with all artifacts
+  # ===========================================================================
+  release:
+    name: Create Release
+    needs: [validate, build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          # Extract the changelog section for this version
+          if [ -f CHANGELOG.md ]; then
+            # Extract content between this version header and the next
+            BODY=$(awk "/^## .*${VERSION//./\\.}/ {found=1; next} /^## / {if(found) exit} found {print}" CHANGELOG.md)
+            if [ -z "$BODY" ]; then
+              BODY="Release v${VERSION}"
+            fi
+          else
+            BODY="Release v${VERSION}"
+          fi
+          # Write to file to preserve newlines
+          echo "$BODY" > release-notes.md
+          echo "Changelog extracted:"
+          cat release-notes.md
+
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+
+          # CLI binaries
+          cp artifacts/cli-linux/todu-cli-linux-x64 release-assets/
+          cp artifacts/cli-linux/todu-cli-linux-arm64 release-assets/
+          cp artifacts/cli-macos/todu-cli-darwin-x64 release-assets/
+          cp artifacts/cli-macos/todu-cli-darwin-arm64 release-assets/
+          cp artifacts/cli-windows/todu-cli-windows-x64.exe release-assets/
+
+          # Electron installers
+          cp artifacts/electron-linux/*.AppImage release-assets/ 2>/dev/null || true
+          cp artifacts/electron-linux/*.deb release-assets/ 2>/dev/null || true
+          cp artifacts/electron-macos/*.dmg release-assets/ 2>/dev/null || true
+          cp artifacts/electron-windows/*.exe release-assets/ 2>/dev/null || true
+
+          echo "Release assets:"
+          ls -lh release-assets/
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: todu v${{ needs.validate.outputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          files: release-assets/*
+
+  # ===========================================================================
+  # Publish: npm packages
+  # ===========================================================================
+  publish-npm:
+    name: Publish to npm
+    needs: [validate, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Publish @todu/core
+        run: npm publish --workspace=packages/core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @todu/engine
+        run: npm publish --workspace=packages/engine --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @todu/cli
+        run: npm publish --workspace=packages/cli --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publish
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          sleep 10
+          npm view @todu/core@${VERSION} version
+          npm view @todu/engine@${VERSION} version
+          npm view @todu/cli@${VERSION} version
+          echo "✅ All packages published at ${VERSION}"
