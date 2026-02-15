@@ -324,7 +324,18 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
       description: "Get full task details including description.",
       label: "Get Task",
       parameters: GetTaskParams,
-      execute: async (_toolCallId, { id }) => formatResult(await todu.task.get(id)),
+      execute: async (_toolCallId, { id }) => {
+        const result = await todu.task.get(id);
+
+        if (result.ok && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("todu:ui-action", {
+            action: "show_task_detail",
+            taskId: id,
+          });
+        }
+
+        return formatResult(result);
+      },
     },
     {
       name: "create_task",
