@@ -1,5 +1,5 @@
 import type { TaskFilter } from "@todu/core/browser";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { CreateTaskDialog } from "./CreateTaskDialog.js";
 import { TaskDetail } from "./TaskDetail.js";
 import { TaskList } from "./TaskList.js";
@@ -12,9 +12,11 @@ import { TaskList } from "./TaskList.js";
 export function TasksView({
   triggerCreateTask = 0,
   externalFilter,
+  focusTaskId,
 }: {
   triggerCreateTask?: number;
   externalFilter?: TaskFilter | null;
+  focusTaskId?: string | null;
 }): ReactNode {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -26,6 +28,15 @@ export function TasksView({
       setShowCreateDialog(true);
     }
   }, [triggerCreateTask]);
+
+  // Navigate to task detail when agent creates a task
+  const appliedFocusRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (focusTaskId && focusTaskId !== appliedFocusRef.current) {
+      appliedFocusRef.current = focusTaskId;
+      setSelectedTaskId(focusTaskId);
+    }
+  }, [focusTaskId]);
 
   if (selectedTaskId) {
     return <TaskDetail taskId={selectedTaskId} onBack={() => setSelectedTaskId(null)} />;

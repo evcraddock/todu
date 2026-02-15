@@ -666,5 +666,46 @@ describe("todu agent tools", () => {
         filter: {},
       });
     });
+
+    it("create_task emits show_task_detail ui-action with task ID", async () => {
+      const sentMessages: Array<{ channel: string; data: unknown }> = [];
+      const mockWindow = {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, data: unknown) => {
+            sentMessages.push({ channel, data });
+          },
+        },
+      };
+
+      const toolsWithWindow = createToduTools(
+        todu,
+        mockWindow as unknown as import("electron").BrowserWindow,
+      );
+      const createTask = toolsWithWindow.find((t) => t.name === "create_task")!;
+
+      const result = await createTask.execute("test-call", {
+        title: "Navigate test",
+        projectId,
+      });
+      const created = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+
+      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
+      expect(uiActions).toHaveLength(1);
+      expect(uiActions[0].data).toEqual({
+        action: "show_task_detail",
+        taskId: created.id,
+      });
+    });
+
+    it("create_task does not emit when no mainWindow provided", async () => {
+      const result = await exec("create_task", {
+        title: "No window test",
+        projectId,
+      });
+      const data = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+      expect(data.title).toBe("No window test");
+      // No crash, no ui-action emitted (no window)
+    });
   });
 });
