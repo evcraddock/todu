@@ -273,6 +273,9 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
     setItems((prev) => [...prev, { kind: "user", text }]);
     scrollToBottom();
 
+    // Keep focus in the input after sending
+    inputRef.current?.focus();
+
     try {
       await window.todu.agent.send(text);
     } catch (err) {
@@ -391,7 +394,7 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
-          rows={1}
+          rows={3}
           disabled={isStreaming}
         />
         {isStreaming ? (
