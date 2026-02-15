@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -28,7 +28,26 @@ pre-pr: ## Run pre-PR checks (check + test + build)
 	npm run build
 
 clean: ## Remove build artifacts
-	rm -rf packages/*/dist packages/*/*.tsbuildinfo
+	rm -rf packages/*/dist packages/*/*.tsbuildinfo dist/cli
+
+# =============================================================================
+# CLI Binary Builds
+# =============================================================================
+
+build-cli-binary: build ## Build standalone CLI binary for current platform
+	@mkdir -p dist/cli
+	bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+	@echo "Built: dist/cli/todu ($$(ls -lh dist/cli/todu | awk '{print $$5}'))"
+
+build-cli-binaries: build ## Build standalone CLI binaries for all platforms
+	@mkdir -p dist/cli
+	bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
+	bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
+	bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
+	bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
+	bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
+	@echo "Built all CLI binaries:"
+	@ls -lh dist/cli/
 
 # =============================================================================
 # Development

@@ -1,13 +1,7 @@
-import { createRequire } from "node:module";
 import type { Repo } from "@automerge/automerge-repo";
 import { WebSocketServerAdapter } from "@automerge/automerge-repo-network-websocket";
 import type { WebSocketServer as IsoWebSocketServer } from "isomorphic-ws";
-
-// ws is CJS, use createRequire for interop
-const require = createRequire(import.meta.url);
-const { WebSocketServer } = require("ws") as {
-  WebSocketServer: new (opts: { host: string; port: number }) => IsoWebSocketServer;
-};
+import { WebSocketServer } from "ws";
 
 export const DEFAULT_SYNC_PORT = 24377;
 
@@ -22,7 +16,7 @@ export interface SyncServer {
  */
 export function startSyncServer(repo: Repo, port: number = DEFAULT_SYNC_PORT): SyncServer {
   const wss = new WebSocketServer({ host: "127.0.0.1", port });
-  const adapter = new WebSocketServerAdapter(wss);
+  const adapter = new WebSocketServerAdapter(wss as unknown as IsoWebSocketServer);
   repo.networkSubsystem.addNetworkAdapter(adapter);
 
   return {
