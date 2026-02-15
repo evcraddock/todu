@@ -1,6 +1,7 @@
 {
   "name": "@todu/core",
   "version": "0.0.1",
+  "description": "Core types, validation, and schemas for todu task management",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,8 +15,29 @@
       "types": "./dist/browser.d.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsgo -p tsconfig.build.json",
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evcraddock/todu.git",
+    "directory": "packages/core"
+  },
+  "license": "MIT",
+  "keywords": [
+    "todu",
+    "task-management",
+    "types",
+    "validation"
+  ],
+  "engines": {
+    "node": ">=20"
   }
 }

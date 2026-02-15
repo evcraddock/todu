@@ -30,7 +30,7 @@ describe("habit CLI commands", { timeout: 30000 }, () => {
       const error = e as { stdout?: string; stderr?: string };
       if (expectFail) return (error.stderr || error.stdout || "").toString();
       throw new Error(
-        `Command failed: toduai ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
+        `Command failed: todu ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
       );
     }
   }

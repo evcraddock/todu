@@ -1,6 +1,7 @@
 {
   "name": "@todu/engine",
   "version": "0.0.1",
+  "description": "Task management engine with offline-first CRDT storage and sync",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,12 +11,15 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsgo -p tsconfig.build.json",
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
-    "@automerge/automerge": "^3.2.3",
+    "@automerge/automerge": "^3.2.4",
     "@automerge/automerge-repo": "^2.5.1",
     "@automerge/automerge-repo-network-websocket": "^2.5.1",
     "@automerge/automerge-repo-storage-nodefs": "^2.5.1",
@@ -25,5 +29,24 @@
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evcraddock/todu.git",
+    "directory": "packages/engine"
+  },
+  "license": "MIT",
+  "keywords": [
+    "todu",
+    "task-management",
+    "crdt",
+    "automerge",
+    "offline-first"
+  ],
+  "engines": {
+    "node": ">=20"
   }
 }
