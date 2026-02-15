@@ -62,6 +62,24 @@ Push and create PR with clear description linking to the task.
 
 **Never merge without human approval.** Agent reviews catch issues early — they are not permission to merge.
 
+## Git Hooks
+
+The project uses [Husky](https://typicode.github.io/husky/) for git hooks:
+
+| Hook | Trigger | What runs |
+|------|---------|-----------|
+| **pre-commit** | `git commit` | Lint, format, typecheck (`npm run check`) |
+| **pre-push** | `git push` | Full test suite (`npm test`) |
+
+If a hook fails, the operation is blocked. Fix the issue before retrying.
+
+To bypass in emergencies (use sparingly):
+
+```bash
+git commit --no-verify   # skip pre-commit
+git push --no-verify     # skip pre-push
+```
+
 ## Tooling
 
 | Command | Purpose |
