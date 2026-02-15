@@ -16,12 +16,11 @@ import type { Repo } from "@automerge/automerge-repo";
 export function observeAllChanges(repo: Repo, callback: () => void): () => void {
   const observed = new Set<DocumentId>();
   let pending = false;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   function coalesced(): void {
     if (!pending) {
       pending = true;
-      // Use queueMicrotask to coalesce multiple synchronous changes
-      // into a single callback invocation.
       queueMicrotask(() => {
         pending = false;
         callback();
@@ -35,20 +34,34 @@ export function observeAllChanges(repo: Repo, callback: () => void): () => void 
     handle.on("change", coalesced);
   }
 
-  // Subscribe to all existing document handles
-  for (const handle of Object.values(repo.handles)) {
-    observe(handle);
+  /** Scan repo.handles for any new unobserved handles. */
+  function scanForNewHandles(): void {
+    for (const handle of Object.values(repo.handles)) {
+      observe(handle);
+    }
   }
 
-  // Subscribe to new documents as they appear
+  // Subscribe to all existing document handles
+  scanForNewHandles();
+
+  // The Repo "document" event may not fire in all versions of automerge-repo,
+  // so we also poll for new handles periodically. The poll is cheap — just
+  // iterating a map and checking a Set.
   function onDocument({ handle }: { handle: DocHandle<unknown> }): void {
     observe(handle);
   }
   repo.on("document", onDocument);
 
+  // Poll every 2 seconds for new document handles that weren't caught by the event
+  pollTimer = setInterval(scanForNewHandles, 2000);
+
   // Cleanup: remove all listeners
   return () => {
     repo.off("document", onDocument);
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
     for (const handle of Object.values(repo.handles)) {
       if (observed.has(handle.documentId)) {
         handle.off("change", coalesced);
