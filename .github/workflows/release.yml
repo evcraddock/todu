@@ -313,18 +313,24 @@ jobs:
       - name: Build packages
         run: npm run build
 
-      - name: Publish @todu/core
-        run: npm publish --workspace=packages/core --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @todu/engine
-        run: npm publish --workspace=packages/engine --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @todu/cli
-        run: npm publish --workspace=packages/cli --access public
+      - name: Publish npm packages
+        run: |
+          publish_package() {
+            local workspace=$1
+            local output
+            if output=$(npm publish --workspace="$workspace" --access public 2>&1); then
+              echo "✅ Published $workspace"
+            elif echo "$output" | grep -q "previously published"; then
+              echo "⏭️  $workspace already published at this version, skipping"
+            else
+              echo "$output" >&2
+              echo "::error::Failed to publish $workspace"
+              return 1
+            fi
+          }
+          publish_package packages/core
+          publish_package packages/engine
+          publish_package packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
