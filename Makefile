@@ -1,4 +1,17 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win version version-check
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win version version-check node_modules check-bun
+
+# =============================================================================
+# Dependency checks
+# =============================================================================
+
+node_modules: ## Install dependencies if missing
+	@if [ ! -d node_modules ]; then \
+		echo "node_modules not found. Running npm install..."; \
+		npm install; \
+	fi
+
+check-bun: ## Verify bun is installed (needed for CLI binary builds)
+	@command -v bun >/dev/null 2>&1 || { echo "❌ bun is required for CLI binary builds. Install from https://bun.sh"; exit 1; }
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -7,22 +20,22 @@ help: ## Show this help
 # Build & Quality
 # =============================================================================
 
-build: ## Build all packages (core → engine → cli)
+build: node_modules ## Build all packages (core → engine → cli)
 	npm run build
 
-test: ## Run tests
+test: node_modules ## Run tests
 	npm test
 
-check: ## Lint + format + typecheck (auto-fixes formatting)
+check: node_modules ## Lint + format + typecheck (auto-fixes formatting)
 	npm run check
 
-check-ci: ## Lint + format + typecheck (no auto-fix, CI mode)
+check-ci: node_modules ## Lint + format + typecheck (no auto-fix, CI mode)
 	npm run check:ci
 
-typecheck: ## Run TypeScript type checking only
+typecheck: node_modules ## Run TypeScript type checking only
 	npm run typecheck
 
-pre-pr: ## Run pre-PR checks (check + test + build)
+pre-pr: node_modules ## Run pre-PR checks (check + test + build)
 	npm run check:ci
 	npm test
 	npm run build
@@ -34,12 +47,12 @@ clean: ## Remove build artifacts
 # CLI Binary Builds
 # =============================================================================
 
-build-cli-binary: build ## Build standalone CLI binary for current platform
+build-cli-binary: check-bun build ## Build standalone CLI binary for current platform
 	@mkdir -p dist/cli
 	bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
 	@echo "Built: dist/cli/todu ($$(ls -lh dist/cli/todu | awk '{print $$5}'))"
 
-build-cli-binaries: build ## Build standalone CLI binaries for all platforms
+build-cli-binaries: check-bun build ## Build standalone CLI binaries for all platforms
 	@mkdir -p dist/cli
 	bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
 	bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
@@ -53,24 +66,24 @@ build-cli-binaries: build ## Build standalone CLI binaries for all platforms
 # Development
 # =============================================================================
 
-run: ## Run CLI (usage: make run ARGS="task list")
+run: node_modules ## Run CLI (usage: make run ARGS="task list")
 	node packages/cli/dist/index.js $(ARGS)
 
 # =============================================================================
 # Electron
 # =============================================================================
 
-dev-electron: ## Launch Electron app in dev mode (hot reload)
+dev-electron: node_modules ## Launch Electron app in dev mode (hot reload)
 	npm run --workspace=packages/electron dev
 
-build-electron: ## Build Electron app for distribution
+build-electron: node_modules ## Build Electron app for distribution
 	npm run --workspace=packages/electron build
 
 # =============================================================================
 # Distribution
 # =============================================================================
 
-dist: build build-electron build-cli-binary ## Build installer for current platform
+dist: check-bun build build-electron build-cli-binary ## Build installer for current platform
 	npm run --workspace=packages/electron dist
 
 dist-linux: build build-electron ## Build Linux installers (.deb, .rpm, .AppImage)
