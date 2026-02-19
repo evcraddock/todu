@@ -32,6 +32,7 @@ Run `make help` to see all targets. Key commands:
 
 | Command               | Description                                        |
 | --------------------- | -------------------------------------------------- |
+| `make help`           | Show all available targets                         |
 | `make build`          | Build all packages (core → engine → cli)           |
 | `make test`           | Run tests                                          |
 | `make check`          | Lint + format + typecheck (auto-fixes formatting)  |
@@ -54,14 +55,15 @@ Run `make help` to see all targets. Key commands:
 | `make build-cli-binary`  | Build standalone CLI binary for current platform  |
 | `make build-cli-binaries`| Build standalone CLI binaries for all platforms   |
 
-#### Distribution
+#### Electron & Distribution
 
-| Command          | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `make dist`      | Build installer for current platform         |
-| `make dist-linux`| Build Linux installers (.deb, .rpm, .AppImage)|
-| `make dist-mac`  | Build macOS installer (.dmg)                 |
-| `make dist-win`  | Build Windows installer (.exe)               |
+| Command              | Description                                   |
+| -------------------- | --------------------------------------------- |
+| `make build-electron`| Build Electron app for distribution            |
+| `make dist`          | Build installer for current platform           |
+| `make dist-linux`    | Build Linux installers (.deb, .rpm, .AppImage) |
+| `make dist-mac`      | Build macOS installer (.dmg)                   |
+| `make dist-win`      | Build Windows installer (.exe)                 |
 
 #### Version Management
 
