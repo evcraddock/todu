@@ -18,6 +18,49 @@ export const DEFAULT_DATA_DIR = path.join(DEFAULT_CONFIG_DIR, "data");
 export interface ToduFileConfig {
   /** Path to data directory (absolute or relative to config file) */
   data_dir?: string;
+  /** Remote multi-device sync configuration */
+  sync?: {
+    remote?: {
+      /** WebSocket URL of the remote sync server (e.g. "wss://sync.todu.sh") */
+      server?: string;
+      /** Whether remote sync is enabled (default: false) */
+      enabled?: boolean;
+    };
+  };
+}
+
+/** Resolved remote sync config — only present when server is set and enabled. */
+export interface RemoteSyncConfig {
+  /** WebSocket URL of the remote sync server */
+  server: string;
+}
+
+/**
+ * Resolve remote sync configuration from file config and env var overrides.
+ *
+ * Priority:
+ * 1. TODUAI_SYNC_SERVER / TODUAI_SYNC_ENABLED env vars
+ * 2. sync.remote fields from config file
+ *
+ * Returns null when remote sync is disabled or not configured.
+ *
+ * IMPORTANT: Never use wss://sync.todu.sh in development or tests.
+ * Use the local dev sync server (ws://localhost:3030) via `make dev`.
+ */
+export function resolveRemoteSyncConfig(config: ToduFileConfig): RemoteSyncConfig | null {
+  const serverEnv = process.env.TODUAI_SYNC_SERVER;
+  const enabledEnv = process.env.TODUAI_SYNC_ENABLED;
+
+  const server = serverEnv ?? config.sync?.remote?.server;
+
+  const enabled =
+    enabledEnv !== undefined
+      ? enabledEnv === "true" || enabledEnv === "1"
+      : (config.sync?.remote?.enabled ?? false);
+
+  if (!server || !enabled) return null;
+
+  return { server };
 }
 
 /**

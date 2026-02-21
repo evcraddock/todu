@@ -1,9 +1,9 @@
-import { resolveStoragePath } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import { createTodu } from "@todu/engine";
 import { app, BrowserWindow } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
+import { loadElectronConfig } from "./config.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerOAuthIpc, unregisterOAuthIpc } from "./oauth.js";
 
@@ -32,14 +32,19 @@ function showWindowWithAction(action: string): void {
 }
 
 async function init(): Promise<void> {
-  // Resolve storage path using the same config chain as CLI
-  const storagePath = resolveStoragePath();
+  // Load full config (data dir + remote sync) using the same config chain as CLI
+  const { storagePath, remoteSync } = loadElectronConfig();
 
-  // Initialize engine with sync server so CLI can connect
-  todu = await createTodu({ storagePath, syncServer: true });
+  // Initialize engine with sync server so CLI can connect,
+  // and connect to remote sync server if configured
+  todu = await createTodu({
+    storagePath,
+    syncServer: true,
+    remoteSync: remoteSync ?? undefined,
+  });
 
   // Register all IPC handlers
-  registerIpcHandlers(todu);
+  registerIpcHandlers(todu, storagePath);
 
   // Create the main window
   const windowState = restoreWindowState();

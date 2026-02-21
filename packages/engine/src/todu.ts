@@ -22,6 +22,7 @@ import type {
   RecurringFilter,
   RecurringId,
   RecurringTemplate,
+  RemoteSyncConfig,
   Result,
   Task,
   TaskFilter,
@@ -54,6 +55,16 @@ export interface ToduConfig {
 
   /** Try to connect to a running sync server (used by CLI) */
   syncClient?: boolean;
+
+  /**
+   * Remote multi-device sync configuration.
+   * When provided, connects a second WebSocketClientAdapter to the remote server.
+   * Used by Electron and toduai serve.
+   *
+   * IMPORTANT: Never use wss://sync.todu.sh in development or tests.
+   * Use ws://localhost:3030 via `make dev`.
+   */
+  remoteSync?: RemoteSyncConfig;
 }
 
 // ============================================================================
@@ -155,6 +166,17 @@ export interface SyncNamespace {
   stop(): Promise<void>;
   /** Get current sync status (local mode + remote state). */
   status(): SyncStatus;
+  /**
+   * Register a callback for remote sync state changes.
+   * Fires when the remote connection transitions between
+   * connected/disconnected. Returns a cleanup function.
+   */
+  onStatusChange(callback: (status: SyncStatus) => void): () => void;
+  /**
+   * Get the catalog document ID for this instance.
+   * Used as a join code so other devices can sync with this one.
+   */
+  getCatalogId(): string;
 }
 
 export interface ConfigNamespace {
@@ -252,6 +274,8 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
         local: { mode: "standalone" as LocalSyncMode },
         remote: { state: "disconnected" as RemoteSyncState },
       }),
+      onStatusChange: () => () => {},
+      getCatalogId: () => "",
     },
     config: {
       get: () => config,

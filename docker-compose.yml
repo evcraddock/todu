@@ -1,0 +1,11 @@
+services:
+  sync-server:
+    image: ghcr.io/automerge/automerge-repo-sync-server:main
+    ports:
+      - "3030:3030"
+    volumes:
+      - ./data/sync:/data
+    environment:
+      - PORT=3030
+      - DATA_DIR=/data
+    restart: unless-stopped

@@ -1,6 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { ThemePreference } from "../hooks/useTheme.js";
-import type { AgentSettings, OAuthEvent, OAuthStatus, ProviderInfo } from "../types/window.js";
+import type {
+  AgentSettings,
+  OAuthEvent,
+  OAuthStatus,
+  ProviderInfo,
+  SyncStatus,
+} from "../types/window.js";
 
 // ============================================================================
 // Component
@@ -22,6 +28,14 @@ export function SettingsView({
   // API key input state — one per provider
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
 
+  // Sync state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [catalogId, setCatalogId] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   // OAuth state
   const [oauthStatuses, setOauthStatuses] = useState<OAuthStatus[]>([]);
   const [oauthLoggingIn, setOauthLoggingIn] = useState<string | null>(null);
@@ -34,7 +48,9 @@ export function SettingsView({
   const [oauthError, setOauthError] = useState<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // Load settings, provider list, and OAuth status on mount
+  // Load settings, provider list, and OAuth status on mount.
+  // Sync data is loaded separately so a sync IPC failure doesn't
+  // prevent the rest of the settings page from rendering.
   useEffect(() => {
     Promise.all([
       window.todu.settings.get(),
@@ -47,6 +63,27 @@ export function SettingsView({
       setProviders(providerList);
       setOauthStatuses(statuses);
     });
+  }, []);
+
+  // Load sync status and catalog ID separately — isolated so a failure
+  // here doesn't blank the whole settings page.
+  useEffect(() => {
+    Promise.all([window.todu.sync.status(), window.todu.sync.getCatalogId()])
+      .then(([syncSt, catId]) => {
+        setSyncStatus(syncSt);
+        setCatalogId(catId);
+      })
+      .catch(() => {
+        // Sync data unavailable — the Sync section simply won't render
+      });
+  }, []);
+
+  // Keep sync status live via push events
+  useEffect(() => {
+    const cleanup = window.todu.on("todu:sync:status-changed", (data) => {
+      setSyncStatus(data as SyncStatus);
+    });
+    return cleanup;
   }, []);
 
   // Listen for OAuth events
@@ -183,6 +220,33 @@ export function SettingsView({
       prev.map((s) => (s.id === providerId ? { ...s, connected: false, expired: false } : s)),
     );
   }, []);
+
+  // ── Sync handlers ────────────────────────────────────────────────
+
+  const handleCopyCatalogId = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(catalogId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can fail (permission denied, insecure context, etc.)
+      // Silently ignore — the user can still select and copy the text manually
+    }
+  }, [catalogId]);
+
+  const handleJoin = useCallback(async () => {
+    const code = joinCode.trim();
+    if (!code) return;
+    setJoining(true);
+    setJoinError(null);
+    try {
+      await window.todu.sync.join(code);
+      // App will restart — no further state update needed
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : String(err));
+      setJoining(false);
+    }
+  }, [joinCode]);
 
   if (!settings || providers.length === 0) {
     return <div className="loading-state">Loading settings...</div>;
@@ -364,6 +428,99 @@ export function SettingsView({
           </div>
         ))}
       </div>
+
+      {/* ── Sync ────────────────────────────────────────────────────── */}
+      {syncStatus && (
+        <div className="settings-section">
+          <h3 className="section-title">Sync</h3>
+
+          {/* Remote server & connection status */}
+          <div className="settings-key-row">
+            <div className="settings-key-header">
+              <span className="settings-key-label">
+                {syncStatus.remote.server
+                  ? syncStatus.remote.server
+                  : "No remote server configured"}
+              </span>
+              <span
+                className={`settings-key-status ${
+                  syncStatus.remote.state === "connected"
+                    ? "settings-key-stored"
+                    : "settings-key-missing"
+                }`}
+              >
+                {syncStatus.remote.state === "connected" ? "● Connected" : "● Disconnected"}
+              </span>
+            </div>
+            {!syncStatus.remote.server && (
+              <p className="settings-hint">
+                Add a <code>sync.remote.server</code> URL to <code>config.yaml</code> to enable
+                multi-device sync.
+              </p>
+            )}
+          </div>
+
+          {/* Join code — Device A shares this, Device B enters it */}
+          {catalogId && (
+            <>
+              <div className="settings-key-row">
+                <div className="settings-key-header">
+                  <span className="settings-key-label">Your join code</span>
+                </div>
+                <p className="settings-hint">
+                  Share this code with another device to let it sync your data.
+                </p>
+                <div className="settings-key-input-row">
+                  <input
+                    type="text"
+                    className="input settings-key-input"
+                    readOnly
+                    value={catalogId}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={handleCopyCatalogId}
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-key-row">
+                <div className="settings-key-header">
+                  <span className="settings-key-label">Join another device</span>
+                </div>
+                <p className="settings-hint">
+                  Enter a join code from another device. The app will restart and replace your local
+                  data with that device&apos;s data.
+                </p>
+                <div className="settings-key-input-row">
+                  <input
+                    type="text"
+                    className="input settings-key-input"
+                    placeholder="Paste join code here"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleJoin();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!joinCode.trim() || joining}
+                    onClick={() => void handleJoin()}
+                  >
+                    {joining ? "Joining..." : "Join"}
+                  </button>
+                </div>
+                {joinError && <div className="settings-oauth-error">{joinError}</div>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── API Keys ────────────────────────────────────────────────── */}
       <div className="settings-section">

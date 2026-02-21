@@ -107,6 +107,15 @@ const api = {
     providers: () => ipcRenderer.invoke("todu:settings:providers"),
   },
 
+  // ── Sync ─────────────────────────────────────────────────────────
+  sync: {
+    status: () => ipcRenderer.invoke("todu:sync:status"),
+    start: () => ipcRenderer.invoke("todu:sync:start"),
+    stop: () => ipcRenderer.invoke("todu:sync:stop"),
+    getCatalogId: () => ipcRenderer.invoke("todu:sync:catalog-id"),
+    join: (catalogId: string) => ipcRenderer.invoke("todu:sync:join", catalogId),
+  },
+
   // ── Events ─────────────────────────────────────────────────────────
   // For change notifications and future agent events.
   // Restricted to an allowlist of known channels for security.
@@ -117,6 +126,7 @@ const api = {
       "todu:oauth:event",
       "todu:action",
       "todu:ui-action",
+      "todu:sync:status-changed",
     ];
     if (!ALLOWED_CHANNELS.includes(channel)) {
       console.warn(`Blocked listen on unknown channel: ${channel}`);

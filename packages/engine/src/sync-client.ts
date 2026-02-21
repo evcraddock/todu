@@ -31,6 +31,27 @@ export async function connectSyncClient(
 }
 
 /**
+ * Add a remote sync adapter to a Repo without blocking.
+ *
+ * Unlike connectSyncClient(), this does NOT await the connection — the remote
+ * server may be temporarily unreachable. The adapter reconnects automatically
+ * at the given retryInterval.
+ *
+ * Returns the adapter so callers can listen for connection events and remove it.
+ *
+ * @param retryInterval - Retry interval in ms on disconnect (default: 30s for remote)
+ */
+export function addRemoteSyncAdapter(
+  repo: Repo,
+  url: string,
+  retryInterval = 30000,
+): WebSocketClientAdapter {
+  const adapter = new WebSocketClientAdapter(url, retryInterval);
+  repo.networkSubsystem.addNetworkAdapter(adapter);
+  return adapter;
+}
+
+/**
  * Check if a sync server is reachable at the given URL.
  * Returns true if the connection succeeds within the timeout.
  */

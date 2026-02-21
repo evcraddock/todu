@@ -1,3 +1,5 @@
+import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo";
+import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
@@ -6,7 +8,7 @@ import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
 import { initEphemeralStorage, initStorage, type Storage } from "./storage.js";
-import { connectSyncClient } from "./sync-client.js";
+import { addRemoteSyncAdapter, connectSyncClient } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import {
@@ -17,6 +19,7 @@ import {
   type ToduConfig,
 } from "./todu.js";
 
+export type { RemoteSyncConfig } from "@todu/core";
 export type { UpcomingOccurrence } from "./recurring.js";
 // Re-export schedule utilities for consumers
 export {
@@ -29,7 +32,7 @@ export {
 export type { ProcessingContext, SchedulableItem, TemplateProcessor } from "./scheduling.js";
 export { clearProcessors, getRegisteredProcessors, registerProcessor } from "./scheduling.js";
 export type { Storage } from "./storage.js";
-export { isSyncServerAvailable } from "./sync-client.js";
+export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   HabitNamespace,
@@ -108,9 +111,93 @@ export async function createTodu(
 
   const syncStatus: SyncStatus = {
     local: { mode: localMode },
-    // Remote multi-device sync is not yet implemented (phase 3)
-    remote: { state: "disconnected" },
+    remote: {
+      state: "disconnected",
+      server: config?.remoteSync?.server,
+    },
   };
+
+  // Listeners for sync status changes
+  const syncStatusListeners = new Set<(status: SyncStatus) => void>();
+
+  function notifySyncStatusListeners(): void {
+    for (const cb of syncStatusListeners) cb(syncStatus);
+  }
+
+  // Remote sync adapter — set up if configured, null when stopped
+  let remoteAdapter: WebSocketClientAdapter | null = null;
+  // Tracked handler references so we can remove them cleanly on stop
+  let remoteHandlers: {
+    onPeerCandidate: (_payload: PeerCandidatePayload) => void;
+    onPeerDisconnected: (_payload: PeerDisconnectedPayload) => void;
+    onClose: () => void;
+  } | null = null;
+
+  /**
+   * Attach a remote sync adapter to the repo and track connection state.
+   * Non-blocking — the adapter retries automatically on disconnect.
+   */
+  function startRemoteAdapter(): void {
+    if (!config?.remoteSync || remoteAdapter) return;
+
+    const onPeerCandidate = (_payload: PeerCandidatePayload): void => {
+      syncStatus.remote.state = "connected";
+      notifySyncStatusListeners();
+    };
+    const onPeerDisconnected = (_payload: PeerDisconnectedPayload): void => {
+      syncStatus.remote.state = "disconnected";
+      notifySyncStatusListeners();
+    };
+    const onClose = (): void => {
+      syncStatus.remote.state = "disconnected";
+      notifySyncStatusListeners();
+    };
+
+    remoteAdapter = addRemoteSyncAdapter(storage.repo, config.remoteSync.server);
+    remoteAdapter.on("peer-candidate", onPeerCandidate);
+    remoteAdapter.on("peer-disconnected", onPeerDisconnected);
+    remoteAdapter.on("close", onClose);
+
+    remoteHandlers = { onPeerCandidate, onPeerDisconnected, onClose };
+  }
+
+  /**
+   * Remove the remote adapter from the repo and clean up state.
+   *
+   * Removes our state-tracking listeners first to prevent stale updates.
+   * Wraps removeNetworkAdapter in try-catch: if the adapter was created but
+   * connect() hasn't run yet (peerMetadata Promise pending), disconnect()
+   * inside removeNetworkAdapter will throw — that's safe to ignore since
+   * the adapter has already been filtered out of the subsystem's adapter list.
+   */
+  function stopRemoteAdapter(): void {
+    if (!remoteAdapter) return;
+
+    // Remove our listeners before touching the adapter
+    if (remoteHandlers) {
+      remoteAdapter.off("peer-candidate", remoteHandlers.onPeerCandidate);
+      remoteAdapter.off("peer-disconnected", remoteHandlers.onPeerDisconnected);
+      remoteAdapter.off("close", remoteHandlers.onClose);
+      remoteHandlers = null;
+    }
+
+    const adapter = remoteAdapter;
+    remoteAdapter = null;
+    syncStatus.remote.state = "disconnected";
+    notifySyncStatusListeners();
+
+    try {
+      storage.repo.networkSubsystem.removeNetworkAdapter(adapter);
+    } catch {
+      // Adapter may not be fully initialized yet (peerMetadata Promise pending,
+      // so peerId is not set). The subsystem filter already ran — safe to ignore.
+    }
+  }
+
+  // Auto-start remote sync if configured
+  if (config?.remoteSync) {
+    startRemoteAdapter();
+  }
 
   const stubs = createStubNamespaces(resolvedConfig);
 
@@ -124,15 +211,25 @@ export async function createTodu(
     habit: createHabitNamespace(storage.catalog, storage.repo),
     sync: {
       status: () => syncStatus,
-      start: () => Promise.resolve(),
-      stop: () => Promise.resolve(),
+      start: async () => {
+        startRemoteAdapter();
+      },
+      stop: async () => {
+        stopRemoteAdapter();
+      },
+      onStatusChange(callback: (status: SyncStatus) => void): () => void {
+        syncStatusListeners.add(callback);
+        return () => syncStatusListeners.delete(callback);
+      },
+      getCatalogId: () => storage.catalog.documentId,
     },
     onChange(callback: () => void): () => void {
       return observeAllChanges(storage.repo, callback);
     },
     async close() {
-      // repo.shutdown() handles disconnecting network adapters.
-      // We just need to close the WS server (if any) after shutdown.
+      // Stop remote adapter first to avoid reconnect attempts during shutdown
+      stopRemoteAdapter();
+      // repo.shutdown() handles disconnecting remaining network adapters.
       await storage.close();
       if (syncServer) {
         await syncServer.close();

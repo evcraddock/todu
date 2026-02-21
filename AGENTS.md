@@ -59,6 +59,25 @@ After an agent review completes:
 
 **The human decides when to merge. Always.**
 
+## NEVER Use sync.todu.sh in Development
+
+**`sync.todu.sh` is strictly for production use. Never connect to it during development, testing, or CI.**
+
+Use the local sync server instead:
+
+```bash
+make dev        # starts local sync server via overmind + docker compose
+```
+
+The local sync server runs at `ws://localhost:3030`. Use this URL in all dev/test config.
+
+This applies to:
+- Manual testing and development
+- Automated tests
+- CI pipelines
+
+**Why this matters:** Connecting dev/test instances to the production sync server pollutes real user data and can cause data corruption from untested code.
+
 ## Project Overview
 
 Local-first task management with offline support and seamless sync

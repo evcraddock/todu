@@ -8,6 +8,7 @@ import {
   resolveConfigPath,
   resolveConfigSources,
   resolveDataDir,
+  resolveRemoteSyncConfig,
   resolveStoragePath,
 } from "./config.js";
 
@@ -126,5 +127,81 @@ describe("config resolution", () => {
       expect(sources.dataDirSource).toBe("default");
       expect(sources.dataDir).toBe(DEFAULT_DATA_DIR);
     });
+  });
+});
+
+describe("resolveRemoteSyncConfig", () => {
+  const origEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of ["TODUAI_SYNC_SERVER", "TODUAI_SYNC_ENABLED"]) {
+      origEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(origEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+
+  it("returns null when not configured", () => {
+    expect(resolveRemoteSyncConfig({})).toBeNull();
+  });
+
+  it("returns null when server set but not enabled", () => {
+    expect(
+      resolveRemoteSyncConfig({
+        sync: { remote: { server: "ws://localhost:3030", enabled: false } },
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null when enabled but no server", () => {
+    expect(resolveRemoteSyncConfig({ sync: { remote: { enabled: true } } })).toBeNull();
+  });
+
+  it("returns config when server set and enabled", () => {
+    const result = resolveRemoteSyncConfig({
+      sync: { remote: { server: "ws://localhost:3030", enabled: true } },
+    });
+    expect(result).toEqual({ server: "ws://localhost:3030" });
+  });
+
+  it("TODUAI_SYNC_SERVER overrides config file server", () => {
+    process.env.TODUAI_SYNC_SERVER = "ws://localhost:9999";
+    const result = resolveRemoteSyncConfig({
+      sync: { remote: { server: "ws://localhost:3030", enabled: true } },
+    });
+    expect(result).toEqual({ server: "ws://localhost:9999" });
+  });
+
+  it("TODUAI_SYNC_ENABLED=true enables sync", () => {
+    process.env.TODUAI_SYNC_ENABLED = "true";
+    const result = resolveRemoteSyncConfig({
+      sync: { remote: { server: "ws://localhost:3030" } },
+    });
+    expect(result).toEqual({ server: "ws://localhost:3030" });
+  });
+
+  it("TODUAI_SYNC_ENABLED=1 enables sync", () => {
+    process.env.TODUAI_SYNC_ENABLED = "1";
+    const result = resolveRemoteSyncConfig({
+      sync: { remote: { server: "ws://localhost:3030" } },
+    });
+    expect(result).toEqual({ server: "ws://localhost:3030" });
+  });
+
+  it("TODUAI_SYNC_ENABLED=false disables sync even when config has enabled:true", () => {
+    process.env.TODUAI_SYNC_ENABLED = "false";
+    const result = resolveRemoteSyncConfig({
+      sync: { remote: { server: "ws://localhost:3030", enabled: true } },
+    });
+    expect(result).toBeNull();
   });
 });
