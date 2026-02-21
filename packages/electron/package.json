@@ -32,7 +32,8 @@
     "@todu/engine": "*",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "tiptap-markdown": "0.9.0"
+    "tiptap-markdown": "0.9.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",

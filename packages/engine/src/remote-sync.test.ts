@@ -5,8 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
-// Use a port range that doesn't conflict with other test files
-const RELAY_PORT = 24401;
+// Unique port per test — avoids OS TIME_WAIT reuse issues when tests
+// run back-to-back. Base port chosen to avoid conflicts with other test files
+// (sync-status: 24398, sync: 24399).
+const RELAY_PORTS = {
+  connected: 24401,
+  stop: 24402,
+  start: 24403,
+  noOp: 24404,
+};
 
 /**
  * Wait for sync status to reach the expected remote state.
@@ -36,12 +43,12 @@ async function waitForRemoteState(
  * will throw if a connected client is still sending sync messages.
  * Pattern: close client first, wait briefly, then call cleanup().
  */
-async function startRelay(): Promise<{ relay: Todu; relayDir: string }> {
+async function startRelay(port: number): Promise<{ relay: Todu; relayDir: string }> {
   const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-"));
   const relay = await createTodu({
     storagePath: relayDir,
     syncServer: true,
-    syncPort: RELAY_PORT,
+    syncPort: port,
   });
   // Allow server to fully initialize before clients connect
   await new Promise((r) => setTimeout(r, 100));
@@ -91,12 +98,12 @@ describe("remote sync", () => {
   });
 
   it("status becomes connected when relay is available", { timeout: 10000 }, async () => {
-    const { relay, relayDir } = await startRelay();
+    const { relay, relayDir } = await startRelay(RELAY_PORTS.connected);
 
     try {
       todu = await createTodu({
         storagePath: tmpDir,
-        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
+        remoteSync: { server: `ws://localhost:${RELAY_PORTS.connected}` },
       });
 
       await waitForRemoteState(todu, "connected");
@@ -115,12 +122,12 @@ describe("remote sync", () => {
     "sync.stop() sets state to disconnected and prevents reconnect",
     { timeout: 10000 },
     async () => {
-      const { relay, relayDir } = await startRelay();
+      const { relay, relayDir } = await startRelay(RELAY_PORTS.stop);
 
       try {
         todu = await createTodu({
           storagePath: tmpDir,
-          remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
+          remoteSync: { server: `ws://localhost:${RELAY_PORTS.stop}` },
         });
 
         await waitForRemoteState(todu, "connected");
@@ -142,12 +149,12 @@ describe("remote sync", () => {
   );
 
   it("sync.start() reconnects after stop", { timeout: 10000 }, async () => {
-    const { relay, relayDir } = await startRelay();
+    const { relay, relayDir } = await startRelay(RELAY_PORTS.start);
 
     try {
       todu = await createTodu({
         storagePath: tmpDir,
-        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
+        remoteSync: { server: `ws://localhost:${RELAY_PORTS.start}` },
       });
 
       await waitForRemoteState(todu, "connected");
@@ -167,12 +174,12 @@ describe("remote sync", () => {
   });
 
   it("sync.start() is a no-op when already running", { timeout: 10000 }, async () => {
-    const { relay, relayDir } = await startRelay();
+    const { relay, relayDir } = await startRelay(RELAY_PORTS.noOp);
 
     try {
       todu = await createTodu({
         storagePath: tmpDir,
-        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
+        remoteSync: { server: `ws://localhost:${RELAY_PORTS.noOp}` },
       });
 
       await waitForRemoteState(todu, "connected");
