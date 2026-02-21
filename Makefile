@@ -1,6 +1,7 @@
 .PHONY: build test check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win version version-check node_modules check-bun
 
-SOCKET := ./.overmind.sock
+SOCKET    := ./.overmind.sock
+DEV_CONFIG := $(abspath .dev/config.yaml)
 
 # =============================================================================
 # Dependency checks
@@ -69,10 +70,10 @@ build-cli-binaries: check-bun build ## Build standalone CLI binaries for all pla
 # =============================================================================
 
 run: node_modules ## Run CLI (usage: make run ARGS="task list")
-	node packages/cli/dist/index.js $(ARGS)
+	TODUAI_CONFIG=$(DEV_CONFIG) TODUAI_NO_SYNC=1 node packages/cli/dist/index.js $(ARGS)
 
 dev: node_modules ## Start dev environment (sync server via overmind)
-	overmind start -D -s $(SOCKET)
+	TODUAI_CONFIG=$(DEV_CONFIG) overmind start -D -s $(SOCKET)
 
 dev-stop: ## Stop dev environment
 	overmind quit -s $(SOCKET) 2>/dev/null || true
@@ -92,7 +93,7 @@ dev-tail: ## Show last 100 lines of dev logs (non-blocking)
 # =============================================================================
 
 dev-electron: node_modules ## Launch Electron app in dev mode (hot reload)
-	npm run --workspace=packages/electron dev
+	TODUAI_CONFIG=$(DEV_CONFIG) npm run --workspace=packages/electron dev
 
 build-electron: node_modules ## Build Electron app for distribution
 	npm run --workspace=packages/electron build
