@@ -102,7 +102,7 @@ All data is stored locally using [Automerge](https://automerge.org/) CRDTs (Conf
 - Automatic conflict resolution when syncing
 - Data sovereignty — your tasks stay on your machine
 
-**Storage location:** `~/.config/todu/data/` (default), configurable via `--config` flag or `TODU_DATA_DIR` env var.
+**Storage location:** `~/.config/toduai/data/` (default), configurable via `--config` flag or `TODUAI_DATA_DIR` env var.
 
 **Automerge packages used:**
 
@@ -498,29 +498,29 @@ External sync is handled by todu extensions implementing a sync provider interfa
 
 ## Configuration
 
-Config file at `~/.config/todu/config.yaml` (default). Covers: data directory, sync server URL, enabled extensions, agent default model, UI preferences.
+Config file at `~/.config/toduai/config.yaml` (default). Covers: data directory, sync server URL, enabled extensions, agent default model, UI preferences.
 
 ### Config Resolution Order
 
 1. `--config <path>` CLI flag (highest priority)
-2. `TODU_CONFIG` environment variable
-3. Default: `~/.config/todu/config.yaml`
+2. `TODUAI_CONFIG` environment variable
+3. Default: `~/.config/toduai/config.yaml`
 
 ### Data Directory Resolution Order
 
-1. `TODU_DATA_DIR` environment variable (for backward compat and tests)
+1. `TODUAI_DATA_DIR` environment variable (for test isolation and explicit overrides)
 2. `data_dir` field in config file (resolved relative to config file location)
-3. Default: `~/.config/todu/data`
+3. Default: `~/.config/toduai/data`
 
 ### Dev Workflow
 
-For project-specific data isolation, run `toduai config init` in a project directory. This creates `.todu/config.yaml` + `.todu/.gitignore`. Tell agents to use `--config .todu/config.yaml` and they get an isolated data directory.
+For project-specific data isolation, run `toduai config init` in a project directory. This creates `.toduai/config.yaml` + `.toduai/.gitignore`. Tell agents to use `--config .toduai/config.yaml` and they get an isolated data directory.
 
 ### Config Behavior
 
 - **Malformed YAML fails fast** — `loadConfig` throws on parse errors, never silently ignores bad config.
 - **Missing file returns defaults** — If the config file doesn't exist, default values are used.
-- **No env vars for config values** — Prefer `--config` flag for dev, default config file for prod. `TODU_DATA_DIR` and `TODU_CONFIG` exist only for backward compat and test isolation.
+- **No env vars for config values** — Prefer `--config` flag for dev, default config file for prod. `TODUAI_DATA_DIR` and `TODUAI_CONFIG` are primarily for test isolation and explicit local overrides.
 
 ## Build Tooling
 
@@ -609,7 +609,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 For users of the current todu-api + todu.sh:
 
 1. Export data from todu-api (JSON format)
-2. Run `todu migrate import ./export.json`
+2. Run `toduai migrate import ./export.json`
 3. Configure sync extensions for existing projects
 4. Verify data, then sunset todu-api
 

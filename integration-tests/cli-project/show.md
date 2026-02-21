@@ -3,13 +3,13 @@
 ## Setup
 
 ```bash
-export TODU_DATA_DIR=$(mktemp -d)
+export TODUAI_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
 
 toduai project create --name "My App" --priority high --description "Main application"
 ```
@@ -69,5 +69,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODU_DATA_DIR"
+rm -rf "$TODUAI_DATA_DIR"
 ```

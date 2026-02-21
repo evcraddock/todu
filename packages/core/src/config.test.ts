@@ -15,7 +15,7 @@ describe("config resolution", () => {
   const origEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
-    for (const key of ["TODU_CONFIG", "TODU_DATA_DIR"]) {
+    for (const key of ["TODUAI_CONFIG", "TODUAI_DATA_DIR"]) {
       origEnv[key] = process.env[key];
       delete process.env[key];
     }
@@ -32,16 +32,16 @@ describe("config resolution", () => {
   });
 
   describe("defaults", () => {
-    it("DEFAULT_CONFIG_DIR is ~/.config/todu", () => {
-      expect(DEFAULT_CONFIG_DIR).toBe(path.join(os.homedir(), ".config", "todu"));
+    it("DEFAULT_CONFIG_DIR is ~/.config/toduai", () => {
+      expect(DEFAULT_CONFIG_DIR).toBe(path.join(os.homedir(), ".config", "toduai"));
     });
 
-    it("DEFAULT_CONFIG_FILE is ~/.config/todu/config.yaml", () => {
-      expect(DEFAULT_CONFIG_FILE).toBe(path.join(os.homedir(), ".config", "todu", "config.yaml"));
+    it("DEFAULT_CONFIG_FILE is ~/.config/toduai/config.yaml", () => {
+      expect(DEFAULT_CONFIG_FILE).toBe(path.join(os.homedir(), ".config", "toduai", "config.yaml"));
     });
 
-    it("DEFAULT_DATA_DIR is ~/.config/todu/data", () => {
-      expect(DEFAULT_DATA_DIR).toBe(path.join(os.homedir(), ".config", "todu", "data"));
+    it("DEFAULT_DATA_DIR is ~/.config/toduai/data", () => {
+      expect(DEFAULT_DATA_DIR).toBe(path.join(os.homedir(), ".config", "toduai", "data"));
     });
   });
 
@@ -50,8 +50,8 @@ describe("config resolution", () => {
       expect(resolveConfigPath("/custom/config.yaml")).toBe("/custom/config.yaml");
     });
 
-    it("uses TODU_CONFIG env var", () => {
-      process.env.TODU_CONFIG = "/env/config.yaml";
+    it("uses TODUAI_CONFIG env var", () => {
+      process.env.TODUAI_CONFIG = "/env/config.yaml";
       expect(resolveConfigPath()).toBe("/env/config.yaml");
     });
 
@@ -60,20 +60,20 @@ describe("config resolution", () => {
     });
 
     it("override beats env var", () => {
-      process.env.TODU_CONFIG = "/env/config.yaml";
+      process.env.TODUAI_CONFIG = "/env/config.yaml";
       expect(resolveConfigPath("/override/config.yaml")).toBe("/override/config.yaml");
     });
   });
 
   describe("resolveDataDir", () => {
-    it("uses TODU_DATA_DIR env var first", () => {
-      process.env.TODU_DATA_DIR = "/env/data";
+    it("uses TODUAI_DATA_DIR env var first", () => {
+      process.env.TODUAI_DATA_DIR = "/env/data";
       expect(resolveDataDir("/any/config.yaml", { data_dir: "./other" })).toBe("/env/data");
     });
 
     it("resolves data_dir relative to config file", () => {
-      expect(resolveDataDir("/home/user/.config/todu/config.yaml", { data_dir: "./data" })).toBe(
-        "/home/user/.config/todu/data",
+      expect(resolveDataDir("/home/user/.config/toduai/config.yaml", { data_dir: "./data" })).toBe(
+        "/home/user/.config/toduai/data",
       );
     });
 
@@ -89,8 +89,8 @@ describe("config resolution", () => {
   });
 
   describe("resolveStoragePath", () => {
-    it("uses TODU_DATA_DIR env var", () => {
-      process.env.TODU_DATA_DIR = "/env/data";
+    it("uses TODUAI_DATA_DIR env var", () => {
+      process.env.TODUAI_DATA_DIR = "/env/data";
       expect(resolveStoragePath()).toBe("/env/data");
     });
 
@@ -107,16 +107,16 @@ describe("config resolution", () => {
       expect(sources.dataDir).toBe("/custom/mydata");
     });
 
-    it("reports TODU_CONFIG env var as source", () => {
-      process.env.TODU_CONFIG = "/env/config.yaml";
+    it("reports TODUAI_CONFIG env var as source", () => {
+      process.env.TODUAI_CONFIG = "/env/config.yaml";
       const sources = resolveConfigSources();
-      expect(sources.configSource).toBe("TODU_CONFIG env var");
+      expect(sources.configSource).toBe("TODUAI_CONFIG env var");
     });
 
-    it("reports TODU_DATA_DIR as source when set", () => {
-      process.env.TODU_DATA_DIR = "/override/data";
+    it("reports TODUAI_DATA_DIR as source when set", () => {
+      process.env.TODUAI_DATA_DIR = "/override/data";
       const sources = resolveConfigSources();
-      expect(sources.dataDirSource).toBe("TODU_DATA_DIR env var");
+      expect(sources.dataDirSource).toBe("TODUAI_DATA_DIR env var");
       expect(sources.dataDir).toBe("/override/data");
     });
 

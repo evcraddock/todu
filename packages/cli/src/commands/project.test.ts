@@ -6,7 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 /**
  * CLI integration test — builds then runs the actual CLI binary.
- * Uses TODU_DATA_DIR env var to isolate storage.
+ * Uses TODUAI_DATA_DIR env var to isolate storage.
  */
 describe("project CLI commands", () => {
   let tmpDir: string;
@@ -30,7 +30,7 @@ describe("project CLI commands", () => {
     try {
       const result = execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODU_NO_SYNC: "1" },
+        env: { ...process.env, TODUAI_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
         encoding: "utf-8",
         timeout: 15000,
       });

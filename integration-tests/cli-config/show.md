@@ -9,9 +9,9 @@ toduai config show
 **Expected:**
 
 ```
-Config file:  /home/<user>/.config/todu/config.yaml
+Config file:  /home/<user>/.config/toduai/config.yaml
               (default, not found)
-Data dir:     /home/<user>/.config/todu/data
+Data dir:     /home/<user>/.config/toduai/data
               (default)
 ```
 
@@ -21,31 +21,31 @@ Data dir:     /home/<user>/.config/todu/data
 WORK_DIR=$(mktemp -d)
 cd "$WORK_DIR"
 toduai config init
-toduai --config .todu/config.yaml config show
+toduai --config .toduai/config.yaml config show
 ```
 
 **Expected:**
 
 ```
-Config file:  /path/to/.todu/config.yaml
+Config file:  /path/to/.toduai/config.yaml
               (--config flag)
-Data dir:     /path/to/.todu/data
-              (config file (/path/to/.todu/config.yaml))
+Data dir:     /path/to/.toduai/data
+              (config file (/path/to/.toduai/config.yaml))
 ```
 
-## 3. With TODU_DATA_DIR Override
+## 3. With TODUAI_DATA_DIR Override
 
 ```bash
-TODU_DATA_DIR=/tmp/override-data toduai config show
+TODUAI_DATA_DIR=/tmp/override-data toduai config show
 ```
 
 **Expected:**
 
 ```
-Config file:  /home/<user>/.config/todu/config.yaml
+Config file:  /home/<user>/.config/toduai/config.yaml
               (default, not found)
 Data dir:     /tmp/override-data
-              (TODU_DATA_DIR env var)
+              (TODUAI_DATA_DIR env var)
 ```
 
 ## 4. JSON Output

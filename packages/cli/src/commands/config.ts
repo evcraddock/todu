@@ -41,7 +41,7 @@ export function registerConfigCommands(program: Command): void {
   config
     .command("init")
     .description("Create a config file for local development")
-    .option("--dir <path>", "directory to create config in", ".todu")
+    .option("--dir <path>", "directory to create config in", ".toduai")
     .action((opts) => {
       const dir = path.resolve(opts.dir);
       const configPath = path.join(dir, "config.yaml");
@@ -57,7 +57,7 @@ export function registerConfigCommands(program: Command): void {
       // Add .gitignore to keep data out of version control
       const gitignorePath = path.join(dir, ".gitignore");
       if (!fs.existsSync(gitignorePath)) {
-        fs.writeFileSync(gitignorePath, "# Ignore todu data\ndata/\n", "utf-8");
+        fs.writeFileSync(gitignorePath, "# Ignore toduai data\ndata/\n", "utf-8");
         console.log(`Created: ${configPath}`);
         console.log(`Created: ${gitignorePath}`);
       } else {
@@ -65,6 +65,6 @@ export function registerConfigCommands(program: Command): void {
       }
       console.log("");
       console.log("Usage:");
-      console.log(`  todu --config ${configPath} task list`);
+      console.log(`  toduai --config ${configPath} task list`);
     });
 }
