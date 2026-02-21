@@ -1,5 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Todu } from "@todu/engine";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 
 /**
  * Register all IPC handlers for the engine SDK.
@@ -8,7 +10,7 @@ import { ipcMain } from "electron";
  * Each handler wraps the corresponding engine SDK method and returns
  * the Result<T> directly — the renderer handles ok/error.
  */
-export function registerIpcHandlers(todu: Todu): void {
+export function registerIpcHandlers(todu: Todu, storagePath: string): void {
   // ── Project ──────────────────────────────────────────────────────────
   ipcMain.handle("todu:project:list", (_, filter) => todu.project.list(filter));
   ipcMain.handle("todu:project:get", (_, id) => todu.project.get(id));
@@ -69,4 +71,27 @@ export function registerIpcHandlers(todu: Todu): void {
   ipcMain.handle("todu:sync:start", () => todu.sync.start());
   ipcMain.handle("todu:sync:stop", () => todu.sync.stop());
   ipcMain.handle("todu:sync:catalog-id", () => todu.sync.getCatalogId());
+
+  // Join flow: Device B writes Device A's catalog document ID to the
+  // marker file and restarts so the engine picks it up on next launch.
+  //
+  // Basic format guard: Automerge document IDs are URL-safe base58/base64
+  // strings of ~22+ characters. Reject obviously malformed input to avoid
+  // restarting into a broken state that requires manual file recovery.
+  ipcMain.handle("todu:sync:join", (_event, catalogId: unknown) => {
+    if (typeof catalogId !== "string") {
+      throw new Error("Invalid join code: must be a string");
+    }
+    const trimmed = catalogId.trim();
+    if (trimmed.length < 10) {
+      throw new Error("Invalid join code: too short");
+    }
+    if (!/^[a-zA-Z0-9+/=_-]+$/.test(trimmed)) {
+      throw new Error("Invalid join code: contains unexpected characters");
+    }
+    const markerPath = path.join(storagePath, "catalog.id");
+    fs.writeFileSync(markerPath, trimmed, "utf-8");
+    app.relaunch();
+    app.exit(0);
+  });
 }

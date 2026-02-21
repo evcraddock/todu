@@ -48,23 +48,34 @@ export function SettingsView({
   const [oauthError, setOauthError] = useState<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  // Load settings, provider list, OAuth status, and sync state on mount
+  // Load settings, provider list, and OAuth status on mount.
+  // Sync data is loaded separately so a sync IPC failure doesn't
+  // prevent the rest of the settings page from rendering.
   useEffect(() => {
     Promise.all([
       window.todu.settings.get(),
       window.todu.settings.storedProviders(),
       window.todu.settings.providers(),
       window.todu.oauth.status(),
-      window.todu.sync.status(),
-      window.todu.sync.getCatalogId(),
-    ]).then(([s, keys, providerList, statuses, syncSt, catId]) => {
+    ]).then(([s, keys, providerList, statuses]) => {
       setSettings(s);
       setStoredKeys(keys);
       setProviders(providerList);
       setOauthStatuses(statuses);
-      setSyncStatus(syncSt);
-      setCatalogId(catId);
     });
+  }, []);
+
+  // Load sync status and catalog ID separately — isolated so a failure
+  // here doesn't blank the whole settings page.
+  useEffect(() => {
+    Promise.all([window.todu.sync.status(), window.todu.sync.getCatalogId()])
+      .then(([syncSt, catId]) => {
+        setSyncStatus(syncSt);
+        setCatalogId(catId);
+      })
+      .catch(() => {
+        // Sync data unavailable — the Sync section simply won't render
+      });
   }, []);
 
   // Keep sync status live via push events
@@ -213,9 +224,14 @@ export function SettingsView({
   // ── Sync handlers ────────────────────────────────────────────────
 
   const handleCopyCatalogId = useCallback(async () => {
-    await navigator.clipboard.writeText(catalogId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(catalogId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can fail (permission denied, insecure context, etc.)
+      // Silently ignore — the user can still select and copy the text manually
+    }
   }, [catalogId]);
 
   const handleJoin = useCallback(async () => {
