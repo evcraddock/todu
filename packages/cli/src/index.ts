@@ -13,13 +13,14 @@ import { registerSyncCommands } from "./commands/sync.js";
 import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
 import { setColorEnabled } from "./format.js";
+import { VERSION } from "./version.js";
 
 const program = new Command();
 
 program
   .name("toduai")
   .description("Local-first task management")
-  .version("0.0.1")
+  .version(VERSION)
   .option("--format <type>", "output format (text or json)", "text")
   .option("--config <path>", "path to config file")
   .option("--no-color", "disable color output")

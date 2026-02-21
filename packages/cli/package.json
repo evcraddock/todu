@@ -11,6 +11,7 @@
     "dist"
   ],
   "scripts": {
+    "prebuild": "node generate-version.mjs",
     "build": "tsgo -p tsconfig.build.json",
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
