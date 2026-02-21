@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win version version-check node_modules check-bun
+.PHONY: build test check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
@@ -113,6 +113,9 @@ dist-mac: build build-electron ## Build macOS installer (.dmg)
 
 dist-win: build build-electron ## Build Windows installer (.exe)
 	npm run --workspace=packages/electron dist:win
+
+install: ## Install toduai on Linux (AppImage + app menu entry)
+	bash scripts/install-linux.sh
 
 # =============================================================================
 # Version Management
