@@ -27,6 +27,33 @@ async function waitForRemoteState(
   );
 }
 
+/**
+ * Create and start a relay server (acts as the remote sync server in tests).
+ * Returns the todu instance and a cleanup function.
+ *
+ * IMPORTANT: Always call cleanup() before closing the client todu instance
+ * would cause relay.close() to fail — relay.close() flushes its repo and
+ * will throw if a connected client is still sending sync messages.
+ * Pattern: close client first, wait briefly, then call cleanup().
+ */
+async function startRelay(): Promise<{ relay: Todu; relayDir: string }> {
+  const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-"));
+  const relay = await createTodu({
+    storagePath: relayDir,
+    syncServer: true,
+    syncPort: RELAY_PORT,
+  });
+  // Allow server to fully initialize before clients connect
+  await new Promise((r) => setTimeout(r, 100));
+  return { relay, relayDir };
+}
+
+async function stopRelay(relay: Todu, relayDir: string): Promise<void> {
+  await new Promise((r) => setTimeout(r, 100));
+  await relay.close();
+  fs.rmSync(relayDir, { recursive: true, force: true });
+}
+
 describe("remote sync", () => {
   let tmpDir: string;
   let todu: Todu | null = null;
@@ -64,16 +91,9 @@ describe("remote sync", () => {
   });
 
   it("status becomes connected when relay is available", { timeout: 10000 }, async () => {
-    // Start a relay server (acts as remote sync server in tests)
-    const relay = await createTodu({
-      storagePath: fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-")),
-      syncServer: true,
-      syncPort: RELAY_PORT,
-    });
+    const { relay, relayDir } = await startRelay();
 
     try {
-      await new Promise((r) => setTimeout(r, 100));
-
       todu = await createTodu({
         storagePath: tmpDir,
         remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
@@ -82,52 +102,49 @@ describe("remote sync", () => {
       await waitForRemoteState(todu, "connected");
       expect(todu.sync.status().remote.state).toBe("connected");
     } finally {
-      await relay.close();
+      // Close client before relay to avoid flush errors
+      if (todu) {
+        await todu.close();
+        todu = null;
+      }
+      await stopRelay(relay, relayDir);
     }
   });
 
-  it("sync.stop() sets state to disconnected and removes adapter", { timeout: 10000 }, async () => {
-    const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-"));
-    const relay = await createTodu({
-      storagePath: relayDir,
-      syncServer: true,
-      syncPort: RELAY_PORT,
-    });
+  it(
+    "sync.stop() sets state to disconnected and prevents reconnect",
+    { timeout: 10000 },
+    async () => {
+      const { relay, relayDir } = await startRelay();
 
-    try {
-      await new Promise((r) => setTimeout(r, 100));
+      try {
+        todu = await createTodu({
+          storagePath: tmpDir,
+          remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
+        });
 
-      todu = await createTodu({
-        storagePath: tmpDir,
-        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
-      });
+        await waitForRemoteState(todu, "connected");
+        await todu.sync.stop();
 
-      await waitForRemoteState(todu, "connected");
+        expect(todu.sync.status().remote.state).toBe("disconnected");
 
-      await todu.sync.stop();
-
-      expect(todu.sync.status().remote.state).toBe("disconnected");
-
-      // Wait a bit to confirm it doesn't auto-reconnect
-      await new Promise((r) => setTimeout(r, 200));
-      expect(todu.sync.status().remote.state).toBe("disconnected");
-    } finally {
-      await relay.close();
-      fs.rmSync(relayDir, { recursive: true, force: true });
-    }
-  });
+        // Wait to confirm it does not auto-reconnect
+        await new Promise((r) => setTimeout(r, 200));
+        expect(todu.sync.status().remote.state).toBe("disconnected");
+      } finally {
+        if (todu) {
+          await todu.close();
+          todu = null;
+        }
+        await stopRelay(relay, relayDir);
+      }
+    },
+  );
 
   it("sync.start() reconnects after stop", { timeout: 10000 }, async () => {
-    const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-"));
-    const relay = await createTodu({
-      storagePath: relayDir,
-      syncServer: true,
-      syncPort: RELAY_PORT,
-    });
+    const { relay, relayDir } = await startRelay();
 
     try {
-      await new Promise((r) => setTimeout(r, 100));
-
       todu = await createTodu({
         storagePath: tmpDir,
         remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
@@ -141,22 +158,18 @@ describe("remote sync", () => {
       await waitForRemoteState(todu, "connected");
       expect(todu.sync.status().remote.state).toBe("connected");
     } finally {
-      await relay.close();
-      fs.rmSync(relayDir, { recursive: true, force: true });
+      if (todu) {
+        await todu.close();
+        todu = null;
+      }
+      await stopRelay(relay, relayDir);
     }
   });
 
   it("sync.start() is a no-op when already running", { timeout: 10000 }, async () => {
-    const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-relay-"));
-    const relay = await createTodu({
-      storagePath: relayDir,
-      syncServer: true,
-      syncPort: RELAY_PORT,
-    });
+    const { relay, relayDir } = await startRelay();
 
     try {
-      await new Promise((r) => setTimeout(r, 100));
-
       todu = await createTodu({
         storagePath: tmpDir,
         remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
@@ -168,8 +181,11 @@ describe("remote sync", () => {
       await todu.sync.start();
       expect(todu.sync.status().remote.state).toBe("connected");
     } finally {
-      await relay.close();
-      fs.rmSync(relayDir, { recursive: true, force: true });
+      if (todu) {
+        await todu.close();
+        todu = null;
+      }
+      await stopRelay(relay, relayDir);
     }
   });
 
