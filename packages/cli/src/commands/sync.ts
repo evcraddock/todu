@@ -20,12 +20,16 @@ export function registerSyncCommands(program: Command, getTodu: () => Promise<To
         }
 
         console.log(`Local Mode:   ${status.local.mode}`);
-        console.log(`Remote Sync:  ${status.remote.state}`);
-        if (status.remote.server) {
-          console.log(`Server:       ${status.remote.server}`);
-        }
-        if (status.remote.lastSync) {
-          console.log(`Last Sync:    ${status.remote.lastSync}`);
+        if (status.local.mode === "ephemeral-client") {
+          console.log(`Remote Sync:  managed by server`);
+        } else {
+          console.log(`Remote Sync:  ${status.remote.state}`);
+          if (status.remote.server) {
+            console.log(`Server:       ${status.remote.server}`);
+          }
+          if (status.remote.lastSync) {
+            console.log(`Last Sync:    ${status.remote.lastSync}`);
+          }
         }
       } finally {
         await todu.close();
