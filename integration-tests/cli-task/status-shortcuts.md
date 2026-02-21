@@ -3,13 +3,13 @@
 ## Setup
 
 ```bash
-export TODU_DATA_DIR=$(mktemp -d)
+export TODUAI_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
 
 toduai project create --name "My App"
 TASK=$(toduai --format json task create --title "Do the thing" --project "My App")
@@ -117,5 +117,5 @@ toduai task show "$TASK_ID" --no-color | grep "Status"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODU_DATA_DIR"
+rm -rf "$TODUAI_DATA_DIR"
 ```

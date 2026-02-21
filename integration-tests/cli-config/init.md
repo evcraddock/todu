@@ -16,17 +16,17 @@ toduai config init
 **Expected:**
 
 ```
-Created: /path/to/.todu/config.yaml
-Created: /path/to/.todu/.gitignore
+Created: /path/to/.toduai/config.yaml
+Created: /path/to/.toduai/.gitignore
 
 Usage:
-  toduai --config /path/to/.todu/config.yaml task list
+  toduai --config /path/to/.toduai/config.yaml task list
 ```
 
 ## 2. Verify Files Created
 
 ```bash
-cat .todu/config.yaml
+cat .toduai/config.yaml
 ```
 
 **Expected:**
@@ -36,13 +36,13 @@ data_dir: ./data
 ```
 
 ```bash
-cat .todu/.gitignore
+cat .toduai/.gitignore
 ```
 
 **Expected:**
 
 ```
-# Ignore todu data
+# Ignore toduai data
 data/
 ```
 
@@ -55,7 +55,7 @@ toduai config init
 **Expected:**
 
 ```
-Config already exists: /path/to/.todu/config.yaml
+Config already exists: /path/to/.toduai/config.yaml
 ```
 
 Exit code: 0 (not an error).

@@ -1,6 +1,6 @@
-appId: com.todu.app
-productName: todu
-copyright: Copyright © 2026 todu
+appId: com.toduai.app
+productName: toduai
+copyright: Copyright © 2026 toduai
 electronVersion: "40.4.1"
 
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
@@ -19,8 +19,8 @@ extraMetadata:
 
 # Include CLI binary built by make build-cli-binary (current platform)
 extraResources:
-  - from: ../../dist/cli/todu
-    to: cli/todu
+  - from: ../../dist/cli/toduai
+    to: cli/toduai
 
 # Linux
 linux:
@@ -35,7 +35,7 @@ linux:
   icon: build/icons
   desktop:
     entry:
-      StartupWMClass: todu
+      StartupWMClass: toduai
 
 deb:
   depends:

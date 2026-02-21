@@ -3,13 +3,13 @@
 ## Setup
 
 ```bash
-export TODU_DATA_DIR=$(mktemp -d)
+export TODUAI_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
 
 toduai label create --name bug --color "#ff0000"
 toduai label create --name feature --color "#00ff00"
@@ -72,9 +72,9 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-label-list-cou
 ## 5. Empty List
 
 ```bash
-export TODU_DATA_DIR2=$(mktemp -d)
-TODU_DATA_DIR="$TODU_DATA_DIR2" toduai label list --no-color
-rm -rf "$TODU_DATA_DIR2"
+export TODUAI_DATA_DIR2=$(mktemp -d)
+TODUAI_DATA_DIR="$TODUAI_DATA_DIR2" toduai label list --no-color
+rm -rf "$TODUAI_DATA_DIR2"
 ```
 
 **Expected:** `No results.`
@@ -83,5 +83,5 @@ rm -rf "$TODU_DATA_DIR2"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODU_DATA_DIR"
+rm -rf "$TODUAI_DATA_DIR"
 ```

@@ -19,7 +19,7 @@ Final polish phase covering migration from old system, advanced background job t
 
 1. **Migration Tooling**
    - Export from todu-api (JSON format)
-   - `todu migrate import ./export.json`
+   - `toduai migrate import ./export.json`
    - Map old IDs to new IDs
    - Preserve history and comments
    - Validate imported data
@@ -55,11 +55,11 @@ Final polish phase covering migration from old system, advanced background job t
 curl https://api.todu.example.com/export > export.json
 
 # Import to new system
-todu migrate import ./export.json --dry-run
-todu migrate import ./export.json
+toduai migrate import ./export.json --dry-run
+toduai migrate import ./export.json
 
 # Verify
-todu migrate verify
+toduai migrate verify
 ```
 
 ### Migration Mapping

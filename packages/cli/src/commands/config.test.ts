@@ -24,7 +24,7 @@ describe("config CLI commands", () => {
   function run(args: string): string {
     return execSync(`node ${cliPath} ${args}`, {
       cwd: tmpDir,
-      env: { ...process.env, TODU_DATA_DIR: "", TODU_CONFIG: "", TODU_NO_SYNC: "1" },
+      env: { ...process.env, TODUAI_DATA_DIR: "", TODUAI_CONFIG: "", TODUAI_NO_SYNC: "1" },
       encoding: "utf-8",
       timeout: 15000,
     }).trim();
@@ -33,8 +33,8 @@ describe("config CLI commands", () => {
   it("config init creates config and gitignore", { timeout: 30000 }, () => {
     run("config init");
 
-    const configPath = path.join(tmpDir, ".todu", "config.yaml");
-    const gitignorePath = path.join(tmpDir, ".todu", ".gitignore");
+    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
+    const gitignorePath = path.join(tmpDir, ".toduai", ".gitignore");
 
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.existsSync(gitignorePath)).toBe(true);
@@ -48,7 +48,7 @@ describe("config CLI commands", () => {
 
   it("config show displays resolved config", { timeout: 30000 }, () => {
     run("config init");
-    const configPath = path.join(tmpDir, ".todu", "config.yaml");
+    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
 
     const output = run(`--config ${configPath} config show`);
     expect(output).toContain("Config file:");
@@ -58,7 +58,7 @@ describe("config CLI commands", () => {
 
   it("--config flag routes data to config data_dir", { timeout: 30000 }, () => {
     run("config init");
-    const configPath = path.join(tmpDir, ".todu", "config.yaml");
+    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
 
     // Create a project using the dev config
     run(`--config ${configPath} project create --name "Dev Project"`);
@@ -67,8 +67,8 @@ describe("config CLI commands", () => {
     expect(projects).toHaveLength(1);
     expect(projects[0].name).toBe("Dev Project");
 
-    // Data should be in .todu/data/
-    const dataDir = path.join(tmpDir, ".todu", "data");
+    // Data should be in .toduai/data/
+    const dataDir = path.join(tmpDir, ".toduai", "data");
     expect(fs.existsSync(dataDir)).toBe(true);
   });
 });

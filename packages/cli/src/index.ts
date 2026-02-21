@@ -16,7 +16,7 @@ import { setColorEnabled } from "./format.js";
 const program = new Command();
 
 program
-  .name("todu")
+  .name("toduai")
   .description("Local-first task management")
   .version("0.0.1")
   .option("--format <type>", "output format (text or json)", "text")
@@ -36,8 +36,8 @@ const getTodu = async () => {
   const configPath = getConfigPath(opts.config);
   const config = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, config);
-  // Skip sync detection when TODU_NO_SYNC is set (used by tests to force standalone mode)
-  const syncClient = process.env.TODU_NO_SYNC ? false : await isSyncServerAvailable();
+  // Skip sync detection when TODUAI_NO_SYNC is set (used by tests to force standalone mode)
+  const syncClient = process.env.TODUAI_NO_SYNC ? false : await isSyncServerAvailable();
   return createTodu({ storagePath, syncClient });
 };
 

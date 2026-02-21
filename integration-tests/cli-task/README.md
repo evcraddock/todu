@@ -5,14 +5,14 @@ Tests for `toduai task` commands with Electron sync verification.
 ## Setup
 
 ```bash
-export TODU_DATA_DIR=$(mktemp -d)
+export TODUAI_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 # Launch Electron with shared data dir
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
+  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
 ```
 
 ## Tests
@@ -32,5 +32,5 @@ export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODU_DATA_DIR"
+rm -rf "$TODUAI_DATA_DIR"
 ```

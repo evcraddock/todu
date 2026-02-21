@@ -24,6 +24,14 @@ make run ARGS="--help"
 make run ARGS="task list"
 ```
 
+The packaged executable is currently named `toduai` to avoid collisions with production `todu` during migration.
+
+### Run Tests and Linting
+
+```bash
+make check
+```
+
 ### Available Commands
 
 Run `make help` to see all targets. Key commands:

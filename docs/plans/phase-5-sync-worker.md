@@ -100,7 +100,7 @@ function generateRecurringTaskId(templateId: string, scheduledDate: Date): strin
 ### Worker Coordination
 
 - On multi-device, only worker should process recurring tasks
-- If no worker, devices should not auto-process (use manual `todu recurring process`)
+- If no worker, devices should not auto-process (use manual `toduai recurring process`)
 - Worker claims ownership via Automerge document flag
 
 ## Open Questions
