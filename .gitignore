@@ -32,3 +32,7 @@ coverage/
 # Local todu/toduai data
 .todu/
 .toduai/
+
+# Dev environment
+data/
+.overmind.sock
