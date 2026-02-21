@@ -22,6 +22,7 @@ import type {
   RecurringFilter,
   RecurringId,
   RecurringTemplate,
+  RemoteSyncConfig,
   Result,
   Task,
   TaskFilter,
@@ -54,6 +55,16 @@ export interface ToduConfig {
 
   /** Try to connect to a running sync server (used by CLI) */
   syncClient?: boolean;
+
+  /**
+   * Remote multi-device sync configuration.
+   * When provided, connects a second WebSocketClientAdapter to the remote server.
+   * Used by Electron and toduai serve.
+   *
+   * IMPORTANT: Never use wss://sync.todu.sh in development or tests.
+   * Use ws://localhost:3030 via `make dev`.
+   */
+  remoteSync?: RemoteSyncConfig;
 }
 
 // ============================================================================
