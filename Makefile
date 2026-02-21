@@ -114,8 +114,12 @@ dist-mac: build build-electron ## Build macOS installer (.dmg)
 dist-win: build build-electron ## Build Windows installer (.exe)
 	npm run --workspace=packages/electron dist:win
 
-install: ## Install toduai on Linux (AppImage + app menu entry)
-	bash scripts/install-linux.sh
+install: ## Install toduai (detects OS: Linux = AppImage, macOS = .dmg)
+	@case "$$(uname -s)" in \
+	  Linux)  bash scripts/install-linux.sh ;; \
+	  Darwin) bash scripts/install-mac.sh ;; \
+	  *)      echo "error: unsupported OS: $$(uname -s)"; exit 1 ;; \
+	esac
 
 # =============================================================================
 # Version Management
