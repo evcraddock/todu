@@ -117,6 +117,13 @@ export async function createTodu(
     },
   };
 
+  // Listeners for sync status changes
+  const syncStatusListeners = new Set<(status: SyncStatus) => void>();
+
+  function notifySyncStatusListeners(): void {
+    for (const cb of syncStatusListeners) cb(syncStatus);
+  }
+
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
   // Tracked handler references so we can remove them cleanly on stop
@@ -135,12 +142,15 @@ export async function createTodu(
 
     const onPeerCandidate = (_payload: PeerCandidatePayload): void => {
       syncStatus.remote.state = "connected";
+      notifySyncStatusListeners();
     };
     const onPeerDisconnected = (_payload: PeerDisconnectedPayload): void => {
       syncStatus.remote.state = "disconnected";
+      notifySyncStatusListeners();
     };
     const onClose = (): void => {
       syncStatus.remote.state = "disconnected";
+      notifySyncStatusListeners();
     };
 
     remoteAdapter = addRemoteSyncAdapter(storage.repo, config.remoteSync.server);
@@ -174,6 +184,7 @@ export async function createTodu(
     const adapter = remoteAdapter;
     remoteAdapter = null;
     syncStatus.remote.state = "disconnected";
+    notifySyncStatusListeners();
 
     try {
       storage.repo.networkSubsystem.removeNetworkAdapter(adapter);
@@ -205,6 +216,10 @@ export async function createTodu(
       },
       stop: async () => {
         stopRemoteAdapter();
+      },
+      onStatusChange(callback: (status: SyncStatus) => void): () => void {
+        syncStatusListeners.add(callback);
+        return () => syncStatusListeners.delete(callback);
       },
     },
     onChange(callback: () => void): () => void {

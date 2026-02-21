@@ -63,4 +63,9 @@ export function registerIpcHandlers(todu: Todu): void {
   ipcMain.handle("todu:habit:uncheck", (_, id) => todu.habit.uncheck(id));
   ipcMain.handle("todu:habit:streak", (_, id) => todu.habit.streak(id));
   ipcMain.handle("todu:habit:history", (_, id, days) => todu.habit.history(id, days));
+
+  // ── Sync ─────────────────────────────────────────────────────────────
+  ipcMain.handle("todu:sync:status", () => todu.sync.status());
+  ipcMain.handle("todu:sync:start", () => todu.sync.start());
+  ipcMain.handle("todu:sync:stop", () => todu.sync.stop());
 }

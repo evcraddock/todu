@@ -166,6 +166,12 @@ export interface SyncNamespace {
   stop(): Promise<void>;
   /** Get current sync status (local mode + remote state). */
   status(): SyncStatus;
+  /**
+   * Register a callback for remote sync state changes.
+   * Fires when the remote connection transitions between
+   * connected/disconnected. Returns a cleanup function.
+   */
+  onStatusChange(callback: (status: SyncStatus) => void): () => void;
 }
 
 export interface ConfigNamespace {
@@ -263,6 +269,7 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
         local: { mode: "standalone" as LocalSyncMode },
         remote: { state: "disconnected" as RemoteSyncState },
       }),
+      onStatusChange: () => () => {},
     },
     config: {
       get: () => config,
