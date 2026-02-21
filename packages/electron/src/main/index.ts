@@ -1,6 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Todu } from "@todu/engine";
 import { createTodu } from "@todu/engine";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { loadElectronConfig } from "./config.js";
@@ -15,6 +17,7 @@ import { createWindow, restoreWindowState, saveWindowState } from "./window.js";
 let mainWindow: BrowserWindow | null = null;
 let todu: Todu | null = null;
 let isQuitting = false;
+let currentStoragePath = "";
 
 function getMainWindow(): BrowserWindow | null {
   return mainWindow;
@@ -34,6 +37,7 @@ function showWindowWithAction(action: string): void {
 async function init(): Promise<void> {
   // Load full config (data dir + remote sync) using the same config chain as CLI
   const { storagePath, remoteSync } = loadElectronConfig();
+  currentStoragePath = storagePath;
 
   // Initialize engine with sync server so CLI can connect,
   // and connect to remote sync server if configured
@@ -45,6 +49,15 @@ async function init(): Promise<void> {
 
   // Register all IPC handlers
   registerIpcHandlers(todu);
+
+  // Join flow: Device B enters a join code (Device A's catalog document ID).
+  // We write it to the catalog marker file and restart so the engine picks it up.
+  ipcMain.handle("todu:sync:join", (_event, catalogId: string) => {
+    const markerPath = path.join(currentStoragePath, "catalog.id");
+    fs.writeFileSync(markerPath, catalogId.trim(), "utf-8");
+    app.relaunch();
+    app.exit(0);
+  });
 
   // Create the main window
   const windowState = restoreWindowState();

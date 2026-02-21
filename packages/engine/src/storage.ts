@@ -83,16 +83,21 @@ export async function initStorage(storagePath: string): Promise<Storage> {
     catalog,
     ephemeral: false,
     async close() {
-      // flush() writes pending changes to storage. If a document is in
-      // "requesting" state (being synced from a remote peer when close is
-      // called), flush() throws "DocHandle is not ready". That's safe to
-      // ignore — requesting documents have no local content to persist.
+      // Both flush() and shutdown() (which calls flush internally) can throw
+      // "DocHandle is not ready" when a document is in "requesting" state —
+      // this happens when a connected remote peer is mid-sync during close.
+      // Requesting documents have no local content to persist, so ignoring
+      // the error is safe and correct.
       try {
         await repo.flush();
       } catch {
         // Safe to ignore — requesting docs have no content to save
       }
-      await repo.shutdown();
+      try {
+        await repo.shutdown();
+      } catch {
+        // shutdown() calls flush() internally — same safe-to-ignore error
+      }
     },
   };
 }

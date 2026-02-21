@@ -149,6 +149,32 @@ export interface ToduSettingsApi {
   providers(): Promise<ProviderInfo[]>;
 }
 
+export type RemoteSyncState = "disconnected" | "connected" | "syncing";
+
+export interface SyncStatus {
+  local: { mode: string };
+  remote: { state: RemoteSyncState; server?: string; lastSync?: string };
+}
+
+export interface ToduSyncApi {
+  /** Get current sync status. */
+  status(): Promise<SyncStatus>;
+  /** Start remote multi-device sync connection. */
+  start(): Promise<void>;
+  /** Stop remote multi-device sync connection. */
+  stop(): Promise<void>;
+  /**
+   * Get the catalog document ID for this instance.
+   * Share this as a join code so other devices can sync with this one.
+   */
+  getCatalogId(): Promise<string>;
+  /**
+   * Join another device's data by entering its catalog document ID.
+   * Writes the ID to the marker file and restarts the app.
+   */
+  join(catalogId: string): Promise<void>;
+}
+
 export interface ToduApi {
   project: ToduProjectApi;
   task: ToduTaskApi;
@@ -159,6 +185,7 @@ export interface ToduApi {
   agent: ToduAgentApi;
   oauth: ToduOAuthApi;
   settings: ToduSettingsApi;
+  sync: ToduSyncApi;
   on(channel: string, callback: (data: unknown) => void): () => void;
 }
 

@@ -221,6 +221,7 @@ export async function createTodu(
         syncStatusListeners.add(callback);
         return () => syncStatusListeners.delete(callback);
       },
+      getCatalogId: () => storage.catalog.documentId,
     },
     onChange(callback: () => void): () => void {
       return observeAllChanges(storage.repo, callback);

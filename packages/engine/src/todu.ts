@@ -172,6 +172,11 @@ export interface SyncNamespace {
    * connected/disconnected. Returns a cleanup function.
    */
   onStatusChange(callback: (status: SyncStatus) => void): () => void;
+  /**
+   * Get the catalog document ID for this instance.
+   * Used as a join code so other devices can sync with this one.
+   */
+  getCatalogId(): string;
 }
 
 export interface ConfigNamespace {
@@ -270,6 +275,7 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
         remote: { state: "disconnected" as RemoteSyncState },
       }),
       onStatusChange: () => () => {},
+      getCatalogId: () => "",
     },
     config: {
       get: () => config,

@@ -68,4 +68,5 @@ export function registerIpcHandlers(todu: Todu): void {
   ipcMain.handle("todu:sync:status", () => todu.sync.status());
   ipcMain.handle("todu:sync:start", () => todu.sync.start());
   ipcMain.handle("todu:sync:stop", () => todu.sync.stop());
+  ipcMain.handle("todu:sync:catalog-id", () => todu.sync.getCatalogId());
 }
