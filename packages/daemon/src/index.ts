@@ -4,7 +4,24 @@ export {
   type StartDaemonProcessOptions,
   startDaemonProcess,
 } from "./process.js";
-
+export {
+  createProtocolError,
+  createProtocolErrorFrame,
+  createProtocolEventFrame,
+  createProtocolSuccessFrame,
+  mapErrorToProtocolError,
+  PROTOCOL_ERROR_CODES,
+  type ProtocolError,
+  type ProtocolErrorCode,
+  type ProtocolErrorFrame,
+  type ProtocolEventFrame,
+  type ProtocolFrameId,
+  type ProtocolParams,
+  type ProtocolRequestFrame,
+  type ProtocolSuccessFrame,
+  parseProtocolRequestFrame,
+  parseProtocolRequestJson,
+} from "./protocol.js";
 export {
   createDaemonRuntime,
   DAEMON_ROLES,

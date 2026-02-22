@@ -150,3 +150,21 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - refuse replacing non-socket files at socket path
 - Implemented shutdown cleanup: closes listener and removes socket file.
 - Added automated transport/runtime/process tests for bind/connect/permissions/stale handling/cleanup.
+
+### 2026-02-22 — Task #1928
+
+- Added protocol envelope primitives in `packages/daemon/src/protocol.ts`:
+  - request, success, error, and event frame types
+  - centralized protocol error taxonomy constants
+  - helpers for success/error/event frame creation
+- Added parser/validator for incoming request frames:
+  - `parseProtocolRequestFrame`
+  - `parseProtocolRequestJson`
+- Added deterministic malformed-frame error handling:
+  - invalid JSON => `BAD_REQUEST`
+  - invalid frame/id/method/params => structured `BAD_REQUEST`
+- Added centralized error mapping utility (`mapErrorToProtocolError`) with consistent mapping for:
+  - existing domain errors (`not-found`, `validation`, `storage`)
+  - protocol errors passthrough
+  - timeout-like and unknown errors
+- Added protocol unit tests in `packages/daemon/src/protocol.test.ts` for valid/invalid parsing and error mapping behavior.
