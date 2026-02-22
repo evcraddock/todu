@@ -19,6 +19,36 @@ Before working, read and follow:
 
 You MUST follow these guidelines throughout your work.
 
+## Skill Compliance Gate (MANDATORY)
+
+When a task maps to a skill document, treat that skill as a checklist, not guidance.
+
+1. **Pre-action checklist**
+   - State the skill's key requirements before running commands.
+   - If requirements are unclear, stop and ask.
+
+2. **Proof-of-compliance before reporting done**
+   - Verify each key requirement with command output.
+   - Do not report completion without explicit verification.
+
+3. **Hard fail and self-correct**
+   - If any requirement is not met, fix it before responding.
+   - Never present partially compliant work as complete.
+
+### `task-create` Validation Rules (MANDATORY)
+
+After creating or updating task descriptions:
+
+- Description must render as valid multiline markdown (not escaped literal `\\n`).
+- Run `todu task show <id> --format json` and verify description content.
+- Explicitly check and confirm the description does **not** contain literal `\\n` sequences.
+
+## No Discretionary Commands (MANDATORY)
+
+Run commands **only** if they are explicitly required by (1) the user's request or (2) a cited step in the active skill/instructions.
+No exploratory/helpful extras. If a command is not clearly required, ask first.
+If violated, stop immediately and report the deviation before continuing.
+
 ## NEVER Push Directly to Main
 
 **No exceptions. No "quick fixes". No "obvious bugs".**
