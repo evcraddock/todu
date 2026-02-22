@@ -84,6 +84,15 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       daemonVersion: resolvedConfig.daemonVersion,
       role: runtimeStatus.role,
       catalogId: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
+      runtimeState: runtimeStatus.state,
+      startedAt: runtimeStatus.startedAt ?? null,
+      transport: runtimeStatus.transport
+        ? {
+            kind: runtimeStatus.transport.kind,
+            path: runtimeStatus.transport.path,
+            mode: runtimeStatus.transport.mode,
+          }
+        : null,
     })),
   });
 

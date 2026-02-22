@@ -25,10 +25,15 @@ export {
 
 export {
   createDaemonRpcRouter,
+  DAEMON_CAPABILITY_METHODS,
   DAEMON_PROTOCOL_VERSION,
   type DaemonHelloResult,
+  type DaemonPingResult,
   type DaemonRpcContext,
   type DaemonRpcRouter,
+  type DaemonRuntimeStateSnapshot,
+  type DaemonStatusResult,
+  type DaemonStatusTransport,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
 

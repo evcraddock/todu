@@ -3,7 +3,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DAEMON_PROTOCOL_VERSION } from "./rpc.js";
+import { DAEMON_CAPABILITY_METHODS, DAEMON_PROTOCOL_VERSION } from "./rpc.js";
 import { createDaemonRuntime } from "./runtime.js";
 
 describe("createDaemonRuntime", () => {
@@ -65,11 +65,68 @@ describe("createDaemonRuntime", () => {
       daemonVersion: "1.2.3",
       role: "authority",
       capabilities: {
-        methods: ["daemon.hello"],
+        methods: DAEMON_CAPABILITY_METHODS,
         events: [],
       },
       catalog: {
         id: runtime.status().catalogId,
+      },
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes daemon.ping and daemon.status over UDS", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      role: "authority",
+      daemonVersion: "2.0.0",
+    });
+
+    await runtime.start();
+
+    const pingResponse = await sendRequest(runtime.config().socketPath, {
+      id: "ping-1",
+      method: "daemon.ping",
+      params: {},
+    });
+
+    expect(pingResponse.id).toBe("ping-1");
+    expect(pingResponse.result).toMatchObject({
+      ok: true,
+    });
+
+    if (!pingResponse.result || typeof pingResponse.result !== "object") {
+      throw new Error("Expected ping result object");
+    }
+
+    const pingResult = pingResponse.result as { ts?: unknown };
+    expect(typeof pingResult.ts).toBe("string");
+    expect(Number.isNaN(Date.parse(pingResult.ts as string))).toBe(false);
+
+    const statusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "status-1",
+      method: "daemon.status",
+      params: {},
+    });
+
+    const runtimeStatus = runtime.status();
+
+    expect(statusResponse.id).toBe("status-1");
+    expect(statusResponse.result).toEqual({
+      protocolVersion: DAEMON_PROTOCOL_VERSION,
+      daemonVersion: "2.0.0",
+      role: "authority",
+      state: "running",
+      healthy: true,
+      startedAt: runtimeStatus.startedAt,
+      transport: {
+        kind: "uds",
+        path: runtime.config().socketPath,
+        mode: runtime.config().socketMode,
+      },
+      catalog: {
+        id: runtimeStatus.catalogId,
       },
     });
 
