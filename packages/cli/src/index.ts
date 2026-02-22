@@ -15,6 +15,11 @@ import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
 import { setColorEnabled } from "./format.js";
 import { VERSION } from "./version.js";
+import { installTimeoutNegativeWarningFilter } from "./warnings.js";
+
+// Suppress noisy Node.js TimeoutNegativeWarning caused by
+// @automerge/automerge-repo passing negative delays to setTimeout.
+installTimeoutNegativeWarningFilter();
 
 const program = new Command();
 
