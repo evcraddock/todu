@@ -120,10 +120,10 @@ export async function createTodu(
   // and Electron launch triggers template processing.
   await processTemplates(storage.catalog);
 
-  // Eagerly prefetch all sub-documents referenced in the catalog so the
-  // relay starts syncing them immediately. Without this, documents like
-  // notes and habit logs only sync when a view explicitly requests them.
-  // Fire-and-forget — we don't need to wait for them to be ready.
+  // Prefetch all sub-documents referenced in the catalog so the relay
+  // syncs them before the UI renders. Without this, notes and habit logs
+  // only arrive when a view explicitly requests them — too late for the
+  // first render on a freshly joined device.
   const catalogDoc = storage.catalog.doc();
   if (catalogDoc) {
     const docIds: string[] = [
@@ -131,8 +131,19 @@ export async function createTodu(
       ...Object.values(catalogDoc.habitLogDocIds ?? {}),
     ];
     if (catalogDoc.notesDocId) docIds.push(catalogDoc.notesDocId);
-    for (const docId of docIds) {
-      storage.repo.find(docId as DocumentId).catch(() => {});
+    if (docIds.length > 0) {
+      const settled = await Promise.allSettled(
+        docIds.map((id) =>
+          storage.repo.find(id as DocumentId, {
+            signal: AbortSignal.timeout(10_000),
+          }),
+        ),
+      );
+      const ok = settled.filter((r) => r.status === "fulfilled").length;
+      const failed = settled.length - ok;
+      if (failed > 0) {
+        console.warn(`[engine] prefetch: ${ok} ok, ${failed} failed`);
+      }
     }
   }
 
