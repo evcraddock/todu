@@ -1,5 +1,11 @@
 import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
 import { createTodu, type Todu } from "@todu/engine";
+import {
+  createUdsTransport,
+  resolveUdsSocketPath,
+  type UdsEndpoint,
+  type UdsTransport,
+} from "./transport.js";
 
 export const DAEMON_ROLES = ["node", "authority"] as const;
 
@@ -15,12 +21,16 @@ export interface DaemonRuntimeConfig {
   storagePath?: string;
   role?: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  socketPath?: string;
+  socketMode?: number;
 }
 
 export interface ResolvedDaemonRuntimeConfig {
   storagePath: string;
   role: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  socketPath: string;
+  socketMode: number;
 }
 
 export interface DaemonRuntimeStatus {
@@ -28,6 +38,7 @@ export interface DaemonRuntimeStatus {
   role: DaemonRole;
   startedAt?: string;
   catalogId?: string;
+  transport?: UdsEndpoint;
 }
 
 export interface DaemonRuntime {
@@ -38,11 +49,22 @@ export interface DaemonRuntime {
 }
 
 export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRuntime {
+  const resolvedStoragePath = config.storagePath ?? resolveStoragePath();
+  const resolvedSocketPath = resolveUdsSocketPath(resolvedStoragePath, config.socketPath);
+
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
-    storagePath: config.storagePath ?? resolveStoragePath(),
+    storagePath: resolvedStoragePath,
     role: config.role ?? "node",
     remoteSync: config.remoteSync,
+    socketPath: resolvedSocketPath,
+    socketMode: config.socketMode ?? 0o600,
   };
+
+  const transport = createUdsTransport({
+    storagePath: resolvedConfig.storagePath,
+    socketPath: resolvedConfig.socketPath,
+    socketMode: resolvedConfig.socketMode,
+  });
 
   let todu: Todu | null = null;
   let startPromise: Promise<DaemonRuntimeStatus> | null = null;
@@ -59,6 +81,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       role: runtimeStatus.role,
       startedAt: runtimeStatus.startedAt,
       catalogId: runtimeStatus.catalogId,
+      transport: runtimeStatus.transport,
     };
   }
 
@@ -66,6 +89,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     runtimeStatus.state = "starting";
 
     try {
+      const endpoint = await transport.start();
+
       todu = await createTodu({
         storagePath: resolvedConfig.storagePath,
         remoteSync: resolvedConfig.remoteSync,
@@ -74,12 +99,15 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.state = "running";
       runtimeStatus.startedAt = new Date().toISOString();
       runtimeStatus.catalogId = todu.sync.getCatalogId();
+      runtimeStatus.transport = endpoint;
 
       return cloneStatus();
     } catch (error) {
+      await safeStopTransport(transport);
       runtimeStatus.state = "stopped";
       runtimeStatus.startedAt = undefined;
       runtimeStatus.catalogId = undefined;
+      runtimeStatus.transport = undefined;
       todu = null;
       throw error;
     }
@@ -116,24 +144,22 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           }
         }
 
-        if (!todu) {
-          runtimeStatus.state = "stopped";
-          runtimeStatus.startedAt = undefined;
-          runtimeStatus.catalogId = undefined;
-          return;
-        }
-
         runtimeStatus.state = "stopping";
 
-        const current = todu;
+        const currentTodu = todu;
         todu = null;
 
         try {
-          await current.close();
+          await transport.stop();
+
+          if (currentTodu) {
+            await currentTodu.close();
+          }
         } finally {
           runtimeStatus.state = "stopped";
           runtimeStatus.startedAt = undefined;
           runtimeStatus.catalogId = undefined;
+          runtimeStatus.transport = undefined;
         }
       })().finally(() => {
         stopPromise = null;
@@ -151,7 +177,17 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         storagePath: resolvedConfig.storagePath,
         role: resolvedConfig.role,
         remoteSync: resolvedConfig.remoteSync,
+        socketPath: resolvedConfig.socketPath,
+        socketMode: resolvedConfig.socketMode,
       };
     },
   };
+}
+
+async function safeStopTransport(transport: UdsTransport): Promise<void> {
+  try {
+    await transport.stop();
+  } catch {
+    // best-effort cleanup path after start() failures
+  }
 }
