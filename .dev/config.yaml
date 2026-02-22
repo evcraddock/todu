@@ -4,4 +4,4 @@ data_dir: data
 
 sync:
   remote:
-    server: ws://localhost:3030
+    server: wss://sync.todu.sh

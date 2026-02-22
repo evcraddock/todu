@@ -191,9 +191,20 @@ async function loadOrCreateCatalog(
   // Try to load existing catalog
   if (fs.existsSync(markerPath)) {
     const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
-    const handle = await repo.find<CatalogDocument>(docId);
-    migrateCatalog(handle);
-    return handle;
+    try {
+      const handle = await repo.find<CatalogDocument>(docId, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      migrateCatalog(handle);
+      return handle;
+    } catch {
+      // Document not reachable (unavailable or timeout) — fall through to
+      // create a new catalog. This can happen when a join code is invalid
+      // or the relay doesn't have the document yet.
+      console.warn(`[storage] catalog ${docId} not reachable within 10s, creating new catalog`);
+      // Remove stale marker so next launch doesn't try again
+      fs.unlinkSync(markerPath);
+    }
   }
 
   // Create new catalog
