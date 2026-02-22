@@ -1,0 +1,46 @@
+{
+  "name": "@todu/daemon",
+  "version": "0.1.1",
+  "description": "Daemon runtime foundation for todu",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "toduai-daemon": "dist/entrypoint.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsgo -p tsconfig.build.json",
+    "typecheck": "tsgo -p tsconfig.build.json --noEmit",
+    "dev": "tsx src/entrypoint.ts"
+  },
+  "dependencies": {
+    "@todu/core": "*",
+    "@todu/engine": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evcraddock/todu.git",
+    "directory": "packages/daemon"
+  },
+  "license": "MIT",
+  "keywords": [
+    "todu",
+    "daemon",
+    "runtime"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

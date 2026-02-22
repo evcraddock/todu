@@ -124,3 +124,15 @@ Every task must include a documentation step in the same PR (or explicitly justi
 1. Daemon protocol is stable enough to build clients against
 2. Protocol regressions are caught by automated tests
 3. Subsequent migration phases can proceed without redesigning transport/envelope/handshake
+
+## Progress Notes
+
+### 2026-02-22 — Task #1926
+
+- Added `@todu/daemon` package scaffold with build/typecheck/test wiring.
+- Added daemon lifecycle shell:
+  - `createDaemonRuntime` (start/stop/status/config)
+  - `startDaemonProcess` (entrypoint lifecycle + signal handling hooks)
+  - `toduai-daemon` entrypoint script for local development runs
+- Runtime config/status now represent daemon role (`node` / `authority`).
+- Scope intentionally excludes domain RPC method implementation and CLI/Electron migration.
