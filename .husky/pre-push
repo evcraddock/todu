@@ -1,10 +1,11 @@
 #!/bin/sh
-set -e
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
-cd "$REPO_ROOT"
+echo "Running tests before push..."
+npm test
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed. Push aborted."
+  echo "Fix the failing tests or use 'git push --no-verify' to bypass."
+  exit 1
+fi
 
-echo "Running pre-PR checks before push..."
-./scripts/pre-pr.sh
-
-echo "✅ Pre-push checks passed!"
+echo "✅ All tests passed!"
