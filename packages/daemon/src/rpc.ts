@@ -13,6 +13,7 @@ import {
 
 export const DAEMON_PROTOCOL_VERSION = "1";
 export const DEFAULT_DAEMON_VERSION = "dev";
+export const DEFAULT_DAEMON_REQUEST_TIMEOUT_MS = 30_000;
 export const DAEMON_CAPABILITY_METHODS = [
   "daemon.hello",
   "daemon.ping",
@@ -86,23 +87,118 @@ interface DaemonConnection {
   closed: boolean;
 }
 
+export type DaemonRpcResponse = ProtocolSuccessFrame<unknown> | ProtocolErrorFrame;
+
+export type DaemonRpcMethodHandler = (
+  request: ProtocolRequestFrame,
+  context: DaemonRpcContext,
+  connection?: DaemonConnection,
+) => DaemonRpcResponse | Promise<DaemonRpcResponse>;
+
+export interface CreateDaemonRpcRouterOptions {
+  methodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
+}
+
+interface ConnectionHandlerOptions {
+  requestTimeoutMs?: number;
+}
+
 export interface DaemonRpcRouter {
   handleRequest(
     request: ProtocolRequestFrame,
     context: DaemonRpcContext,
     connection?: DaemonConnection,
-  ): ProtocolSuccessFrame<unknown> | ProtocolErrorFrame;
+  ): Promise<DaemonRpcResponse>;
   handlePayload(
     payload: string,
     context: DaemonRpcContext,
     connection?: DaemonConnection,
-  ): ProtocolSuccessFrame<unknown> | ProtocolErrorFrame;
-  createConnectionHandler(contextProvider: () => DaemonRpcContext): (socket: Socket) => void;
+  ): Promise<DaemonRpcResponse>;
+  createConnectionHandler(
+    contextProvider: () => DaemonRpcContext,
+    options?: ConnectionHandlerOptions,
+  ): (socket: Socket) => void;
   dispatchEvent(event: DaemonCapabilityEvent, payload: unknown, ts?: string): number;
 }
 
-export function createDaemonRpcRouter(): DaemonRpcRouter {
+export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}): DaemonRpcRouter {
   const connections = new Set<DaemonConnection>();
+
+  const defaultHandlers: Record<string, DaemonRpcMethodHandler> = {
+    "daemon.hello": (request, context) => handleDaemonHello(request, context),
+    "daemon.ping": (request) => handleDaemonPing(request),
+    "daemon.status": (request, context) => handleDaemonStatus(request, context),
+    "events.subscribe": (request, _context, connection) =>
+      handleEventsSubscribe(request, connection),
+    "events.unsubscribe": (request, _context, connection) =>
+      handleEventsUnsubscribe(request, connection),
+  };
+
+  const methodHandlers: Record<string, DaemonRpcMethodHandler | undefined> = {
+    ...defaultHandlers,
+    ...(options.methodHandlers ?? {}),
+  };
+
+  async function runRequest(
+    request: ProtocolRequestFrame,
+    context: DaemonRpcContext,
+    connection?: DaemonConnection,
+  ): Promise<DaemonRpcResponse> {
+    const handler = methodHandlers[request.method];
+
+    if (!handler) {
+      return createProtocolErrorFrame(
+        request.id,
+        createProtocolError("METHOD_NOT_FOUND", `Unknown method: ${request.method}`, {
+          method: request.method,
+        }),
+      );
+    }
+
+    try {
+      return await handler(request, context, connection);
+    } catch (error) {
+      return createProtocolErrorFrame(request.id, error);
+    }
+  }
+
+  async function executeRequestWithTimeout(
+    request: ProtocolRequestFrame,
+    context: DaemonRpcContext,
+    connection: DaemonConnection,
+    requestTimeoutMs: number,
+  ): Promise<DaemonRpcResponse> {
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        resolve(
+          createProtocolErrorFrame(
+            request.id,
+            createProtocolError("TIMEOUT", "Request execution timed out", {
+              method: request.method,
+              timeoutMs: requestTimeoutMs,
+            }),
+          ),
+        );
+      }, requestTimeoutMs);
+
+      void runRequest(request, context, connection).then((response) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeout);
+        resolve(response);
+      });
+    });
+  }
 
   return {
     handleRequest(
@@ -110,46 +206,27 @@ export function createDaemonRpcRouter(): DaemonRpcRouter {
       context: DaemonRpcContext,
       connection?: DaemonConnection,
     ) {
-      if (request.method === "daemon.hello") {
-        return handleDaemonHello(request, context);
-      }
-
-      if (request.method === "daemon.ping") {
-        return handleDaemonPing(request);
-      }
-
-      if (request.method === "daemon.status") {
-        return handleDaemonStatus(request, context);
-      }
-
-      if (request.method === "events.subscribe") {
-        return handleEventsSubscribe(request, connection);
-      }
-
-      if (request.method === "events.unsubscribe") {
-        return handleEventsUnsubscribe(request, connection);
-      }
-
-      return createProtocolErrorFrame(
-        request.id,
-        createProtocolError("METHOD_NOT_FOUND", `Unknown method: ${request.method}`, {
-          method: request.method,
-        }),
-      );
+      return runRequest(request, context, connection);
     },
 
-    handlePayload(payload: string, context: DaemonRpcContext, connection?: DaemonConnection) {
+    async handlePayload(payload: string, context: DaemonRpcContext, connection?: DaemonConnection) {
       const parsed = parseProtocolRequestJson(payload);
       if (!parsed.ok) {
         return createProtocolErrorFrame(null, parsed.error);
       }
 
-      return this.handleRequest(parsed.value, context, connection);
+      return runRequest(parsed.value, context, connection);
     },
 
-    createConnectionHandler(contextProvider: () => DaemonRpcContext) {
+    createConnectionHandler(
+      contextProvider: () => DaemonRpcContext,
+      options: ConnectionHandlerOptions = {},
+    ) {
+      const requestTimeoutMs = normalizeRequestTimeoutMs(options.requestTimeoutMs);
+
       return (socket: Socket) => {
         let buffer = "";
+        let pending = Promise.resolve();
 
         const connection: DaemonConnection = {
           socket,
@@ -165,6 +242,32 @@ export function createDaemonRpcRouter(): DaemonRpcRouter {
           connection.closed = true;
           connection.subscriptions.clear();
           connections.delete(connection);
+        };
+
+        const processLine = async (line: string) => {
+          const parsed = parseProtocolRequestJson(line);
+
+          let response: DaemonRpcResponse;
+          if (!parsed.ok) {
+            response = createProtocolErrorFrame(null, parsed.error);
+          } else {
+            response = await executeRequestWithTimeout(
+              parsed.value,
+              contextProvider(),
+              connection,
+              requestTimeoutMs,
+            );
+          }
+
+          if (connection.closed) {
+            return;
+          }
+
+          try {
+            socket.write(`${JSON.stringify(response)}\n`);
+          } catch {
+            closeConnection();
+          }
         };
 
         connections.add(connection);
@@ -186,12 +289,11 @@ export function createDaemonRpcRouter(): DaemonRpcRouter {
               continue;
             }
 
-            const response = this.handlePayload(trimmed, contextProvider(), connection);
-            try {
-              socket.write(`${JSON.stringify(response)}\n`);
-            } catch {
-              closeConnection();
-            }
+            pending = pending
+              .then(() => processLine(trimmed))
+              .catch(() => {
+                closeConnection();
+              });
           }
         });
       };
@@ -407,4 +509,16 @@ function parseRequestedEvents(
 
 function isDaemonCapabilityEvent(value: string): value is DaemonCapabilityEvent {
   return (DAEMON_CAPABILITY_EVENTS as readonly string[]).includes(value);
+}
+
+function normalizeRequestTimeoutMs(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_DAEMON_REQUEST_TIMEOUT_MS;
+  }
+
+  if (value < 1) {
+    return DEFAULT_DAEMON_REQUEST_TIMEOUT_MS;
+  }
+
+  return Math.floor(value);
 }

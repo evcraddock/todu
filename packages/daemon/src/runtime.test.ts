@@ -26,6 +26,7 @@ describe("createDaemonRuntime", () => {
 
     expect(runtime.config().role).toBe("node");
     expect(runtime.config().daemonVersion.length).toBeGreaterThan(0);
+    expect(runtime.config().requestTimeoutMs).toBeGreaterThan(0);
     expect(runtime.status().role).toBe("node");
     expect(runtime.status().state).toBe("stopped");
   });
@@ -185,6 +186,57 @@ describe("createDaemonRuntime", () => {
       result: {
         unsubscribed: [],
       },
+    });
+
+    await runtime.stop();
+  });
+
+  it("returns TIMEOUT on request overrun and remains healthy", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      requestTimeoutMs: 10,
+      rpcMethodHandlers: {
+        "daemon.ping": async (request) => {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return {
+            id: request.id,
+            result: {
+              ok: true,
+              ts: "late",
+            },
+          };
+        },
+      },
+    });
+
+    await runtime.start();
+
+    const timeoutResponse = await sendRequest(runtime.config().socketPath, {
+      id: "ping-timeout",
+      method: "daemon.ping",
+      params: {},
+    });
+
+    expect(timeoutResponse.id).toBe("ping-timeout");
+    expect(timeoutResponse.error).toEqual({
+      code: "TIMEOUT",
+      message: "Request execution timed out",
+      details: {
+        method: "daemon.ping",
+        timeoutMs: 10,
+      },
+    });
+
+    const statusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "status-after-timeout",
+      method: "daemon.status",
+      params: {},
+    });
+
+    expect(statusResponse.id).toBe("status-after-timeout");
+    expect(statusResponse.result).toMatchObject({
+      state: "running",
+      healthy: true,
     });
 
     await runtime.stop();

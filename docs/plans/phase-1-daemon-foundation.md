@@ -220,3 +220,16 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - dispatch integration coverage for connection-scoped subscription delivery
   - runtime routing coverage for subscribe/unsubscribe methods over UDS
 - Updated `daemon.hello` capability reporting to include event channel methods/events.
+
+### 2026-02-22 — Task #1932
+
+- Added bounded per-request execution timeout enforcement in daemon RPC connection handling.
+- Added default timeout cap constant (`DEFAULT_DAEMON_REQUEST_TIMEOUT_MS = 30000`) and runtime configuration support (`requestTimeoutMs`) with optional env override (`TODUAI_DAEMON_REQUEST_TIMEOUT_MS`).
+- Added structured timeout error behavior on overrun:
+  - returns protocol error code `TIMEOUT`
+  - includes deterministic details (`method`, `timeoutMs`)
+- Ensured timeout events do not crash daemon or kill healthy request handling path; subsequent requests continue to succeed.
+- Expanded tests with simulated long-running handlers:
+  - router-level timeout behavior and post-timeout health on same connection
+  - runtime-level timeout overrun and daemon health verification after timeout
+- Updated timeout policy notes in this phase doc to reflect enforced runtime behavior.
