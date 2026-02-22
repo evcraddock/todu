@@ -1,261 +1,227 @@
-# Task #1923: Automerge Sync Refactor Research
+# Task #1923: Automerge Sync Refactor Research (Planning Snapshot)
 
-## Goal
-Research and propose a refactor approach for Automerge sync behavior:
-- CLI ↔ Electron (same machine)
-- Device ↔ Device (remote sync server)
+## Context
 
----
-
-## Current Architecture (Observed)
-
-### Runtime modes in `createTodu()`
-Source: `packages/engine/src/index.ts`
-
-1. **Standalone owner**
-   - Persistent repo (`NodeFSStorageAdapter`)
-   - No local sync server
-   - Optional remote sync adapter
-
-2. **Electron owner**
-   - Persistent repo (`NodeFSStorageAdapter`)
-   - Starts local WebSocket sync server (`127.0.0.1:24377`) via `startSyncServer()`
-   - Optional remote sync adapter
-
-3. **CLI ephemeral client**
-   - In-memory repo via `initEphemeralStorage()`
-   - Connects to local server (`connectSyncClient()`)
-   - Reads catalog ID from marker (`todu-catalog.id`)
-   - No direct remote adapter management (remote is effectively owned by server process)
-
-### Data model and document topology
-Source: `packages/core/src/schema.ts`
-
-- `CatalogDocument` (root): projects, labels, recurring templates, habits, doc ID indexes
-- Per-project `TaskListDocument`
-- Per-task `TaskDetailDocument`
-- Global `NotesDocument`
-- Per-habit `HabitLogDocument`
-
-### Join flow (device B joins device A)
-Sources: `packages/electron/src/main/ipc.ts`, `packages/engine/src/storage.ts`
-
-- UI sends join code (catalog doc ID)
-- Main process writes marker file: `<storage>/todu-catalog.id`
-- App relaunches
-- On startup, engine tries `repo.find(catalogId)` with 10s timeout
-- If not reachable, marker is removed and a **new empty catalog** is created
+This is a greenfield project (not in production, single primary user). We are optimizing for a clean long-term architecture now.
 
 ---
 
-## Sync Behavior Comparison: CLI vs Electron
+## Decisions Locked So Far
 
-### CLI
-Source: `packages/cli/src/index.ts`
+1. **Daemon-per-machine model**
+   - Every machine running todu has a local daemon.
+   - This includes user devices (MacBook, Mac mini, Arch) and k3s.
 
-- On each command:
-  - Loads config
-  - Probes local sync server with `isSyncServerAvailable()` (200ms timeout)
-  - If available: uses ephemeral client mode
-  - If unavailable: opens persistent standalone repo directly
-- `sync status` reports `managed by server` in ephemeral mode (`packages/cli/src/commands/sync.ts`)
+2. **CLI and Electron are thin clients**
+   - They should talk to the local daemon.
+   - They should not directly own persistent Automerge storage.
 
-### Electron
-Sources: `packages/electron/src/main/index.ts`, `packages/electron/src/main/change-notifications.ts`
+3. **Fail-fast when daemon is unavailable**
+   - No silent fallback mode.
 
-- Always starts in owner mode with local sync server enabled
-- Optionally attaches remote sync adapter
-- Pushes `todu:data:changed` and `todu:sync:status-changed` to renderer
+4. **Join is transactional with strict rollback**
+   - Join failures must not leave clients on a reset/new catalog path.
 
-### Key edge-case differences
+5. **Recurring should be a plugin/worker capability**
+   - Not special-cased core runtime behavior.
+   - It can run on whichever daemon is configured for it.
 
-1. **Mode selection race in CLI**
-   - 200ms probe can miss a starting/loaded Electron server
-   - CLI may fall back to standalone owner mode unexpectedly
+6. **Worker assignment is by integration/worker type, not per-project examples**
+   - Example shape: one `github-sync` worker handles all configured GitHub sync scope.
+   - Another `forgejo-sync` worker can run on a different daemon.
+   - Avoid project-scoped examples in docs to prevent future confusion.
 
-2. **Lifecycle asymmetry**
-   - Electron is long-lived owner
-   - CLI is short-lived, frequently reconnecting ephemeral client
+7. **No lease system for initial design**
+   - Start with static assignment/configuration first.
+   - Revisit lease-based coordination only if needed later.
 
-3. **Status surface mismatch**
-   - `RemoteSyncState` includes `syncing`, `lastSync`, but code mostly toggles connected/disconnected only
-
----
-
-## Multi-Device Consistency & Conflict Handling
-
-### What is strong today
-
-- CRDT merge semantics from Automerge across docs
-- Deterministic recurring task IDs (`generateScheduledTaskId`) reduce duplicate recurring tasks across devices (`packages/engine/src/recurring.ts`)
-- Idempotent habit check-ins keyed by date in habit log docs
-
-### Important invariants implicitly relied on
-
-1. Exactly one durable owner per local data dir at a time
-2. Marker file always points to intended catalog
-3. CLI ephemeral writes must flush before process exit
-4. Recurring generation must remain idempotent across devices
-
-### Main failure modes / risks
-
-1. **Ephemeral flush is catalog-centric, not mutation-centric**
-   - `initEphemeralStorage().close()` waits for sync flush on **catalog document ID only** (`packages/engine/src/storage.ts`)
-   - But many writes occur on task list/detail/notes/habit docs
-   - Risk: short-lived CLI exits before non-catalog doc sync is delivered
-
-2. **Join failure can silently reset user to fresh catalog**
-   - Invalid/unreachable join code after restart falls back to new catalog creation
-   - This is operationally harsh for users
-
-3. **Owner arbitration is implicit**
-   - No explicit lock/lease around “who owns persistent storage” locally
-   - Behavior depends on probe timing and process start order
-
-4. **Config/docs drift**
-   - Architecture doc still references `sync.server` while runtime uses `sync.remote.server`
-   - Increases operator error during setup/debug
+8. **Rollout/implementation sequencing is deferred for now**
+   - Still in planning and architecture decision mode.
 
 ---
 
-## Refactor Options
+## Architecture Direction (Current)
 
-### Option A — Harden current model (lowest risk)
+## Local topology
 
-Keep architecture, improve correctness:
-- Add mutation-aware flush barrier for ephemeral client close
-- Add explicit local owner lock file/lease
-- Make join flow transactional (validate reachability before committing marker switch)
-- Normalize sync status semantics (`connected/disconnected/syncing`, `lastSync`)
+- **1 local daemon per machine** acts as local state owner/coordinator.
+- **CLI/Electron** act as local clients only.
 
-**Pros:** low migration risk, incremental
-**Cons:** retains complexity of mode switching heuristics
+## Cross-device topology
 
----
-
-### Option B — Single local sync owner daemon (cleaner local topology)
-
-- Introduce a persistent local sync owner process (`toduai serve` or embedded service)
-- CLI always acts as ephemeral client (never direct persistent owner in normal dev)
-- Electron either hosts owner or connects to owner process
-
-**Pros:** removes probe ambiguity + dual-owner risk
-**Cons:** operational overhead, bigger UX/process change
+- Replication uses Automerge sync relay.
+- k3s can host always-on services (relay and one or more worker-enabled daemons).
 
 ---
 
-### Option C — Full sync orchestration layer in engine (heavier redesign)
+## Worker/Plugin Model
 
-- Create explicit `SyncCoordinator` abstraction with state machine
-- Separate concerns: local transport, remote transport, join/import, status
-- All clients use the same coordinator contract
+Treat automation capabilities as pluggable workers attached to daemons by config.
 
-**Pros:** best long-term clarity/testability
-**Cons:** highest implementation and migration cost
+Examples of worker types:
+- `recurring`
+- `github-sync`
+- `forgejo-sync`
 
----
-
-## Recommended Direction
-
-Recommend **Option A now**, with an intentional path toward B/C if needed.
-
-Why:
-- Fixes highest-risk correctness issues quickly
-- Preserves current user workflow
-- Creates clean seams for later topology simplification
+Important: assignment is by worker type/integration capability, not by per-project partition examples.
 
 ---
 
-## Proposed Phased Plan
+## Coordination Model (Initial, No Leases)
 
-### Phase 1: Correctness hardening
+Use static assignment and policy:
 
-1. **Ephemeral flush fix**
-   - Track changed document IDs in engine lifecycle
-   - On close, wait for sync-message generation/delivery for all changed docs (or robust repo-level idle barrier)
+- A worker type is configured to run on specific daemon(s).
+- Non-assigned daemons do not run that worker type.
+- Failover is manual by updating assignment/config.
 
-2. **Join safety**
-   - Validate join target reachability before replacing marker
-   - Keep rollback path (previous marker backup)
-   - Distinguish invalid code vs temporary server unavailable
-
-3. **Status contract cleanup**
-   - Define transitions and set `lastSync` on successful exchange
-   - Use `syncing` meaningfully or remove it
-
-### Phase 2: Ownership clarity
-
-4. **Local owner lock/lease**
-   - Prevent concurrent persistent owners on same storage path
-   - CLI fallback behavior becomes explicit and safe
-
-5. **Mode decision observability**
-   - Emit structured logs/diagnostics: why CLI chose ephemeral vs standalone
-
-### Phase 3: Documentation and migration hygiene
-
-6. **Config/docs alignment**
-   - Standardize on `sync.remote.server` everywhere
-
-7. **Operational playbook**
-   - Troubleshooting for join, remote connectivity, and local owner conflicts
+This keeps initial complexity low while preserving deployment flexibility.
 
 ---
 
-## Suggested Test Strategy
+## Join Policy (Required Behavior)
 
-### Engine integration tests (critical)
+Join flow must be fail-safe:
 
-1. **Ephemeral close flush across non-catalog docs**
-   - Client updates task detail doc only
-   - Immediate close
-   - Server must observe update reliably
+1. Validate join code
+2. Verify target reachability
+3. Snapshot current pointer/state
+4. Atomic switch
+5. Reconnect
+6. Roll back on failure
 
-2. **Join transactional behavior**
-   - Invalid join code does not destroy existing local marker/data
-   - Temporary remote unavailability does not force empty catalog reset
+No implicit "create new catalog" behavior on failed join attempts.
 
-3. **Owner lock tests**
-   - Second persistent owner on same storage path fails fast with clear error
+Bootstrap vs join distinction:
+- **Bootstrap (first run, no marker/catalog yet):** creating an initial catalog is allowed.
+- **Join (explicitly switching to another catalog ID):** creating a new catalog as fallback is not allowed.
 
-4. **Remote status transitions**
-   - connected → syncing → connected/disconnected transitions validated
-   - `lastSync` monotonic updates
+### Example: Authority migration from Mac mini daemon to k3s daemon
 
-### Cross-client scenario tests
-
-5. **Electron owner + repeated CLI ephemeral writes**
-   - Burst operations on tasks/notes/habits
-   - No dropped writes
-
-6. **Standalone CLI + remote relay + second device**
-   - Conflicting edits merge deterministically
-   - Recurring generation does not duplicate (deterministic ID invariant)
-
-### Regression coverage
-
-7. Existing tests to preserve:
-   - `packages/engine/src/sync.test.ts`
-   - `packages/engine/src/remote-sync.test.ts`
-   - `packages/engine/src/sync-status.test.ts`
-   - Electron integration flows under `integration-tests/`
+1. Read current catalog ID from Mac mini daemon (`daemon.status` / sync status surface).
+2. Ensure shared Automerge relay is running and Mac mini daemon is connected.
+3. Start k3s daemon and run explicit join using that catalog ID.
+4. k3s daemon performs transactional join (validate/reachability/switch/rollback on failure).
+5. Verify both daemons report the same catalog ID.
+6. Reassign worker types (e.g., recurring, github-sync) via explicit config updates in each host/context.
 
 ---
 
-## Notable Coupling Points to Refactor First
+## Catalog Consistency Principle
 
-- `createTodu()` currently mixes topology selection, adapter lifecycle, scheduling startup, prefetch, and sync status wiring (`packages/engine/src/index.ts`)
-- Marker-file ownership and join semantics are split between engine storage and Electron IPC restart flow (`storage.ts` + `ipc.ts`)
-- CLI mode decision is tightly coupled to a short timeout probe (`cli/src/index.ts`)
+Goal: all clients should replicate the same Automerge document graph for a user dataset.
+
+Practical rule: clients should converge on the same catalog document ID and referenced sub-doc graph.
 
 ---
 
-## Conclusion
+## Planning Status of Previously Open Questions
 
-Current architecture is directionally solid (Automerge for both local and remote sync), but correctness depends on implicit assumptions. The highest value refactor is to make those assumptions explicit and enforced:
-- durable flush semantics for ephemeral clients,
-- transactional join behavior,
-- explicit local ownership,
-- and a precise sync status contract.
+1. **Worker assignment config location**
+   - Initial approach: local config file and/or environment variables.
 
-That gives a safe base for broader topology simplification later.
+2. **Duplicate assignment detection (no leases)**
+   - Initial approach: keep simple for now.
+   - Start with error logging/observability only.
+   - Treat stronger prevention as a future enhancement.
+
+3. **Exact daemon-client API/transport contract**
+   - **Resolved in planning**.
+   - Transport: UDS on mac/linux (with abstraction for future Windows support).
+   - Connection model: Electron persistent connection; CLI short-lived per invocation.
+   - Protocol: JSON-RPC-style envelope (request/result/error + event frames) with stable error taxonomy.
+   - Handshake: `daemon.hello` with protocol/version/capabilities/role/catalog context.
+   - Events: `events.subscribe` / `events.unsubscribe` with best-effort delivery (clients re-fetch after reconnect).
+   - Local trust model: UDS file permissions as primary gate; no separate auth token initially.
+   - Timeout/retry policy:
+     - CLI: connect timeout 1s, request timeout 10s, no retries, fail-fast on unavailable daemon.
+     - Electron: connect timeout 2s, reconnect backoff 250ms → 500ms → 1s → 2s (cap 2s); on reconnect, re-hello + re-subscribe + refresh.
+     - Daemon: bounded per-request execution timeout (target 30s cap) returning `TIMEOUT` on overrun.
+   - Initial implemented namespaces: `daemon.*`, core domain namespaces, `events.*`.
+   - `worker.*` reserved for later and should return `UNSUPPORTED_CAPABILITY` until implemented.
+
+4. **Operational UX for manual worker reassignment/failover**
+   - **Resolved in planning (initial model)**.
+   - CLI targets one daemon per invocation (local daemon only).
+   - No cross-daemon fanout in a single command.
+   - Multi-daemon failover is explicit: run CLI in each host/context and apply config changes in sequence.
+   - Keep this model simple and document it clearly.
+
+5. **Core domain ↔ worker/plugin interaction model**
+   - **Resolved in planning (initial model)**.
+   - Core domains remain usable without workers; workers add automation, not base CRUD/read behavior.
+   - Workers must declare required domain capabilities; daemon blocks worker start when required domains are disabled/missing.
+   - Recurring without worker: templates still usable, and manual occurrence generation should be available.
+   - Habit without worker: manual check-in, history, and streak computation still work.
+   - Capability gating must surface clear status/errors when a worker depends on a disabled core domain.
+
+---
+
+## Rollout / Implementation Sequencing (Agreed)
+
+### Phase 1 — Protocol + daemon foundation
+- Implement daemon process skeleton.
+- Implement UDS transport.
+- Implement `daemon.hello`, `daemon.status`, `daemon.ping`.
+- Add protocol tests (envelope, errors, handshake, version mismatch).
+
+Gate: daemon starts, responds, and reports protocol/capabilities reliably.
+
+### Phase 2 — Core domain RPC surface
+- Expose existing core namespaces over daemon (`project/task/label/note/recurring/habit/sync`).
+- Add `events.subscribe` / `events.unsubscribe`.
+- Emit `data.changed` and `sync.statusChanged`.
+
+Gate: daemon path reaches behavior parity with existing SDK operations.
+
+### Phase 3 — CLI migration to thin client
+- Switch CLI to daemon-only UDS path.
+- Enforce fail-fast behavior when daemon is unavailable.
+- Remove CLI probe/fallback ownership logic.
+
+Gate: CLI behavior is stable in daemon mode with clear fail-fast UX.
+
+### Phase 4 — Electron migration to thin client
+- Switch Electron to persistent daemon connection.
+- Implement reconnect backoff + re-hello + re-subscribe + refresh.
+- Remove direct persistent storage ownership from Electron runtime.
+
+Gate: Electron + CLI concurrent usage converges through local daemon coordination.
+
+### Phase 5 — Join safety refactor
+- Explicitly separate bootstrap vs join paths.
+- Implement transactional join with strict rollback.
+- Remove failed-join fallback that creates a fresh catalog in join flow.
+
+Gate: failed join preserves prior dataset; bootstrap still creates initial catalog correctly.
+
+### Phase 6 — Worker/plugin framework (minimal)
+- Add worker registration model with domain/capability dependency declarations.
+- Add capability gating: workers blocked if required domains are disabled/missing.
+- Keep `worker.*` protocol namespace reserved; implement minimal lifecycle/status as needed.
+
+Gate: worker availability/dependency state is visible via status/logging.
+
+### Phase 7 — Recurring as plugin capability
+- Remove recurring auto-processing from general client startup path.
+- Implement recurring automation as a worker/plugin capability.
+- Keep manual recurring occurrence generation path available.
+
+Gate: no client-side recurring auto-run; recurring works via worker/manual flow.
+
+### Phase 8 — Operational controls + documentation
+- Implement static worker assignment via config (local file/env).
+- Provide CLI-driven manual reassignment flow (single-daemon per invocation).
+- Document authority migration and per-host/context operational runbooks.
+
+Gate: repeatable failover/reassignment process documented and testable.
+
+## Summary
+
+Current planning direction is:
+- daemon on every machine,
+- thin CLI/Electron clients,
+- fail-fast client behavior,
+- transactional join with rollback,
+- recurring as a normal plugin/worker capability,
+- static worker-type assignment first (no leases yet).
