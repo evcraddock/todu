@@ -25,8 +25,10 @@ export {
 
 export {
   createDaemonRpcRouter,
+  DAEMON_CAPABILITY_EVENTS,
   DAEMON_CAPABILITY_METHODS,
   DAEMON_PROTOCOL_VERSION,
+  type DaemonCapabilityEvent,
   type DaemonHelloResult,
   type DaemonPingResult,
   type DaemonRpcContext,
@@ -35,6 +37,8 @@ export {
   type DaemonStatusResult,
   type DaemonStatusTransport,
   DEFAULT_DAEMON_VERSION,
+  type EventsSubscribeResult,
+  type EventsUnsubscribeResult,
 } from "./rpc.js";
 
 export {

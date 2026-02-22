@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import net, { type Socket } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createDaemonRpcRouter,
+  DAEMON_CAPABILITY_EVENTS,
   DAEMON_CAPABILITY_METHODS,
   DAEMON_PROTOCOL_VERSION,
   type DaemonRpcContext,
@@ -46,7 +51,7 @@ describe("createDaemonRpcRouter", () => {
       role: "authority",
       capabilities: {
         methods: DAEMON_CAPABILITY_METHODS,
-        events: [],
+        events: [...DAEMON_CAPABILITY_EVENTS],
       },
       catalog: {
         id: "catalog-123",
@@ -182,3 +187,224 @@ describe("createDaemonRpcRouter", () => {
     expect(response.error.code).toBe("BAD_REQUEST");
   });
 });
+
+describe("events.subscribe/events.unsubscribe dispatch", () => {
+  let tmpDir: string;
+  let socketPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-rpc-test-"));
+    socketPath = path.join(tmpDir, "daemon.sock");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("tracks subscriptions per connection and dispatches best-effort event frames", async () => {
+    const router = createDaemonRpcRouter();
+
+    const context: DaemonRpcContext = {
+      daemonVersion: DEFAULT_DAEMON_VERSION,
+      role: "node",
+      catalogId: "catalog-123",
+      runtimeState: "running",
+      startedAt: "2026-02-22T23:00:00.000Z",
+      transport: {
+        kind: "uds",
+        path: socketPath,
+        mode: 0o600,
+      },
+    };
+
+    const server = net.createServer(router.createConnectionHandler(() => context));
+    await listenServer(server, socketPath);
+
+    const client = net.createConnection(socketPath);
+    client.setEncoding("utf8");
+
+    await waitForConnect(client);
+    const nextFrame = createJsonLineReader(client);
+
+    client.write(
+      `${JSON.stringify({
+        id: "sub-1",
+        method: "events.subscribe",
+        params: { events: ["data.changed"] },
+      })}\n`,
+    );
+
+    const subscribeResponse = await nextFrame();
+    expect(subscribeResponse).toEqual({
+      id: "sub-1",
+      result: {
+        subscribed: ["data.changed"],
+      },
+    });
+
+    const delivered = router.dispatchEvent(
+      "data.changed",
+      { scope: "task" },
+      "2026-02-22T00:00:00.000Z",
+    );
+    expect(delivered).toBe(1);
+
+    const eventFrame = await nextFrame();
+    expect(eventFrame).toEqual({
+      event: "data.changed",
+      payload: { scope: "task" },
+      ts: "2026-02-22T00:00:00.000Z",
+    });
+
+    client.write(
+      `${JSON.stringify({
+        id: "unsub-1",
+        method: "events.unsubscribe",
+        params: { events: ["data.changed"] },
+      })}\n`,
+    );
+
+    const unsubscribeResponse = await nextFrame();
+    expect(unsubscribeResponse).toEqual({
+      id: "unsub-1",
+      result: {
+        unsubscribed: ["data.changed"],
+      },
+    });
+
+    const deliveredAfterUnsubscribe = router.dispatchEvent("data.changed", {
+      scope: "task",
+      after: true,
+    });
+    expect(deliveredAfterUnsubscribe).toBe(0);
+
+    await expect(nextFrame(150)).rejects.toThrow("Timed out waiting for frame");
+
+    client.end();
+    await closeServer(server);
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for unsupported event names", async () => {
+    const router = createDaemonRpcRouter();
+
+    const context: DaemonRpcContext = {
+      daemonVersion: DEFAULT_DAEMON_VERSION,
+      role: "node",
+      catalogId: null,
+      runtimeState: "running",
+      startedAt: "2026-02-22T23:00:00.000Z",
+      transport: {
+        kind: "uds",
+        path: socketPath,
+        mode: 0o600,
+      },
+    };
+
+    const server = net.createServer(router.createConnectionHandler(() => context));
+    await listenServer(server, socketPath);
+
+    const client = net.createConnection(socketPath);
+    client.setEncoding("utf8");
+
+    await waitForConnect(client);
+    const nextFrame = createJsonLineReader(client);
+
+    client.write(
+      `${JSON.stringify({
+        id: "sub-1",
+        method: "events.subscribe",
+        params: { events: ["unsupported.event"] },
+      })}\n`,
+    );
+
+    const response = await nextFrame();
+    expect(response.id).toBe("sub-1");
+    expect(response.error?.code).toBe("UNSUPPORTED_CAPABILITY");
+    expect(response.error?.details).toEqual({
+      unsupported: ["unsupported.event"],
+      supported: [...DAEMON_CAPABILITY_EVENTS],
+    });
+
+    client.end();
+    await closeServer(server);
+  });
+});
+
+function listenServer(server: net.Server, socketPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+function waitForConnect(socket: Socket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    socket.once("error", reject);
+    socket.once("connect", () => {
+      socket.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+function createJsonLineReader(
+  client: Socket,
+): (timeoutMs?: number) => Promise<Record<string, unknown>> {
+  let buffer = "";
+  const queuedLines: string[] = [];
+  const waiters: Array<(line: string) => void> = [];
+
+  client.on("data", (chunk: string) => {
+    buffer += chunk;
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+
+      const waiter = waiters.shift();
+      if (waiter) {
+        waiter(trimmed);
+      } else {
+        queuedLines.push(trimmed);
+      }
+    }
+  });
+
+  return async (timeoutMs: number = 1000): Promise<Record<string, unknown>> => {
+    if (queuedLines.length > 0) {
+      return JSON.parse(queuedLines.shift() ?? "{}");
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const index = waiters.indexOf(onLine);
+        if (index >= 0) {
+          waiters.splice(index, 1);
+        }
+
+        reject(new Error("Timed out waiting for frame"));
+      }, timeoutMs);
+
+      const onLine = (line: string) => {
+        clearTimeout(timeout);
+        resolve(JSON.parse(line) as Record<string, unknown>);
+      };
+
+      waiters.push(onLine);
+    });
+  };
+}
+
+function closeServer(server: net.Server): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+}

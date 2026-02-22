@@ -3,7 +3,11 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DAEMON_CAPABILITY_METHODS, DAEMON_PROTOCOL_VERSION } from "./rpc.js";
+import {
+  DAEMON_CAPABILITY_EVENTS,
+  DAEMON_CAPABILITY_METHODS,
+  DAEMON_PROTOCOL_VERSION,
+} from "./rpc.js";
 import { createDaemonRuntime } from "./runtime.js";
 
 describe("createDaemonRuntime", () => {
@@ -66,7 +70,7 @@ describe("createDaemonRuntime", () => {
       role: "authority",
       capabilities: {
         methods: DAEMON_CAPABILITY_METHODS,
-        events: [],
+        events: [...DAEMON_CAPABILITY_EVENTS],
       },
       catalog: {
         id: runtime.status().catalogId,
@@ -127,6 +131,59 @@ describe("createDaemonRuntime", () => {
       },
       catalog: {
         id: runtimeStatus.catalogId,
+      },
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes events.subscribe and events.unsubscribe over UDS", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const subscribeResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sub-1",
+      method: "events.subscribe",
+      params: {
+        events: ["data.changed", "sync.statusChanged"],
+      },
+    });
+
+    expect(subscribeResponse).toEqual({
+      id: "sub-1",
+      result: {
+        subscribed: ["data.changed", "sync.statusChanged"],
+      },
+    });
+
+    const unsupportedSubscribeResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sub-2",
+      method: "events.subscribe",
+      params: {
+        events: ["unsupported.event"],
+      },
+    });
+
+    expect(unsupportedSubscribeResponse.id).toBe("sub-2");
+    expect(unsupportedSubscribeResponse.error).toMatchObject({
+      code: "UNSUPPORTED_CAPABILITY",
+    });
+
+    // sendRequest opens a new connection per call, so this unsubscribe call
+    // intentionally validates routing/shape only (not same-connection state).
+    const unsubscribeResponse = await sendRequest(runtime.config().socketPath, {
+      id: "unsub-1",
+      method: "events.unsubscribe",
+      params: {
+        events: ["data.changed"],
+      },
+    });
+
+    expect(unsubscribeResponse).toEqual({
+      id: "unsub-1",
+      result: {
+        unsubscribed: [],
       },
     });
 

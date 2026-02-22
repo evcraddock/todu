@@ -201,3 +201,22 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - router unit coverage for `daemon.ping` and `daemon.status`
   - runtime UDS integration coverage for ping/status requests
 - Updated handshake capability reporting to include implemented baseline daemon methods.
+
+### 2026-02-22 — Task #1931
+
+- Added baseline event channel methods `events.subscribe` and `events.unsubscribe` in `packages/daemon/src/rpc.ts`.
+- Added per-connection subscription tracking (connection-scoped registries; no shared global subscription state across clients).
+- Added unsupported-event reporting via structured `UNSUPPORTED_CAPABILITY` with supported/unsupported event lists.
+- Added event dispatch baseline through protocol event frames (`{ event, payload, ts }`) with best-effort delivery.
+- Wired runtime emitters for baseline events:
+  - `data.changed` via `todu.onChange(...)`
+  - `sync.statusChanged` via `todu.sync.onStatusChange(...)`
+- Best-effort semantics documented/implemented for baseline:
+  - no durable replay buffer in this phase
+  - disconnected clients may miss events
+  - reconnecting clients are expected to re-subscribe and refresh current state
+- Expanded tests:
+  - router coverage for subscribe/unsubscribe validation and unsupported events
+  - dispatch integration coverage for connection-scoped subscription delivery
+  - runtime routing coverage for subscribe/unsubscribe methods over UDS
+- Updated `daemon.hello` capability reporting to include event channel methods/events.
