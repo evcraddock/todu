@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { CATALOG_DOC_KEY } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import { app, ipcMain } from "electron";
 
@@ -89,7 +90,7 @@ export function registerIpcHandlers(todu: Todu, storagePath: string): void {
     if (!/^[a-zA-Z0-9+/=_-]+$/.test(trimmed)) {
       throw new Error("Invalid join code: contains unexpected characters");
     }
-    const markerPath = path.join(storagePath, "catalog.id");
+    const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
     fs.writeFileSync(markerPath, trimmed, "utf-8");
     app.relaunch();
     app.exit(0);
