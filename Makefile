@@ -14,7 +14,7 @@ node_modules: ## Install dependencies if missing
 	fi
 
 check-bun: ## Verify bun is installed (needed for CLI binary builds)
-	@command -v bun >/dev/null 2>&1 || { echo "❌ bun is required for CLI binary builds. Install from https://bun.sh"; exit 1; }
+	@command -v bun >/dev/null 2>&1 || test -x "$$HOME/.bun/bin/bun" || { echo "❌ bun is required for CLI binary builds. Install from https://bun.sh"; exit 1; }
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'

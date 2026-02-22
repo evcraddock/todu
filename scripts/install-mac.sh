@@ -11,7 +11,7 @@ fi
 
 echo "Installing toduai from $DMG..."
 
-MOUNT=$(hdiutil attach "$DMG" -nobrowse | awk '/Apple_HFS/ {print substr($0, index($0, "/Volumes"))}')
+MOUNT=$(hdiutil attach "$DMG" -nobrowse | awk '/\/Volumes\// {print substr($0, index($0, "/Volumes"))}')
 if [[ -z "$MOUNT" ]]; then
   echo "error: failed to mount $DMG"
   exit 1
