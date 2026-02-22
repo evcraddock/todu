@@ -128,6 +128,18 @@ Non-stable versions (canary, beta, alpha, rc) can have bugs or incomplete featur
 6. Use the `request-review` skill to spawn a separate agent to review the PR
 7. **Wait for human approval** before merging
 
+### `request-review` Skill Enforcement (MANDATORY)
+
+When requesting PR review, follow the `request-review` skill **exactly as written**.
+
+- **No substitutions** and **no custom review flow**
+- **Do NOT use `pi -p`** (or any non-interactive shortcut) for the reviewer session
+- Use tmux session + `wait-for` signaling exactly as documented in the skill
+- Wait for completion signal before reporting results
+- After completion, fetch and report the latest PR review comment
+- If a task ID is present, ensure the review is also posted to the task
+- If you must deviate for any reason, **stop and ask the human first**
+
 ### Wait for CI Before Requesting Review
 
 After creating a PR, CI runs automatically. **Do not request a review until CI passes.**
