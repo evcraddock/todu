@@ -68,6 +68,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let todu: Todu | null = null;
   let startPromise: Promise<DaemonRuntimeStatus> | null = null;
   let stopPromise: Promise<void> | null = null;
+  let changeSubscriptionCleanup: (() => void) | null = null;
+  let syncStatusSubscriptionCleanup: (() => void) | null = null;
 
   const runtimeStatus: DaemonRuntimeStatus = {
     state: "stopped",
@@ -96,6 +98,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     })),
   });
 
+  function clearEventSubscriptions(): void {
+    if (changeSubscriptionCleanup) {
+      changeSubscriptionCleanup();
+      changeSubscriptionCleanup = null;
+    }
+
+    if (syncStatusSubscriptionCleanup) {
+      syncStatusSubscriptionCleanup();
+      syncStatusSubscriptionCleanup = null;
+    }
+  }
+
   function cloneStatus(): DaemonRuntimeStatus {
     return {
       state: runtimeStatus.state,
@@ -122,8 +136,21 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.catalogId = todu.sync.getCatalogId();
       runtimeStatus.transport = endpoint;
 
+      changeSubscriptionCleanup = todu.onChange(() => {
+        rpcRouter.dispatchEvent("data.changed", {
+          catalog: {
+            id: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
+          },
+        });
+      });
+
+      syncStatusSubscriptionCleanup = todu.sync.onStatusChange((status) => {
+        rpcRouter.dispatchEvent("sync.statusChanged", status);
+      });
+
       return cloneStatus();
     } catch (error) {
+      clearEventSubscriptions();
       await safeStopTransport(transport);
       runtimeStatus.state = "stopped";
       runtimeStatus.startedAt = undefined;
@@ -169,6 +196,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
         const currentTodu = todu;
         todu = null;
+        clearEventSubscriptions();
 
         try {
           await transport.stop();
