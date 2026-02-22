@@ -4,25 +4,32 @@ import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument } from "@todu/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
 
 describe("createTodu", () => {
   let tmpDir: string;
   let todu: Todu | null = null;
+  const tmpDirs: string[] = [];
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-test-"));
+    tmpDirs.push(tmpDir);
   });
 
   afterEach(async () => {
     if (todu) {
       await todu.close();
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100));
       todu = null;
     }
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  afterAll(() => {
+    for (const dir of tmpDirs) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("creates an instance with all namespaces", async () => {

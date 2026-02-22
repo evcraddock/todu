@@ -22,6 +22,16 @@ export {
   parseProtocolRequestFrame,
   parseProtocolRequestJson,
 } from "./protocol.js";
+
+export {
+  createDaemonRpcRouter,
+  DAEMON_PROTOCOL_VERSION,
+  type DaemonHelloResult,
+  type DaemonRpcContext,
+  type DaemonRpcRouter,
+  DEFAULT_DAEMON_VERSION,
+} from "./rpc.js";
+
 export {
   createDaemonRuntime,
   DAEMON_ROLES,
