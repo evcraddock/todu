@@ -1,4 +1,5 @@
 import {
+  type DocumentId,
   type PeerCandidatePayload,
   type PeerDisconnectedPayload,
   Repo,
@@ -118,6 +119,22 @@ export async function createTodu(
   // This is the "generate on access" pattern — every CLI invocation
   // and Electron launch triggers template processing.
   await processTemplates(storage.catalog);
+
+  // Eagerly prefetch all sub-documents referenced in the catalog so the
+  // relay starts syncing them immediately. Without this, documents like
+  // notes and habit logs only sync when a view explicitly requests them.
+  // Fire-and-forget — we don't need to wait for them to be ready.
+  const catalogDoc = storage.catalog.doc();
+  if (catalogDoc) {
+    const docIds: string[] = [
+      ...Object.values(catalogDoc.taskListDocIds ?? {}),
+      ...Object.values(catalogDoc.habitLogDocIds ?? {}),
+    ];
+    if (catalogDoc.notesDocId) docIds.push(catalogDoc.notesDocId);
+    for (const docId of docIds) {
+      storage.repo.find(docId as DocumentId).catch(() => {});
+    }
+  }
 
   // Determine local sync mode
   const localMode: LocalSyncMode = config?.syncClient
