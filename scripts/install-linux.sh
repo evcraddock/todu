@@ -3,7 +3,7 @@
 # Run from the project root after `make dist`.
 set -euo pipefail
 
-APPIMAGE=$(ls dist/installers/toduai-*-linux-x86_64.AppImage 2>/dev/null | sort -V | tail -1)
+APPIMAGE=$(find dist/installers -name 'toduai-*-linux-x86_64.AppImage' 2>/dev/null | sort -V | tail -1 || true)
 if [[ -z "$APPIMAGE" ]]; then
   echo "error: no AppImage found in dist/installers/ — run 'make dist' first"
   exit 1
