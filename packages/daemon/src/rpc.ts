@@ -11,6 +11,7 @@ import {
 
 export const DAEMON_PROTOCOL_VERSION = "1";
 export const DEFAULT_DAEMON_VERSION = "dev";
+export const DAEMON_CAPABILITY_METHODS = ["daemon.hello", "daemon.ping", "daemon.status"];
 
 export interface DaemonHelloResult {
   protocolVersion: string;
@@ -25,10 +26,39 @@ export interface DaemonHelloResult {
   };
 }
 
+export interface DaemonPingResult {
+  ok: true;
+  ts: string;
+}
+
+export interface DaemonStatusTransport {
+  kind: "uds";
+  path: string;
+  mode: number;
+}
+
+export type DaemonRuntimeStateSnapshot = "stopped" | "starting" | "running" | "stopping";
+
+export interface DaemonStatusResult {
+  protocolVersion: string;
+  daemonVersion: string;
+  role: "node" | "authority";
+  state: DaemonRuntimeStateSnapshot;
+  healthy: boolean;
+  startedAt: string | null;
+  transport: DaemonStatusTransport | null;
+  catalog: {
+    id: string | null;
+  };
+}
+
 export interface DaemonRpcContext {
   daemonVersion: string;
   role: "node" | "authority";
   catalogId: string | null;
+  runtimeState: DaemonRuntimeStateSnapshot;
+  startedAt: string | null;
+  transport: DaemonStatusTransport | null;
 }
 
 export interface DaemonRpcRouter {
@@ -48,6 +78,14 @@ export function createDaemonRpcRouter(): DaemonRpcRouter {
     handleRequest(request: ProtocolRequestFrame, context: DaemonRpcContext) {
       if (request.method === "daemon.hello") {
         return handleDaemonHello(request, context);
+      }
+
+      if (request.method === "daemon.ping") {
+        return handleDaemonPing(request);
+      }
+
+      if (request.method === "daemon.status") {
+        return handleDaemonStatus(request, context);
       }
 
       return createProtocolErrorFrame(
@@ -127,9 +165,34 @@ function handleDaemonHello(
     daemonVersion: context.daemonVersion,
     role: context.role,
     capabilities: {
-      methods: ["daemon.hello"],
+      methods: DAEMON_CAPABILITY_METHODS.slice(),
       events: [],
     },
+    catalog: {
+      id: context.catalogId,
+    },
+  });
+}
+
+function handleDaemonPing(request: ProtocolRequestFrame): ProtocolSuccessFrame<DaemonPingResult> {
+  return createProtocolSuccessFrame(request.id, {
+    ok: true,
+    ts: new Date().toISOString(),
+  });
+}
+
+function handleDaemonStatus(
+  request: ProtocolRequestFrame,
+  context: DaemonRpcContext,
+): ProtocolSuccessFrame<DaemonStatusResult> {
+  return createProtocolSuccessFrame(request.id, {
+    protocolVersion: DAEMON_PROTOCOL_VERSION,
+    daemonVersion: context.daemonVersion,
+    role: context.role,
+    state: context.runtimeState,
+    healthy: context.runtimeState === "running",
+    startedAt: context.startedAt,
+    transport: context.transport,
     catalog: {
       id: context.catalogId,
     },

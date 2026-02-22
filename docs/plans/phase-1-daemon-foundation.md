@@ -183,3 +183,21 @@ Every task must include a documentation step in the same PR (or explicitly justi
 - Added handshake tests:
   - router unit tests in `packages/daemon/src/rpc.test.ts`
   - runtime UDS routing handshake verification in `packages/daemon/src/runtime.test.ts`.
+
+### 2026-02-22 — Task #1930
+
+- Added baseline daemon methods `daemon.ping` and `daemon.status` in `packages/daemon/src/rpc.ts`.
+- `daemon.ping` now returns a stable health response (`ok`, `ts`) for liveness checks.
+- `daemon.status` now returns baseline metadata for thin clients:
+  - `protocolVersion`
+  - `daemonVersion`
+  - daemon `role`
+  - runtime `state` and derived `healthy` flag
+  - `startedAt`
+  - transport endpoint metadata (`kind`, `path`, `mode`)
+  - catalog context (`catalog.id`)
+- Extended daemon RPC context wiring in runtime so status reflects current runtime and transport state.
+- Expanded tests:
+  - router unit coverage for `daemon.ping` and `daemon.status`
+  - runtime UDS integration coverage for ping/status requests
+- Updated handshake capability reporting to include implemented baseline daemon methods.
