@@ -3,6 +3,7 @@ import net, { type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createProtocolSuccessFrame } from "./protocol.js";
 import {
   createDaemonRpcRouter,
   DAEMON_CAPABILITY_EVENTS,
@@ -13,8 +14,6 @@ import {
 } from "./rpc.js";
 
 describe("createDaemonRpcRouter", () => {
-  const router = createDaemonRpcRouter();
-
   const context: DaemonRpcContext = {
     daemonVersion: DEFAULT_DAEMON_VERSION,
     role: "authority",
@@ -28,8 +27,10 @@ describe("createDaemonRpcRouter", () => {
     },
   };
 
-  it("returns daemon.hello handshake payload with deterministic capabilities", () => {
-    const response = router.handleRequest(
+  it("returns daemon.hello handshake payload with deterministic capabilities", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "1",
         method: "daemon.hello",
@@ -59,8 +60,10 @@ describe("createDaemonRpcRouter", () => {
     });
   });
 
-  it("returns daemon.ping healthy response", () => {
-    const response = router.handleRequest(
+  it("returns daemon.ping healthy response", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "ping-1",
         method: "daemon.ping",
@@ -82,8 +85,10 @@ describe("createDaemonRpcRouter", () => {
     expect(Number.isNaN(Date.parse(response.result.ts))).toBe(false);
   });
 
-  it("returns daemon.status baseline metadata", () => {
-    const response = router.handleRequest(
+  it("returns daemon.status baseline metadata", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "status-1",
         method: "daemon.status",
@@ -115,8 +120,10 @@ describe("createDaemonRpcRouter", () => {
     });
   });
 
-  it("returns PROTOCOL_MISMATCH when handshake version differs", () => {
-    const response = router.handleRequest(
+  it("returns PROTOCOL_MISMATCH when handshake version differs", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "1",
         method: "daemon.hello",
@@ -139,8 +146,10 @@ describe("createDaemonRpcRouter", () => {
     });
   });
 
-  it("returns BAD_REQUEST when protocolVersion is missing", () => {
-    const response = router.handleRequest(
+  it("returns BAD_REQUEST when protocolVersion is missing", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "1",
         method: "daemon.hello",
@@ -158,8 +167,10 @@ describe("createDaemonRpcRouter", () => {
     expect(response.error.message).toBe("daemon.hello requires params.protocolVersion string");
   });
 
-  it("returns METHOD_NOT_FOUND for unknown methods", () => {
-    const response = router.handleRequest(
+  it("returns METHOD_NOT_FOUND for unknown methods", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
       {
         id: "1",
         method: "unknown.method",
@@ -176,8 +187,10 @@ describe("createDaemonRpcRouter", () => {
     expect(response.error.code).toBe("METHOD_NOT_FOUND");
   });
 
-  it("maps invalid JSON payloads to BAD_REQUEST through handlePayload", () => {
-    const response = router.handlePayload("{ invalid-json }", context);
+  it("maps invalid JSON payloads to BAD_REQUEST through handlePayload", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handlePayload("{ invalid-json }", context);
 
     expect("error" in response).toBe(true);
     if (!("error" in response)) {
@@ -323,6 +336,83 @@ describe("events.subscribe/events.unsubscribe dispatch", () => {
     expect(response.error?.details).toEqual({
       unsupported: ["unsupported.event"],
       supported: [...DAEMON_CAPABILITY_EVENTS],
+    });
+
+    client.end();
+    await closeServer(server);
+  });
+
+  it("returns TIMEOUT and keeps connection healthy for subsequent requests", async () => {
+    const router = createDaemonRpcRouter({
+      methodHandlers: {
+        "daemon.ping": async (request) => {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return createProtocolSuccessFrame(request.id, {
+            ok: true,
+            ts: "late",
+          });
+        },
+      },
+    });
+
+    const context: DaemonRpcContext = {
+      daemonVersion: DEFAULT_DAEMON_VERSION,
+      role: "node",
+      catalogId: null,
+      runtimeState: "running",
+      startedAt: "2026-02-22T23:00:00.000Z",
+      transport: {
+        kind: "uds",
+        path: socketPath,
+        mode: 0o600,
+      },
+    };
+
+    const server = net.createServer(
+      router.createConnectionHandler(() => context, {
+        requestTimeoutMs: 10,
+      }),
+    );
+    await listenServer(server, socketPath);
+
+    const client = net.createConnection(socketPath);
+    client.setEncoding("utf8");
+
+    await waitForConnect(client);
+    const nextFrame = createJsonLineReader(client);
+
+    client.write(
+      `${JSON.stringify({
+        id: "ping-1",
+        method: "daemon.ping",
+        params: {},
+      })}\n`,
+    );
+
+    const timeoutResponse = await nextFrame();
+    expect(timeoutResponse.id).toBe("ping-1");
+    expect(timeoutResponse.error).toMatchObject({
+      code: "TIMEOUT",
+      message: "Request execution timed out",
+      details: {
+        method: "daemon.ping",
+        timeoutMs: 10,
+      },
+    });
+
+    client.write(
+      `${JSON.stringify({
+        id: "status-1",
+        method: "daemon.status",
+        params: {},
+      })}\n`,
+    );
+
+    const statusResponse = await nextFrame();
+    expect(statusResponse.id).toBe("status-1");
+    expect(statusResponse.result).toMatchObject({
+      state: "running",
+      healthy: true,
     });
 
     client.end();

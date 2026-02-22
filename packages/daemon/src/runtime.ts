@@ -1,6 +1,11 @@
 import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
 import { createTodu, type Todu } from "@todu/engine";
-import { createDaemonRpcRouter, DEFAULT_DAEMON_VERSION } from "./rpc.js";
+import {
+  createDaemonRpcRouter,
+  type DaemonRpcMethodHandler,
+  DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
+  DEFAULT_DAEMON_VERSION,
+} from "./rpc.js";
 import {
   createUdsTransport,
   resolveUdsSocketPath,
@@ -25,6 +30,8 @@ export interface DaemonRuntimeConfig {
   socketPath?: string;
   socketMode?: number;
   daemonVersion?: string;
+  requestTimeoutMs?: number;
+  rpcMethodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -34,6 +41,7 @@ export interface ResolvedDaemonRuntimeConfig {
   socketPath: string;
   socketMode: number;
   daemonVersion: string;
+  requestTimeoutMs: number;
 }
 
 export interface DaemonRuntimeStatus {
@@ -63,6 +71,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     socketMode: config.socketMode ?? 0o600,
     daemonVersion:
       config.daemonVersion ?? process.env.TODUAI_DAEMON_VERSION ?? DEFAULT_DAEMON_VERSION,
+    requestTimeoutMs:
+      config.requestTimeoutMs ??
+      parsePositiveInteger(process.env.TODUAI_DAEMON_REQUEST_TIMEOUT_MS) ??
+      DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   };
 
   let todu: Todu | null = null;
@@ -76,26 +88,33 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     role: resolvedConfig.role,
   };
 
-  const rpcRouter = createDaemonRpcRouter();
+  const rpcRouter = createDaemonRpcRouter({
+    methodHandlers: config.rpcMethodHandlers,
+  });
 
   const transport = createUdsTransport({
     storagePath: resolvedConfig.storagePath,
     socketPath: resolvedConfig.socketPath,
     socketMode: resolvedConfig.socketMode,
-    onConnection: rpcRouter.createConnectionHandler(() => ({
-      daemonVersion: resolvedConfig.daemonVersion,
-      role: runtimeStatus.role,
-      catalogId: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
-      runtimeState: runtimeStatus.state,
-      startedAt: runtimeStatus.startedAt ?? null,
-      transport: runtimeStatus.transport
-        ? {
-            kind: runtimeStatus.transport.kind,
-            path: runtimeStatus.transport.path,
-            mode: runtimeStatus.transport.mode,
-          }
-        : null,
-    })),
+    onConnection: rpcRouter.createConnectionHandler(
+      () => ({
+        daemonVersion: resolvedConfig.daemonVersion,
+        role: runtimeStatus.role,
+        catalogId: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
+        runtimeState: runtimeStatus.state,
+        startedAt: runtimeStatus.startedAt ?? null,
+        transport: runtimeStatus.transport
+          ? {
+              kind: runtimeStatus.transport.kind,
+              path: runtimeStatus.transport.path,
+              mode: runtimeStatus.transport.mode,
+            }
+          : null,
+      }),
+      {
+        requestTimeoutMs: resolvedConfig.requestTimeoutMs,
+      },
+    ),
   });
 
   function clearEventSubscriptions(): void {
@@ -229,9 +248,27 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         socketPath: resolvedConfig.socketPath,
         socketMode: resolvedConfig.socketMode,
         daemonVersion: resolvedConfig.daemonVersion,
+        requestTimeoutMs: resolvedConfig.requestTimeoutMs,
       };
     },
   };
+}
+
+function parsePositiveInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  if (parsed < 1) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
 }
 
 async function safeStopTransport(transport: UdsTransport): Promise<void> {
