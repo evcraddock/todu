@@ -23,7 +23,7 @@ describe("createDaemonRuntime", () => {
     expect(runtime.status().state).toBe("stopped");
   });
 
-  it("starts and reports running status with catalog id", async () => {
+  it("starts and reports running status with catalog id and UDS endpoint", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir, role: "authority" });
 
     const status = await runtime.start();
@@ -32,6 +32,9 @@ describe("createDaemonRuntime", () => {
     expect(status.role).toBe("authority");
     expect(status.startedAt).toBeDefined();
     expect(status.catalogId).toBeTruthy();
+    expect(status.transport?.kind).toBe("uds");
+    expect(status.transport?.path).toBe(runtime.config().socketPath);
+    expect(fs.existsSync(runtime.config().socketPath)).toBe(true);
 
     await runtime.stop();
   });
@@ -40,12 +43,15 @@ describe("createDaemonRuntime", () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
     await runtime.start();
+    const socketPath = runtime.config().socketPath;
     await runtime.stop();
 
     const status = runtime.status();
     expect(status.state).toBe("stopped");
     expect(status.startedAt).toBeUndefined();
     expect(status.catalogId).toBeUndefined();
+    expect(status.transport).toBeUndefined();
+    expect(fs.existsSync(socketPath)).toBe(false);
   });
 
   it("treats repeated start and stop calls as safe no-ops", async () => {

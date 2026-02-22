@@ -136,3 +136,17 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - `toduai-daemon` entrypoint script for local development runs
 - Runtime config/status now represent daemon role (`node` / `authority`).
 - Scope intentionally excludes domain RPC method implementation and CLI/Electron migration.
+
+### 2026-02-22 — Task #1927
+
+- Added UDS transport listener implementation (`createUdsTransport`) in `packages/daemon/src/transport.ts`.
+- Added socket path convention:
+  - default socket path: `<storagePath>/daemon.sock`
+  - optional override via runtime config / `TODUAI_DAEMON_SOCKET`
+- Enforced local trust baseline with socket file mode `0600` after bind.
+- Implemented startup safety behavior:
+  - detect and remove stale socket files (existing socket path with no active listener)
+  - refuse startup if socket path is active
+  - refuse replacing non-socket files at socket path
+- Implemented shutdown cleanup: closes listener and removes socket file.
+- Added automated transport/runtime/process tests for bind/connect/permissions/stale handling/cleanup.

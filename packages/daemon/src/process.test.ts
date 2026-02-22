@@ -38,10 +38,14 @@ describe("startDaemonProcess", () => {
 
     expect(daemon.runtime.status().state).toBe("running");
 
+    const socketPath = daemon.runtime.config().socketPath;
+    expect(fs.existsSync(socketPath)).toBe(true);
+
     await daemon.stop("test");
     await daemon.waitForShutdown();
 
     expect(daemon.runtime.status().state).toBe("stopped");
+    expect(fs.existsSync(socketPath)).toBe(false);
     expect(events).toEqual(["started:authority", "stopping:test", "stopped"]);
   });
 });

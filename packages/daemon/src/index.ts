@@ -16,3 +16,13 @@ export {
   isDaemonRole,
   type ResolvedDaemonRuntimeConfig,
 } from "./runtime.js";
+
+export {
+  createUdsTransport,
+  DEFAULT_DAEMON_SOCKET_FILENAME,
+  DEFAULT_DAEMON_SOCKET_MODE,
+  resolveUdsSocketPath,
+  type UdsEndpoint,
+  type UdsTransport,
+  type UdsTransportConfig,
+} from "./transport.js";

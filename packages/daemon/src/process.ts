@@ -13,7 +13,6 @@ export interface DaemonProcessHooks {
 
 export interface StartDaemonProcessOptions {
   registerSignalHandlers?: boolean;
-  keepAliveIntervalMs?: number;
   hooks?: DaemonProcessHooks;
 }
 
@@ -28,11 +27,7 @@ export async function startDaemonProcess(
   options: StartDaemonProcessOptions = {},
 ): Promise<DaemonProcess> {
   const runtime = createDaemonRuntime(config);
-  const { hooks, registerSignalHandlers = true, keepAliveIntervalMs = 60_000 } = options;
-
-  const keepAliveTimer = setInterval(() => {
-    // Keep event loop alive until transport listeners are added.
-  }, keepAliveIntervalMs);
+  const { hooks, registerSignalHandlers = true } = options;
 
   let stopPromise: Promise<void> | null = null;
   let resolveShutdown: (() => void) | null = null;
@@ -63,7 +58,6 @@ export async function startDaemonProcess(
     stopPromise = (async () => {
       hooks?.onStopping?.(reason);
       unregisterSignalHandlers();
-      clearInterval(keepAliveTimer);
 
       try {
         await runtime.stop();
@@ -95,7 +89,6 @@ export async function startDaemonProcess(
     hooks?.onStarted?.(started);
   } catch (error) {
     unregisterSignalHandlers();
-    clearInterval(keepAliveTimer);
     throw error;
   }
 

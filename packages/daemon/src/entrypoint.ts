@@ -18,17 +18,21 @@ function parseDaemonRole(value: string | undefined): DaemonRole {
 
 export async function runDaemonEntrypoint(): Promise<void> {
   const daemonRole = parseDaemonRole(process.env.TODUAI_DAEMON_ROLE);
+  const daemonSocketPath = process.env.TODUAI_DAEMON_SOCKET;
   const remoteSync = resolveRemoteSyncConfig({});
 
   const daemon = await startDaemonProcess(
     {
       role: daemonRole,
+      socketPath: daemonSocketPath,
       remoteSync: remoteSync ?? undefined,
     },
     {
       hooks: {
         onStarted: (status) => {
-          console.log(`[daemon] running role=${status.role} catalog=${status.catalogId ?? "-"}`);
+          console.log(
+            `[daemon] running role=${status.role} socket=${status.transport?.path ?? "-"} catalog=${status.catalogId ?? "-"}`,
+          );
         },
         onStopping: (reason) => {
           console.log(`[daemon] stopping (${reason})`);
