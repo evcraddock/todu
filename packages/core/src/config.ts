@@ -53,10 +53,12 @@ export function resolveRemoteSyncConfig(config: ToduFileConfig): RemoteSyncConfi
 
   const server = serverEnv ?? config.sync?.remote?.server;
 
+  // Default enabled to true when a server is configured — if someone
+  // sets a sync server URL, they obviously want sync enabled.
   const enabled =
     enabledEnv !== undefined
       ? enabledEnv === "true" || enabledEnv === "1"
-      : (config.sync?.remote?.enabled ?? false);
+      : (config.sync?.remote?.enabled ?? true);
 
   if (!server || !enabled) return null;
 

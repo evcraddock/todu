@@ -211,6 +211,11 @@ export async function createTodu(
     notifySyncStatusListeners();
 
     try {
+      // Swallow async WebSocket errors during teardown — the connection may
+      // not be established yet, causing ws to emit 'error' on close().
+      if (adapter.socket && typeof adapter.socket.on === "function") {
+        adapter.socket.on("error", () => {});
+      }
       storage.repo.networkSubsystem.removeNetworkAdapter(adapter);
     } catch {
       // Adapter may not be fully initialized yet (peerMetadata Promise pending,

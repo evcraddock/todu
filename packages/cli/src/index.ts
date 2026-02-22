@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { resolveRemoteSyncConfig } from "@todu/core";
 import { createTodu, isSyncServerAvailable } from "@todu/engine";
 import { Command } from "commander";
 import { registerConfigCommands } from "./commands/config.js";
@@ -38,9 +39,11 @@ const getTodu = async () => {
   const configPath = getConfigPath(opts.config);
   const config = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, config);
-  // Skip sync detection when TODUAI_NO_SYNC is set (used by tests to force standalone mode)
-  const syncClient = process.env.TODUAI_NO_SYNC ? false : await isSyncServerAvailable();
-  return createTodu({ storagePath, syncClient });
+  // Skip all sync when TODUAI_NO_SYNC is set (used by tests to force standalone mode)
+  const noSync = !!process.env.TODUAI_NO_SYNC;
+  const syncClient = noSync ? false : await isSyncServerAvailable();
+  const remoteSync = noSync ? undefined : (resolveRemoteSyncConfig(config) ?? undefined);
+  return createTodu({ storagePath, syncClient, remoteSync });
 };
 
 // Register command groups
