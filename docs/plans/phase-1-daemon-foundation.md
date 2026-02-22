@@ -168,3 +168,18 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - protocol errors passthrough
   - timeout-like and unknown errors
 - Added protocol unit tests in `packages/daemon/src/protocol.test.ts` for valid/invalid parsing and error mapping behavior.
+
+### 2026-02-22 — Task #1929
+
+- Added daemon RPC router in `packages/daemon/src/rpc.ts` with routable `daemon.hello` handshake handling.
+- Implemented `daemon.hello` response surface with:
+  - `protocolVersion`
+  - `daemonVersion`
+  - daemon `role`
+  - deterministic capability reporting (`methods`, `events`)
+  - catalog context (`catalog.id`)
+- Implemented explicit handshake version compatibility check returning structured `PROTOCOL_MISMATCH` details (`expected`, `received`).
+- Wired UDS transport connection handler to protocol router in daemon runtime so newline-delimited JSON requests are parsed and responded to over the daemon socket.
+- Added handshake tests:
+  - router unit tests in `packages/daemon/src/rpc.test.ts`
+  - runtime UDS routing handshake verification in `packages/daemon/src/runtime.test.ts`.

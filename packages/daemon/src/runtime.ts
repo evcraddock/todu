@@ -1,5 +1,6 @@
 import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
 import { createTodu, type Todu } from "@todu/engine";
+import { createDaemonRpcRouter, DEFAULT_DAEMON_VERSION } from "./rpc.js";
 import {
   createUdsTransport,
   resolveUdsSocketPath,
@@ -23,6 +24,7 @@ export interface DaemonRuntimeConfig {
   remoteSync?: RemoteSyncConfig;
   socketPath?: string;
   socketMode?: number;
+  daemonVersion?: string;
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -31,6 +33,7 @@ export interface ResolvedDaemonRuntimeConfig {
   remoteSync?: RemoteSyncConfig;
   socketPath: string;
   socketMode: number;
+  daemonVersion: string;
 }
 
 export interface DaemonRuntimeStatus {
@@ -58,13 +61,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     remoteSync: config.remoteSync,
     socketPath: resolvedSocketPath,
     socketMode: config.socketMode ?? 0o600,
+    daemonVersion:
+      config.daemonVersion ?? process.env.TODUAI_DAEMON_VERSION ?? DEFAULT_DAEMON_VERSION,
   };
-
-  const transport = createUdsTransport({
-    storagePath: resolvedConfig.storagePath,
-    socketPath: resolvedConfig.socketPath,
-    socketMode: resolvedConfig.socketMode,
-  });
 
   let todu: Todu | null = null;
   let startPromise: Promise<DaemonRuntimeStatus> | null = null;
@@ -74,6 +73,19 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     state: "stopped",
     role: resolvedConfig.role,
   };
+
+  const rpcRouter = createDaemonRpcRouter();
+
+  const transport = createUdsTransport({
+    storagePath: resolvedConfig.storagePath,
+    socketPath: resolvedConfig.socketPath,
+    socketMode: resolvedConfig.socketMode,
+    onConnection: rpcRouter.createConnectionHandler(() => ({
+      daemonVersion: resolvedConfig.daemonVersion,
+      role: runtimeStatus.role,
+      catalogId: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
+    })),
+  });
 
   function cloneStatus(): DaemonRuntimeStatus {
     return {
@@ -179,6 +191,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         remoteSync: resolvedConfig.remoteSync,
         socketPath: resolvedConfig.socketPath,
         socketMode: resolvedConfig.socketMode,
+        daemonVersion: resolvedConfig.daemonVersion,
       };
     },
   };

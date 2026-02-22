@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DAEMON_PROTOCOL_VERSION } from "./rpc.js";
 import { createDaemonRuntime } from "./runtime.js";
 
 describe("createDaemonRuntime", () => {
@@ -19,6 +21,7 @@ describe("createDaemonRuntime", () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
     expect(runtime.config().role).toBe("node");
+    expect(runtime.config().daemonVersion.length).toBeGreaterThan(0);
     expect(runtime.status().role).toBe("node");
     expect(runtime.status().state).toBe("stopped");
   });
@@ -35,6 +38,40 @@ describe("createDaemonRuntime", () => {
     expect(status.transport?.kind).toBe("uds");
     expect(status.transport?.path).toBe(runtime.config().socketPath);
     expect(fs.existsSync(runtime.config().socketPath)).toBe(true);
+
+    await runtime.stop();
+  });
+
+  it("routes daemon.hello over UDS with handshake response", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      role: "authority",
+      daemonVersion: "1.2.3",
+    });
+
+    await runtime.start();
+
+    const response = await sendRequest(runtime.config().socketPath, {
+      id: "req-1",
+      method: "daemon.hello",
+      params: {
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+      },
+    });
+
+    expect(response.id).toBe("req-1");
+    expect(response.result).toEqual({
+      protocolVersion: DAEMON_PROTOCOL_VERSION,
+      daemonVersion: "1.2.3",
+      role: "authority",
+      capabilities: {
+        methods: ["daemon.hello"],
+        events: [],
+      },
+      catalog: {
+        id: runtime.status().catalogId,
+      },
+    });
 
     await runtime.stop();
   });
@@ -67,3 +104,44 @@ describe("createDaemonRuntime", () => {
     await expect(runtime.stop()).resolves.toBeUndefined();
   });
 });
+
+function sendRequest(
+  socketPath: string,
+  request: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const client = net.createConnection(socketPath);
+
+    let buffer = "";
+
+    client.setEncoding("utf8");
+
+    client.once("error", reject);
+
+    client.once("connect", () => {
+      client.write(`${JSON.stringify(request)}\n`);
+    });
+
+    client.on("data", (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      if (lines.length === 0) {
+        return;
+      }
+
+      const first = lines[0];
+      if (!first) {
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(first) as Record<string, unknown>);
+        client.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
