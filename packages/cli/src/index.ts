@@ -1,17 +1,5 @@
 #!/usr/bin/env node
 
-// Suppress Node.js TimeoutNegativeWarning caused by @automerge/automerge-repo's
-// throttle helper passing negative delays to setTimeout. This is an upstream bug
-// (automerge-repo ≤2.5.3) — harmless, but noisy on stderr.
-const _origEmitWarning = process.emitWarning;
-process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
-  if (typeof warning === "string" && warning.includes("is a negative number")) {
-    return;
-  }
-  // biome-ignore lint/suspicious/noExplicitAny: overriding built-in with pass-through
-  return (_origEmitWarning as any).call(process, warning, ...args);
-}) as typeof process.emitWarning;
-
 import { resolveRemoteSyncConfig } from "@todu/core";
 import { createTodu, isSyncServerAvailable } from "@todu/engine";
 import { Command } from "commander";
@@ -27,6 +15,11 @@ import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
 import { setColorEnabled } from "./format.js";
 import { VERSION } from "./version.js";
+import { installTimeoutNegativeWarningFilter } from "./warnings.js";
+
+// Suppress noisy Node.js TimeoutNegativeWarning caused by
+// @automerge/automerge-repo passing negative delays to setTimeout.
+installTimeoutNegativeWarningFilter();
 
 const program = new Command();
 
