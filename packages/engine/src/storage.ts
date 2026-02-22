@@ -66,20 +66,22 @@ export interface Storage {
  * Initialize storage: create data directory, set up Automerge repo,
  * and load or create the catalog document.
  */
-export async function initStorage(storagePath: string): Promise<Storage> {
+export async function initStorage(storagePath: string, repo?: Repo): Promise<Storage> {
   // Ensure data directory exists
   fs.mkdirSync(storagePath, { recursive: true });
 
-  // Create Automerge repo with filesystem storage
-  const repo = new Repo({
-    storage: new NodeFSStorageAdapter(storagePath),
-  });
+  // Use provided repo or create a new one with filesystem storage
+  const actualRepo =
+    repo ??
+    new Repo({
+      storage: new NodeFSStorageAdapter(storagePath),
+    });
 
   // Load or create catalog document
-  const catalog = await loadOrCreateCatalog(repo, storagePath);
+  const catalog = await loadOrCreateCatalog(actualRepo, storagePath);
 
   return {
-    repo,
+    repo: actualRepo,
     catalog,
     ephemeral: false,
     async close() {
@@ -89,12 +91,12 @@ export async function initStorage(storagePath: string): Promise<Storage> {
       // Requesting documents have no local content to persist, so ignoring
       // the error is safe and correct.
       try {
-        await repo.flush();
+        await actualRepo.flush();
       } catch {
         // Safe to ignore — requesting docs have no content to save
       }
       try {
-        await repo.shutdown();
+        await actualRepo.shutdown();
       } catch {
         // shutdown() calls flush() internally — same safe-to-ignore error
       }

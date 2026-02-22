@@ -1,5 +1,10 @@
-import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo";
+import {
+  type PeerCandidatePayload,
+  type PeerDisconnectedPayload,
+  Repo,
+} from "@automerge/automerge-repo";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
@@ -74,6 +79,7 @@ export async function createTodu(
   // Standalone: persistent repo, no sync
   let syncServer: SyncServer | null = null;
   let storage: Storage;
+  let initialRemoteAdapter: WebSocketClientAdapter | null = null;
 
   if (config?.syncClient) {
     // Mode 2: CLI as ephemeral sync client
@@ -86,7 +92,18 @@ export async function createTodu(
     storage = await ephemeral.findCatalog();
   } else {
     // Mode 1 (standalone) or Electron (sync server)
-    storage = await initStorage(resolvedConfig.storagePath);
+    //
+    // When remote sync is configured, the adapter MUST be connected before
+    // loading the catalog. On join, the catalog document ID points to a
+    // remote document not in local storage — without a network peer,
+    // repo.find() marks it "unavailable" and throws.
+    const repo = new Repo({
+      storage: new NodeFSStorageAdapter(resolvedConfig.storagePath),
+    });
+    if (config?.remoteSync) {
+      initialRemoteAdapter = addRemoteSyncAdapter(repo, config.remoteSync.server);
+    }
+    storage = await initStorage(resolvedConfig.storagePath, repo);
 
     if (config?.syncServer) {
       syncServer = startSyncServer(storage.repo, config.syncPort);
@@ -153,7 +170,14 @@ export async function createTodu(
       notifySyncStatusListeners();
     };
 
-    remoteAdapter = addRemoteSyncAdapter(storage.repo, config.remoteSync.server);
+    // Reuse the adapter created during init (before catalog load) to avoid
+    // a duplicate WebSocket connection. Only create a new one on restart.
+    if (initialRemoteAdapter) {
+      remoteAdapter = initialRemoteAdapter;
+      initialRemoteAdapter = null;
+    } else {
+      remoteAdapter = addRemoteSyncAdapter(storage.repo, config.remoteSync.server);
+    }
     remoteAdapter.on("peer-candidate", onPeerCandidate);
     remoteAdapter.on("peer-disconnected", onPeerDisconnected);
     remoteAdapter.on("close", onClose);
