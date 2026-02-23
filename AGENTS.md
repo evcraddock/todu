@@ -45,6 +45,7 @@ After creating or updating task descriptions:
 
 ## No Discretionary Commands (MANDATORY)
 
+Run commands **only** if they are explicitly required by (1) the user's request or (2) a cited step in the active skill/instructions.
 No exploratory/helpful extras. If a command is not clearly required, ask first.
 If violated, stop immediately and report the deviation before continuing.
 
