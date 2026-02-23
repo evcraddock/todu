@@ -244,6 +244,33 @@ describe("createDaemonRpcRouter", () => {
     });
   });
 
+  it("returns UNSUPPORTED_CAPABILITY for reserved worker namespace methods", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
+      {
+        id: "worker-status-1",
+        method: "worker.status",
+        params: {},
+      },
+      context,
+    );
+
+    expect("error" in response).toBe(true);
+    if (!("error" in response)) {
+      throw new Error("Expected unsupported capability response");
+    }
+
+    expect(response.error).toEqual({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Namespace is reserved but not implemented: worker",
+      details: {
+        namespace: "worker",
+        method: "worker.status",
+      },
+    });
+  });
+
   it("maps invalid JSON payloads to BAD_REQUEST through handlePayload", async () => {
     const router = createDaemonRpcRouter();
 

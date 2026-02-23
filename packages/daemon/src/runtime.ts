@@ -1,9 +1,6 @@
 import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
 import { createTodu, type Todu } from "@todu/engine";
-import {
-  createProjectTaskLabelNoteNamespaceHandlers,
-  mergeNamespaceHandlerSets,
-} from "./core-rpc-adapters.js";
+import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
   createDaemonRpcRouter,
   type DaemonRpcMethodHandler,
@@ -94,7 +91,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     role: resolvedConfig.role,
   };
 
-  const defaultNamespaceHandlers = createProjectTaskLabelNoteNamespaceHandlers({
+  const defaultNamespaceHandlers = createCoreNamespaceHandlers({
     getTodu: () => todu,
   });
 
