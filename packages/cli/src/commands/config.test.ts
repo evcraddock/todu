@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("config CLI commands", () => {
   let tmpDir: string;
@@ -56,19 +57,24 @@ describe("config CLI commands", () => {
     expect(output).toContain("--config flag");
   });
 
-  it("--config flag routes data to config data_dir", { timeout: 30000 }, () => {
+  it("--config flag routes data to config data_dir", { timeout: 30000 }, async () => {
     run("config init");
     const configPath = path.join(tmpDir, ".toduai", "config.yaml");
+    const dataDir = path.join(tmpDir, ".toduai", "data");
 
-    // Create a project using the dev config
-    run(`--config ${configPath} project create --name "Dev Project"`);
-    const output = run(`--config ${configPath} --format json project list`);
-    const projects = JSON.parse(output);
-    expect(projects).toHaveLength(1);
-    expect(projects[0].name).toBe("Dev Project");
+    const daemon = await startDaemonForTests(rootDir, dataDir);
+    try {
+      // Create a project using the dev config
+      run(`--config ${configPath} project create --name "Dev Project"`);
+      const output = run(`--config ${configPath} --format json project list`);
+      const projects = JSON.parse(output);
+      expect(projects).toHaveLength(1);
+      expect(projects[0].name).toBe("Dev Project");
+    } finally {
+      await daemon.stop("test-cleanup");
+    }
 
     // Data should be in .toduai/data/
-    const dataDir = path.join(tmpDir, ".toduai", "data");
     expect(fs.existsSync(dataDir)).toBe(true);
   });
 });

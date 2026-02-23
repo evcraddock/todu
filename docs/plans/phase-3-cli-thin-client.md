@@ -107,3 +107,19 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - unavailable daemon (`ENOENT`) path
   - request timeout path
   - connect timeout path
+
+### 2026-02-23 — Task #1939
+
+- Migrated `project`, `task`, `label`, and `note` command groups to daemon RPC routing.
+  - Added CLI daemon command invoker utility in `packages/cli/src/daemon-command-client.ts`.
+  - Routed command handlers to core RPC methods (`project.*`, `task.*`, `label.*`, `note.*`) instead of direct `createTodu()` ownership paths.
+- Preserved command UX and output semantics while switching transport path.
+  - Existing table/JSON output formats remain unchanged for migrated command groups.
+  - Existing name/ID resolution behavior for project/label references remains unchanged.
+- Added explicit fail-fast UX for daemon-unavailable conditions in migrated command groups.
+  - User-facing error now states daemon requirement and remediation: start local daemon and retry.
+- Added daemon-mode CLI integration coverage for migrated command groups by updating integration tests to run commands against a real daemon process.
+  - Updated `project.test.ts`, `task.test.ts`, `label-note.test.ts`, and `config.test.ts`.
+  - Added daemon-unavailable regression assertion in `project.test.ts`.
+- Kept non-migrated command tests stable.
+  - Updated recurring test setup/assertion paths to avoid cross-mode coupling until recurring/task migration task is complete.

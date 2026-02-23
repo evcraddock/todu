@@ -1,8 +1,7 @@
 import type { Note, NoteEntityType } from "@todu/core";
-import { createNoteId, createProjectId } from "@todu/core";
-import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
-import { formatError, formatJSON, formatTable } from "../format.js";
+import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
+import { formatJSON, formatTable } from "../format.js";
 
 const NOTE_COLUMNS = [
   { key: "id", label: "ID" },
@@ -34,7 +33,37 @@ function noteDetail(n: Note): string {
   return lines.join("\n");
 }
 
-export function registerNoteCommands(program: Command, getTodu: () => Promise<Todu>): void {
+async function resolveProjectId(
+  invokeDaemon: CliDaemonInvoker,
+  ref: string,
+): Promise<{ ok: true; value: string } | { ok: false; message: string }> {
+  const byId = await invokeDaemon<{ id: string }>("project.get", { id: ref });
+  if (byId.ok) {
+    return { ok: true, value: byId.value.id };
+  }
+
+  if (byId.error.code !== "NOT_FOUND") {
+    return { ok: false, message: formatDaemonCommandError(byId.error) };
+  }
+
+  const list = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+  if (!list.ok) {
+    return { ok: false, message: formatDaemonCommandError(list.error) };
+  }
+
+  const matches = list.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
+  if (matches.length === 1) {
+    return { ok: true, value: matches[0].id };
+  }
+
+  if (matches.length > 1) {
+    return { ok: false, message: `Multiple projects match "${ref}". Use the project ID instead.` };
+  }
+
+  return { ok: false, message: `Project not found: ${ref}` };
+}
+
+export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const note = program.command("note").description("Manage notes and journal entries");
 
   note
@@ -45,61 +74,46 @@ export function registerNoteCommands(program: Command, getTodu: () => Promise<To
     .option("--tag <tags...>", "tags")
     .option("--author <author>", "author (default: user)")
     .action(async (content, opts) => {
-      const todu = await getTodu();
-      try {
-        let entityType: NoteEntityType | undefined;
-        let entityId: string | undefined;
+      let entityType: NoteEntityType | undefined;
+      let entityId: string | undefined;
 
-        if (opts.task) {
-          entityType = "task";
-          entityId = opts.task;
-        } else if (opts.project) {
-          // Resolve project by name or ID
-          const projResult = await todu.project.get(createProjectId(opts.project));
-          if (projResult.ok) {
-            entityType = "project";
-            entityId = projResult.value.id;
-          } else {
-            const list = await todu.project.list();
-            if (list.ok) {
-              const match = list.value.find(
-                (p) => p.name.toLowerCase() === opts.project.toLowerCase(),
-              );
-              if (match) {
-                entityType = "project";
-                entityId = match.id;
-              } else {
-                console.error(`Project not found: ${opts.project}`);
-                process.exitCode = 1;
-                return;
-              }
-            }
-          }
+      if (opts.task) {
+        entityType = "task";
+        entityId = opts.task;
+      } else if (opts.project) {
+        const project = await resolveProjectId(invokeDaemon, opts.project);
+        if (!project.ok) {
+          console.error(project.message);
+          process.exitCode = 1;
+          return;
         }
 
-        const result = await todu.note.create({
+        entityType = "project";
+        entityId = project.value;
+      }
+
+      const result = await invokeDaemon<Note>("note.create", {
+        input: {
           content,
           entityType,
           entityId,
           tags: opts.tag,
           author: opts.author,
-        });
+        },
+      });
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Note added:");
-          console.log(noteDetail(result.value));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Note added:");
+        console.log(noteDetail(result.value));
       }
     });
 
@@ -111,63 +125,46 @@ export function registerNoteCommands(program: Command, getTodu: () => Promise<To
     .option("--tag <tag>", "filter by tag")
     .option("--author <author>", "filter by author")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        let entityType: NoteEntityType | undefined;
-        let entityId: string | undefined;
+      let entityType: NoteEntityType | undefined;
+      let entityId: string | undefined;
 
-        if (opts.task) {
-          entityType = "task";
-          entityId = opts.task;
-        } else if (opts.project) {
-          // Resolve project
-          const projResult = await todu.project.get(createProjectId(opts.project));
-          if (projResult.ok) {
-            entityType = "project";
-            entityId = projResult.value.id;
-          } else {
-            const list = await todu.project.list();
-            if (list.ok) {
-              const match = list.value.find(
-                (p) => p.name.toLowerCase() === opts.project.toLowerCase(),
-              );
-              if (match) {
-                entityType = "project";
-                entityId = match.id;
-              } else {
-                console.error(`Project not found: ${opts.project}`);
-                process.exitCode = 1;
-                return;
-              }
-            }
-          }
-        }
-
-        const result = await todu.note.list({
-          entityType,
-          entityId,
-          tag: opts.tag,
-          author: opts.author,
-        });
-
-        if (!result.ok) {
-          console.error(formatError(result.error));
+      if (opts.task) {
+        entityType = "task";
+        entityId = opts.task;
+      } else if (opts.project) {
+        const project = await resolveProjectId(invokeDaemon, opts.project);
+        if (!project.ok) {
+          console.error(project.message);
           process.exitCode = 1;
           return;
         }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          if (result.value.length === 0) {
-            console.log("No notes.");
-          } else {
-            console.log(formatTable(result.value.map(noteToRow), NOTE_COLUMNS));
-          }
-        }
-      } finally {
-        await todu.close();
+        entityType = "project";
+        entityId = project.value;
+      }
+
+      const result = await invokeDaemon<Note[]>("note.list", {
+        filter: {
+          entityType,
+          entityId,
+          tag: opts.tag,
+          author: opts.author,
+        },
+      });
+
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else if (result.value.length === 0) {
+        console.log("No notes.");
+      } else {
+        console.log(formatTable(result.value.map(noteToRow), NOTE_COLUMNS));
       }
     });
 
@@ -175,22 +172,18 @@ export function registerNoteCommands(program: Command, getTodu: () => Promise<To
     .command("delete <id>")
     .description("Delete a note")
     .action(async (id) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.note.delete(createNoteId(id));
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON({ deleted: id }));
-        } else {
-          console.log(`Deleted note: ${id}`);
-        }
-      } finally {
-        await todu.close();
+      const result = await invokeDaemon<null>("note.delete", { id });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON({ deleted: id }));
+      } else {
+        console.log(`Deleted note: ${id}`);
       }
     });
 }

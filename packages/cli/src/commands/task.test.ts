@@ -3,9 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("task CLI commands", () => {
   let tmpDir: string;
+  let daemon: DaemonHandle | null = null;
   const rootDir = path.resolve(__dirname, "../../../..");
   const cliPath = path.resolve(rootDir, "packages/cli/dist/index.js");
 
@@ -13,11 +15,17 @@ describe("task CLI commands", () => {
     execSync("npm run build", { cwd: rootDir, stdio: "pipe", timeout: 30000 });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-task-test-"));
+    daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (daemon) {
+      await daemon.stop("test-cleanup");
+      daemon = null;
+    }
+
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

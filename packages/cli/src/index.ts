@@ -13,6 +13,7 @@ import { registerServeCommand } from "./commands/serve.js";
 import { registerSyncCommands } from "./commands/sync.js";
 import { registerTaskCommands } from "./commands/task.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "./config.js";
+import { createCliDaemonInvoker } from "./daemon-command-client.js";
 import { setColorEnabled } from "./format.js";
 import { VERSION } from "./version.js";
 import { installTimeoutNegativeWarningFilter } from "./warnings.js";
@@ -51,12 +52,14 @@ const getTodu = async () => {
   return createTodu({ storagePath, syncClient, remoteSync });
 };
 
+const invokeDaemon = createCliDaemonInvoker(program);
+
 // Register command groups
 registerServeCommand(program);
-registerProjectCommands(program, getTodu);
-registerTaskCommands(program, getTodu);
-registerLabelCommands(program, getTodu);
-registerNoteCommands(program, getTodu);
+registerProjectCommands(program, invokeDaemon);
+registerTaskCommands(program, invokeDaemon);
+registerLabelCommands(program, invokeDaemon);
+registerNoteCommands(program, invokeDaemon);
 registerRecurringCommands(program, getTodu);
 registerHabitCommands(program, getTodu);
 registerSyncCommands(program, getTodu);

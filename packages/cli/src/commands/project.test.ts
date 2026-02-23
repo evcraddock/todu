@@ -3,13 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
-/**
- * CLI integration test — builds then runs the actual CLI binary.
- * Uses TODUAI_DATA_DIR env var to isolate storage.
- */
 describe("project CLI commands", () => {
   let tmpDir: string;
+  let daemon: DaemonHandle | null = null;
   const rootDir = path.resolve(__dirname, "../../../..");
   const cliPath = path.resolve(rootDir, "packages/cli/dist/index.js");
 
@@ -18,11 +16,17 @@ describe("project CLI commands", () => {
     execSync("npm run build", { cwd: rootDir, stdio: "pipe", timeout: 30000 });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-test-"));
+    daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (daemon) {
+      await daemon.stop("test-cleanup");
+      daemon = null;
+    }
+
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -103,6 +107,16 @@ describe("project CLI commands", () => {
     // Show nonexistent
     const showErr = run("project show nonexistent", true);
     expect(showErr).toContain("not found");
+  });
+
+  it("fails fast when daemon is unavailable", async () => {
+    if (daemon) {
+      await daemon.stop("unavailable-test");
+      daemon = null;
+    }
+
+    const output = run("project list", true);
+    expect(output).toContain("local daemon is required but unavailable");
   });
 
   it("list returns 'No results.' when empty", () => {
