@@ -13,6 +13,7 @@
     "build:daemon": "npm run --workspace=packages/daemon build",
     "build:cli": "npm run --workspace=packages/cli build",
     "test": "vitest run",
+    "test:conformance": "vitest run packages/daemon/src/protocol-conformance.test.ts",
     "test:watch": "vitest",
     "check": "biome check --write --error-on-warnings . && npm run typecheck",
     "check:ci": "biome check --error-on-warnings . && npm run typecheck",
