@@ -2,12 +2,12 @@
 
 import { Command } from "commander";
 import { registerConfigCommands } from "./commands/config.js";
+import { registerDaemonCommands } from "./commands/daemon.js";
 import { registerHabitCommands } from "./commands/habit.js";
 import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
 import { registerProjectCommands } from "./commands/project.js";
 import { registerRecurringCommands } from "./commands/recurring.js";
-import { registerServeCommand } from "./commands/serve.js";
 import { registerSyncCommands } from "./commands/sync.js";
 import { registerTaskCommands } from "./commands/task.js";
 import { createCliDaemonInvoker } from "./daemon-command-client.js";
@@ -37,7 +37,7 @@ program
 const invokeDaemon = createCliDaemonInvoker(program);
 
 // Register command groups
-registerServeCommand(program);
+registerDaemonCommands(program, invokeDaemon);
 registerProjectCommands(program, invokeDaemon);
 registerTaskCommands(program, invokeDaemon);
 registerLabelCommands(program, invokeDaemon);

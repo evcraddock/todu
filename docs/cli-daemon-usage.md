@@ -2,9 +2,17 @@
 
 `toduai` now runs in daemon-first mode for task/project/label/note/recurring/habit/sync command groups.
 
+The legacy `toduai serve` path has been removed.
+
 ## Start the local daemon
 
-Use the daemon package entrypoint:
+Use the CLI lifecycle command:
+
+```bash
+toduai daemon run
+```
+
+You can also run the daemon binary directly:
 
 ```bash
 toduai-daemon
@@ -29,10 +37,11 @@ Override with:
 ## Validate connectivity
 
 ```bash
-toduai sync status
+toduai daemon status
+toduai --format json daemon status
 ```
 
-If the daemon is healthy, this returns sync/local mode status.
+If the daemon is healthy, status reports `running: true` and includes daemon health details.
 
 ## Expected fail-fast errors
 
