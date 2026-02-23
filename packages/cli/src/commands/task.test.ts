@@ -1,12 +1,9 @@
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-
-interface DaemonHandle {
-  stop(reason?: string): Promise<void>;
-}
+import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("task CLI commands", () => {
   let tmpDir: string;
@@ -20,7 +17,7 @@ describe("task CLI commands", () => {
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-task-test-"));
-    daemon = await startDaemon(rootDir, tmpDir);
+    daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
   afterEach(async () => {
@@ -181,65 +178,3 @@ describe("task CLI commands", () => {
     expect(createErr).toContain("not found");
   });
 });
-
-async function startDaemon(rootDir: string, storagePath: string): Promise<DaemonHandle> {
-  const daemonEntrypoint = path.resolve(rootDir, "packages/daemon/dist/entrypoint.js");
-  const socketPath = path.join(storagePath, "daemon.sock");
-  const daemonProcess = spawn("node", [daemonEntrypoint], {
-    cwd: rootDir,
-    env: { ...process.env, TODUAI_DATA_DIR: storagePath },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  let stderr = "";
-  daemonProcess.stderr?.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
-  });
-
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(socketPath)) {
-      return {
-        stop: async () => {
-          await stopProcess(daemonProcess);
-        },
-      };
-    }
-
-    if (daemonProcess.exitCode !== null) {
-      throw new Error(`Daemon exited early with code ${daemonProcess.exitCode}: ${stderr}`);
-    }
-
-    await sleep(50);
-  }
-
-  throw new Error(`Timed out waiting for daemon socket: ${socketPath}\n${stderr}`);
-}
-
-async function stopProcess(processHandle: ReturnType<typeof spawn>): Promise<void> {
-  if (processHandle.exitCode !== null) {
-    return;
-  }
-
-  processHandle.kill("SIGTERM");
-
-  await new Promise<void>((resolve) => {
-    const timeout = setTimeout(() => {
-      if (processHandle.exitCode === null) {
-        processHandle.kill("SIGKILL");
-      }
-      resolve();
-    }, 3000);
-
-    processHandle.once("exit", () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-  });
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}

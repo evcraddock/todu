@@ -51,12 +51,16 @@ async function resolveProjectId(
     return { ok: false, message: formatDaemonCommandError(list.error) };
   }
 
-  const match = list.value.find((p) => p.name.toLowerCase() === ref.toLowerCase());
-  if (!match) {
-    return { ok: false, message: `Project not found: ${ref}` };
+  const matches = list.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
+  if (matches.length === 1) {
+    return { ok: true, value: matches[0].id };
   }
 
-  return { ok: true, value: match.id };
+  if (matches.length > 1) {
+    return { ok: false, message: `Multiple projects match "${ref}". Use the project ID instead.` };
+  }
+
+  return { ok: false, message: `Project not found: ${ref}` };
 }
 
 export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
