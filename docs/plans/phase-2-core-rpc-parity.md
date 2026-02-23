@@ -116,3 +116,17 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - `packages/daemon/src/rpc.test.ts`
   - `packages/daemon/src/runtime.test.ts`
   - `packages/daemon/src/protocol-conformance.test.ts`
+
+### 2026-02-22 — Task #1935
+
+- Added daemon RPC adapter handlers for `project.*`, `task.*`, `label.*`, and `note.*` in `packages/daemon/src/core-rpc-adapters.ts`.
+- Wired adapters into runtime defaults so these namespaces are callable over daemon protocol without per-task manual registration.
+- Added deterministic request-param validation (`BAD_REQUEST`) for missing/invalid adapter params.
+- Added stable `Result<T, E>` → protocol mapping for adapted domains:
+  - successful `Result` values map to protocol success frames
+  - domain errors map through protocol error taxonomy (`NOT_FOUND`, `VALIDATION_ERROR`, etc.)
+- Normalized void success results (`Result<void>`) to `result: null` to preserve protocol success envelope shape.
+- Added/expanded runtime + conformance coverage for:
+  - callable project/task/label/note methods
+  - domain and request validation error mapping
+  - unchanged fallback `UNSUPPORTED_CAPABILITY` behavior for still-unadapted namespaces (for example `recurring.*`).

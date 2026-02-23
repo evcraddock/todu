@@ -170,27 +170,414 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
-  it("returns UNSUPPORTED_CAPABILITY for known core methods without runtime adapters", async () => {
+  it("routes project namespace CRUD methods through runtime adapters", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
     await runtime.start();
 
-    const response = await sendRequest(runtime.config().socketPath, {
-      id: "project-list-unsupported",
+    const createResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-create-1",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Work",
+          description: "Initial",
+        },
+      },
+    });
+
+    const createdProject = createResponse.result as { id?: string; name?: string };
+    expect(createResponse.id).toBe("project-create-1");
+    expect(typeof createdProject.id).toBe("string");
+    expect(createdProject.name).toBe("Work");
+
+    const projectId = createdProject.id as string;
+
+    const listResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-list-1",
       method: "project.list",
       params: {},
     });
 
-    expect(response).toEqual({
-      id: "project-list-unsupported",
-      error: {
-        code: "UNSUPPORTED_CAPABILITY",
-        message: "Method is not implemented: project.list",
-        details: {
-          namespace: "project",
-          method: "project.list",
-          capability: "project.list",
+    expect(listResponse.id).toBe("project-list-1");
+    expect(listResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: projectId, name: "Work" })]),
+    );
+
+    const getResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-get-1",
+      method: "project.get",
+      params: {
+        id: projectId,
+      },
+    });
+
+    expect(getResponse.id).toBe("project-get-1");
+    expect(getResponse.result).toEqual(expect.objectContaining({ id: projectId, name: "Work" }));
+
+    const updateResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-update-1",
+      method: "project.update",
+      params: {
+        id: projectId,
+        input: {
+          name: "Work Updated",
+          priority: "high",
         },
+      },
+    });
+
+    expect(updateResponse.id).toBe("project-update-1");
+    expect(updateResponse.result).toEqual(
+      expect.objectContaining({ id: projectId, name: "Work Updated", priority: "high" }),
+    );
+
+    const deleteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-delete-1",
+      method: "project.delete",
+      params: {
+        id: projectId,
+      },
+    });
+
+    expect(deleteResponse).toEqual({
+      id: "project-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes task namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const sourceProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-source-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Source Project",
+        },
+      },
+    });
+
+    const targetProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-target-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Target Project",
+        },
+      },
+    });
+
+    const sourceProjectId = (sourceProjectResponse.result as { id: string }).id;
+    const targetProjectId = (targetProjectResponse.result as { id: string }).id;
+
+    const createTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-create-1",
+      method: "task.create",
+      params: {
+        input: {
+          title: "Ship feature",
+          projectId: sourceProjectId,
+          description: "Route through daemon",
+          labels: ["phase2"],
+        },
+      },
+    });
+
+    const createdTask = createTaskResponse.result as { id: string };
+    const taskId = createdTask.id;
+
+    const listTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-list-1",
+      method: "task.list",
+      params: {
+        filter: {
+          projectId: sourceProjectId,
+        },
+      },
+    });
+
+    expect(listTaskResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: taskId, title: "Ship feature" })]),
+    );
+
+    const getTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-get-1",
+      method: "task.get",
+      params: {
+        id: taskId,
+      },
+    });
+
+    expect(getTaskResponse.result).toEqual(
+      expect.objectContaining({ id: taskId, description: "Route through daemon" }),
+    );
+
+    const updateTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-update-1",
+      method: "task.update",
+      params: {
+        id: taskId,
+        input: {
+          status: "inprogress",
+          priority: "high",
+        },
+      },
+    });
+
+    expect(updateTaskResponse.result).toEqual(
+      expect.objectContaining({ id: taskId, status: "inprogress", priority: "high" }),
+    );
+
+    const moveTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-move-1",
+      method: "task.move",
+      params: {
+        id: taskId,
+        projectId: targetProjectId,
+      },
+    });
+
+    expect(moveTaskResponse.result).toEqual(
+      expect.objectContaining({ id: taskId, projectId: targetProjectId }),
+    );
+
+    const searchTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-search-1",
+      method: "task.search",
+      params: {
+        query: "ship",
+      },
+    });
+
+    expect(searchTaskResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: taskId })]),
+    );
+
+    const deleteTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-delete-1",
+      method: "task.delete",
+      params: {
+        id: taskId,
+      },
+    });
+
+    expect(deleteTaskResponse).toEqual({
+      id: "task-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes label and note namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const createLabelResponse = await sendRequest(runtime.config().socketPath, {
+      id: "label-create-1",
+      method: "label.create",
+      params: {
+        input: {
+          name: "blocked",
+          color: "#ff0000",
+        },
+      },
+    });
+
+    const labelId = (createLabelResponse.result as { id: string }).id;
+
+    const listLabelResponse = await sendRequest(runtime.config().socketPath, {
+      id: "label-list-1",
+      method: "label.list",
+      params: {},
+    });
+
+    expect(listLabelResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: labelId, name: "blocked" })]),
+    );
+
+    const updateLabelResponse = await sendRequest(runtime.config().socketPath, {
+      id: "label-update-1",
+      method: "label.update",
+      params: {
+        id: labelId,
+        input: {
+          name: "blocked-now",
+        },
+      },
+    });
+
+    expect(updateLabelResponse.result).toEqual(
+      expect.objectContaining({ id: labelId, name: "blocked-now" }),
+    );
+
+    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-note-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Note Project",
+        },
+      },
+    });
+
+    const projectId = (createProjectResponse.result as { id: string }).id;
+
+    const createNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-create-1",
+      method: "note.create",
+      params: {
+        input: {
+          content: "Capture context",
+          author: "agent",
+          entityType: "project",
+          entityId: projectId,
+          tags: ["phase-2"],
+        },
+      },
+    });
+
+    const noteId = (createNoteResponse.result as { id: string }).id;
+
+    const listNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-list-1",
+      method: "note.list",
+      params: {
+        filter: {
+          entityType: "project",
+          entityId: projectId,
+        },
+      },
+    });
+
+    expect(listNoteResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: noteId, content: "Capture context" })]),
+    );
+
+    const updateNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-update-1",
+      method: "note.update",
+      params: {
+        id: noteId,
+        input: {
+          content: "Capture updated context",
+        },
+      },
+    });
+
+    expect(updateNoteResponse.result).toEqual(
+      expect.objectContaining({ id: noteId, content: "Capture updated context" }),
+    );
+
+    const deleteNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-delete-1",
+      method: "note.delete",
+      params: {
+        id: noteId,
+      },
+    });
+
+    expect(deleteNoteResponse).toEqual({
+      id: "note-delete-1",
+      result: null,
+    });
+
+    const deleteLabelResponse = await sendRequest(runtime.config().socketPath, {
+      id: "label-delete-1",
+      method: "label.delete",
+      params: {
+        id: labelId,
+      },
+    });
+
+    expect(deleteLabelResponse).toEqual({
+      id: "label-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("maps domain and request validation errors for project/task/label/note methods", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const badRequestResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-get-bad-request",
+      method: "project.get",
+      params: {
+        id: 42,
+      },
+    });
+
+    expect(badRequestResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "project.get requires params.id as a non-empty string",
+      details: {
+        field: "id",
+      },
+    });
+
+    const notFoundResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-get-not-found",
+      method: "project.get",
+      params: {
+        id: "proj-missing",
+      },
+    });
+
+    expect(notFoundResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "project not found: proj-missing",
+      details: {
+        entity: "project",
+        id: "proj-missing",
+      },
+    });
+
+    const validationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "label-create-validation",
+      method: "label.create",
+      params: {
+        input: {
+          name: "",
+        },
+      },
+    });
+
+    expect(validationResponse.error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        field: "name",
+      },
+    });
+
+    const noteNotFoundResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-create-not-found",
+      method: "note.create",
+      params: {
+        input: {
+          content: "Attached note",
+          entityType: "project",
+          entityId: "proj-missing",
+        },
+      },
+    });
+
+    expect(noteNotFoundResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "project not found: proj-missing",
+      details: {
+        entity: "project",
+        id: "proj-missing",
       },
     });
 
