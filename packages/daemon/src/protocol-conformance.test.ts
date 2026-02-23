@@ -137,23 +137,53 @@ describe("daemon protocol conformance suite", () => {
     );
   });
 
-  it("returns UNSUPPORTED_CAPABILITY for known core methods without adapters", async () => {
+  it("routes project namespace methods through default runtime adapters", async () => {
     await withRunningRuntime({}, async (runtime) => {
-      const response = await sendRequest(runtime.config().socketPath, {
-        id: "project-list-unsupported",
+      const createResponse = await sendRequest(runtime.config().socketPath, {
+        id: "project-create-default",
+        method: "project.create",
+        params: {
+          input: {
+            name: "Conformance",
+          },
+        },
+      });
+
+      expect(createResponse.id).toBe("project-create-default");
+      expect(createResponse.result).toMatchObject({
+        name: "Conformance",
+      });
+
+      const listResponse = await sendRequest(runtime.config().socketPath, {
+        id: "project-list-default",
         method: "project.list",
         params: {},
       });
 
+      expect(listResponse.id).toBe("project-list-default");
+      expect(listResponse.result).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "Conformance" })]),
+      );
+    });
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for namespaces not yet adapted", async () => {
+    await withRunningRuntime({}, async (runtime) => {
+      const response = await sendRequest(runtime.config().socketPath, {
+        id: "recurring-list-unsupported",
+        method: "recurring.list",
+        params: {},
+      });
+
       expect(response).toEqual({
-        id: "project-list-unsupported",
+        id: "recurring-list-unsupported",
         error: {
           code: "UNSUPPORTED_CAPABILITY",
-          message: "Method is not implemented: project.list",
+          message: "Method is not implemented: recurring.list",
           details: {
-            namespace: "project",
-            method: "project.list",
-            capability: "project.list",
+            namespace: "recurring",
+            method: "recurring.list",
+            capability: "recurring.list",
           },
         },
       });
