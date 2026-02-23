@@ -3,7 +3,11 @@ import net, { type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { DAEMON_PROTOCOL_VERSION, type DaemonRpcMethodHandler } from "./rpc.js";
+import {
+  DAEMON_PROTOCOL_VERSION,
+  type DaemonRpcMethodHandler,
+  type DaemonRpcNamespaceHandlers,
+} from "./rpc.js";
 import { createDaemonRuntime } from "./runtime.js";
 
 describe("daemon protocol conformance suite", () => {
@@ -98,6 +102,60 @@ describe("daemon protocol conformance suite", () => {
         protocolVersion: DAEMON_PROTOCOL_VERSION,
         state: "running",
         healthy: true,
+      });
+    });
+  });
+
+  it("routes known core namespace methods when registered", async () => {
+    await withRunningRuntime(
+      {
+        rpcNamespaceHandlers: {
+          project: {
+            list: (request) => ({
+              id: request.id,
+              result: {
+                source: "conformance-project-list",
+              },
+            }),
+          },
+        },
+      },
+      async (runtime) => {
+        const response = await sendRequest(runtime.config().socketPath, {
+          id: "project-list-registered",
+          method: "project.list",
+          params: {},
+        });
+
+        expect(response).toEqual({
+          id: "project-list-registered",
+          result: {
+            source: "conformance-project-list",
+          },
+        });
+      },
+    );
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for known core methods without adapters", async () => {
+    await withRunningRuntime({}, async (runtime) => {
+      const response = await sendRequest(runtime.config().socketPath, {
+        id: "project-list-unsupported",
+        method: "project.list",
+        params: {},
+      });
+
+      expect(response).toEqual({
+        id: "project-list-unsupported",
+        error: {
+          code: "UNSUPPORTED_CAPABILITY",
+          message: "Method is not implemented: project.list",
+          details: {
+            namespace: "project",
+            method: "project.list",
+            capability: "project.list",
+          },
+        },
       });
     });
   });
@@ -229,6 +287,7 @@ interface RuntimeHarnessConfig {
   daemonVersion?: string;
   requestTimeoutMs?: number;
   rpcMethodHandlers?: Record<string, DaemonRpcMethodHandler>;
+  rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
 }
 
 async function withRunningRuntime(
@@ -241,6 +300,7 @@ async function withRunningRuntime(
     daemonVersion: config.daemonVersion,
     requestTimeoutMs: config.requestTimeoutMs,
     rpcMethodHandlers: config.rpcMethodHandlers,
+    rpcNamespaceHandlers: config.rpcNamespaceHandlers,
   });
 
   try {

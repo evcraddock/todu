@@ -97,3 +97,22 @@ Every task must include a documentation step in the same PR (or explicitly justi
 1. Daemon method surface is functionally equivalent to current engine behavior
 2. Client migration phases can begin without method-surface churn
 3. Event contract is stable enough for persistent UI clients
+
+## Progress Notes
+
+### 2026-02-22 — Task #1934
+
+- Added a namespace/method dispatch table in `packages/daemon/src/rpc.ts` for core namespaces:
+  - `project`, `task`, `label`, `note`, `recurring`, `habit`, `sync`
+- Added a single routing flow that resolves handlers by `<namespace>.<method>` with support for:
+  - namespace-level handler registration (`namespaceHandlers`)
+  - explicit method overrides (`methodHandlers`)
+- Added fallback behavior for recognized-but-unimplemented core methods:
+  - returns structured `UNSUPPORTED_CAPABILITY`
+- Preserved unknown method behavior:
+  - unrecognized methods still return structured `METHOD_NOT_FOUND`
+- Extended runtime wiring to accept namespace handler registration via `rpcNamespaceHandlers`.
+- Added routing coverage in tests:
+  - `packages/daemon/src/rpc.test.ts`
+  - `packages/daemon/src/runtime.test.ts`
+  - `packages/daemon/src/protocol-conformance.test.ts`

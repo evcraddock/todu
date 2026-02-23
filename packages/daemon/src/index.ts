@@ -24,6 +24,8 @@ export {
 } from "./protocol.js";
 
 export {
+  CORE_DAEMON_NAMESPACE_METHODS,
+  type CoreDaemonNamespace,
   createDaemonRpcRouter,
   DAEMON_CAPABILITY_EVENTS,
   DAEMON_CAPABILITY_METHODS,
@@ -33,6 +35,9 @@ export {
   type DaemonPingResult,
   type DaemonRpcContext,
   type DaemonRpcMethodHandler,
+  type DaemonRpcNamespace,
+  type DaemonRpcNamespaceHandlers,
+  type DaemonRpcNamespaceMethodTable,
   type DaemonRpcResponse,
   type DaemonRpcRouter,
   type DaemonRuntimeStateSnapshot,
