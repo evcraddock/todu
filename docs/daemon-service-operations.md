@@ -2,7 +2,7 @@
 
 This is the recommended way to run `toduai-daemon` continuously.
 
-`to duai` CLI commands are daemon-backed, so running the daemon as a user service avoids manual restarts after reboot/login.
+`toduai` CLI commands are daemon-backed, so running the daemon as a user service avoids manual restarts after reboot/login.
 
 ## Recommendation
 

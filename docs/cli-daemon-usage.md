@@ -4,7 +4,7 @@
 
 The legacy `toduai serve` path has been removed.
 
-For always-on daemon startup (recommended), use OS service manager setup from [`docs/daemon-service-operations.md`](daemon-service-operations.md).
+For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
 ## Start the local daemon
 
