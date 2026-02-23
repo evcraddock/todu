@@ -152,3 +152,18 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - socket resolution/override behavior
   - troubleshooting guidance for unavailable/timeout/protocol mismatch failures
 - Linked operator notes from `docs/CONTRIBUTING.md` tooling section for discoverability.
+
+### 2026-02-23 — Task #1987
+
+- Removed legacy `serve` command path from CLI runtime surface.
+  - Deleted `packages/cli/src/commands/serve.ts`.
+  - Removed serve command registration from `packages/cli/src/index.ts`.
+- Added explicit daemon lifecycle command group in CLI:
+  - `daemon run` (foreground daemon process)
+  - `daemon status` (running/not-running health output in text/json)
+  - implemented in `packages/cli/src/commands/daemon.ts`.
+- Added daemon command integration coverage in `packages/cli/src/commands/daemon.test.ts`:
+  - daemon status unavailable/running cases
+  - daemon run foreground startup behavior
+  - regression assertion that `serve` command is no longer available
+- Updated operator docs (`docs/cli-daemon-usage.md`) to reflect daemon lifecycle command usage.
