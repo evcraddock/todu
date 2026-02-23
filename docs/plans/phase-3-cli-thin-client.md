@@ -90,3 +90,20 @@ Every task must include a documentation step in the same PR (or explicitly justi
 1. CLI is operationally simple and deterministic (one daemon target per invocation)
 2. Mixed ownership ambiguity is eliminated from CLI behavior
 3. CLI remains feature-equivalent while using daemon transport
+
+## Progress Notes
+
+### 2026-02-23 — Task #1938
+
+- Added reusable CLI daemon transport utility in `packages/cli/src/daemon-transport.ts`.
+- Added `createDaemonTransportClient()` + `invokeDaemonMethod()` request lifecycle wrappers for command-module migration work.
+- Implemented deterministic fail-fast behavior aligned with architecture policy:
+  - connect timeout default: `1000ms`
+  - request timeout default: `10000ms`
+  - unavailable daemon maps to `DAEMON_UNAVAILABLE`
+  - request timeout maps to `TIMEOUT`
+- Added focused transport unit coverage in `packages/cli/src/daemon-transport.test.ts`:
+  - handshake + request success path
+  - unavailable daemon (`ENOENT`) path
+  - request timeout path
+  - connect timeout path
