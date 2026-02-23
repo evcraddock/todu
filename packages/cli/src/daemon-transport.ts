@@ -281,31 +281,17 @@ async function sendRequestFrame(
     if (remaining <= 0) {
       return {
         ok: false,
-        error: {
-          code: "TIMEOUT",
-          message: `Daemon request timed out after ${timeoutMs}ms`,
-          details: {
-            method: request.method,
-            timeoutMs,
-          },
-        },
+        error: createRequestTimeoutError(request.method, timeoutMs),
       };
     }
 
     let frame: unknown;
     try {
       frame = await reader.next(remaining);
-    } catch {
+    } catch (error) {
       return {
         ok: false,
-        error: {
-          code: "TIMEOUT",
-          message: `Daemon request timed out after ${timeoutMs}ms`,
-          details: {
-            method: request.method,
-            timeoutMs,
-          },
-        },
+        error: mapReaderError(error, request.method, timeoutMs),
       };
     }
 
@@ -501,6 +487,56 @@ function parseIncomingFrame(
       message: "Daemon response frame shape is invalid",
     },
   };
+}
+
+function mapReaderError(error: unknown, method: string, timeoutMs: number): DaemonTransportError {
+  if (isDaemonTransportError(error)) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.startsWith("Timed out waiting for daemon response")) {
+    return createRequestTimeoutError(method, timeoutMs);
+  }
+
+  if (
+    error instanceof Error &&
+    error.message === "Daemon connection closed before response was received"
+  ) {
+    return {
+      code: "DAEMON_UNAVAILABLE",
+      message: error.message,
+      details: {
+        method,
+      },
+    };
+  }
+
+  return {
+    code: "INTERNAL_ERROR",
+    message: getErrorMessage(error),
+    details: {
+      method,
+    },
+  };
+}
+
+function createRequestTimeoutError(method: string, timeoutMs: number): DaemonTransportError {
+  return {
+    code: "TIMEOUT",
+    message: `Daemon request timed out after ${timeoutMs}ms`,
+    details: {
+      method,
+      timeoutMs,
+    },
+  };
+}
+
+function isDaemonTransportError(value: unknown): value is DaemonTransportError {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.code === "string" && typeof value.message === "string";
 }
 
 function isProtocolHelloResult(value: unknown, expectedProtocolVersion: string): boolean {

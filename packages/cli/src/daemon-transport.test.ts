@@ -161,6 +161,59 @@ describe("daemon transport client", () => {
     );
   });
 
+  it("preserves BAD_RESPONSE when daemon emits invalid json", async () => {
+    const socketPath = createSocketPath();
+
+    const server = net.createServer((socket) => {
+      socket.setEncoding("utf8");
+      let buffer = "";
+
+      socket.on("data", (chunk: string) => {
+        buffer += chunk;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const frame = JSON.parse(line) as { id: string; method: string };
+
+          if (frame.method === "daemon.hello") {
+            socket.write(
+              `${JSON.stringify({
+                id: frame.id,
+                result: {
+                  protocolVersion: "1",
+                  daemonVersion: "test",
+                  role: "node",
+                  capabilities: { methods: [], events: [] },
+                  catalog: { id: null },
+                },
+              })}\n`,
+            );
+            continue;
+          }
+
+          if (frame.method === "daemon.ping") {
+            socket.write("{not-json}\n");
+          }
+        }
+      });
+    });
+
+    await listen(server, socketPath);
+    cleanup.push(() => closeServer(server));
+
+    const client = createDaemonTransportClient({ socketPath, requestTimeoutMs: 40 });
+    const response = await client.request("daemon.ping", {});
+
+    expect(response.ok).toBe(false);
+    if (response.ok) {
+      throw new Error("Expected BAD_RESPONSE error");
+    }
+
+    expect(response.error.code).toBe("BAD_RESPONSE");
+    expect(response.error.message).toBe("Daemon returned invalid JSON response");
+  });
+
   it("returns DAEMON_UNAVAILABLE on connect timeout", async () => {
     const hangingSocket = new HangingSocket();
     const client = createDaemonTransportClient({
