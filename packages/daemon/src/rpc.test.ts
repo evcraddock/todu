@@ -187,6 +187,63 @@ describe("createDaemonRpcRouter", () => {
     expect(response.error.code).toBe("METHOD_NOT_FOUND");
   });
 
+  it("routes known core namespace methods through namespace handlers", async () => {
+    const router = createDaemonRpcRouter({
+      namespaceHandlers: {
+        project: {
+          list: (request) =>
+            createProtocolSuccessFrame(request.id, {
+              source: "project.list",
+            }),
+        },
+      },
+    });
+
+    const response = await router.handleRequest(
+      {
+        id: "project-list-1",
+        method: "project.list",
+        params: {},
+      },
+      context,
+    );
+
+    expect(response).toEqual({
+      id: "project-list-1",
+      result: {
+        source: "project.list",
+      },
+    });
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for known core methods without adapters", async () => {
+    const router = createDaemonRpcRouter();
+
+    const response = await router.handleRequest(
+      {
+        id: "project-list-unsupported",
+        method: "project.list",
+        params: {},
+      },
+      context,
+    );
+
+    expect("error" in response).toBe(true);
+    if (!("error" in response)) {
+      throw new Error("Expected unsupported capability error response");
+    }
+
+    expect(response.error).toEqual({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Method is not implemented: project.list",
+      details: {
+        namespace: "project",
+        method: "project.list",
+        capability: "project.list",
+      },
+    });
+  });
+
   it("maps invalid JSON payloads to BAD_REQUEST through handlePayload", async () => {
     const router = createDaemonRpcRouter();
 

@@ -3,6 +3,7 @@ import { createTodu, type Todu } from "@todu/engine";
 import {
   createDaemonRpcRouter,
   type DaemonRpcMethodHandler,
+  type DaemonRpcNamespaceHandlers,
   DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
@@ -32,6 +33,7 @@ export interface DaemonRuntimeConfig {
   daemonVersion?: string;
   requestTimeoutMs?: number;
   rpcMethodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
+  rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -90,6 +92,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   const rpcRouter = createDaemonRpcRouter({
     methodHandlers: config.rpcMethodHandlers,
+    namespaceHandlers: config.rpcNamespaceHandlers,
   });
 
   const transport = createUdsTransport({

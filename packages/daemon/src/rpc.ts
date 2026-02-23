@@ -23,7 +23,47 @@ export const DAEMON_CAPABILITY_METHODS = [
 ];
 export const DAEMON_CAPABILITY_EVENTS = ["data.changed", "sync.statusChanged"] as const;
 
+export const CORE_DAEMON_NAMESPACE_METHODS = {
+  project: ["create", "list", "get", "update", "delete"],
+  task: ["create", "list", "get", "update", "delete", "move", "search"],
+  label: ["create", "list", "update", "delete"],
+  note: ["create", "list", "update", "delete"],
+  recurring: [
+    "create",
+    "list",
+    "get",
+    "update",
+    "delete",
+    "pause",
+    "resume",
+    "upcoming",
+    "generate",
+    "process",
+  ],
+  habit: [
+    "create",
+    "list",
+    "get",
+    "update",
+    "delete",
+    "pause",
+    "resume",
+    "check",
+    "uncheck",
+    "streak",
+    "history",
+  ],
+  sync: ["start", "stop", "status", "catalogId"],
+} as const;
+
 export type DaemonCapabilityEvent = (typeof DAEMON_CAPABILITY_EVENTS)[number];
+export type CoreDaemonNamespace = keyof typeof CORE_DAEMON_NAMESPACE_METHODS;
+
+export type DaemonRpcNamespace = "daemon" | "events" | CoreDaemonNamespace;
+export type DaemonRpcNamespaceMethodTable = Record<string, DaemonRpcMethodHandler>;
+export type DaemonRpcNamespaceHandlers = Partial<
+  Record<DaemonRpcNamespace, DaemonRpcNamespaceMethodTable>
+>;
 
 export interface DaemonHelloResult {
   protocolVersion: string;
@@ -97,6 +137,7 @@ export type DaemonRpcMethodHandler = (
 
 export interface CreateDaemonRpcRouterOptions {
   methodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
+  namespaceHandlers?: DaemonRpcNamespaceHandlers;
 }
 
 interface ConnectionHandlerOptions {
@@ -124,18 +165,12 @@ export interface DaemonRpcRouter {
 export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}): DaemonRpcRouter {
   const connections = new Set<DaemonConnection>();
 
-  const defaultHandlers: Record<string, DaemonRpcMethodHandler> = {
-    "daemon.hello": (request, context) => handleDaemonHello(request, context),
-    "daemon.ping": (request) => handleDaemonPing(request),
-    "daemon.status": (request, context) => handleDaemonStatus(request, context),
-    "events.subscribe": (request, _context, connection) =>
-      handleEventsSubscribe(request, connection),
-    "events.unsubscribe": (request, _context, connection) =>
-      handleEventsUnsubscribe(request, connection),
-  };
+  const namespaceHandlers = mergeNamespaceHandlers(
+    createDefaultNamespaceHandlers(),
+    options.namespaceHandlers ?? {},
+  );
 
   const methodHandlers: Record<string, DaemonRpcMethodHandler | undefined> = {
-    ...defaultHandlers,
     ...(options.methodHandlers ?? {}),
   };
 
@@ -144,7 +179,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     context: DaemonRpcContext,
     connection?: DaemonConnection,
   ): Promise<DaemonRpcResponse> {
-    const handler = methodHandlers[request.method];
+    const handler = resolveMethodHandler(request.method, namespaceHandlers, methodHandlers);
 
     if (!handler) {
       return createProtocolErrorFrame(
@@ -330,6 +365,131 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
       return delivered;
     },
   };
+}
+
+function createDefaultNamespaceHandlers(): DaemonRpcNamespaceHandlers {
+  return {
+    daemon: {
+      hello: (request, context) => handleDaemonHello(request, context),
+      ping: (request) => handleDaemonPing(request),
+      status: (request, context) => handleDaemonStatus(request, context),
+    },
+    events: {
+      subscribe: (request, _context, connection) => handleEventsSubscribe(request, connection),
+      unsubscribe: (request, _context, connection) => handleEventsUnsubscribe(request, connection),
+    },
+    ...createCoreNamespaceFallbackHandlers(),
+  };
+}
+
+function createCoreNamespaceFallbackHandlers(): DaemonRpcNamespaceHandlers {
+  const handlers: DaemonRpcNamespaceHandlers = {};
+
+  const namespaces = Object.entries(CORE_DAEMON_NAMESPACE_METHODS) as Array<
+    [CoreDaemonNamespace, readonly string[]]
+  >;
+
+  for (const [namespace, methods] of namespaces) {
+    const methodHandlers: DaemonRpcNamespaceMethodTable = {};
+
+    for (const method of methods) {
+      methodHandlers[method] = createUnsupportedCapabilityHandler(namespace, method);
+    }
+
+    handlers[namespace] = methodHandlers;
+  }
+
+  return handlers;
+}
+
+function createUnsupportedCapabilityHandler(
+  namespace: CoreDaemonNamespace,
+  methodName: string,
+): DaemonRpcMethodHandler {
+  const fullMethod = `${namespace}.${methodName}`;
+
+  return (request) =>
+    createProtocolErrorFrame(
+      request.id,
+      createProtocolError(
+        "UNSUPPORTED_CAPABILITY",
+        `Method is not implemented: ${request.method}`,
+        {
+          namespace,
+          method: request.method,
+          capability: fullMethod,
+        },
+      ),
+    );
+}
+
+function mergeNamespaceHandlers(
+  base: DaemonRpcNamespaceHandlers,
+  overrides: DaemonRpcNamespaceHandlers,
+): DaemonRpcNamespaceHandlers {
+  const merged: DaemonRpcNamespaceHandlers = {};
+
+  const namespaces = new Set<DaemonRpcNamespace>([
+    ...(Object.keys(base) as DaemonRpcNamespace[]),
+    ...(Object.keys(overrides) as DaemonRpcNamespace[]),
+  ]);
+
+  for (const namespace of namespaces) {
+    merged[namespace] = {
+      ...(base[namespace] ?? {}),
+      ...(overrides[namespace] ?? {}),
+    };
+  }
+
+  return merged;
+}
+
+function resolveMethodHandler(
+  method: string,
+  namespaceHandlers: DaemonRpcNamespaceHandlers,
+  methodHandlers: Record<string, DaemonRpcMethodHandler | undefined>,
+): DaemonRpcMethodHandler | undefined {
+  const directHandler = methodHandlers[method];
+  if (directHandler) {
+    return directHandler;
+  }
+
+  const parsed = parseMethod(method);
+  if (!parsed) {
+    return undefined;
+  }
+
+  return namespaceHandlers[parsed.namespace]?.[parsed.methodName];
+}
+
+function parseMethod(
+  value: string,
+): { namespace: DaemonRpcNamespace; methodName: string } | undefined {
+  const separatorIndex = value.indexOf(".");
+
+  if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
+    return undefined;
+  }
+
+  const namespace = value.slice(0, separatorIndex);
+  const methodName = value.slice(separatorIndex + 1);
+
+  if (!isDaemonRpcNamespace(namespace)) {
+    return undefined;
+  }
+
+  return {
+    namespace,
+    methodName,
+  };
+}
+
+function isDaemonRpcNamespace(value: string): value is DaemonRpcNamespace {
+  if (value === "daemon" || value === "events") {
+    return true;
+  }
+
+  return value in CORE_DAEMON_NAMESPACE_METHODS;
 }
 
 function handleDaemonHello(

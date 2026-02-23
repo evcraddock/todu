@@ -3,6 +3,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createProtocolSuccessFrame } from "./protocol.js";
 import {
   DAEMON_CAPABILITY_EVENTS,
   DAEMON_CAPABILITY_METHODS,
@@ -132,6 +133,64 @@ describe("createDaemonRuntime", () => {
       },
       catalog: {
         id: runtimeStatus.catalogId,
+      },
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes known core namespace methods through runtime namespace handlers", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      rpcNamespaceHandlers: {
+        project: {
+          list: (request) =>
+            createProtocolSuccessFrame(request.id, {
+              source: "runtime-project-list",
+            }),
+        },
+      },
+    });
+
+    await runtime.start();
+
+    const response = await sendRequest(runtime.config().socketPath, {
+      id: "project-list-1",
+      method: "project.list",
+      params: {},
+    });
+
+    expect(response).toEqual({
+      id: "project-list-1",
+      result: {
+        source: "runtime-project-list",
+      },
+    });
+
+    await runtime.stop();
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for known core methods without runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const response = await sendRequest(runtime.config().socketPath, {
+      id: "project-list-unsupported",
+      method: "project.list",
+      params: {},
+    });
+
+    expect(response).toEqual({
+      id: "project-list-unsupported",
+      error: {
+        code: "UNSUPPORTED_CAPABILITY",
+        message: "Method is not implemented: project.list",
+        details: {
+          namespace: "project",
+          method: "project.list",
+          capability: "project.list",
+        },
       },
     });
 
