@@ -1,8 +1,8 @@
-import type { Project, ProjectId, ProjectStatus } from "@todu/core";
-import { createProjectId, isProjectStatus } from "@todu/core";
-import type { Todu } from "@todu/engine";
+import type { Project, ProjectStatus } from "@todu/core";
+import { isProjectStatus } from "@todu/core";
 import type { Command } from "commander";
-import { colorPriority, colorStatus, formatError, formatJSON, formatTable } from "../format.js";
+import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
+import { colorPriority, colorStatus, formatJSON, formatTable } from "../format.js";
 
 const PROJECT_COLUMNS = [
   { key: "id", label: "ID" },
@@ -40,19 +40,30 @@ function projectDetail(p: Project): string {
  * Resolve a project reference — try as ID first, then search by name.
  */
 async function resolveProject(
-  todu: Todu,
+  invokeDaemon: CliDaemonInvoker,
   ref: string,
 ): Promise<{ ok: true; value: Project } | { ok: false; message: string }> {
   // Try as ID
-  const byId = await todu.project.get(createProjectId(ref) as ProjectId);
-  if (byId.ok) return byId;
+  const byId = await invokeDaemon<Project>("project.get", { id: ref });
+  if (byId.ok) {
+    return byId;
+  }
+
+  if (byId.error.code !== "NOT_FOUND") {
+    return { ok: false, message: formatDaemonCommandError(byId.error) };
+  }
 
   // Try name search
-  const list = await todu.project.list();
-  if (!list.ok) return { ok: false, message: formatError(list.error) };
+  const list = await invokeDaemon<Project[]>("project.list", {});
+  if (!list.ok) {
+    return { ok: false, message: formatDaemonCommandError(list.error) };
+  }
 
   const matches = list.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
-  if (matches.length === 1) return { ok: true, value: matches[0] };
+  if (matches.length === 1) {
+    return { ok: true, value: matches[0] };
+  }
+
   if (matches.length > 1) {
     return { ok: false, message: `Multiple projects match "${ref}". Use the project ID instead.` };
   }
@@ -60,7 +71,7 @@ async function resolveProject(
   return { ok: false, message: `Project not found: ${ref}` };
 }
 
-export function registerProjectCommands(program: Command, getTodu: () => Promise<Todu>): void {
+export function registerProjectCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const project = program.command("project").description("Manage projects");
 
   // create
@@ -71,29 +82,26 @@ export function registerProjectCommands(program: Command, getTodu: () => Promise
     .option("--description <desc>", "project description")
     .option("--priority <priority>", "priority (low, medium, high)", "medium")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.project.create({
+      const result = await invokeDaemon<Project>("project.create", {
+        input: {
           name: opts.name,
           description: opts.description,
           priority: opts.priority,
-        });
+        },
+      });
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Project created:");
-          console.log(projectDetail(result.value));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Project created:");
+        console.log(projectDetail(result.value));
       }
     });
 
@@ -103,34 +111,29 @@ export function registerProjectCommands(program: Command, getTodu: () => Promise
     .description("List projects")
     .option("--status <status>", "filter by status (active, done, canceled)")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.project.list();
+      const result = await invokeDaemon<Project[]>("project.list", {});
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      let projects = result.value;
+      if (opts.status) {
+        if (!isProjectStatus(opts.status)) {
+          console.error(`Error: invalid status: ${opts.status}`);
           process.exitCode = 1;
           return;
         }
+        projects = projects.filter((p) => p.status === (opts.status as ProjectStatus));
+      }
 
-        let projects = result.value;
-        if (opts.status) {
-          if (!isProjectStatus(opts.status)) {
-            console.error(`Error: invalid status: ${opts.status}`);
-            process.exitCode = 1;
-            return;
-          }
-          projects = projects.filter((p) => p.status === (opts.status as ProjectStatus));
-        }
-
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(projects));
-        } else {
-          console.log(formatTable(projects.map(projectToRow), PROJECT_COLUMNS));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(projects));
+      } else {
+        console.log(formatTable(projects.map(projectToRow), PROJECT_COLUMNS));
       }
     });
 
@@ -139,23 +142,18 @@ export function registerProjectCommands(program: Command, getTodu: () => Promise
     .command("show <ref>")
     .description("Show project details (by ID or name)")
     .action(async (ref) => {
-      const todu = await getTodu();
-      try {
-        const resolved = await resolveProject(todu, ref);
-        if (!resolved.ok) {
-          console.error(resolved.message);
-          process.exitCode = 1;
-          return;
-        }
+      const resolved = await resolveProject(invokeDaemon, ref);
+      if (!resolved.ok) {
+        console.error(resolved.message);
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(resolved.value));
-        } else {
-          console.log(projectDetail(resolved.value));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(resolved.value));
+      } else {
+        console.log(projectDetail(resolved.value));
       }
     });
 
@@ -168,37 +166,35 @@ export function registerProjectCommands(program: Command, getTodu: () => Promise
     .option("--status <status>", "new status (active, done, canceled)")
     .option("--priority <priority>", "new priority (low, medium, high)")
     .action(async (ref, opts) => {
-      const todu = await getTodu();
-      try {
-        const resolved = await resolveProject(todu, ref);
-        if (!resolved.ok) {
-          console.error(resolved.message);
-          process.exitCode = 1;
-          return;
-        }
+      const resolved = await resolveProject(invokeDaemon, ref);
+      if (!resolved.ok) {
+        console.error(resolved.message);
+        process.exitCode = 1;
+        return;
+      }
 
-        const result = await todu.project.update(resolved.value.id, {
+      const result = await invokeDaemon<Project>("project.update", {
+        id: resolved.value.id,
+        input: {
           name: opts.name,
           description: opts.description,
           status: opts.status,
           priority: opts.priority,
-        });
+        },
+      });
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Project updated:");
-          console.log(projectDetail(result.value));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Project updated:");
+        console.log(projectDetail(result.value));
       }
     });
 
@@ -207,30 +203,25 @@ export function registerProjectCommands(program: Command, getTodu: () => Promise
     .command("delete <ref>")
     .description("Delete a project (by ID or name)")
     .action(async (ref) => {
-      const todu = await getTodu();
-      try {
-        const resolved = await resolveProject(todu, ref);
-        if (!resolved.ok) {
-          console.error(resolved.message);
-          process.exitCode = 1;
-          return;
-        }
+      const resolved = await resolveProject(invokeDaemon, ref);
+      if (!resolved.ok) {
+        console.error(resolved.message);
+        process.exitCode = 1;
+        return;
+      }
 
-        const result = await todu.project.delete(resolved.value.id);
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      const result = await invokeDaemon<null>("project.delete", { id: resolved.value.id });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON({ deleted: resolved.value.id }));
-        } else {
-          console.log(`Deleted project: ${resolved.value.name} (${resolved.value.id})`);
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON({ deleted: resolved.value.id }));
+      } else {
+        console.log(`Deleted project: ${resolved.value.name} (${resolved.value.id})`);
       }
     });
 }

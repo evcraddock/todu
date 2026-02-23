@@ -1,7 +1,7 @@
 import type { Label } from "@todu/core";
-import type { Todu } from "@todu/engine";
 import type { Command } from "commander";
-import { formatError, formatJSON, formatTable } from "../format.js";
+import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
+import { formatJSON, formatTable } from "../format.js";
 
 const LABEL_COLUMNS = [
   { key: "id", label: "ID" },
@@ -24,18 +24,24 @@ function labelDetail(l: Label): string {
 }
 
 async function resolveLabel(
-  todu: Todu,
+  invokeDaemon: CliDaemonInvoker,
   ref: string,
 ): Promise<{ ok: true; value: Label } | { ok: false; message: string }> {
-  // Try as ID
-  const list = await todu.label.list();
-  if (!list.ok) return { ok: false, message: formatError(list.error) };
+  const list = await invokeDaemon<Label[]>("label.list", {});
+  if (!list.ok) {
+    return { ok: false, message: formatDaemonCommandError(list.error) };
+  }
 
   const byId = list.value.find((l) => l.id === ref);
-  if (byId) return { ok: true, value: byId };
+  if (byId) {
+    return { ok: true, value: byId };
+  }
 
   const byName = list.value.filter((l) => l.name.toLowerCase() === ref.toLowerCase());
-  if (byName.length === 1) return { ok: true, value: byName[0] };
+  if (byName.length === 1) {
+    return { ok: true, value: byName[0] };
+  }
+
   if (byName.length > 1) {
     return { ok: false, message: `Multiple labels match "${ref}". Use the label ID instead.` };
   }
@@ -43,7 +49,7 @@ async function resolveLabel(
   return { ok: false, message: `Label not found: ${ref}` };
 }
 
-export function registerLabelCommands(program: Command, getTodu: () => Promise<Todu>): void {
+export function registerLabelCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const label = program.command("label").description("Manage labels");
 
   label
@@ -52,23 +58,21 @@ export function registerLabelCommands(program: Command, getTodu: () => Promise<T
     .requiredOption("--name <name>", "label name")
     .option("--color <color>", "hex color (#RRGGBB)")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.label.create({ name: opts.name, color: opts.color });
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Label created:");
-          console.log(labelDetail(result.value));
-        }
-      } finally {
-        await todu.close();
+      const result = await invokeDaemon<Label>("label.create", {
+        input: { name: opts.name, color: opts.color },
+      });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Label created:");
+        console.log(labelDetail(result.value));
       }
     });
 
@@ -76,22 +80,18 @@ export function registerLabelCommands(program: Command, getTodu: () => Promise<T
     .command("list")
     .description("List all labels")
     .action(async () => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.label.list();
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log(formatTable(result.value.map(labelToRow), LABEL_COLUMNS));
-        }
-      } finally {
-        await todu.close();
+      const result = await invokeDaemon<Label[]>("label.list", {});
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log(formatTable(result.value.map(labelToRow), LABEL_COLUMNS));
       }
     });
 
@@ -101,32 +101,32 @@ export function registerLabelCommands(program: Command, getTodu: () => Promise<T
     .option("--name <name>", "new name")
     .option("--color <color>", "new hex color")
     .action(async (ref, opts) => {
-      const todu = await getTodu();
-      try {
-        const resolved = await resolveLabel(todu, ref);
-        if (!resolved.ok) {
-          console.error(resolved.message);
-          process.exitCode = 1;
-          return;
-        }
-        const result = await todu.label.update(resolved.value.id, {
+      const resolved = await resolveLabel(invokeDaemon, ref);
+      if (!resolved.ok) {
+        console.error(resolved.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      const result = await invokeDaemon<Label>("label.update", {
+        id: resolved.value.id,
+        input: {
           name: opts.name,
           color: opts.color,
-        });
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Label updated:");
-          console.log(labelDetail(result.value));
-        }
-      } finally {
-        await todu.close();
+        },
+      });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Label updated:");
+        console.log(labelDetail(result.value));
       }
     });
 
@@ -134,28 +134,25 @@ export function registerLabelCommands(program: Command, getTodu: () => Promise<T
     .command("delete <ref>")
     .description("Delete a label (by ID or name)")
     .action(async (ref) => {
-      const todu = await getTodu();
-      try {
-        const resolved = await resolveLabel(todu, ref);
-        if (!resolved.ok) {
-          console.error(resolved.message);
-          process.exitCode = 1;
-          return;
-        }
-        const result = await todu.label.delete(resolved.value.id);
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON({ deleted: resolved.value.id }));
-        } else {
-          console.log(`Deleted label: ${resolved.value.name} (${resolved.value.id})`);
-        }
-      } finally {
-        await todu.close();
+      const resolved = await resolveLabel(invokeDaemon, ref);
+      if (!resolved.ok) {
+        console.error(resolved.message);
+        process.exitCode = 1;
+        return;
+      }
+
+      const result = await invokeDaemon<null>("label.delete", { id: resolved.value.id });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON({ deleted: resolved.value.id }));
+      } else {
+        console.log(`Deleted label: ${resolved.value.name} (${resolved.value.id})`);
       }
     });
 }

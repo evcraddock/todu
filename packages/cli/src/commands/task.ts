@@ -1,14 +1,8 @@
-import type { ProjectId, Task, TaskSortOptions, TaskStatus, TaskWithDetail } from "@todu/core";
-import {
-  createProjectId,
-  createTaskId,
-  isTaskPriority,
-  isTaskSortField,
-  isTaskStatus,
-} from "@todu/core";
-import type { Todu } from "@todu/engine";
+import type { Task, TaskSortOptions, TaskStatus, TaskWithDetail } from "@todu/core";
+import { isTaskPriority, isTaskSortField, isTaskStatus } from "@todu/core";
 import type { Command } from "commander";
-import { colorPriority, colorStatus, formatError, formatJSON, formatTable } from "../format.js";
+import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
+import { colorPriority, colorStatus, formatJSON, formatTable } from "../format.js";
 
 const TASK_COLUMNS = [
   { key: "id", label: "ID" },
@@ -48,35 +42,52 @@ function taskDetail(t: TaskWithDetail, projectName?: string): string {
 }
 
 /**
- * Resolve a project reference to a ProjectId.
+ * Resolve a project reference to a project ID.
  * Try as ID first, then search by name.
  */
 async function resolveProjectId(
-  todu: Todu,
+  invokeDaemon: CliDaemonInvoker,
   ref: string,
-): Promise<{ ok: true; id: ProjectId; name: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; id: string; name: string } | { ok: false; message: string }> {
   // Try as ID
-  const byId = await todu.project.get(createProjectId(ref));
-  if (byId.ok) return { ok: true, id: byId.value.id, name: byId.value.name };
+  const byId = await invokeDaemon<{ id: string; name: string }>("project.get", { id: ref });
+  if (byId.ok) {
+    return { ok: true, id: byId.value.id, name: byId.value.name };
+  }
+
+  if (byId.error.code !== "NOT_FOUND") {
+    return { ok: false, message: formatDaemonCommandError(byId.error) };
+  }
 
   // Try name search
-  const list = await todu.project.list();
-  if (!list.ok) return { ok: false, message: formatError(list.error) };
+  const list = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+  if (!list.ok) {
+    return { ok: false, message: formatDaemonCommandError(list.error) };
+  }
 
   const matches = list.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
-  if (matches.length === 1) return { ok: true, id: matches[0].id, name: matches[0].name };
+  if (matches.length === 1) {
+    return { ok: true, id: matches[0].id, name: matches[0].name };
+  }
+
   if (matches.length > 1) {
     return { ok: false, message: `Multiple projects match "${ref}". Use the project ID instead.` };
   }
+
   return { ok: false, message: `Project not found: ${ref}` };
 }
 
 /**
  * Build a map of projectId → projectName for display.
  */
-async function buildProjectNameMap(todu: Todu): Promise<Record<string, string>> {
-  const result = await todu.project.list();
-  if (!result.ok) return {};
+async function buildProjectNameMap(
+  invokeDaemon: CliDaemonInvoker,
+): Promise<Record<string, string>> {
+  const result = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+  if (!result.ok) {
+    return {};
+  }
+
   const map: Record<string, string> = {};
   for (const p of result.value) {
     map[p.id] = p.name;
@@ -84,7 +95,7 @@ async function buildProjectNameMap(todu: Todu): Promise<Record<string, string>> 
   return map;
 }
 
-export function registerTaskCommands(program: Command, getTodu: () => Promise<Todu>): void {
+export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const task = program.command("task").description("Manage tasks");
 
   // create
@@ -99,16 +110,15 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .option("--due <date>", "due date (ISO format)")
     .option("--scheduled <date>", "scheduled date (ISO format)")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        const project = await resolveProjectId(todu, opts.project);
-        if (!project.ok) {
-          console.error(project.message);
-          process.exitCode = 1;
-          return;
-        }
+      const project = await resolveProjectId(invokeDaemon, opts.project);
+      if (!project.ok) {
+        console.error(project.message);
+        process.exitCode = 1;
+        return;
+      }
 
-        const result = await todu.task.create({
+      const result = await invokeDaemon<TaskWithDetail>("task.create", {
+        input: {
           title: opts.title,
           projectId: project.id,
           priority: opts.priority,
@@ -116,23 +126,21 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
           labels: opts.label,
           dueDate: opts.due,
           scheduledDate: opts.scheduled,
-        });
+        },
+      });
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Task created:");
-          console.log(taskDetail(result.value, project.name));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Task created:");
+        console.log(taskDetail(result.value, project.name));
       }
     });
 
@@ -149,78 +157,73 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .option("--sort <field>", "sort by field (priority, dueDate, createdAt, updatedAt, title)")
     .option("--asc", "sort ascending (default: descending)")
     .action(async (opts) => {
-      const todu = await getTodu();
-      try {
-        let projectId: ProjectId | undefined;
-        if (opts.project) {
-          const project = await resolveProjectId(todu, opts.project);
-          if (!project.ok) {
-            console.error(project.message);
-            process.exitCode = 1;
-            return;
-          }
-          projectId = project.id;
-        }
-
-        // Parse multi-status: --status active,inprogress
-        let status: TaskStatus | TaskStatus[] | undefined;
-        if (opts.status) {
-          const parts = opts.status.split(",").map((s: string) => s.trim());
-          for (const s of parts) {
-            if (!isTaskStatus(s)) {
-              console.error(`Error: invalid status: ${s}`);
-              process.exitCode = 1;
-              return;
-            }
-          }
-          status = parts.length === 1 ? (parts[0] as TaskStatus) : (parts as TaskStatus[]);
-        }
-
-        if (opts.priority && !isTaskPriority(opts.priority)) {
-          console.error(`Error: invalid priority: ${opts.priority}`);
+      let projectId: string | undefined;
+      if (opts.project) {
+        const project = await resolveProjectId(invokeDaemon, opts.project);
+        if (!project.ok) {
+          console.error(project.message);
           process.exitCode = 1;
           return;
         }
+        projectId = project.id;
+      }
 
-        // Parse sort
-        let sort: TaskSortOptions | undefined;
-        if (opts.sort) {
-          if (!isTaskSortField(opts.sort)) {
-            console.error(`Error: invalid sort field: ${opts.sort}`);
+      // Parse multi-status: --status active,inprogress
+      let status: TaskStatus | TaskStatus[] | undefined;
+      if (opts.status) {
+        const parts = opts.status.split(",").map((s: string) => s.trim());
+        for (const s of parts) {
+          if (!isTaskStatus(s)) {
+            console.error(`Error: invalid status: ${s}`);
             process.exitCode = 1;
             return;
           }
-          sort = { field: opts.sort, direction: opts.asc ? "asc" : "desc" };
         }
+        status = parts.length === 1 ? (parts[0] as TaskStatus) : (parts as TaskStatus[]);
+      }
 
-        const result = await todu.task.list(
-          {
-            projectId,
-            status,
-            priority: opts.priority,
-            label: opts.label,
-            overdue: opts.overdue,
-            today: opts.today,
-          },
-          sort,
-        );
+      if (opts.priority && !isTaskPriority(opts.priority)) {
+        console.error(`Error: invalid priority: ${opts.priority}`);
+        process.exitCode = 1;
+        return;
+      }
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
+      // Parse sort
+      let sort: TaskSortOptions | undefined;
+      if (opts.sort) {
+        if (!isTaskSortField(opts.sort)) {
+          console.error(`Error: invalid sort field: ${opts.sort}`);
           process.exitCode = 1;
           return;
         }
+        sort = { field: opts.sort, direction: opts.asc ? "asc" : "desc" };
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          const nameMap = await buildProjectNameMap(todu);
-          const rows = result.value.map((t) => taskToRow(t, nameMap[t.projectId]));
-          console.log(formatTable(rows, TASK_COLUMNS));
-        }
-      } finally {
-        await todu.close();
+      const result = await invokeDaemon<Task[]>("task.list", {
+        filter: {
+          projectId,
+          status,
+          priority: opts.priority,
+          label: opts.label,
+          overdue: opts.overdue,
+          today: opts.today,
+        },
+        sort,
+      });
+
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        const nameMap = await buildProjectNameMap(invokeDaemon);
+        const rows = result.value.map((t) => taskToRow(t, nameMap[t.projectId]));
+        console.log(formatTable(rows, TASK_COLUMNS));
       }
     });
 
@@ -229,24 +232,19 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .command("show <id>")
     .description("Show task details")
     .action(async (id) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.task.get(createTaskId(id));
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      const result = await invokeDaemon<TaskWithDetail>("task.get", { id });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const nameMap = await buildProjectNameMap(todu);
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log(taskDetail(result.value, nameMap[result.value.projectId]));
-        }
-      } finally {
-        await todu.close();
+      const nameMap = await buildProjectNameMap(invokeDaemon);
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log(taskDetail(result.value, nameMap[result.value.projectId]));
       }
     });
 
@@ -262,9 +260,9 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .option("--due <date>", "new due date")
     .option("--scheduled <date>", "new scheduled date")
     .action(async (id, opts) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.task.update(createTaskId(id), {
+      const result = await invokeDaemon<TaskWithDetail>("task.update", {
+        id,
+        input: {
           title: opts.title,
           status: opts.status,
           priority: opts.priority,
@@ -272,24 +270,22 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
           labels: opts.label,
           dueDate: opts.due,
           scheduledDate: opts.scheduled,
-        });
+        },
+      });
 
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const nameMap = await buildProjectNameMap(todu);
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log("Task updated:");
-          console.log(taskDetail(result.value, nameMap[result.value.projectId]));
-        }
-      } finally {
-        await todu.close();
+      const nameMap = await buildProjectNameMap(invokeDaemon);
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log("Task updated:");
+        console.log(taskDetail(result.value, nameMap[result.value.projectId]));
       }
     });
 
@@ -298,23 +294,18 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .command("delete <id>")
     .description("Delete a task")
     .action(async (id) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.task.delete(createTaskId(id));
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      const result = await invokeDaemon<null>("task.delete", { id });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON({ deleted: id }));
-        } else {
-          console.log(`Deleted task: ${id}`);
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON({ deleted: id }));
+      } else {
+        console.log(`Deleted task: ${id}`);
       }
     });
 
@@ -323,31 +314,29 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .command("move <id> <project>")
     .description("Move a task to another project")
     .action(async (id, projectRef) => {
-      const todu = await getTodu();
-      try {
-        const project = await resolveProjectId(todu, projectRef);
-        if (!project.ok) {
-          console.error(project.message);
-          process.exitCode = 1;
-          return;
-        }
+      const project = await resolveProjectId(invokeDaemon, projectRef);
+      if (!project.ok) {
+        console.error(project.message);
+        process.exitCode = 1;
+        return;
+      }
 
-        const result = await todu.task.move(createTaskId(id), project.id);
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      const result = await invokeDaemon<TaskWithDetail>("task.move", {
+        id,
+        projectId: project.id,
+      });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log(`Moved task to ${project.name}:`);
-          console.log(taskDetail(result.value, project.name));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        console.log(`Moved task to ${project.name}:`);
+        console.log(taskDetail(result.value, project.name));
       }
     });
 
@@ -356,25 +345,20 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
     .command("search <query>")
     .description("Search tasks by title")
     .action(async (query) => {
-      const todu = await getTodu();
-      try {
-        const result = await todu.task.search(query);
-        if (!result.ok) {
-          console.error(formatError(result.error));
-          process.exitCode = 1;
-          return;
-        }
+      const result = await invokeDaemon<Task[]>("task.search", { query });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
 
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          const nameMap = await buildProjectNameMap(todu);
-          const rows = result.value.map((t) => taskToRow(t, nameMap[t.projectId]));
-          console.log(formatTable(rows, TASK_COLUMNS));
-        }
-      } finally {
-        await todu.close();
+      const format = program.opts().format;
+      if (format === "json") {
+        console.log(formatJSON(result.value));
+      } else {
+        const nameMap = await buildProjectNameMap(invokeDaemon);
+        const rows = result.value.map((t) => taskToRow(t, nameMap[t.projectId]));
+        console.log(formatTable(rows, TASK_COLUMNS));
       }
     });
 
@@ -384,25 +368,23 @@ export function registerTaskCommands(program: Command, getTodu: () => Promise<To
       .command(`${name} <id>`)
       .description(description)
       .action(async (id) => {
-        const todu = await getTodu();
-        try {
-          const result = await todu.task.update(createTaskId(id), { status: targetStatus });
-          if (!result.ok) {
-            console.error(formatError(result.error));
-            process.exitCode = 1;
-            return;
-          }
+        const result = await invokeDaemon<TaskWithDetail>("task.update", {
+          id,
+          input: { status: targetStatus },
+        });
+        if (!result.ok) {
+          console.error(formatDaemonCommandError(result.error));
+          process.exitCode = 1;
+          return;
+        }
 
-          const nameMap = await buildProjectNameMap(todu);
-          const format = program.opts().format;
-          if (format === "json") {
-            console.log(formatJSON(result.value));
-          } else {
-            console.log(`Task ${targetStatus}:`);
-            console.log(taskDetail(result.value, nameMap[result.value.projectId]));
-          }
-        } finally {
-          await todu.close();
+        const nameMap = await buildProjectNameMap(invokeDaemon);
+        const format = program.opts().format;
+        if (format === "json") {
+          console.log(formatJSON(result.value));
+        } else {
+          console.log(`Task ${targetStatus}:`);
+          console.log(taskDetail(result.value, nameMap[result.value.projectId]));
         }
       });
   }

@@ -2,6 +2,8 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createProjectId } from "@todu/core";
+import { createTodu } from "@todu/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 describe("recurring CLI commands", { timeout: 30000 }, () => {
@@ -39,9 +41,9 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     }
   }
 
-  it("recurring create → list → show → upcoming → generate → pause → resume → delete flow", () => {
-    // Create a project first
-    run("project create --name RecurringTest");
+  it("recurring create → list → show → upcoming → generate → pause → resume → delete flow", async () => {
+    // Create a project directly in storage (project CLI is daemon-backed in phase 3)
+    const projectId = await createProject(tmpDir, "RecurringTest");
 
     // Create a recurring template
     const createOutput = run(
@@ -82,13 +84,12 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     expect(genTask.scheduledDate).toBe("2026-03-15");
     expect(genTask.templateId).toBe(created.id);
 
-    // Verify task appears in task list
-    const taskListJson = JSON.parse(run("task list --project RecurringTest --format json"));
-    const scheduledTask = taskListJson.find(
-      (t: Record<string, string>) => t.scheduledDate === "2026-03-15",
+    // Verify task appears in task list for the target project
+    const taskList = await listTasks(tmpDir, projectId);
+    const scheduledTask = taskList.find(
+      (t) => t.scheduledDate === "2026-03-15" && t.title === "Daily standup",
     );
     expect(scheduledTask).toBeDefined();
-    expect(scheduledTask.title).toBe("Daily standup");
 
     // Update
     run(`recurring update ${created.id} --title "Morning sync" --priority medium`);
@@ -121,3 +122,34 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     expect(output).toContain("not found");
   });
 });
+
+async function createProject(storagePath: string, name: string): Promise<string> {
+  const todu = await createTodu({ storagePath });
+  try {
+    const created = await todu.project.create({ name });
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    return created.value.id;
+  } finally {
+    await todu.close();
+  }
+}
+
+async function listTasks(
+  storagePath: string,
+  projectId: string,
+): Promise<Array<{ title: string; scheduledDate?: string }>> {
+  const todu = await createTodu({ storagePath });
+  try {
+    const tasks = await todu.task.list({ projectId: createProjectId(projectId) });
+    if (!tasks.ok) {
+      throw new Error(tasks.error.message);
+    }
+
+    return tasks.value;
+  } finally {
+    await todu.close();
+  }
+}

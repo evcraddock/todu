@@ -1,8 +1,12 @@
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+interface DaemonHandle {
+  stop(reason?: string): Promise<void>;
+}
 
 describe("config CLI commands", () => {
   let tmpDir: string;
@@ -56,19 +60,86 @@ describe("config CLI commands", () => {
     expect(output).toContain("--config flag");
   });
 
-  it("--config flag routes data to config data_dir", { timeout: 30000 }, () => {
+  it("--config flag routes data to config data_dir", { timeout: 30000 }, async () => {
     run("config init");
     const configPath = path.join(tmpDir, ".toduai", "config.yaml");
+    const dataDir = path.join(tmpDir, ".toduai", "data");
 
-    // Create a project using the dev config
-    run(`--config ${configPath} project create --name "Dev Project"`);
-    const output = run(`--config ${configPath} --format json project list`);
-    const projects = JSON.parse(output);
-    expect(projects).toHaveLength(1);
-    expect(projects[0].name).toBe("Dev Project");
+    const daemon = await startDaemon(rootDir, dataDir);
+    try {
+      // Create a project using the dev config
+      run(`--config ${configPath} project create --name "Dev Project"`);
+      const output = run(`--config ${configPath} --format json project list`);
+      const projects = JSON.parse(output);
+      expect(projects).toHaveLength(1);
+      expect(projects[0].name).toBe("Dev Project");
+    } finally {
+      await daemon.stop("test-cleanup");
+    }
 
     // Data should be in .toduai/data/
-    const dataDir = path.join(tmpDir, ".toduai", "data");
     expect(fs.existsSync(dataDir)).toBe(true);
   });
 });
+
+async function startDaemon(rootDir: string, storagePath: string): Promise<DaemonHandle> {
+  const daemonEntrypoint = path.resolve(rootDir, "packages/daemon/dist/entrypoint.js");
+  const socketPath = path.join(storagePath, "daemon.sock");
+  const daemonProcess = spawn("node", [daemonEntrypoint], {
+    cwd: rootDir,
+    env: { ...process.env, TODUAI_DATA_DIR: storagePath },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stderr = "";
+  daemonProcess.stderr?.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (fs.existsSync(socketPath)) {
+      return {
+        stop: async () => {
+          await stopProcess(daemonProcess);
+        },
+      };
+    }
+
+    if (daemonProcess.exitCode !== null) {
+      throw new Error(`Daemon exited early with code ${daemonProcess.exitCode}: ${stderr}`);
+    }
+
+    await sleep(50);
+  }
+
+  throw new Error(`Timed out waiting for daemon socket: ${socketPath}\n${stderr}`);
+}
+
+async function stopProcess(processHandle: ReturnType<typeof spawn>): Promise<void> {
+  if (processHandle.exitCode !== null) {
+    return;
+  }
+
+  processHandle.kill("SIGTERM");
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      if (processHandle.exitCode === null) {
+        processHandle.kill("SIGKILL");
+      }
+      resolve();
+    }, 3000);
+
+    processHandle.once("exit", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
