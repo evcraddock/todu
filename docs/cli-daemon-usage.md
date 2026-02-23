@@ -66,7 +66,7 @@ Meaning:
 Example output:
 
 ```text
-Error: Unsupported protocol version: <version>
+Error: Protocol version mismatch
 ```
 
 Meaning:
