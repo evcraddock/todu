@@ -178,3 +178,24 @@ Every task must include a documentation step in the same PR (or explicitly justi
 - Added doc discoverability links from:
   - `docs/cli-daemon-usage.md`
   - `docs/CONTRIBUTING.md`
+
+### 2026-02-23 — Task #1989
+
+- Added daemon lifecycle wrappers to CLI command surface in `packages/cli/src/commands/daemon.ts`:
+  - `daemon start`
+  - `daemon stop`
+  - `daemon restart`
+- Implemented deterministic lifecycle mode selection:
+  - explicit override via `TODUAI_DAEMON_LIFECYCLE_MODE`
+  - auto preference for configured service-manager delegation (systemd user unit / launchd agent)
+  - safe direct managed fallback when no service registration exists
+- Added direct fallback process management behavior:
+  - managed daemon PID file at `<data_dir>/daemon.pid`
+  - refusal to stop unmanaged daemon processes in direct mode
+- Expanded CLI integration coverage in `packages/cli/src/commands/daemon.test.ts`:
+  - direct-mode start/stop/restart success flow
+  - unmanaged-stop failure path with nonzero exit
+  - JSON failure output for invalid lifecycle mode override
+- Updated operator docs for wrapper behavior and delegation/fallback rules:
+  - `docs/daemon-service-operations.md`
+  - `docs/cli-daemon-usage.md`

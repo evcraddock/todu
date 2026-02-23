@@ -1,10 +1,15 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { resolveRemoteSyncConfig } from "@todu/core";
 import type { Command } from "commander";
 import { getConfigPath, loadConfig, resolveDataDir } from "../config.js";
-import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
+import {
+  type CliDaemonInvoker,
+  formatDaemonCommandError,
+  resolveDaemonSocketPath,
+} from "../daemon-command-client.js";
 import { formatJSON } from "../format.js";
 
 interface DaemonStatusResult {
@@ -28,6 +33,37 @@ interface DaemonStatusOutput {
   reason?: string;
 }
 
+type DaemonLifecycleAction = "start" | "stop" | "restart";
+type DaemonLifecycleMode = "direct" | "systemd-user" | "launchd";
+
+interface DaemonLifecycleResult {
+  action: DaemonLifecycleAction;
+  ok: boolean;
+  mode: DaemonLifecycleMode;
+  delegated: boolean;
+  message: string;
+  running?: boolean;
+  pid?: number;
+  details?: string;
+}
+
+interface DaemonCommandContext {
+  storagePath: string;
+  socketPath: string;
+  daemonPidPath: string;
+  daemonEntrypoint: string;
+  remoteSyncServer: string | null;
+}
+
+const DIRECT_PID_FILENAME = "daemon.pid";
+const SYSTEMD_SERVICE_NAME = "toduai-daemon";
+const SYSTEMD_SERVICE_PATH = ".config/systemd/user/toduai-daemon.service";
+const LAUNCHD_LABEL = "com.todu.daemon";
+const LAUNCHD_PLIST_PATH = "Library/LaunchAgents/com.todu.daemon.plist";
+const LIFECYCLE_MODE_ENV = "TODUAI_DAEMON_LIFECYCLE_MODE";
+const STARTUP_TIMEOUT_MS = 5_000;
+const STOP_TIMEOUT_MS = 5_000;
+
 export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const daemon = program.command("daemon").description("Manage local daemon lifecycle");
 
@@ -35,33 +71,18 @@ export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemon
     .command("run")
     .description("Run local daemon in foreground mode")
     .action(async () => {
-      const configOpt = program.opts().config as string | undefined;
-      const configPath = getConfigPath(configOpt);
-      const fileConfig = loadConfig(configPath);
-      const storagePath = resolveDataDir(configPath, fileConfig);
-      const remoteSync = resolveRemoteSyncConfig(fileConfig);
+      const context = resolveDaemonCommandContext(program);
 
-      const daemonEntrypoint = resolveDaemonEntrypoint();
-      if (!fs.existsSync(daemonEntrypoint)) {
-        console.error(`Error: daemon entrypoint not found at ${daemonEntrypoint}`);
+      if (!fs.existsSync(context.daemonEntrypoint)) {
+        console.error(`Error: daemon entrypoint not found at ${context.daemonEntrypoint}`);
         process.exitCode = 1;
         return;
       }
 
-      const childEnv: NodeJS.ProcessEnv = {
-        ...process.env,
-        TODUAI_DATA_DIR: storagePath,
-      };
-
-      if (remoteSync) {
-        childEnv.TODUAI_SYNC_SERVER = remoteSync.server;
-        childEnv.TODUAI_SYNC_ENABLED = "1";
-      }
-
-      const child = spawn(process.execPath, [daemonEntrypoint], {
+      const child = spawn(process.execPath, [context.daemonEntrypoint], {
         cwd: process.cwd(),
         stdio: "inherit",
-        env: childEnv,
+        env: createDaemonChildEnv(context),
       });
 
       const forwardSigInt = () => {
@@ -147,6 +168,661 @@ export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemon
         console.log(`Catalog: ${result.value.catalog.id}`);
       }
     });
+
+  daemon
+    .command("start")
+    .description("Start daemon via configured service manager or direct fallback")
+    .action(async () => {
+      await handleLifecycleAction("start", program, invokeDaemon);
+    });
+
+  daemon
+    .command("stop")
+    .description("Stop daemon via configured service manager or direct fallback")
+    .action(async () => {
+      await handleLifecycleAction("stop", program, invokeDaemon);
+    });
+
+  daemon
+    .command("restart")
+    .description("Restart daemon via configured service manager or direct fallback")
+    .action(async () => {
+      await handleLifecycleAction("restart", program, invokeDaemon);
+    });
+}
+
+async function handleLifecycleAction(
+  action: DaemonLifecycleAction,
+  program: Command,
+  invokeDaemon: CliDaemonInvoker,
+): Promise<void> {
+  const context = resolveDaemonCommandContext(program);
+  const format = program.opts().format;
+
+  let mode: DaemonLifecycleMode;
+  try {
+    mode = resolveLifecycleMode();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const invalidModeResult: DaemonLifecycleResult = {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message,
+    };
+
+    renderLifecycleResult(invalidModeResult, format);
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await executeLifecycleAction(action, mode, context, invokeDaemon);
+  renderLifecycleResult(result, format);
+
+  if (!result.ok) {
+    process.exitCode = 1;
+  }
+}
+
+function renderLifecycleResult(result: DaemonLifecycleResult, format: string): void {
+  if (format === "json") {
+    console.log(formatJSON(result));
+    return;
+  }
+
+  if (!result.ok) {
+    console.error(`Error: ${result.message}`);
+    console.error(`Mode: ${result.mode}`);
+    if (result.details) {
+      console.error(`Details: ${result.details}`);
+    }
+    return;
+  }
+
+  console.log(`Daemon ${result.action}: ${result.message}`);
+  console.log(`Mode: ${result.mode}${result.delegated ? " (delegated)" : ""}`);
+  if (typeof result.running === "boolean") {
+    console.log(`Running: ${result.running ? "yes" : "no"}`);
+  }
+  if (typeof result.pid === "number") {
+    console.log(`PID: ${result.pid}`);
+  }
+  if (result.details) {
+    console.log(`Details: ${result.details}`);
+  }
+}
+
+async function executeLifecycleAction(
+  action: DaemonLifecycleAction,
+  mode: DaemonLifecycleMode,
+  context: DaemonCommandContext,
+  invokeDaemon: CliDaemonInvoker,
+): Promise<DaemonLifecycleResult> {
+  if (mode === "systemd-user") {
+    return executeSystemdLifecycleAction(action);
+  }
+
+  if (mode === "launchd") {
+    return executeLaunchdLifecycleAction(action);
+  }
+
+  if (action === "start") {
+    return executeDirectStart(action, context, invokeDaemon);
+  }
+
+  if (action === "stop") {
+    return executeDirectStop(action, context, invokeDaemon, {
+      allowUnmanagedRunning: false,
+    });
+  }
+
+  const stop = await executeDirectStop("restart", context, invokeDaemon, {
+    allowUnmanagedRunning: false,
+  });
+  if (!stop.ok) {
+    return stop;
+  }
+
+  return executeDirectStart("restart", context, invokeDaemon);
+}
+
+function executeSystemdLifecycleAction(action: DaemonLifecycleAction): DaemonLifecycleResult {
+  const servicePath = path.join(os.homedir(), SYSTEMD_SERVICE_PATH);
+
+  if (!fs.existsSync(servicePath)) {
+    return {
+      action,
+      ok: false,
+      mode: "systemd-user",
+      delegated: true,
+      message: `systemd user service is not configured at ${servicePath}`,
+      details: "Create the service using docs/daemon-service-operations.md or use direct mode.",
+    };
+  }
+
+  const command = runCommand("systemctl", ["--user", action, SYSTEMD_SERVICE_NAME]);
+  if (!command.ok) {
+    return {
+      action,
+      ok: false,
+      mode: "systemd-user",
+      delegated: true,
+      message: `systemctl --user ${action} ${SYSTEMD_SERVICE_NAME} failed`,
+      details: command.message,
+    };
+  }
+
+  return {
+    action,
+    ok: true,
+    mode: "systemd-user",
+    delegated: true,
+    message: `${action} delegated to systemd user service`,
+    details: servicePath,
+  };
+}
+
+function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLifecycleResult {
+  const plistPath = path.join(os.homedir(), LAUNCHD_PLIST_PATH);
+  const uid = process.getuid?.();
+
+  if (!Number.isInteger(uid)) {
+    return {
+      action,
+      ok: false,
+      mode: "launchd",
+      delegated: true,
+      message: "launchd delegation requires a macOS user session with a numeric uid",
+    };
+  }
+
+  if (!fs.existsSync(plistPath)) {
+    return {
+      action,
+      ok: false,
+      mode: "launchd",
+      delegated: true,
+      message: `launchd plist is not configured at ${plistPath}`,
+      details: "Create the LaunchAgent using docs/daemon-service-operations.md or use direct mode.",
+    };
+  }
+
+  const domainTarget = `gui/${uid}`;
+  const serviceTarget = `${domainTarget}/${LAUNCHD_LABEL}`;
+
+  if (action === "stop") {
+    const stop = runCommand("launchctl", ["bootout", domainTarget, plistPath]);
+    if (!stop.ok && !isLaunchdAlreadyStopped(stop.message)) {
+      return {
+        action,
+        ok: false,
+        mode: "launchd",
+        delegated: true,
+        message: `launchctl bootout failed for ${serviceTarget}`,
+        details: stop.message,
+      };
+    }
+
+    return {
+      action,
+      ok: true,
+      mode: "launchd",
+      delegated: true,
+      message: "stop delegated to launchd",
+      details: plistPath,
+    };
+  }
+
+  if (action === "restart") {
+    const start = runLaunchdStart(serviceTarget, domainTarget, plistPath);
+    if (!start.ok) {
+      return {
+        action,
+        ok: false,
+        mode: "launchd",
+        delegated: true,
+        message: `launchctl restart failed for ${serviceTarget}`,
+        details: start.message,
+      };
+    }
+
+    return {
+      action,
+      ok: true,
+      mode: "launchd",
+      delegated: true,
+      message: "restart delegated to launchd",
+      details: plistPath,
+    };
+  }
+
+  const start = runLaunchdStart(serviceTarget, domainTarget, plistPath);
+  if (!start.ok) {
+    return {
+      action,
+      ok: false,
+      mode: "launchd",
+      delegated: true,
+      message: `launchctl start failed for ${serviceTarget}`,
+      details: start.message,
+    };
+  }
+
+  return {
+    action,
+    ok: true,
+    mode: "launchd",
+    delegated: true,
+    message: "start delegated to launchd",
+    details: plistPath,
+  };
+}
+
+function runLaunchdStart(
+  serviceTarget: string,
+  domainTarget: string,
+  plistPath: string,
+): CommandRunResult {
+  const print = runCommand("launchctl", ["print", serviceTarget]);
+  if (!print.ok) {
+    const bootstrap = runCommand("launchctl", ["bootstrap", domainTarget, plistPath]);
+    if (!bootstrap.ok && !isLaunchdAlreadyLoaded(bootstrap.message)) {
+      return bootstrap;
+    }
+  }
+
+  return runCommand("launchctl", ["kickstart", "-k", serviceTarget]);
+}
+
+function isLaunchdAlreadyLoaded(message: string): boolean {
+  return message.includes("already loaded") || message.includes("service already bootstrapped");
+}
+
+function isLaunchdAlreadyStopped(message: string): boolean {
+  return message.includes("No such process") || message.includes("Could not find service");
+}
+
+async function executeDirectStart(
+  action: DaemonLifecycleAction,
+  context: DaemonCommandContext,
+  invokeDaemon: CliDaemonInvoker,
+): Promise<DaemonLifecycleResult> {
+  const pidInfo = readDaemonPid(context.daemonPidPath);
+  if (pidInfo.pid && isProcessAlive(pidInfo.pid)) {
+    const running = await waitForDaemonRunning(invokeDaemon, STARTUP_TIMEOUT_MS);
+    if (!running.running) {
+      return {
+        action,
+        ok: false,
+        mode: "direct",
+        delegated: false,
+        message: "managed daemon process exists but daemon socket is not responding",
+        pid: pidInfo.pid,
+      };
+    }
+
+    return {
+      action,
+      ok: true,
+      mode: "direct",
+      delegated: false,
+      message: "daemon already running",
+      running: true,
+      pid: pidInfo.pid,
+    };
+  }
+
+  if (pidInfo.pid && !isProcessAlive(pidInfo.pid)) {
+    safeUnlink(context.daemonPidPath);
+  }
+
+  const unmanagedRunning = await waitForDaemonRunning(invokeDaemon, 400);
+  if (unmanagedRunning.running) {
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "daemon is running but not managed by direct lifecycle wrapper",
+      details: "Use daemon stop via the service manager that started it.",
+    };
+  }
+
+  if (!fs.existsSync(context.daemonEntrypoint)) {
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: `daemon entrypoint not found at ${context.daemonEntrypoint}`,
+    };
+  }
+
+  fs.mkdirSync(context.storagePath, { recursive: true });
+
+  const daemonProcess = spawn(process.execPath, [context.daemonEntrypoint], {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: "ignore",
+    env: createDaemonChildEnv(context),
+  });
+
+  const daemonPid = daemonProcess.pid;
+  if (!daemonPid) {
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "failed to spawn daemon process",
+    };
+  }
+
+  daemonProcess.unref();
+
+  try {
+    fs.writeFileSync(context.daemonPidPath, `${daemonPid}\n`, "utf8");
+  } catch (error) {
+    terminateProcess(daemonPid, "SIGTERM");
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "failed to write daemon pid file",
+      details: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const running = await waitForDaemonRunning(invokeDaemon, STARTUP_TIMEOUT_MS);
+  if (!running.running) {
+    terminateProcess(daemonPid, "SIGTERM");
+    safeUnlink(context.daemonPidPath);
+
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "daemon failed to become healthy after start",
+      pid: daemonPid,
+      details: running.reason,
+    };
+  }
+
+  return {
+    action,
+    ok: true,
+    mode: "direct",
+    delegated: false,
+    message: "started managed daemon process",
+    running: true,
+    pid: daemonPid,
+  };
+}
+
+async function executeDirectStop(
+  action: DaemonLifecycleAction,
+  context: DaemonCommandContext,
+  invokeDaemon: CliDaemonInvoker,
+  options: { allowUnmanagedRunning: boolean } = { allowUnmanagedRunning: true },
+): Promise<DaemonLifecycleResult> {
+  const pidInfo = readDaemonPid(context.daemonPidPath);
+
+  if (!pidInfo.pid) {
+    const running = await waitForDaemonRunning(invokeDaemon, 400);
+    if (running.running && !options.allowUnmanagedRunning) {
+      return {
+        action,
+        ok: false,
+        mode: "direct",
+        delegated: false,
+        message: "daemon is running but not managed by direct lifecycle wrapper",
+        details: "Stop it through the service manager that started it.",
+      };
+    }
+
+    return {
+      action,
+      ok: true,
+      mode: "direct",
+      delegated: false,
+      message: "daemon already stopped",
+      running: false,
+    };
+  }
+
+  if (!isProcessAlive(pidInfo.pid)) {
+    safeUnlink(context.daemonPidPath);
+    return {
+      action,
+      ok: true,
+      mode: "direct",
+      delegated: false,
+      message: "removed stale daemon pid file",
+      running: false,
+    };
+  }
+
+  terminateProcess(pidInfo.pid, "SIGTERM");
+  const stopped = await waitForProcessExit(pidInfo.pid, STOP_TIMEOUT_MS);
+  if (!stopped) {
+    terminateProcess(pidInfo.pid, "SIGKILL");
+    const killed = await waitForProcessExit(pidInfo.pid, 1_000);
+    if (!killed) {
+      return {
+        action,
+        ok: false,
+        mode: "direct",
+        delegated: false,
+        message: `failed to stop managed daemon process ${pidInfo.pid}`,
+      };
+    }
+  }
+
+  safeUnlink(context.daemonPidPath);
+
+  const running = await waitForDaemonRunning(invokeDaemon, 1_000);
+  if (running.running) {
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "daemon socket still responds after managed process stop",
+    };
+  }
+
+  return {
+    action,
+    ok: true,
+    mode: "direct",
+    delegated: false,
+    message: "stopped managed daemon process",
+    running: false,
+  };
+}
+
+async function waitForDaemonRunning(
+  invokeDaemon: CliDaemonInvoker,
+  timeoutMs: number,
+): Promise<{ running: boolean; reason?: string }> {
+  const deadline = Date.now() + timeoutMs;
+  let lastReason: string | undefined;
+
+  while (Date.now() < deadline) {
+    const status = await invokeDaemon<DaemonStatusResult>("daemon.status", {});
+    if (status.ok) {
+      if (status.value.state === "running" && status.value.healthy) {
+        return { running: true };
+      }
+
+      lastReason = `state=${status.value.state}, healthy=${status.value.healthy ? "yes" : "no"}`;
+      await sleep(100);
+      continue;
+    }
+
+    lastReason = status.error.message;
+    await sleep(100);
+  }
+
+  return {
+    running: false,
+    reason: lastReason,
+  };
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return true;
+    }
+
+    await sleep(50);
+  }
+
+  return !isProcessAlive(pid);
+}
+
+function terminateProcess(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal);
+  } catch {
+    // Process may have already exited.
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readDaemonPid(pidPath: string): { pid: number | null } {
+  try {
+    const raw = fs.readFileSync(pidPath, "utf8").trim();
+    if (!raw) {
+      return { pid: null };
+    }
+
+    const pid = Number.parseInt(raw, 10);
+    if (!Number.isInteger(pid) || pid < 1) {
+      return { pid: null };
+    }
+
+    return { pid };
+  } catch {
+    return { pid: null };
+  }
+}
+
+function safeUnlink(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    // File may already be removed.
+  }
+}
+
+function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
+  const configOpt = program.opts().config as string | undefined;
+  const configPath = getConfigPath(configOpt);
+  const fileConfig = loadConfig(configPath);
+  const storagePath = resolveDataDir(configPath, fileConfig);
+  const remoteSync = resolveRemoteSyncConfig(fileConfig);
+
+  return {
+    storagePath,
+    socketPath: resolveDaemonSocketPath(storagePath),
+    daemonPidPath: path.join(storagePath, DIRECT_PID_FILENAME),
+    daemonEntrypoint: resolveDaemonEntrypoint(),
+    remoteSyncServer: remoteSync?.server ?? null,
+  };
+}
+
+function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv {
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    TODUAI_DATA_DIR: context.storagePath,
+  };
+
+  if (context.remoteSyncServer) {
+    childEnv.TODUAI_SYNC_SERVER = context.remoteSyncServer;
+    childEnv.TODUAI_SYNC_ENABLED = "1";
+  }
+
+  if (context.socketPath) {
+    childEnv.TODUAI_DAEMON_SOCKET = context.socketPath;
+  }
+
+  return childEnv;
+}
+
+function resolveLifecycleMode(): DaemonLifecycleMode {
+  const override = process.env[LIFECYCLE_MODE_ENV]?.trim();
+
+  if (override && override !== "auto") {
+    if (override === "direct" || override === "systemd-user" || override === "launchd") {
+      return override;
+    }
+
+    throw new Error(
+      `Invalid ${LIFECYCLE_MODE_ENV} value: ${override}. Expected auto, direct, systemd-user, or launchd.`,
+    );
+  }
+
+  if (
+    process.platform === "linux" &&
+    fs.existsSync(path.join(os.homedir(), SYSTEMD_SERVICE_PATH))
+  ) {
+    return "systemd-user";
+  }
+
+  if (process.platform === "darwin" && fs.existsSync(path.join(os.homedir(), LAUNCHD_PLIST_PATH))) {
+    return "launchd";
+  }
+
+  return "direct";
+}
+
+interface CommandRunResult {
+  ok: boolean;
+  message: string;
+}
+
+function runCommand(command: string, args: string[]): CommandRunResult {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.error) {
+    return {
+      ok: false,
+      message: result.error.message,
+    };
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.trim();
+    const stdout = result.stdout?.trim();
+
+    return {
+      ok: false,
+      message: stderr || stdout || `exit code ${result.status}`,
+    };
+  }
+
+  return {
+    ok: true,
+    message: result.stdout?.trim() ?? "",
+  };
 }
 
 function resolveDaemonEntrypoint(): string {
@@ -156,4 +832,10 @@ function resolveDaemonEntrypoint(): string {
   }
 
   return path.resolve(import.meta.dirname, "../../../daemon/dist/entrypoint.js");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

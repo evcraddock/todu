@@ -6,9 +6,28 @@ The legacy `toduai serve` path has been removed.
 
 For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
-## Start the local daemon
+## Start/stop/restart the local daemon
 
-Use the CLI lifecycle command:
+Recommended for persistent operation:
+
+- Use OS service manager setup in [`daemon-service-operations.md`](daemon-service-operations.md)
+- Then control lifecycle through your service manager (`systemctl --user` / `launchctl`)
+
+CLI wrappers are available:
+
+```bash
+toduai daemon start
+toduai daemon stop
+toduai daemon restart
+```
+
+Wrapper behavior:
+
+- **Delegates** to system service managers when configured (`systemd --user` on Linux, `launchd` on macOS).
+- Falls back to **direct managed mode** when no service registration exists.
+- Direct mode tracks a managed PID at `<data_dir>/daemon.pid` and refuses to stop unmanaged daemon processes.
+
+Foreground daemon run (manual/interactive) is still available:
 
 ```bash
 toduai daemon run
