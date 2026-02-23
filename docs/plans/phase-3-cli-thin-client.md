@@ -123,3 +123,19 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - Added daemon-unavailable regression assertion in `project.test.ts`.
 - Kept non-migrated command tests stable.
   - Updated recurring test setup/assertion paths to avoid cross-mode coupling until recurring/task migration task is complete.
+
+### 2026-02-23 — Task #1940
+
+- Migrated remaining CLI command groups to daemon RPC routing:
+  - `recurring` (`packages/cli/src/commands/recurring.ts`)
+  - `habit` (`packages/cli/src/commands/habit.ts`)
+  - `sync` (`packages/cli/src/commands/sync.ts`)
+- Removed mixed ownership fallback initialization path from CLI entrypoint:
+  - removed `isSyncServerAvailable` probing and `createTodu()` ownership fallback wiring from `packages/cli/src/index.ts`
+  - CLI command execution now routes through daemon invoker for all user command groups
+- Preserved command output semantics while switching to daemon transport.
+  - Existing text/JSON output shapes for recurring/habit/sync command flows remain functionally equivalent.
+- Expanded daemon-mode integration coverage for migrated groups:
+  - updated `recurring.test.ts`, `habit.test.ts`, and `sync.test.ts` to run against a real daemon process
+  - added daemon-unavailable fail-fast assertion in `sync.test.ts`
+- Confirmed full CLI command suite passes in daemon mode and phase checks remain green (`make pre-pr`).

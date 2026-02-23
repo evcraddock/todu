@@ -2,22 +2,28 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProjectId } from "@todu/core";
-import { createTodu } from "@todu/engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("recurring CLI commands", { timeout: 30000 }, () => {
   const rootDir = path.resolve(import.meta.dirname, "../../../..");
   const cliPath = path.join(rootDir, "packages/cli/dist/index.js");
   let tmpDir: string;
+  let daemon: DaemonHandle | null = null;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Build first
     execSync("npm run build", { cwd: rootDir, stdio: "pipe" });
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-recurring-cli-"));
+    daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (daemon) {
+      await daemon.stop("test-cleanup");
+      daemon = null;
+    }
+
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -41,9 +47,10 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     }
   }
 
-  it("recurring create → list → show → upcoming → generate → pause → resume → delete flow", async () => {
-    // Create a project directly in storage (project CLI is daemon-backed in phase 3)
-    const projectId = await createProject(tmpDir, "RecurringTest");
+  it("recurring create → list → show → upcoming → generate → pause → resume → delete flow", () => {
+    // Create a project
+    const projectJson = run('project create --name "RecurringTest" --format json');
+    const project = JSON.parse(projectJson) as { id: string };
 
     // Create a recurring template
     const createOutput = run(
@@ -85,9 +92,10 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     expect(genTask.templateId).toBe(created.id);
 
     // Verify task appears in task list for the target project
-    const taskList = await listTasks(tmpDir, projectId);
+    const taskList = JSON.parse(run(`task list --project "${project.id}" --format json`));
     const scheduledTask = taskList.find(
-      (t) => t.scheduledDate === "2026-03-15" && t.title === "Daily standup",
+      (t: { scheduledDate?: string; title: string }) =>
+        t.scheduledDate === "2026-03-15" && t.title === "Daily standup",
     );
     expect(scheduledTask).toBeDefined();
 
@@ -122,34 +130,3 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     expect(output).toContain("not found");
   });
 });
-
-async function createProject(storagePath: string, name: string): Promise<string> {
-  const todu = await createTodu({ storagePath });
-  try {
-    const created = await todu.project.create({ name });
-    if (!created.ok) {
-      throw new Error(created.error.message);
-    }
-
-    return created.value.id;
-  } finally {
-    await todu.close();
-  }
-}
-
-async function listTasks(
-  storagePath: string,
-  projectId: string,
-): Promise<Array<{ title: string; scheduledDate?: string }>> {
-  const todu = await createTodu({ storagePath });
-  try {
-    const tasks = await todu.task.list({ projectId: createProjectId(projectId) });
-    if (!tasks.ok) {
-      throw new Error(tasks.error.message);
-    }
-
-    return tasks.value;
-  } finally {
-    await todu.close();
-  }
-}
