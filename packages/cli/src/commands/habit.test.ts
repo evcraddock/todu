@@ -3,18 +3,26 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("habit CLI commands", { timeout: 30000 }, () => {
   const rootDir = path.resolve(import.meta.dirname, "../../../..");
   const cliPath = path.join(rootDir, "packages/cli/dist/index.js");
   let tmpDir: string;
+  let daemon: DaemonHandle | null = null;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     execSync("npm run build", { cwd: rootDir, stdio: "pipe" });
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-habit-cli-"));
+    daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (daemon) {
+      await daemon.stop("test-cleanup");
+      daemon = null;
+    }
+
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
