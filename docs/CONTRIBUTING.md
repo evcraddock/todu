@@ -110,6 +110,8 @@ git push --no-verify     # skip pre-push
 | `make pre-pr` | Full pre-PR checks (check + test) |
 | `make run ARGS="..."` | Run CLI |
 
+See also: [CLI Daemon Usage](cli-daemon-usage.md) for operator notes on daemon-required commands.
+
 ## When Stuck
 
 After 3 failed attempts at the same problem:
