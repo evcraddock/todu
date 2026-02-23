@@ -110,7 +110,9 @@ git push --no-verify     # skip pre-push
 | `make pre-pr` | Full pre-PR checks (check + test) |
 | `make run ARGS="..."` | Run CLI |
 
-See also: [CLI Daemon Usage](cli-daemon-usage.md) for operator notes on daemon-required commands.
+See also:
+- [CLI Daemon Usage](cli-daemon-usage.md) for daemon-required CLI behavior
+- [Daemon Service Operations](daemon-service-operations.md) for Linux/macOS service setup and lifecycle commands
 
 ## When Stuck
 

@@ -167,3 +167,14 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - daemon run foreground startup behavior
   - regression assertion that `serve` command is no longer available
 - Updated operator docs (`docs/cli-daemon-usage.md`) to reflect daemon lifecycle command usage.
+
+### 2026-02-23 — Task #1988
+
+- Added dedicated daemon service operations guide at `docs/daemon-service-operations.md`.
+  - Linux `systemd --user` service template and lifecycle commands
+  - macOS `launchd` LaunchAgent template and lifecycle commands
+  - log inspection and troubleshooting guidance
+- Documented service-manager flow as the recommended daemon startup model for persistent CLI usage.
+- Added doc discoverability links from:
+  - `docs/cli-daemon-usage.md`
+  - `docs/CONTRIBUTING.md`
