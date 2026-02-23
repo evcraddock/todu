@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolveRemoteSyncConfig } from "@todu/core";
+import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
 import { startDaemonProcess } from "./process.js";
 import { type DaemonRole, isDaemonRole } from "./runtime.js";
 
@@ -17,6 +18,12 @@ function parseDaemonRole(value: string | undefined): DaemonRole {
 }
 
 export async function runDaemonEntrypoint(): Promise<void> {
+  const daemonLogLevel = resolveDaemonLogLevelFromEnv(process.env);
+  const logger = createDaemonLogger({
+    component: "daemon.entrypoint",
+    level: daemonLogLevel,
+  });
+
   const daemonRole = parseDaemonRole(process.env.TODUAI_DAEMON_ROLE);
   const daemonSocketPath = process.env.TODUAI_DAEMON_SOCKET;
   const remoteSync = resolveRemoteSyncConfig({});
@@ -26,19 +33,24 @@ export async function runDaemonEntrypoint(): Promise<void> {
       role: daemonRole,
       socketPath: daemonSocketPath,
       remoteSync: remoteSync ?? undefined,
+      logLevel: daemonLogLevel,
     },
     {
       hooks: {
         onStarted: (status) => {
-          console.log(
-            `[daemon] running role=${status.role} socket=${status.transport?.path ?? "-"} catalog=${status.catalogId ?? "-"}`,
-          );
+          logger.info("daemon process started", {
+            role: status.role,
+            socketPath: status.transport?.path ?? "-",
+            catalogId: status.catalogId ?? "-",
+          });
         },
         onStopping: (reason) => {
-          console.log(`[daemon] stopping (${reason})`);
+          logger.info("daemon process stopping", {
+            reason,
+          });
         },
         onStopped: () => {
-          console.log("[daemon] stopped");
+          logger.info("daemon process stopped");
         },
       },
     },
@@ -52,8 +64,15 @@ const isMainModule =
 
 if (isMainModule) {
   runDaemonEntrypoint().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[daemon] failed: ${message}`);
+    const logger = createDaemonLogger({
+      component: "daemon.entrypoint",
+      level: resolveDaemonLogLevelFromEnv(process.env),
+    });
+
+    logger.error("daemon process failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     process.exitCode = 1;
   });
 }

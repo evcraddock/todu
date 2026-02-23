@@ -1,4 +1,14 @@
 export {
+  type CreateDaemonLoggerOptions,
+  createDaemonLogger,
+  DAEMON_LOG_LEVELS,
+  type DaemonLogger,
+  type DaemonLogLevel,
+  isDaemonLogLevel,
+  resolveDaemonLogLevel,
+  resolveDaemonLogLevelFromEnv,
+} from "./logger.js";
+export {
   type DaemonProcess,
   type DaemonProcessHooks,
   type StartDaemonProcessOptions,

@@ -199,3 +199,23 @@ Every task must include a documentation step in the same PR (or explicitly justi
 - Updated operator docs for wrapper behavior and delegation/fallback rules:
   - `docs/daemon-service-operations.md`
   - `docs/cli-daemon-usage.md`
+
+### 2026-02-23 — Task #1993
+
+- Added daemon structured logger with level filtering in `packages/daemon/src/logger.ts`.
+  - supports `error`, `warn`, `info`, `debug`
+  - runtime config via `TODUAI_LOG_LEVEL`
+- Routed daemon lifecycle/startup/failure logs through structured logger in:
+  - `packages/daemon/src/entrypoint.ts`
+  - `packages/daemon/src/runtime.ts`
+- Added RPC operation logging in `packages/daemon/src/rpc.ts`:
+  - request start debug context (method/request id/param keys)
+  - completion info logs with outcome and duration
+  - warning/error-path logs without sensitive payload content
+- Added logging coverage tests:
+  - `packages/daemon/src/logger.test.ts`
+  - extended `packages/daemon/src/rpc.test.ts`
+- Updated operator/developer docs for log-level usage:
+  - `docs/cli-daemon-usage.md`
+  - `docs/daemon-service-operations.md`
+  - `README.md`

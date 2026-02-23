@@ -1,5 +1,11 @@
 import type { Socket } from "node:net";
 import {
+  createDaemonLogger,
+  type DaemonLogger,
+  type DaemonLogLevel,
+  resolveDaemonLogLevelFromEnv,
+} from "./logger.js";
+import {
   createProtocolError,
   createProtocolErrorFrame,
   createProtocolEventFrame,
@@ -150,6 +156,8 @@ export type DaemonRpcMethodHandler = (
 export interface CreateDaemonRpcRouterOptions {
   methodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
   namespaceHandlers?: DaemonRpcNamespaceHandlers;
+  logger?: DaemonLogger;
+  logLevel?: DaemonLogLevel;
 }
 
 interface ConnectionHandlerOptions {
@@ -176,6 +184,12 @@ export interface DaemonRpcRouter {
 
 export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}): DaemonRpcRouter {
   const connections = new Set<DaemonConnection>();
+  const logger =
+    options.logger ??
+    createDaemonLogger({
+      component: "daemon.rpc",
+      level: options.logLevel ?? resolveDaemonLogLevelFromEnv(process.env),
+    });
 
   const namespaceHandlers = mergeNamespaceHandlers(
     createDefaultNamespaceHandlers(),
@@ -191,12 +205,19 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     context: DaemonRpcContext,
     connection?: DaemonConnection,
   ): Promise<DaemonRpcResponse> {
+    const requestStartedAt = Date.now();
+    const requestContext = createRpcRequestContext(request);
+
+    logger.debug("rpc request started", requestContext);
+
     const handler = resolveMethodHandler(request.method, namespaceHandlers, methodHandlers);
+
+    let response: DaemonRpcResponse;
 
     if (!handler) {
       const parsedMethod = parseMethod(request.method);
       if (parsedMethod && isReservedDaemonNamespace(parsedMethod.namespace)) {
-        return createProtocolErrorFrame(
+        response = createProtocolErrorFrame(
           request.id,
           createProtocolError(
             "UNSUPPORTED_CAPABILITY",
@@ -207,21 +228,24 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
             },
           ),
         );
+      } else {
+        response = createProtocolErrorFrame(
+          request.id,
+          createProtocolError("METHOD_NOT_FOUND", `Unknown method: ${request.method}`, {
+            method: request.method,
+          }),
+        );
       }
-
-      return createProtocolErrorFrame(
-        request.id,
-        createProtocolError("METHOD_NOT_FOUND", `Unknown method: ${request.method}`, {
-          method: request.method,
-        }),
-      );
+    } else {
+      try {
+        response = await handler(request, context, connection);
+      } catch (error) {
+        response = createProtocolErrorFrame(request.id, error);
+      }
     }
 
-    try {
-      return await handler(request, context, connection);
-    } catch (error) {
-      return createProtocolErrorFrame(request.id, error);
-    }
+    logRpcResponse(response, request, requestStartedAt);
+    return response;
   }
 
   async function executeRequestWithTimeout(
@@ -262,6 +286,56 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     });
   }
 
+  function createRpcRequestContext(request: ProtocolRequestFrame): Record<string, unknown> {
+    const paramKeys = Object.keys(request.params).sort();
+
+    return {
+      requestId: request.id,
+      method: request.method,
+      paramCount: paramKeys.length,
+      paramKeys,
+    };
+  }
+
+  function logRpcResponse(
+    response: DaemonRpcResponse,
+    request: ProtocolRequestFrame,
+    startedAt: number,
+  ): void {
+    const durationMs = Date.now() - startedAt;
+
+    if ("result" in response) {
+      logger.info("rpc request completed", {
+        requestId: request.id,
+        method: request.method,
+        outcome: "success",
+        durationMs,
+      });
+      return;
+    }
+
+    logger.info("rpc request completed", {
+      requestId: request.id,
+      method: request.method,
+      outcome: "error",
+      errorCode: response.error.code,
+      durationMs,
+    });
+
+    logger.warn("rpc request failed", {
+      requestId: request.id,
+      method: request.method,
+      errorCode: response.error.code,
+    });
+
+    logger.debug("rpc request failure details", {
+      requestId: request.id,
+      method: request.method,
+      errorMessage: response.error.message,
+      errorDetails: response.error.details,
+    });
+  }
+
   return {
     handleRequest(
       request: ProtocolRequestFrame,
@@ -274,6 +348,14 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     async handlePayload(payload: string, context: DaemonRpcContext, connection?: DaemonConnection) {
       const parsed = parseProtocolRequestJson(payload);
       if (!parsed.ok) {
+        logger.warn("rpc payload parse failed", {
+          errorCode: parsed.error.code,
+        });
+        logger.debug("rpc payload parse details", {
+          errorMessage: parsed.error.message,
+          errorDetails: parsed.error.details,
+        });
+
         return createProtocolErrorFrame(null, parsed.error);
       }
 
@@ -311,6 +393,13 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
 
           let response: DaemonRpcResponse;
           if (!parsed.ok) {
+            logger.warn("rpc request parse failed", {
+              errorCode: parsed.error.code,
+            });
+            logger.debug("rpc request parse details", {
+              errorMessage: parsed.error.message,
+              errorDetails: parsed.error.details,
+            });
             response = createProtocolErrorFrame(null, parsed.error);
           } else {
             response = await executeRequestWithTimeout(
@@ -328,6 +417,10 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
           try {
             socket.write(`${JSON.stringify(response)}\n`);
           } catch {
+            logger.warn("rpc response write failed", {
+              requestId: parsed.ok ? parsed.value.id : null,
+              method: parsed.ok ? parsed.value.method : "unknown",
+            });
             closeConnection();
           }
         };

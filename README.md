@@ -26,6 +26,39 @@ make run ARGS="task list"
 
 The packaged executable is currently named `toduai` to avoid collisions with production `todu` during migration.
 
+### Run daemon-backed dev environment (recommended)
+
+```bash
+make build
+make dev
+```
+
+`make dev` starts both processes under overmind:
+
+- local daemon (`toduai-daemon`) with test data dir: `.dev/data`
+- local sync server (docker compose): `ws://localhost:3030`
+
+To enable daemon debug logs during development:
+
+```bash
+TODUAI_LOG_LEVEL=debug make dev
+```
+
+In another terminal, run CRUD commands against that test instance:
+
+```bash
+make run ARGS="project list"
+make run ARGS="task create --project inbox --title 'test'"
+make run ARGS="note list"
+make run ARGS="daemon status"
+```
+
+Stop the dev environment:
+
+```bash
+make dev-stop
+```
+
 ### Run Tests and Linting
 
 ```bash
@@ -51,10 +84,15 @@ Run `make help` to see all targets. Key commands:
 
 #### Development
 
-| Command                  | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `make run ARGS="..."`    | Run CLI (e.g. `make run ARGS="task list"`)       |
-| `make dev-electron`      | Launch Electron app in dev mode (hot reload)      |
+| Command                  | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
+| `make run ARGS="..."`    | Run CLI (e.g. `make run ARGS="task list"`)               |
+| `make dev`              | Start overmind dev stack (daemon + local sync server)   |
+| `make dev-status`       | Show overmind stack status                               |
+| `make dev-logs`         | Connect to overmind session (interactive terminal)       |
+| `make dev-tail`         | Show recent overmind logs                                |
+| `make dev-stop`         | Stop overmind dev stack                                  |
+| `make dev-electron`     | Launch Electron app in dev mode (hot reload)            |
 
 #### CLI Binaries
 

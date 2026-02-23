@@ -3,6 +3,7 @@ import net, { type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createDaemonLogger } from "./logger.js";
 import { createProtocolSuccessFrame } from "./protocol.js";
 import {
   createDaemonRpcRouter,
@@ -185,6 +186,103 @@ describe("createDaemonRpcRouter", () => {
     }
 
     expect(response.error.code).toBe("METHOD_NOT_FOUND");
+  });
+
+  it("logs rpc request method, outcome, and duration", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const logger = createDaemonLogger({
+      level: "debug",
+      component: "daemon.rpc.test",
+      now: () => "2026-02-23T21:30:00.000Z",
+      writeStdout: (line) => stdout.push(line),
+      writeStderr: (line) => stderr.push(line),
+    });
+
+    const router = createDaemonRpcRouter({ logger });
+
+    const response = await router.handleRequest(
+      {
+        id: "log-success-1",
+        method: "daemon.ping",
+        params: {},
+      },
+      context,
+    );
+
+    expect("result" in response).toBe(true);
+
+    const entries = stdout.map(
+      (line) => JSON.parse(line) as { message: string; context?: Record<string, unknown> },
+    );
+
+    const debugStart = entries.find((entry) => entry.message === "rpc request started");
+    expect(debugStart).toBeDefined();
+    const debugContext = debugStart?.context as Record<string, unknown>;
+    expect(debugContext.method).toBe("daemon.ping");
+    expect(debugContext.requestId).toBe("log-success-1");
+
+    const completion = entries.find((entry) => entry.message === "rpc request completed");
+    expect(completion).toBeDefined();
+    const completionContext = completion?.context as Record<string, unknown>;
+    expect(completionContext.method).toBe("daemon.ping");
+    expect(completionContext.outcome).toBe("success");
+    expect(typeof completionContext.durationMs).toBe("number");
+
+    expect(stderr).toHaveLength(0);
+  });
+
+  it("logs warnings for rpc failures", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const logger = createDaemonLogger({
+      level: "debug",
+      component: "daemon.rpc.test",
+      now: () => "2026-02-23T21:30:00.000Z",
+      writeStdout: (line) => stdout.push(line),
+      writeStderr: (line) => stderr.push(line),
+    });
+
+    const router = createDaemonRpcRouter({ logger });
+
+    const secretValue = "super-secret-token";
+
+    const response = await router.handleRequest(
+      {
+        id: "log-failure-1",
+        method: "unknown.method",
+        params: {
+          token: secretValue,
+        },
+      },
+      context,
+    );
+
+    expect("error" in response).toBe(true);
+
+    const stdoutEntries = stdout.map(
+      (line) => JSON.parse(line) as { message: string; context?: Record<string, unknown> },
+    );
+    const completion = stdoutEntries.find((entry) => entry.message === "rpc request completed");
+    expect(completion).toBeDefined();
+    const completionContext = completion?.context as Record<string, unknown>;
+    expect(completionContext.method).toBe("unknown.method");
+    expect(completionContext.outcome).toBe("error");
+    expect(completionContext.errorCode).toBe("METHOD_NOT_FOUND");
+
+    const stderrEntries = stderr.map(
+      (line) => JSON.parse(line) as { message: string; context?: Record<string, unknown> },
+    );
+    const warnEntry = stderrEntries.find((entry) => entry.message === "rpc request failed");
+    expect(warnEntry).toBeDefined();
+    const warnContext = warnEntry?.context as Record<string, unknown>;
+    expect(warnContext.method).toBe("unknown.method");
+    expect(warnContext.errorCode).toBe("METHOD_NOT_FOUND");
+
+    expect(stdout.join("\n")).not.toContain(secretValue);
+    expect(stderr.join("\n")).not.toContain(secretValue);
   });
 
   it("routes known core namespace methods through namespace handlers", async () => {

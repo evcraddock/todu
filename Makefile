@@ -2,6 +2,7 @@
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
+DEV_DAEMON_SOCKET := $(abspath .dev/data/daemon.sock)
 
 # =============================================================================
 # Dependency checks
@@ -70,20 +71,68 @@ build-cli-binaries: check-bun build ## Build standalone CLI binaries for all pla
 # =============================================================================
 
 run: node_modules ## Run CLI (usage: make run ARGS="task list")
-	TODUAI_CONFIG=$(DEV_CONFIG) TODUAI_NO_SYNC=1 node packages/cli/dist/index.js $(ARGS)
+	@TODUAI_CONFIG=$(DEV_CONFIG) node packages/cli/dist/index.js $(ARGS)
 
-dev: node_modules ## Start dev environment (sync server via overmind)
-	TODUAI_CONFIG=$(DEV_CONFIG) overmind start -D -s $(SOCKET)
+dev: node_modules ## Start dev environment (daemon + local sync server via overmind)
+	@if overmind ps -s $(SOCKET) >/dev/null 2>&1; then \
+		echo "Dev environment already running."; \
+	else \
+		pids=$$(ps -eo pid=,args= | grep 'packages/daemon/src/entrypoint.ts' | grep -v grep | awk '{print $$1}'); \
+		if [ -n "$$pids" ]; then \
+			kill $$pids 2>/dev/null || true; \
+		fi; \
+		rm -f $(DEV_DAEMON_SOCKET); \
+		TODUAI_CONFIG=$(DEV_CONFIG) overmind start -D -s $(SOCKET) --can-die sync-server; \
+	fi
+	@for i in $$(seq 1 150); do \
+		if [ -S "$(DEV_DAEMON_SOCKET)" ]; then \
+			exit 0; \
+		fi; \
+		sleep 0.2; \
+	done; \
+	echo "Timed out waiting for daemon socket (30s): $(DEV_DAEMON_SOCKET)"; \
+	if overmind ps -s $(SOCKET) >/dev/null 2>&1; then \
+		overmind ps -s $(SOCKET) || true; \
+		echo "Use 'make dev-logs' to inspect daemon startup errors."; \
+	else \
+		echo "Overmind is not reachable at $(SOCKET)."; \
+	fi; \
+	exit 1
 
 dev-stop: ## Stop dev environment
 	overmind quit -s $(SOCKET) 2>/dev/null || true
+	@pids=$$(ps -eo pid=,args= | grep 'packages/daemon/src/entrypoint.ts' | grep -v grep | awk '{print $$1}'); \
+	if [ -n "$$pids" ]; then \
+		kill $$pids 2>/dev/null || true; \
+	fi
 	rm -f $(SOCKET)
+	rm -f $(DEV_DAEMON_SOCKET)
 
-dev-status: ## Check if dev environment is running (outputs: running | stopped)
-	@overmind ps -s $(SOCKET) 2>/dev/null | grep -q "." && echo "running" || echo "stopped"
+dev-status: ## Check if dev environment is healthy (outputs: running | stopped)
+	@if [ -S "$(DEV_DAEMON_SOCKET)" ] && ps -eo args= | grep -q '[p]ackages/daemon/src/entrypoint.ts'; then \
+		echo "running"; \
+	else \
+		echo "stopped"; \
+	fi
 
-dev-logs: ## Stream dev environment logs (Ctrl+C to stop)
-	overmind echo -s $(SOCKET)
+dev-logs: ## Connect to overmind session (interactive)
+	@if [ -t 0 ] && [ -t 1 ]; then \
+		if overmind ps -s $(SOCKET) >/dev/null 2>&1; then \
+			overmind connect -s $(SOCKET); \
+		else \
+			tmux_socket=$$(ls -1t /tmp/tmux-$$(id -u)/overmind-todu-* 2>/dev/null | head -n1); \
+			if [ -n "$$tmux_socket" ] && tmux -S "$$tmux_socket" has-session -t todu >/dev/null 2>&1; then \
+				echo "Overmind socket unavailable; attaching directly via tmux socket: $$tmux_socket"; \
+				tmux -S "$$tmux_socket" attach -t todu; \
+			else \
+				echo "Dev environment is not running. Start it with: make dev"; \
+				exit 1; \
+			fi; \
+		fi; \
+	else \
+		echo "make dev-logs requires an interactive terminal. Use make dev-tail for non-interactive log output."; \
+		exit 1; \
+	fi
 
 dev-tail: ## Show last 100 lines of dev logs (non-blocking)
 	@timeout 2 overmind echo -s $(SOCKET) 2>/dev/null | tail -100 || true

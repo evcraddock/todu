@@ -1,7 +1,7 @@
-# Development config — used by make run, make dev-electron, and toduai serve
+# Development config — used by make run and make dev-electron
 # Data is stored in .dev/data/ (gitignored) so dev never touches ~/.config/toduai/
 data_dir: data
 
 sync:
   remote:
-    server: wss://sync.todu.sh
+    server: ws://localhost:3030
