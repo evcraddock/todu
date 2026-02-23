@@ -143,3 +143,15 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - recurring/habit/sync method availability
   - capability list coverage for newly implemented namespaces
   - reserved namespace error behavior (`worker.*`)
+
+### 2026-02-22 — Task #1937
+
+- Added event-observability integration coverage in `packages/daemon/src/events-parity.test.ts`:
+  - verifies `data.changed` is emitted and observable through `events.subscribe` after RPC domain mutation
+  - verifies `sync.statusChanged` is emitted and observable across `sync.stop` / `sync.start` transitions
+- Added daemon-vs-engine parity suite in `packages/daemon/src/daemon-engine-parity.test.ts` for representative flows:
+  - project CRUD behavior parity
+  - task CRUD/query behavior parity
+  - sync status behavior parity
+- Kept parity/event tests in standard daemon test discovery so regressions fail CI through existing `npm test` / `make pre-pr` pipeline.
+- Expanded runtime/rpc/conformance assertions to cover reserved namespace handling and capability consistency.

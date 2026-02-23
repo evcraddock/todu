@@ -59,6 +59,16 @@ npm run test:conformance
 
 This runs the Phase 1 protocol conformance harness (`packages/daemon/src/protocol-conformance.test.ts`) and is gated in CI.
 
+### Daemon Event + Parity Suites
+
+For targeted event/parity checks during daemon protocol work:
+
+```bash
+npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
+```
+
+These suites are also included in the standard test run (`npm test`) and therefore enforced by `make pre-pr` and CI.
+
 ### 5. Open PR
 
 Push and create PR with clear description linking to the task.
