@@ -3,6 +3,25 @@ import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websoc
 
 export const DEFAULT_SYNC_URL = "ws://127.0.0.1:24377";
 
+const TRANSIENT_SOCKET_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EPIPE",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+]);
+
+const TRANSIENT_SOCKET_ERROR_MESSAGE_PATTERNS = [
+  /failed to connect/i,
+  /connection failed/i,
+  /connect ECONNREFUSED/i,
+  /read ECONNRESET/i,
+  /socket hang up/i,
+];
+
 /**
  * Add a sync client adapter to a Repo, connecting to a remote sync server.
  * Waits for the adapter to be ready before returning.
@@ -16,6 +35,7 @@ export async function connectSyncClient(
   retryInterval = 500,
 ): Promise<() => void> {
   const adapter = new WebSocketClientAdapter(url, retryInterval);
+  hardenWebSocketClientAdapterErrors(adapter);
   repo.networkSubsystem.addNetworkAdapter(adapter);
 
   // Wait for the WebSocket connection to establish
@@ -47,8 +67,59 @@ export function addRemoteSyncAdapter(
   retryInterval = 30000,
 ): WebSocketClientAdapter {
   const adapter = new WebSocketClientAdapter(url, retryInterval);
+  hardenWebSocketClientAdapterErrors(adapter);
   repo.networkSubsystem.addNetworkAdapter(adapter);
   return adapter;
+}
+
+export function hardenWebSocketClientAdapterErrors(adapter: WebSocketClientAdapter): void {
+  const originalOnError = adapter.onError;
+
+  adapter.onError = (event) => {
+    try {
+      originalOnError(event);
+    } catch (error) {
+      const eventError = getEventError(event);
+      if (isTransientSocketError(error) || isTransientSocketError(eventError)) {
+        return;
+      }
+
+      throw error;
+    }
+  };
+}
+
+function getEventError(event: unknown): unknown {
+  if (typeof event !== "object" || event === null) {
+    return undefined;
+  }
+
+  if (!("error" in event)) {
+    return undefined;
+  }
+
+  return (event as { error?: unknown }).error;
+}
+
+function isTransientSocketError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string" && TRANSIENT_SOCKET_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  const message = (error as { message?: unknown }).message;
+  if (
+    typeof message === "string" &&
+    TRANSIENT_SOCKET_ERROR_MESSAGE_PATTERNS.some((pattern) => pattern.test(message))
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

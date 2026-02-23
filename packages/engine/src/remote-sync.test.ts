@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
@@ -193,6 +194,40 @@ describe("remote sync", () => {
         todu = null;
       }
       await stopRelay(relay, relayDir);
+    }
+  });
+
+  it("keeps local operations available when remote adapter emits ECONNRESET", async () => {
+    const connectSpy = vi
+      .spyOn(WebSocketClientAdapter.prototype, "connect")
+      .mockImplementation(function mockConnectWithReset(this: WebSocketClientAdapter) {
+        const error = Object.assign(new Error("read ECONNRESET"), {
+          code: "ECONNRESET",
+        });
+
+        this.onError({ error } as unknown as Parameters<WebSocketClientAdapter["onError"]>[0]);
+      });
+
+    try {
+      todu = await createTodu({
+        storagePath: tmpDir,
+        remoteSync: { server: "ws://localhost:3030" },
+      });
+
+      const createResult = await todu.project.create({ name: "Works while sync is down" });
+      expect(createResult.ok).toBe(true);
+
+      const listResult = await todu.project.list();
+      expect(listResult.ok).toBe(true);
+      if (listResult.ok) {
+        expect(
+          listResult.value.some((project) => project.name === "Works while sync is down"),
+        ).toBe(true);
+      }
+
+      expect(todu.sync.status().remote.state).toBe("disconnected");
+    } finally {
+      connectSpy.mockRestore();
     }
   });
 
