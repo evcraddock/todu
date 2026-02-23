@@ -139,3 +139,16 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - updated `recurring.test.ts`, `habit.test.ts`, and `sync.test.ts` to run against a real daemon process
   - added daemon-unavailable fail-fast assertion in `sync.test.ts`
 - Confirmed full CLI command suite passes in daemon mode and phase checks remain green (`make pre-pr`).
+
+### 2026-02-23 — Task #1941
+
+- Added dedicated daemon-mode CLI integration coverage for key error paths in `packages/cli/src/daemon-mode.integration.test.ts`:
+  - daemon unavailable path returns clear fail-fast error with nonzero exit
+  - request timeout path returns timeout error with nonzero exit
+  - protocol mismatch path returns mismatch error with nonzero exit
+- Validated exit-code behavior for these error classes remains stable (`status=1`) while preserving user-facing error clarity.
+- Added operator-facing CLI daemon usage notes at `docs/cli-daemon-usage.md`:
+  - daemon startup options
+  - socket resolution/override behavior
+  - troubleshooting guidance for unavailable/timeout/protocol mismatch failures
+- Linked operator notes from `docs/CONTRIBUTING.md` tooling section for discoverability.

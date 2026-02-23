@@ -109,6 +109,7 @@ git push --no-verify     # skip pre-push
 | `make check` | Lint + format + typecheck |
 | `make pre-pr` | Full pre-PR checks (check + test) |
 | `make run ARGS="..."` | Run CLI |
+| `docs/cli-daemon-usage.md` | Operator notes for daemon-required CLI usage |
 
 ## When Stuck
 
