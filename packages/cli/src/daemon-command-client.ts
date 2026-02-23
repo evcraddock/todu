@@ -33,7 +33,7 @@ export function formatDaemonCommandError(error: { code: string; message: string 
   return `Error: ${error.message}`;
 }
 
-function resolveDaemonSocketPath(storagePath: string): string {
+export function resolveDaemonSocketPath(storagePath: string): string {
   const socketOverride = process.env.TODUAI_DAEMON_SOCKET;
   if (socketOverride && socketOverride.trim().length > 0) {
     return path.resolve(socketOverride);

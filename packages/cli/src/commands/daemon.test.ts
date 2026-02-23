@@ -1,4 +1,4 @@
-import { type ChildProcess, execSync, spawn } from "node:child_process";
+import { type ChildProcess, execSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +10,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
   const cliPath = path.resolve(rootDir, "packages/cli/dist/index.js");
 
   let tmpDir: string;
+  let homeDir: string;
   let daemon: DaemonHandle | null = null;
   let daemonRunProcess: ChildProcess | null = null;
 
@@ -30,47 +31,72 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     daemonRunProcess = null;
 
     if (tmpDir) {
+      stopManagedDaemon(tmpDir);
       fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+
+    if (homeDir) {
+      fs.rmSync(homeDir, { recursive: true, force: true });
     }
   });
 
-  function run(args: string, expectFail = false): string {
-    try {
-      return execSync(`node ${cliPath} ${args}`, {
-        cwd: rootDir,
-        env: { ...process.env, TODUAI_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
-        encoding: "utf-8",
-        timeout: 15000,
-      }).trim();
-    } catch (e: unknown) {
-      if (expectFail) {
-        const err = e as { stderr?: string; stdout?: string };
-        return (err.stderr || err.stdout || "").trim();
-      }
-      throw e;
-    }
+  function runCli(
+    args: string[],
+    options: { env?: Record<string, string>; timeoutMs?: number } = {},
+  ): {
+    status: number;
+    stdout: string;
+    stderr: string;
+  } {
+    const completed = spawnSync(process.execPath, [cliPath, ...args], {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        TODUAI_DATA_DIR: tmpDir,
+        TODUAI_NO_SYNC: "1",
+        TODUAI_DAEMON_LIFECYCLE_MODE: "direct",
+        HOME: homeDir,
+        ...(options.env ?? {}),
+      },
+      encoding: "utf8",
+      timeout: options.timeoutMs ?? 15000,
+    });
+
+    return {
+      status: completed.status ?? -1,
+      stdout: completed.stdout.trim(),
+      stderr: completed.stderr.trim(),
+    };
   }
 
   it("daemon status reports not running when daemon is unavailable", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
 
-    const textOutput = run("daemon status");
-    expect(textOutput).toContain("Daemon: not running");
+    const textResult = runCli(["daemon", "status"]);
+    expect(textResult.status).toBe(0);
+    expect(textResult.stdout).toContain("Daemon: not running");
 
-    const jsonOutput = JSON.parse(run("--format json daemon status"));
+    const jsonResult = runCli(["--format", "json", "daemon", "status"]);
+    expect(jsonResult.status).toBe(0);
+    const jsonOutput = JSON.parse(jsonResult.stdout);
     expect(jsonOutput.running).toBe(false);
     expect(jsonOutput.reason).toContain("Daemon unavailable at socket");
   });
 
   it("daemon status reports running daemon details", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
     daemon = await startDaemonForTests(rootDir, tmpDir);
 
-    const textOutput = run("daemon status");
-    expect(textOutput).toContain("Daemon: running");
-    expect(textOutput).toContain("State:  running");
+    const textResult = runCli(["daemon", "status"]);
+    expect(textResult.status).toBe(0);
+    expect(textResult.stdout).toContain("Daemon: running");
+    expect(textResult.stdout).toContain("State:  running");
 
-    const jsonOutput = JSON.parse(run("--format json daemon status"));
+    const jsonResult = runCli(["--format", "json", "daemon", "status"]);
+    expect(jsonResult.status).toBe(0);
+    const jsonOutput = JSON.parse(jsonResult.stdout);
     expect(jsonOutput.running).toBe(true);
     expect(jsonOutput.status.state).toBe("running");
     expect(jsonOutput.status.transport.path).toContain("daemon.sock");
@@ -78,17 +104,25 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
 
   it("daemon run starts foreground daemon process", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-run-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
     const socketPath = path.join(tmpDir, "daemon.sock");
 
-    daemonRunProcess = spawn("node", [cliPath, "daemon", "run"], {
+    daemonRunProcess = spawn(process.execPath, [cliPath, "daemon", "run"], {
       cwd: rootDir,
-      env: { ...process.env, TODUAI_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+      env: {
+        ...process.env,
+        TODUAI_DATA_DIR: tmpDir,
+        TODUAI_NO_SYNC: "1",
+        HOME: homeDir,
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
     await waitForSocket(socketPath, daemonRunProcess, 7000);
 
-    const jsonOutput = JSON.parse(run("--format json daemon status"));
+    const jsonResult = runCli(["--format", "json", "daemon", "status"]);
+    expect(jsonResult.status).toBe(0);
+    const jsonOutput = JSON.parse(jsonResult.stdout);
     expect(jsonOutput.running).toBe(true);
     expect(jsonOutput.status.state).toBe("running");
 
@@ -96,17 +130,121 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     await waitForProcessExit(daemonRunProcess, 5000);
     daemonRunProcess = null;
 
-    const afterStop = JSON.parse(run("--format json daemon status"));
+    const afterStopResult = runCli(["--format", "json", "daemon", "status"]);
+    expect(afterStopResult.status).toBe(0);
+    const afterStop = JSON.parse(afterStopResult.stdout);
     expect(afterStop.running).toBe(false);
+  });
+
+  it("daemon start/stop/restart commands manage daemon in direct mode", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-lifecycle-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+
+    const start = runCli(["daemon", "start"]);
+    expect(start.status).toBe(0);
+    expect(start.stdout).toContain("Daemon start: started managed daemon process");
+
+    const statusAfterStart = runCli(["--format", "json", "daemon", "status"]);
+    expect(statusAfterStart.status).toBe(0);
+    expect(JSON.parse(statusAfterStart.stdout).running).toBe(true);
+
+    const restart = runCli(["daemon", "restart"]);
+    expect(restart.status).toBe(0);
+    expect(restart.stdout).toContain("Daemon restart: started managed daemon process");
+
+    const statusAfterRestart = runCli(["--format", "json", "daemon", "status"]);
+    expect(statusAfterRestart.status).toBe(0);
+    expect(JSON.parse(statusAfterRestart.stdout).running).toBe(true);
+
+    const stop = runCli(["daemon", "stop"]);
+    expect(stop.status).toBe(0);
+    expect(stop.stdout).toContain("Daemon stop: stopped managed daemon process");
+
+    const statusAfterStop = runCli(["--format", "json", "daemon", "status"]);
+    expect(statusAfterStop.status).toBe(0);
+    expect(JSON.parse(statusAfterStop.stdout).running).toBe(false);
+  });
+
+  it("daemon stop fails when daemon is unmanaged in direct mode", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-unmanaged-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+    daemon = await startDaemonForTests(rootDir, tmpDir);
+
+    const stop = runCli(["daemon", "stop"], {
+      env: {
+        TODUAI_DAEMON_LIFECYCLE_MODE: "direct",
+      },
+    });
+
+    expect(stop.status).toBe(1);
+    expect(stop.stderr).toContain("not managed by direct lifecycle wrapper");
+  });
+
+  it("daemon start returns json error output for invalid lifecycle mode", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-invalid-mode-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+
+    const result = runCli(["--format", "json", "daemon", "start"], {
+      env: {
+        TODUAI_DAEMON_LIFECYCLE_MODE: "invalid-mode",
+      },
+    });
+
+    expect(result.status).toBe(1);
+    const json = JSON.parse(result.stdout);
+    expect(json.ok).toBe(false);
+    expect(json.message).toContain("Invalid TODUAI_DAEMON_LIFECYCLE_MODE value");
   });
 
   it("serve command is removed", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
 
-    const output = run("serve", true);
-    expect(output).toContain("unknown command 'serve'");
+    const output = runCli(["serve"]);
+    expect(output.status).toBe(1);
+    expect(output.stderr).toContain("unknown command 'serve'");
   });
 });
+
+function stopManagedDaemon(storagePath: string): void {
+  const pidPath = path.join(storagePath, "daemon.pid");
+
+  if (!fs.existsSync(pidPath)) {
+    return;
+  }
+
+  const rawPid = fs.readFileSync(pidPath, "utf8").trim();
+  const pid = Number.parseInt(rawPid, 10);
+  if (!Number.isInteger(pid) || pid < 1) {
+    fs.rmSync(pidPath, { force: true });
+    return;
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    fs.rmSync(pidPath, { force: true });
+    return;
+  }
+
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      fs.rmSync(pidPath, { force: true });
+      return;
+    }
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // best effort cleanup
+  }
+
+  fs.rmSync(pidPath, { force: true });
+}
 
 async function waitForSocket(socketPath: string, processHandle: ChildProcess, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;

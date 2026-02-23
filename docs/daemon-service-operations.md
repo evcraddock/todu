@@ -16,6 +16,33 @@ toduai daemon status
 toduai --format json daemon status
 ```
 
+## CLI lifecycle wrappers (`daemon start|stop|restart`)
+
+`toduai daemon start`, `toduai daemon stop`, and `toduai daemon restart` follow this deterministic order:
+
+1. If `TODUAI_DAEMON_LIFECYCLE_MODE` is set to one of
+   - `systemd-user`
+   - `launchd`
+   - `direct`
+   it uses that mode.
+2. Otherwise (`auto`, default), CLI prefers service-manager delegation when registration exists:
+   - Linux: `~/.config/systemd/user/toduai-daemon.service`
+   - macOS: `~/Library/LaunchAgents/com.todu.daemon.plist`
+3. If no service registration is detected, CLI uses direct managed fallback mode.
+
+Direct managed fallback mode:
+
+- starts daemon as a detached local process
+- writes managed PID to `<data_dir>/daemon.pid`
+- stops only managed direct-mode daemon processes
+- refuses to stop unmanaged daemon processes (safe fallback behavior)
+
+To force a specific behavior (for scripting/testing):
+
+```bash
+export TODUAI_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
+```
+
 ---
 
 ## Linux (`systemd --user`)
