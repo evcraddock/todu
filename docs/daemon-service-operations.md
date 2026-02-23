@@ -43,6 +43,12 @@ To force a specific behavior (for scripting/testing):
 export TODUAI_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
 ```
 
+Daemon logging level is controlled with `TODUAI_LOG_LEVEL`:
+
+```bash
+export TODUAI_LOG_LEVEL=debug  # error | warn | info | debug
+```
+
 ---
 
 ## Linux (`systemd --user`)

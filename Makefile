@@ -70,9 +70,9 @@ build-cli-binaries: check-bun build ## Build standalone CLI binaries for all pla
 # =============================================================================
 
 run: node_modules ## Run CLI (usage: make run ARGS="task list")
-	TODUAI_CONFIG=$(DEV_CONFIG) TODUAI_NO_SYNC=1 node packages/cli/dist/index.js $(ARGS)
+	@TODUAI_CONFIG=$(DEV_CONFIG) node packages/cli/dist/index.js $(ARGS)
 
-dev: node_modules ## Start dev environment (sync server via overmind)
+dev: node_modules ## Start dev environment (daemon + local sync server via overmind)
 	TODUAI_CONFIG=$(DEV_CONFIG) overmind start -D -s $(SOCKET)
 
 dev-stop: ## Stop dev environment
@@ -82,8 +82,8 @@ dev-stop: ## Stop dev environment
 dev-status: ## Check if dev environment is running (outputs: running | stopped)
 	@overmind ps -s $(SOCKET) 2>/dev/null | grep -q "." && echo "running" || echo "stopped"
 
-dev-logs: ## Stream dev environment logs (Ctrl+C to stop)
-	overmind echo -s $(SOCKET)
+dev-logs: ## Connect to overmind session
+	overmind connect -s $(SOCKET)
 
 dev-tail: ## Show last 100 lines of dev logs (non-blocking)
 	@timeout 2 overmind echo -s $(SOCKET) 2>/dev/null | tail -100 || true

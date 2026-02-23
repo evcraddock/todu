@@ -45,6 +45,24 @@ For local development from source:
 npm run --workspace=packages/daemon dev
 ```
 
+## Daemon log levels
+
+Set daemon log level via `TODUAI_LOG_LEVEL`:
+
+- `error`
+- `warn`
+- `info` (default)
+- `debug`
+
+Examples:
+
+```bash
+TODUAI_LOG_LEVEL=debug make dev
+TODUAI_LOG_LEVEL=warn toduai daemon run
+```
+
+`debug` adds RPC operation context (method, request id, param keys, outcome, duration) to help trace CRUD flows.
+
 ## How CLI finds the daemon socket
 
 By default, CLI connects to:

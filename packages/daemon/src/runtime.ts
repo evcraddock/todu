@@ -2,6 +2,12 @@ import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
 import { createTodu, type Todu } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
+  createDaemonLogger,
+  type DaemonLogger,
+  type DaemonLogLevel,
+  resolveDaemonLogLevelFromEnv,
+} from "./logger.js";
+import {
   createDaemonRpcRouter,
   type DaemonRpcMethodHandler,
   type DaemonRpcNamespaceHandlers,
@@ -33,6 +39,8 @@ export interface DaemonRuntimeConfig {
   socketMode?: number;
   daemonVersion?: string;
   requestTimeoutMs?: number;
+  logLevel?: DaemonLogLevel;
+  logger?: DaemonLogger;
   rpcMethodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
   rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
 }
@@ -45,6 +53,7 @@ export interface ResolvedDaemonRuntimeConfig {
   socketMode: number;
   daemonVersion: string;
   requestTimeoutMs: number;
+  logLevel: DaemonLogLevel;
 }
 
 export interface DaemonRuntimeStatus {
@@ -65,6 +74,7 @@ export interface DaemonRuntime {
 export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRuntime {
   const resolvedStoragePath = config.storagePath ?? resolveStoragePath();
   const resolvedSocketPath = resolveUdsSocketPath(resolvedStoragePath, config.socketPath);
+  const resolvedLogLevel = config.logLevel ?? resolveDaemonLogLevelFromEnv(process.env);
 
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
     storagePath: resolvedStoragePath,
@@ -78,6 +88,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       config.requestTimeoutMs ??
       parsePositiveInteger(process.env.TODUAI_DAEMON_REQUEST_TIMEOUT_MS) ??
       DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
+    logLevel: resolvedLogLevel,
   };
 
   let todu: Todu | null = null;
@@ -95,12 +106,22 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     getTodu: () => todu,
   });
 
+  const runtimeLogger =
+    config.logger ??
+    createDaemonLogger({
+      component: "daemon.runtime",
+      level: resolvedConfig.logLevel,
+    });
+
+  const rpcLogger = runtimeLogger.child("rpc");
+
   const rpcRouter = createDaemonRpcRouter({
     methodHandlers: config.rpcMethodHandlers,
     namespaceHandlers: mergeNamespaceHandlerSets(
       defaultNamespaceHandlers,
       config.rpcNamespaceHandlers ?? {},
     ),
+    logger: rpcLogger,
   });
 
   const transport = createUdsTransport({
@@ -152,6 +173,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   async function startInternal(): Promise<DaemonRuntimeStatus> {
     runtimeStatus.state = "starting";
+    runtimeLogger.info("daemon runtime start requested", {
+      role: runtimeStatus.role,
+      socketPath: resolvedConfig.socketPath,
+    });
 
     try {
       const endpoint = await transport.start();
@@ -178,6 +203,12 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         rpcRouter.dispatchEvent("sync.statusChanged", status);
       });
 
+      runtimeLogger.info("daemon runtime started", {
+        role: runtimeStatus.role,
+        socketPath: endpoint.path,
+        catalogId: runtimeStatus.catalogId,
+      });
+
       return cloneStatus();
     } catch (error) {
       clearEventSubscriptions();
@@ -187,6 +218,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.catalogId = undefined;
       runtimeStatus.transport = undefined;
       todu = null;
+      runtimeLogger.error("daemon runtime failed to start", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -222,6 +256,11 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           }
         }
 
+        runtimeLogger.info("daemon runtime stop requested", {
+          role: runtimeStatus.role,
+          state: runtimeStatus.state,
+        });
+
         runtimeStatus.state = "stopping";
 
         const currentTodu = todu;
@@ -239,6 +278,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           runtimeStatus.startedAt = undefined;
           runtimeStatus.catalogId = undefined;
           runtimeStatus.transport = undefined;
+          runtimeLogger.info("daemon runtime stopped", {
+            role: runtimeStatus.role,
+          });
         }
       })().finally(() => {
         stopPromise = null;
@@ -260,6 +302,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         socketMode: resolvedConfig.socketMode,
         daemonVersion: resolvedConfig.daemonVersion,
         requestTimeoutMs: resolvedConfig.requestTimeoutMs,
+        logLevel: resolvedConfig.logLevel,
       };
     },
   };
