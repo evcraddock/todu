@@ -89,7 +89,7 @@ Run `make help` to see all targets. Key commands:
 | `make run ARGS="..."`    | Run CLI (e.g. `make run ARGS="task list"`)               |
 | `make dev`              | Start overmind dev stack (daemon + local sync server)   |
 | `make dev-status`       | Show overmind stack status                               |
-| `make dev-logs`         | Connect to overmind session                              |
+| `make dev-logs`         | Connect to overmind session (TTY) or stream logs         |
 | `make dev-tail`         | Show recent overmind logs                                |
 | `make dev-stop`         | Stop overmind dev stack                                  |
 | `make dev-electron`     | Launch Electron app in dev mode (hot reload)            |

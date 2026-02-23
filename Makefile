@@ -82,8 +82,12 @@ dev-stop: ## Stop dev environment
 dev-status: ## Check if dev environment is running (outputs: running | stopped)
 	@overmind ps -s $(SOCKET) 2>/dev/null | grep -q "." && echo "running" || echo "stopped"
 
-dev-logs: ## Connect to overmind session
-	overmind connect -s $(SOCKET)
+dev-logs: ## Connect to overmind session (TTY) or stream logs (non-TTY)
+	@if [ -t 1 ]; then \
+		overmind connect -s $(SOCKET); \
+	else \
+		overmind echo -s $(SOCKET); \
+	fi
 
 dev-tail: ## Show last 100 lines of dev logs (non-blocking)
 	@timeout 2 overmind echo -s $(SOCKET) 2>/dev/null | tail -100 || true
