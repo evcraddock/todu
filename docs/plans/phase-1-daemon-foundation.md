@@ -233,3 +233,16 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - router-level timeout behavior and post-timeout health on same connection
   - runtime-level timeout overrun and daemon health verification after timeout
 - Updated timeout policy notes in this phase doc to reflect enforced runtime behavior.
+
+### 2026-02-22 — Task #1933
+
+- Added dedicated protocol conformance harness at `packages/daemon/src/protocol-conformance.test.ts` covering baseline daemon contract behaviors end-to-end over UDS:
+  - envelope correctness for success and error responses
+  - `daemon.hello` success and protocol mismatch behavior
+  - `daemon.ping`/`daemon.status` stability checks
+  - `events.subscribe`/`events.unsubscribe` baseline behavior on a persistent connection
+  - malformed payload mapping to `BAD_REQUEST`
+  - long-running request timeout mapping to `TIMEOUT` with post-timeout health verification
+- Added targeted test command: `npm run test:conformance`.
+- Integrated conformance suite into required CI checks (`.github/workflows/ci.yml`) and local pre-PR workflow (`scripts/pre-pr.sh`).
+- Added developer run note in `docs/CONTRIBUTING.md` describing how to execute protocol conformance tests locally.

@@ -32,6 +32,9 @@ jobs:
       - name: Check (lint + format + typecheck)
         run: make check-ci
 
+      - name: Protocol conformance
+        run: npm run test:conformance
+
       - name: Test
         run: make test
 

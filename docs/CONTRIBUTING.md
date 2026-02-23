@@ -47,7 +47,17 @@ Before opening a PR:
 make pre-pr
 ```
 
-This runs formatting, linting, type checking, and tests. Do not open a PR if this fails.
+This runs formatting, linting, type checking, protocol conformance, and tests. Do not open a PR if this fails.
+
+### Protocol Conformance Suite
+
+For targeted daemon protocol contract checks:
+
+```bash
+npm run test:conformance
+```
+
+This runs the Phase 1 protocol conformance harness (`packages/daemon/src/protocol-conformance.test.ts`) and is gated in CI.
 
 ### 5. Open PR
 
