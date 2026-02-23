@@ -1,4 +1,4 @@
-import type { Habit } from "@todu/core";
+import type { Habit, HabitHistoryEntry, HabitStreak } from "@todu/core";
 import { describeSchedule } from "@todu/engine";
 import type { Command } from "commander";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
@@ -11,19 +11,6 @@ const HABIT_COLUMNS = [
   { key: "nextDue", label: "Next Due" },
   { key: "status", label: "Status" },
 ];
-
-interface HabitStreak {
-  current: number;
-  longest: number;
-  completedToday: boolean;
-  totalCheckins: number;
-}
-
-interface HabitHistoryEntry {
-  date: string;
-  completed: boolean;
-  scheduled: boolean;
-}
 
 function habitToRow(h: Habit): Record<string, string> {
   return {
