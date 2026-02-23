@@ -167,23 +167,98 @@ describe("daemon protocol conformance suite", () => {
     });
   });
 
-  it("returns UNSUPPORTED_CAPABILITY for namespaces not yet adapted", async () => {
+  it("routes recurring/habit/sync methods through default runtime adapters", async () => {
+    await withRunningRuntime({}, async (runtime) => {
+      const projectResponse = await sendRequest(runtime.config().socketPath, {
+        id: "project-for-recurring",
+        method: "project.create",
+        params: {
+          input: {
+            name: "Conformance Recurring",
+          },
+        },
+      });
+
+      const projectId = (projectResponse.result as { id: string }).id;
+
+      const recurringResponse = await sendRequest(runtime.config().socketPath, {
+        id: "recurring-create-conformance",
+        method: "recurring.create",
+        params: {
+          input: {
+            title: "Daily check",
+            schedule: "FREQ=DAILY",
+            timezone: "America/Chicago",
+            startDate: "2026-02-01",
+            projectId,
+          },
+        },
+      });
+
+      expect(recurringResponse.id).toBe("recurring-create-conformance");
+      expect(recurringResponse.result).toMatchObject({
+        title: "Daily check",
+        projectId,
+      });
+
+      const habitResponse = await sendRequest(runtime.config().socketPath, {
+        id: "habit-create-conformance",
+        method: "habit.create",
+        params: {
+          input: {
+            title: "Stretch",
+            schedule: "FREQ=DAILY",
+            timezone: "America/Chicago",
+            startDate: "2026-02-01",
+          },
+        },
+      });
+
+      expect(habitResponse.id).toBe("habit-create-conformance");
+      expect(habitResponse.result).toMatchObject({
+        title: "Stretch",
+      });
+
+      const syncStatus = await sendRequest(runtime.config().socketPath, {
+        id: "sync-status-conformance",
+        method: "sync.status",
+        params: {},
+      });
+
+      expect(syncStatus.id).toBe("sync-status-conformance");
+      expect(syncStatus.result).toMatchObject({
+        local: {
+          mode: "standalone",
+        },
+      });
+
+      const syncCatalog = await sendRequest(runtime.config().socketPath, {
+        id: "sync-catalog-conformance",
+        method: "sync.catalogId",
+        params: {},
+      });
+
+      expect(typeof syncCatalog.result).toBe("string");
+      expect((syncCatalog.result as string).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("returns UNSUPPORTED_CAPABILITY for reserved worker namespace methods", async () => {
     await withRunningRuntime({}, async (runtime) => {
       const response = await sendRequest(runtime.config().socketPath, {
-        id: "recurring-list-unsupported",
-        method: "recurring.list",
+        id: "worker-status-unsupported",
+        method: "worker.status",
         params: {},
       });
 
       expect(response).toEqual({
-        id: "recurring-list-unsupported",
+        id: "worker-status-unsupported",
         error: {
           code: "UNSUPPORTED_CAPABILITY",
-          message: "Method is not implemented: recurring.list",
+          message: "Namespace is reserved but not implemented: worker",
           details: {
-            namespace: "recurring",
-            method: "recurring.list",
-            capability: "recurring.list",
+            namespace: "worker",
+            method: "worker.status",
           },
         },
       });

@@ -1,21 +1,30 @@
 import {
+  type CreateHabitInput,
   type CreateLabelInput,
   type CreateNoteInput,
   type CreateProjectInput,
+  type CreateRecurringInput,
   type CreateTaskInput,
+  createHabitId,
   createLabelId,
   createNoteId,
   createProjectId,
+  createRecurringId,
   createTaskId,
+  type HabitFilter,
   type NoteFilter,
+  ok,
   type ProjectFilter,
+  type RecurringFilter,
   type Result,
   type TaskFilter,
   type TaskSortOptions,
   type ToduError,
+  type UpdateHabitInput,
   type UpdateLabelInput,
   type UpdateNoteInput,
   type UpdateProjectInput,
+  type UpdateRecurringInput,
   type UpdateTaskInput,
 } from "@todu/core";
 import type { Todu } from "@todu/engine";
@@ -27,12 +36,12 @@ import {
 } from "./protocol.js";
 import type { DaemonRpcMethodHandler, DaemonRpcNamespaceHandlers } from "./rpc.js";
 
-export interface CreateProjectTaskLabelNoteNamespaceHandlersOptions {
+export interface CreateCoreNamespaceHandlersOptions {
   getTodu: () => Todu | null;
 }
 
-export function createProjectTaskLabelNoteNamespaceHandlers(
-  options: CreateProjectTaskLabelNoteNamespaceHandlersOptions,
+export function createCoreNamespaceHandlers(
+  options: CreateCoreNamespaceHandlersOptions,
 ): DaemonRpcNamespaceHandlers {
   const method = createMethodExecutor(options.getTodu);
 
@@ -130,7 +139,135 @@ export function createProjectTaskLabelNoteNamespaceHandlers(
         return todu.note.delete(id);
       }),
     },
+    recurring: {
+      create: method(async (request, todu) => {
+        const input = getRequiredObjectParam<CreateRecurringInput>(request, "input");
+        return todu.recurring.create(input);
+      }),
+      list: method(async (request, todu) => {
+        const filter = getOptionalObjectParam<RecurringFilter>(request, "filter");
+        return todu.recurring.list(filter);
+      }),
+      get: method(async (request, todu) => {
+        const id = createRecurringId(getRequiredStringParam(request, "id"));
+        return todu.recurring.get(id);
+      }),
+      update: method(async (request, todu) => {
+        const id = createRecurringId(getRequiredStringParam(request, "id"));
+        const input = getRequiredObjectParam<UpdateRecurringInput>(request, "input");
+        return todu.recurring.update(id, input);
+      }),
+      delete: method(async (request, todu) => {
+        const id = createRecurringId(getRequiredStringParam(request, "id"));
+        return todu.recurring.delete(id);
+      }),
+      pause: method(async (request, todu) => {
+        const id = createRecurringId(getRequiredStringParam(request, "id"));
+        return todu.recurring.pause(id);
+      }),
+      resume: method(async (request, todu) => {
+        const id = createRecurringId(getRequiredStringParam(request, "id"));
+        return todu.recurring.resume(id);
+      }),
+      upcoming: method(async (request, todu) => {
+        const rawOptions = getOptionalObjectParam<{ templateId?: string; days?: number }>(
+          request,
+          "options",
+        );
+
+        const options = rawOptions
+          ? {
+              ...rawOptions,
+              templateId:
+                rawOptions.templateId !== undefined
+                  ? createRecurringId(rawOptions.templateId)
+                  : undefined,
+            }
+          : undefined;
+
+        return todu.recurring.upcoming(options);
+      }),
+      generate: method(async (request, todu) => {
+        const templateId = createRecurringId(getRequiredStringParam(request, "templateId"));
+        const date = getRequiredStringParam(request, "date");
+        return todu.recurring.generate(templateId, date);
+      }),
+      process: method(async (_request, todu) => {
+        return todu.recurring.process();
+      }),
+    },
+    habit: {
+      create: method(async (request, todu) => {
+        const input = getRequiredObjectParam<CreateHabitInput>(request, "input");
+        return todu.habit.create(input);
+      }),
+      list: method(async (request, todu) => {
+        const filter = getOptionalObjectParam<HabitFilter>(request, "filter");
+        return todu.habit.list(filter);
+      }),
+      get: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.get(id);
+      }),
+      update: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        const input = getRequiredObjectParam<UpdateHabitInput>(request, "input");
+        return todu.habit.update(id, input);
+      }),
+      delete: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.delete(id);
+      }),
+      pause: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.pause(id);
+      }),
+      resume: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.resume(id);
+      }),
+      check: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.check(id);
+      }),
+      uncheck: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.uncheck(id);
+      }),
+      streak: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        return todu.habit.streak(id);
+      }),
+      history: method(async (request, todu) => {
+        const id = createHabitId(getRequiredStringParam(request, "id"));
+        const days = getOptionalNumberParam(request, "days");
+        return todu.habit.history(id, days);
+      }),
+    },
+    sync: {
+      start: method(async (_request, todu) => {
+        await todu.sync.start();
+        return ok(undefined);
+      }),
+      stop: method(async (_request, todu) => {
+        await todu.sync.stop();
+        return ok(undefined);
+      }),
+      status: method(async (_request, todu) => {
+        return ok(todu.sync.status());
+      }),
+      catalogId: method(async (_request, todu) => {
+        return ok(todu.sync.getCatalogId());
+      }),
+    },
   };
+}
+
+// Kept for compatibility with previously merged code/tests.
+export function createProjectTaskLabelNoteNamespaceHandlers(
+  options: CreateCoreNamespaceHandlersOptions,
+): DaemonRpcNamespaceHandlers {
+  return createCoreNamespaceHandlers(options);
 }
 
 function createMethodExecutor(
@@ -175,6 +312,23 @@ function getRequiredStringParam(request: ProtocolRequestFrame, field: string): s
   }
 
   return value;
+}
+
+function getOptionalNumberParam(request: ProtocolRequestFrame, field: string): number | undefined {
+  const value = request.params[field];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+    throw createProtocolError(
+      "BAD_REQUEST",
+      `${request.method} requires params.${field} as a positive number`,
+      { field },
+    );
+  }
+
+  return Math.floor(value);
 }
 
 function getRequiredObjectParam<T extends object>(request: ProtocolRequestFrame, field: string): T {

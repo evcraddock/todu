@@ -126,7 +126,20 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - successful `Result` values map to protocol success frames
   - domain errors map through protocol error taxonomy (`NOT_FOUND`, `VALIDATION_ERROR`, etc.)
 - Normalized void success results (`Result<void>`) to `result: null` to preserve protocol success envelope shape.
-- Added/expanded runtime + conformance coverage for:
-  - callable project/task/label/note methods
-  - domain and request validation error mapping
-  - unchanged fallback `UNSUPPORTED_CAPABILITY` behavior for still-unadapted namespaces (for example `recurring.*`).
+- Added/expanded runtime + conformance coverage for callable methods and error mapping.
+
+### 2026-02-22 — Task #1936
+
+- Extended daemon adapters in `packages/daemon/src/core-rpc-adapters.ts` to cover:
+  - `recurring.*`
+  - `habit.*`
+  - `sync.*`
+- Updated runtime default namespace wiring to use full core adapter set (project/task/label/note/recurring/habit/sync).
+- Updated capability reporting so `daemon.hello` method capabilities include the full core method surface.
+- Added reserved namespace handling for `worker.*`:
+  - returns structured `UNSUPPORTED_CAPABILITY` (reserved, not implemented)
+  - preserves `METHOD_NOT_FOUND` for unknown non-reserved methods
+- Added/expanded runtime and conformance coverage for:
+  - recurring/habit/sync method availability
+  - capability list coverage for newly implemented namespaces
+  - reserved namespace error behavior (`worker.*`)

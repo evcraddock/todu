@@ -14,13 +14,13 @@ import {
 export const DAEMON_PROTOCOL_VERSION = "1";
 export const DEFAULT_DAEMON_VERSION = "dev";
 export const DEFAULT_DAEMON_REQUEST_TIMEOUT_MS = 30_000;
-export const DAEMON_CAPABILITY_METHODS = [
+export const DAEMON_BASE_METHODS = [
   "daemon.hello",
   "daemon.ping",
   "daemon.status",
   "events.subscribe",
   "events.unsubscribe",
-];
+] as const;
 export const DAEMON_CAPABILITY_EVENTS = ["data.changed", "sync.statusChanged"] as const;
 
 export const CORE_DAEMON_NAMESPACE_METHODS = {
@@ -56,10 +56,22 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
   sync: ["start", "stop", "status", "catalogId"],
 } as const;
 
+export const RESERVED_DAEMON_NAMESPACES = ["worker"] as const;
+
+export const DAEMON_CAPABILITY_METHODS = [
+  ...DAEMON_BASE_METHODS,
+  ...listCoreNamespaceMethods(),
+] as const;
+
 export type DaemonCapabilityEvent = (typeof DAEMON_CAPABILITY_EVENTS)[number];
 export type CoreDaemonNamespace = keyof typeof CORE_DAEMON_NAMESPACE_METHODS;
+export type ReservedDaemonNamespace = (typeof RESERVED_DAEMON_NAMESPACES)[number];
 
-export type DaemonRpcNamespace = "daemon" | "events" | CoreDaemonNamespace;
+export type DaemonRpcNamespace =
+  | "daemon"
+  | "events"
+  | CoreDaemonNamespace
+  | ReservedDaemonNamespace;
 export type DaemonRpcNamespaceMethodTable = Record<string, DaemonRpcMethodHandler>;
 export type DaemonRpcNamespaceHandlers = Partial<
   Record<DaemonRpcNamespace, DaemonRpcNamespaceMethodTable>
@@ -182,6 +194,21 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     const handler = resolveMethodHandler(request.method, namespaceHandlers, methodHandlers);
 
     if (!handler) {
+      const parsedMethod = parseMethod(request.method);
+      if (parsedMethod && isReservedDaemonNamespace(parsedMethod.namespace)) {
+        return createProtocolErrorFrame(
+          request.id,
+          createProtocolError(
+            "UNSUPPORTED_CAPABILITY",
+            `Namespace is reserved but not implemented: ${parsedMethod.namespace}`,
+            {
+              namespace: parsedMethod.namespace,
+              method: request.method,
+            },
+          ),
+        );
+      }
+
       return createProtocolErrorFrame(
         request.id,
         createProtocolError("METHOD_NOT_FOUND", `Unknown method: ${request.method}`, {
@@ -367,6 +394,19 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
   };
 }
 
+function listCoreNamespaceMethods(): string[] {
+  const methods: string[] = [];
+
+  const namespaces = Object.keys(CORE_DAEMON_NAMESPACE_METHODS).sort() as CoreDaemonNamespace[];
+  for (const namespace of namespaces) {
+    for (const methodName of CORE_DAEMON_NAMESPACE_METHODS[namespace]) {
+      methods.push(`${namespace}.${methodName}`);
+    }
+  }
+
+  return methods;
+}
+
 function createDefaultNamespaceHandlers(): DaemonRpcNamespaceHandlers {
   return {
     daemon: {
@@ -489,7 +529,15 @@ function isDaemonRpcNamespace(value: string): value is DaemonRpcNamespace {
     return true;
   }
 
+  if (isReservedDaemonNamespace(value)) {
+    return true;
+  }
+
   return value in CORE_DAEMON_NAMESPACE_METHODS;
+}
+
+function isReservedDaemonNamespace(value: string): value is ReservedDaemonNamespace {
+  return (RESERVED_DAEMON_NAMESPACES as readonly string[]).includes(value);
 }
 
 function handleDaemonHello(

@@ -79,6 +79,10 @@ describe("createDaemonRuntime", () => {
       },
     });
 
+    expect(DAEMON_CAPABILITY_METHODS).toEqual(
+      expect.arrayContaining(["recurring.process", "habit.history", "sync.catalogId"]),
+    );
+
     await runtime.stop();
   });
 
@@ -505,7 +509,343 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
-  it("maps domain and request validation errors for project/task/label/note methods", async () => {
+  it("routes recurring namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-recurring-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Recurring Project",
+        },
+      },
+    });
+
+    const projectId = (createProjectResponse.result as { id: string }).id;
+
+    const createRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-create-1",
+      method: "recurring.create",
+      params: {
+        input: {
+          title: "Daily standup",
+          schedule: "FREQ=DAILY",
+          timezone: "America/Chicago",
+          startDate: "2026-02-01",
+          projectId,
+        },
+      },
+    });
+
+    const recurringId = (createRecurringResponse.result as { id: string }).id;
+
+    const listRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-list-1",
+      method: "recurring.list",
+      params: {
+        filter: {
+          projectId,
+        },
+      },
+    });
+
+    expect(listRecurringResponse.result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: recurringId, title: "Daily standup" }),
+      ]),
+    );
+
+    const getRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-get-1",
+      method: "recurring.get",
+      params: {
+        id: recurringId,
+      },
+    });
+
+    expect(getRecurringResponse.result).toEqual(
+      expect.objectContaining({ id: recurringId, projectId }),
+    );
+
+    const updateRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-update-1",
+      method: "recurring.update",
+      params: {
+        id: recurringId,
+        input: {
+          title: "Daily standup updated",
+          priority: "high",
+        },
+      },
+    });
+
+    expect(updateRecurringResponse.result).toEqual(
+      expect.objectContaining({
+        id: recurringId,
+        title: "Daily standup updated",
+        priority: "high",
+      }),
+    );
+
+    const pauseRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-pause-1",
+      method: "recurring.pause",
+      params: {
+        id: recurringId,
+      },
+    });
+
+    expect(pauseRecurringResponse.result).toEqual(
+      expect.objectContaining({ id: recurringId, paused: true }),
+    );
+
+    const resumeRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-resume-1",
+      method: "recurring.resume",
+      params: {
+        id: recurringId,
+      },
+    });
+
+    expect(resumeRecurringResponse.result).toEqual(
+      expect.objectContaining({ id: recurringId, paused: false }),
+    );
+
+    const upcomingRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-upcoming-1",
+      method: "recurring.upcoming",
+      params: {
+        options: {
+          templateId: recurringId,
+          days: 14,
+        },
+      },
+    });
+
+    expect(Array.isArray(upcomingRecurringResponse.result)).toBe(true);
+
+    const generateRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-generate-1",
+      method: "recurring.generate",
+      params: {
+        templateId: recurringId,
+        date: "2026-02-15",
+      },
+    });
+
+    expect(generateRecurringResponse.result).toEqual(
+      expect.objectContaining({ projectId, templateId: recurringId }),
+    );
+
+    const processRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-process-1",
+      method: "recurring.process",
+      params: {},
+    });
+
+    expect(Array.isArray(processRecurringResponse.result)).toBe(true);
+
+    const deleteRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-delete-1",
+      method: "recurring.delete",
+      params: {
+        id: recurringId,
+      },
+    });
+
+    expect(deleteRecurringResponse).toEqual({
+      id: "recurring-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes habit and sync namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const createHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-create-1",
+      method: "habit.create",
+      params: {
+        input: {
+          title: "Meditate",
+          schedule: "FREQ=DAILY",
+          timezone: "America/Chicago",
+          startDate: "2026-02-01",
+        },
+      },
+    });
+
+    const habitId = (createHabitResponse.result as { id: string }).id;
+
+    const listHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-list-1",
+      method: "habit.list",
+      params: {},
+    });
+
+    expect(listHabitResponse.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: habitId, title: "Meditate" })]),
+    );
+
+    const getHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-get-1",
+      method: "habit.get",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(getHabitResponse.result).toEqual(expect.objectContaining({ id: habitId }));
+
+    const updateHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-update-1",
+      method: "habit.update",
+      params: {
+        id: habitId,
+        input: {
+          title: "Meditate daily",
+        },
+      },
+    });
+
+    expect(updateHabitResponse.result).toEqual(
+      expect.objectContaining({ id: habitId, title: "Meditate daily" }),
+    );
+
+    const checkHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-check-1",
+      method: "habit.check",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(checkHabitResponse.result).toEqual(expect.objectContaining({ completed: true }));
+
+    const streakHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-streak-1",
+      method: "habit.streak",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(streakHabitResponse.result).toEqual(expect.objectContaining({ totalCheckins: 1 }));
+
+    const historyHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-history-1",
+      method: "habit.history",
+      params: {
+        id: habitId,
+        days: 7,
+      },
+    });
+
+    expect(Array.isArray(historyHabitResponse.result)).toBe(true);
+
+    const uncheckHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-uncheck-1",
+      method: "habit.uncheck",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(uncheckHabitResponse).toEqual({
+      id: "habit-uncheck-1",
+      result: null,
+    });
+
+    const pauseHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-pause-1",
+      method: "habit.pause",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(pauseHabitResponse.result).toEqual(
+      expect.objectContaining({ id: habitId, paused: true }),
+    );
+
+    const resumeHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-resume-1",
+      method: "habit.resume",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(resumeHabitResponse.result).toEqual(
+      expect.objectContaining({ id: habitId, paused: false }),
+    );
+
+    const syncStatusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-status-1",
+      method: "sync.status",
+      params: {},
+    });
+
+    expect(syncStatusResponse.result).toEqual(
+      expect.objectContaining({
+        local: expect.objectContaining({ mode: "standalone" }),
+      }),
+    );
+
+    const syncCatalogIdResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-catalog-id-1",
+      method: "sync.catalogId",
+      params: {},
+    });
+
+    expect(syncCatalogIdResponse.result).toBe(runtime.status().catalogId);
+
+    const syncStartResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-start-1",
+      method: "sync.start",
+      params: {},
+    });
+
+    expect(syncStartResponse).toEqual({
+      id: "sync-start-1",
+      result: null,
+    });
+
+    const syncStopResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-stop-1",
+      method: "sync.stop",
+      params: {},
+    });
+
+    expect(syncStopResponse).toEqual({
+      id: "sync-stop-1",
+      result: null,
+    });
+
+    const deleteHabitResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-delete-1",
+      method: "habit.delete",
+      params: {
+        id: habitId,
+      },
+    });
+
+    expect(deleteHabitResponse).toEqual({
+      id: "habit-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("maps domain and request validation errors for project/task/label/note/recurring/habit/sync methods", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
     await runtime.start();
@@ -578,6 +918,91 @@ describe("createDaemonRuntime", () => {
       details: {
         entity: "project",
         id: "proj-missing",
+      },
+    });
+
+    const recurringBadRequestResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-get-bad-request",
+      method: "recurring.get",
+      params: {
+        id: 99,
+      },
+    });
+
+    expect(recurringBadRequestResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "recurring.get requires params.id as a non-empty string",
+      details: {
+        field: "id",
+      },
+    });
+
+    const recurringNotFoundResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-get-not-found",
+      method: "recurring.get",
+      params: {
+        id: "rec-missing",
+      },
+    });
+
+    expect(recurringNotFoundResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "recurring template not found: rec-missing",
+      details: {
+        entity: "recurring template",
+        id: "rec-missing",
+      },
+    });
+
+    const habitValidationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-create-validation",
+      method: "habit.create",
+      params: {
+        input: {
+          title: "Bad Habit",
+          schedule: "FREQ=HOURLY",
+          timezone: "UTC",
+          startDate: "2026-02-01",
+        },
+      },
+    });
+
+    expect(habitValidationResponse.error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        field: "schedule",
+      },
+    });
+
+    const habitHistoryBadRequestResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-history-bad-request",
+      method: "habit.history",
+      params: {
+        id: "hab-missing",
+        days: "7",
+      },
+    });
+
+    expect(habitHistoryBadRequestResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "habit.history requires params.days as a positive number",
+      details: {
+        field: "days",
+      },
+    });
+
+    const reservedNamespaceResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-unsupported",
+      method: "worker.status",
+      params: {},
+    });
+
+    expect(reservedNamespaceResponse.error).toEqual({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Namespace is reserved but not implemented: worker",
+      details: {
+        namespace: "worker",
+        method: "worker.status",
       },
     });
 
