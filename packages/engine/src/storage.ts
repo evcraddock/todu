@@ -18,6 +18,8 @@ import {
 const SYNC_THROTTLE_MS = 100;
 /** Extra time after sync message generation for WebSocket delivery */
 const SYNC_DELIVERY_MS = 20;
+/** Catalog load timeout for startup and join checks */
+const CATALOG_LOAD_TIMEOUT_MS = 10_000;
 
 /**
  * Wait for pending sync messages to be generated and delivered.
@@ -48,6 +50,10 @@ async function waitForSyncFlush(repo: Repo, documentId: DocumentId): Promise<voi
   });
 }
 
+function getCatalogMarkerPath(storagePath: string): string {
+  return path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
+}
+
 export interface Storage {
   /** The Automerge repo instance */
   repo: Repo;
@@ -62,46 +68,110 @@ export interface Storage {
   close(): Promise<void>;
 }
 
+export interface CatalogJoinSwitch {
+  /** Catalog marker that was active before this switch started */
+  previousCatalogId: DocumentId | null;
+
+  /** Target catalog marker requested by join */
+  targetCatalogId: DocumentId;
+
+  /** Finalize the switch after join validation/sync succeeds */
+  commit(): void;
+
+  /** Restore prior catalog marker if the join attempt fails */
+  rollback(): void;
+}
+
 /**
- * Initialize storage: create data directory, set up Automerge repo,
- * and load or create the catalog document.
+ * Begin a catalog marker switch for join flows.
+ *
+ * This is the storage-layer entrypoint that explicit join workflows use.
+ * The caller should:
+ * 1) validate target catalog reachability,
+ * 2) perform switch-dependent work,
+ * 3) call commit() on success or rollback() on failure.
  */
-export async function initStorage(storagePath: string, repo?: Repo): Promise<Storage> {
-  // Ensure data directory exists
+export function beginCatalogJoinSwitch(
+  storagePath: string,
+  targetCatalogId: DocumentId,
+): CatalogJoinSwitch {
+  const markerPath = getCatalogMarkerPath(storagePath);
+  const previousCatalogId = fs.existsSync(markerPath)
+    ? (fs.readFileSync(markerPath, "utf-8").trim() as DocumentId)
+    : null;
+
+  fs.writeFileSync(markerPath, targetCatalogId, "utf-8");
+
+  return {
+    previousCatalogId,
+    targetCatalogId,
+    commit(): void {
+      // Marker already points at target; nothing else needed yet.
+    },
+    rollback(): void {
+      if (previousCatalogId) {
+        fs.writeFileSync(markerPath, previousCatalogId, "utf-8");
+      } else if (fs.existsSync(markerPath)) {
+        fs.unlinkSync(markerPath);
+      }
+    },
+  };
+}
+
+/**
+ * Initialize persistent storage for bootstrap flows.
+ *
+ * Bootstrap behavior:
+ * - No marker: create initial catalog
+ * - Existing marker: load that catalog
+ * - Existing but unreachable marker: fail (do not implicitly create a new catalog)
+ */
+export async function initBootstrapStorage(storagePath: string, repo?: Repo): Promise<Storage> {
   fs.mkdirSync(storagePath, { recursive: true });
 
-  // Use provided repo or create a new one with filesystem storage
   const actualRepo =
     repo ??
     new Repo({
       storage: new NodeFSStorageAdapter(storagePath),
     });
 
-  // Load or create catalog document
-  const catalog = await loadOrCreateCatalog(actualRepo, storagePath);
+  const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
 
-  return {
-    repo: actualRepo,
-    catalog,
-    ephemeral: false,
-    async close() {
-      // Both flush() and shutdown() (which calls flush internally) can throw
-      // "DocHandle is not ready" when a document is in "requesting" state —
-      // this happens when a connected remote peer is mid-sync during close.
-      // Requesting documents have no local content to persist, so ignoring
-      // the error is safe and correct.
-      try {
-        await actualRepo.flush();
-      } catch {
-        // Safe to ignore — requesting docs have no content to save
-      }
-      try {
-        await actualRepo.shutdown();
-      } catch {
-        // shutdown() calls flush() internally — same safe-to-ignore error
-      }
-    },
-  };
+  return createPersistentStorage(actualRepo, catalog);
+}
+
+/**
+ * Initialize persistent storage for explicit join flows.
+ *
+ * Join behavior:
+ * - Requires the target catalog to be reachable
+ * - Never creates a fresh catalog implicitly
+ */
+export async function initJoinStorage(
+  storagePath: string,
+  targetCatalogId: DocumentId,
+  repo?: Repo,
+): Promise<Storage> {
+  fs.mkdirSync(storagePath, { recursive: true });
+
+  const actualRepo =
+    repo ??
+    new Repo({
+      storage: new NodeFSStorageAdapter(storagePath),
+    });
+
+  const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
+
+  return createPersistentStorage(actualRepo, catalog);
+}
+
+/**
+ * Backward-compatible storage initialization entrypoint.
+ *
+ * Defaults to bootstrap semantics.
+ */
+export async function initStorage(storagePath: string, repo?: Repo): Promise<Storage> {
+  return initBootstrapStorage(storagePath, repo);
 }
 
 /**
@@ -122,7 +192,7 @@ export async function initEphemeralStorage(storagePath: string): Promise<
   }
 > {
   // Read the catalog document ID from the marker file
-  const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
+  const markerPath = getCatalogMarkerPath(storagePath);
   if (!fs.existsSync(markerPath)) {
     throw new Error(
       "No catalog marker found. Run the Electron app or CLI standalone first to create data.",
@@ -178,36 +248,75 @@ export async function initEphemeralStorage(storagePath: string): Promise<
   };
 }
 
+function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>): Storage {
+  return {
+    repo,
+    catalog,
+    ephemeral: false,
+    async close() {
+      // Both flush() and shutdown() (which calls flush internally) can throw
+      // "DocHandle is not ready" when a document is in "requesting" state —
+      // this happens when a connected remote peer is mid-sync during close.
+      // Requesting documents have no local content to persist, so ignoring
+      // the error is safe and correct.
+      try {
+        await repo.flush();
+      } catch {
+        // Safe to ignore — requesting docs have no content to save
+      }
+      try {
+        await repo.shutdown();
+      } catch {
+        // shutdown() calls flush() internally — same safe-to-ignore error
+      }
+    },
+  };
+}
+
 /**
- * Load existing catalog document or create a new one.
- * Uses a marker file to store the document ID between sessions.
+ * Load existing catalog document from marker if present.
+ * If no marker exists, bootstrap a new catalog.
  */
-async function loadOrCreateCatalog(
+async function loadOrBootstrapCatalog(
   repo: Repo,
   storagePath: string,
 ): Promise<DocHandle<CatalogDocument>> {
-  const markerPath = path.join(storagePath, `${CATALOG_DOC_KEY}.id`);
+  const markerPath = getCatalogMarkerPath(storagePath);
 
-  // Try to load existing catalog
   if (fs.existsSync(markerPath)) {
     const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
-    try {
-      const handle = await repo.find<CatalogDocument>(docId, {
-        signal: AbortSignal.timeout(10_000),
-      });
-      migrateCatalog(handle);
-      return handle;
-    } catch {
-      // Document not reachable (unavailable or timeout) — fall through to
-      // create a new catalog. This can happen when a join code is invalid
-      // or the relay doesn't have the document yet.
-      console.warn(`[storage] catalog ${docId} not reachable within 10s, creating new catalog`);
-      // Remove stale marker so next launch doesn't try again
-      fs.unlinkSync(markerPath);
-    }
+    return loadCatalogById(repo, docId, "bootstrap");
   }
 
-  // Create new catalog
+  return createBootstrapCatalog(repo, markerPath);
+}
+
+/**
+ * Load an existing catalog by ID and run schema migration if needed.
+ * Does not create a replacement catalog on failure.
+ */
+async function loadCatalogById(
+  repo: Repo,
+  docId: DocumentId,
+  mode: "bootstrap" | "join",
+): Promise<DocHandle<CatalogDocument>> {
+  try {
+    const handle = await repo.find<CatalogDocument>(docId, {
+      signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
+    });
+    migrateCatalog(handle);
+    return handle;
+  } catch {
+    throw new Error(
+      `[storage] ${mode} catalog ${docId} not reachable within ${CATALOG_LOAD_TIMEOUT_MS}ms`,
+    );
+  }
+}
+
+/**
+ * Create a new catalog and persist its marker.
+ */
+function createBootstrapCatalog(repo: Repo, markerPath: string): DocHandle<CatalogDocument> {
   const handle = repo.create<CatalogDocument>();
   handle.change((doc: CatalogDocument) => {
     const empty = createEmptyCatalog();
@@ -221,7 +330,6 @@ async function loadOrCreateCatalog(
     doc.settings = empty.settings;
   });
 
-  // Save document ID for next session
   fs.writeFileSync(markerPath, handle.documentId, "utf-8");
 
   return handle;

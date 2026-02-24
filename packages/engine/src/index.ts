@@ -13,7 +13,7 @@ import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
-import { initEphemeralStorage, initStorage, type Storage } from "./storage.js";
+import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
 import { addRemoteSyncAdapter, connectSyncClient } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
@@ -37,7 +37,12 @@ export {
 } from "./schedule.js";
 export type { ProcessingContext, SchedulableItem, TemplateProcessor } from "./scheduling.js";
 export { clearProcessors, getRegisteredProcessors, registerProcessor } from "./scheduling.js";
-export type { Storage } from "./storage.js";
+export type { CatalogJoinSwitch, Storage } from "./storage.js";
+export {
+  beginCatalogJoinSwitch,
+  initBootstrapStorage,
+  initJoinStorage,
+} from "./storage.js";
 export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
@@ -104,7 +109,7 @@ export async function createTodu(
     if (config?.remoteSync) {
       initialRemoteAdapter = addRemoteSyncAdapter(repo, config.remoteSync.server);
     }
-    storage = await initStorage(resolvedConfig.storagePath, repo);
+    storage = await initBootstrapStorage(resolvedConfig.storagePath, repo);
 
     if (config?.syncServer) {
       syncServer = startSyncServer(storage.repo, config.syncPort);
