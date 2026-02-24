@@ -155,11 +155,16 @@ describe("daemon event parity", () => {
     } finally {
       await runtime.stop();
       await relay.close();
+      await waitForStorageSettled();
       fs.rmSync(runtimeDir, { recursive: true, force: true });
       fs.rmSync(relayDir, { recursive: true, force: true });
     }
   });
 });
+
+async function waitForStorageSettled(delayMs = 100): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
 
 interface JsonLineClient {
   send(frame: Record<string, unknown>): void;

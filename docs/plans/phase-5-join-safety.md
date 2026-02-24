@@ -19,9 +19,11 @@ Refactor catalog switching so bootstrap and join are explicit, separate flows. J
 
 1. **Explicit bootstrap path**
    - Initial catalog creation only when no marker/catalog exists
+   - Storage API: `initBootstrapStorage(...)`
 
 2. **Explicit join path**
    - Catalog switch operation that never falls back to fresh catalog creation
+   - Storage API: `initJoinStorage(...)`
 
 3. **Transactional join execution**
    - Validate join code
@@ -29,6 +31,7 @@ Refactor catalog switching so bootstrap and join are explicit, separate flows. J
    - Snapshot current pointer/state
    - Atomic switch
    - Roll back on failure
+   - Storage entrypoint for switch/rollback scaffolding: `beginCatalogJoinSwitch(...)`
 
 4. **Daemon-owned join API**
    - Join logic implemented in engine/storage and invoked via daemon method
