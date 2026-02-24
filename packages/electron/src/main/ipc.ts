@@ -2,10 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { CATALOG_DOC_KEY, err, ok, type Result, type ToduError } from "@todu/core";
 import { app, ipcMain } from "electron";
-import type {
-  DaemonConnectionError,
-  DaemonConnectionManager,
-} from "./daemon-connection-manager.js";
+import type { DaemonConnectionManager } from "./daemon-connection-manager.js";
+import { formatDaemonInvocationError, mapDaemonErrorToToduError } from "./daemon-error-mapping.js";
 
 interface IpcAppLifecycle {
   relaunch(): void;
@@ -22,6 +20,8 @@ interface CreateDaemonIpcHandlersOptions extends RegisterIpcHandlersOptions {
 }
 
 type IpcHandler = (_event: unknown, ...args: unknown[]) => Promise<unknown> | unknown;
+
+export { mapDaemonErrorToToduError };
 
 /**
  * Register all IPC handlers for renderer API channels.
@@ -162,41 +162,4 @@ async function invokeDaemonRaw<T>(
   }
 
   throw new Error(formatDaemonInvocationError(method, response.error));
-}
-
-export function mapDaemonErrorToToduError(method: string, error: DaemonConnectionError): ToduError {
-  if (error.code === "NOT_FOUND") {
-    return {
-      type: "not-found",
-      entity: stringDetail(error, "entity") ?? inferEntityFromMethod(method),
-      id: stringDetail(error, "id") ?? "unknown",
-    };
-  }
-
-  if (error.code === "VALIDATION_ERROR" || error.code === "BAD_REQUEST") {
-    return {
-      type: "validation",
-      field: stringDetail(error, "field") ?? "request",
-      message: error.message,
-    };
-  }
-
-  return {
-    type: "storage",
-    message: formatDaemonInvocationError(method, error),
-  };
-}
-
-function formatDaemonInvocationError(method: string, error: DaemonConnectionError): string {
-  return `${method} failed (${error.code}): ${error.message}`;
-}
-
-function inferEntityFromMethod(method: string): string {
-  const namespace = method.split(".")[0];
-  return namespace.length > 0 ? namespace : "entity";
-}
-
-function stringDetail(error: DaemonConnectionError, key: string): string | undefined {
-  const value = error.details?.[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

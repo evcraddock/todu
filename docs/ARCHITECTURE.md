@@ -24,6 +24,7 @@ Project context:
 2. **CLI/Electron are thin clients**
    - Clients talk to local daemon only.
    - Clients do not own persistent Automerge storage directly.
+   - Electron main runtime must not initialize local engine ownership paths (for example, no `createTodu()` startup ownership in Electron main process).
 
 3. **Fail-fast client behavior**
    - If local daemon is unavailable, clients fail with clear instructions.
