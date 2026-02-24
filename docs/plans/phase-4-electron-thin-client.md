@@ -27,6 +27,9 @@ Migrate Electron to daemon-first architecture by replacing direct engine/storage
    - Main process IPC handlers forward to daemon methods
    - Remove direct engine namespace calls in Electron runtime path
 
+   Status update:
+   - Electron main IPC handlers now invoke daemon RPC methods and map protocol errors to renderer Result shapes while preserving existing channel contracts.
+
 3. **Runtime ownership removal**
    - Remove direct persistent storage ownership assumptions from Electron startup
    - Electron should no longer be local state owner

@@ -81,7 +81,10 @@ async function init(): Promise<void> {
   });
 
   // Register all IPC handlers
-  registerIpcHandlers(todu, storagePath);
+  registerIpcHandlers({
+    daemon: daemonConnectionManager,
+    storagePath,
+  });
 
   // Create the main window
   const windowState = restoreWindowState();
