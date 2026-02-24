@@ -2,7 +2,12 @@ import type { Todu } from "@todu/engine";
 import { createTodu } from "@todu/engine";
 import { app, BrowserWindow } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
-import { setupChangeNotifications } from "./change-notifications.js";
+import {
+  buildReconnectRefreshEvents,
+  dispatchRendererEvent,
+  mapDaemonEventToRendererEvent,
+  subscribeRendererToDaemonEvents,
+} from "./change-notifications.js";
 import { loadElectronConfig } from "./config.js";
 import {
   createDaemonConnectionManager,
@@ -55,18 +60,27 @@ async function init(): Promise<void> {
   daemonConnectionManager = createDaemonConnectionManager({
     socketPath: resolveDaemonSocketPath(storagePath),
     hooks: {
-      onConnected: async ({ isReconnect, request }) => {
+      onConnected: async ({ request }) => {
         const hello = await request("daemon.hello", {
           protocolVersion: DAEMON_PROTOCOL_VERSION,
         });
         assertRequestOk(hello, "daemon.hello");
 
-        if (isReconnect) {
-          const subscribe = await request("events.subscribe", {
-            events: ["data.changed", "sync.statusChanged"],
-          });
-          assertRequestOk(subscribe, "events.subscribe");
+        await subscribeRendererToDaemonEvents({ request });
+      },
+      onReconnected: async ({ request }) => {
+        const refreshEvents = await buildReconnectRefreshEvents({ request });
+        for (const event of refreshEvents) {
+          dispatchRendererEvent(getMainWindow(), event);
         }
+      },
+      onEvent: (event) => {
+        const rendererEvent = mapDaemonEventToRendererEvent(event);
+        if (!rendererEvent) {
+          return;
+        }
+
+        dispatchRendererEvent(getMainWindow(), rendererEvent);
       },
     },
   });
@@ -89,9 +103,6 @@ async function init(): Promise<void> {
   // Create the main window
   const windowState = restoreWindowState();
   mainWindow = createWindow(windowState);
-
-  // Forward Automerge change events to renderer
-  setupChangeNotifications(todu, mainWindow);
 
   // Initialize settings, OAuth, and agent
   registerSettingsIpc();
