@@ -38,6 +38,10 @@ Migrate Electron to daemon-first architecture by replacing direct engine/storage
    - Preserve renderer invalidation/update behavior from daemon events
    - Maintain sync status indicators from `sync.statusChanged`
 
+   Status update:
+   - Electron main process now subscribes to daemon `data.changed` and `sync.statusChanged` events and forwards them over existing renderer channels (`todu:data:changed`, `todu:sync:status-changed`).
+   - Reconnect path now applies best-effort refresh semantics by forcing renderer data invalidation and requesting fresh `sync.status` snapshot.
+
 5. **Electron daemon-mode tests**
    - Integration tests against daemon harness
    - Reconnect recovery tests
