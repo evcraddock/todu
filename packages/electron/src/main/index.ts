@@ -4,6 +4,13 @@ import { app, BrowserWindow } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import { setupChangeNotifications } from "./change-notifications.js";
 import { loadElectronConfig } from "./config.js";
+import {
+  createDaemonConnectionManager,
+  DAEMON_PROTOCOL_VERSION,
+  type DaemonConnectionManager,
+  type DaemonConnectionResult,
+  resolveDaemonSocketPath,
+} from "./daemon-connection-manager.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerOAuthIpc, unregisterOAuthIpc } from "./oauth.js";
 
@@ -14,6 +21,7 @@ import { createWindow, restoreWindowState, saveWindowState } from "./window.js";
 
 let mainWindow: BrowserWindow | null = null;
 let todu: Todu | null = null;
+let daemonConnectionManager: DaemonConnectionManager | null = null;
 let isQuitting = false;
 
 function getMainWindow(): BrowserWindow | null {
@@ -31,9 +39,38 @@ function showWindowWithAction(action: string): void {
   }
 }
 
+function assertRequestOk<T>(
+  result: DaemonConnectionResult<T>,
+  method: string,
+): asserts result is { ok: true; value: T } {
+  if (!result.ok) {
+    throw new Error(`Daemon ${method} failed: ${result.error.code} ${result.error.message}`);
+  }
+}
+
 async function init(): Promise<void> {
   // Load full config (data dir + remote sync) using the same config chain as CLI
   const { storagePath, remoteSync } = loadElectronConfig();
+
+  daemonConnectionManager = createDaemonConnectionManager({
+    socketPath: resolveDaemonSocketPath(storagePath),
+    hooks: {
+      onConnected: async ({ isReconnect, request }) => {
+        const hello = await request("daemon.hello", {
+          protocolVersion: DAEMON_PROTOCOL_VERSION,
+        });
+        assertRequestOk(hello, "daemon.hello");
+
+        if (isReconnect) {
+          const subscribe = await request("events.subscribe", {
+            events: ["data.changed", "sync.statusChanged"],
+          });
+          assertRequestOk(subscribe, "events.subscribe");
+        }
+      },
+    },
+  });
+  daemonConnectionManager.start();
 
   // Initialize engine with sync server so CLI can connect,
   // and connect to remote sync server if configured
@@ -90,6 +127,8 @@ app.whenReady().then(init);
 // Mark as quitting so the close handler allows it through
 app.on("before-quit", () => {
   isQuitting = true;
+  daemonConnectionManager?.stop();
+  daemonConnectionManager = null;
 });
 
 app.on("window-all-closed", async () => {
@@ -99,6 +138,9 @@ app.on("window-all-closed", async () => {
 
   unregisterOAuthIpc();
   unregisterSettingsIpc();
+  daemonConnectionManager?.stop();
+  daemonConnectionManager = null;
+
   if (todu) {
     await todu.close();
     todu = null;
