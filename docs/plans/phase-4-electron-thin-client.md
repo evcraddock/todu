@@ -47,6 +47,16 @@ Migrate Electron to daemon-first architecture by replacing direct engine/storage
 - On disconnect, reconnect with bounded backoff
 - On reconnect: re-hello, re-subscribe, refresh relevant state
 
+#### Connection lifecycle notes
+
+- Reconnect backoff schedule is fixed to `250ms → 500ms → 1s → 2s` (2s cap).
+- Electron main-process daemon client exposes lifecycle hooks for:
+  - connection established
+  - reconnect established
+  - disconnected
+  - reconnect scheduled (with attempt + delay)
+- Lifecycle hooks are intended to run reconnect recovery logic (re-hello, re-subscribe) in one place.
+
 ### UI Behavior
 
 - Temporary daemon unavailability should degrade gracefully
