@@ -1,5 +1,3 @@
-import type { Todu } from "@todu/engine";
-import { createTodu } from "@todu/engine";
 import { app, BrowserWindow } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import {
@@ -16,6 +14,8 @@ import {
   type DaemonConnectionResult,
   resolveDaemonSocketPath,
 } from "./daemon-connection-manager.js";
+import { ensureDaemonReady } from "./daemon-startup.js";
+import { createDaemonToduClient } from "./daemon-todu-client.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerOAuthIpc, unregisterOAuthIpc } from "./oauth.js";
 
@@ -25,7 +25,6 @@ import { destroyTray, setupTray } from "./tray.js";
 import { createWindow, restoreWindowState, saveWindowState } from "./window.js";
 
 let mainWindow: BrowserWindow | null = null;
-let todu: Todu | null = null;
 let daemonConnectionManager: DaemonConnectionManager | null = null;
 let isQuitting = false;
 
@@ -54,8 +53,7 @@ function assertRequestOk<T>(
 }
 
 async function init(): Promise<void> {
-  // Load full config (data dir + remote sync) using the same config chain as CLI
-  const { storagePath, remoteSync } = loadElectronConfig();
+  const { storagePath } = loadElectronConfig();
 
   daemonConnectionManager = createDaemonConnectionManager({
     socketPath: resolveDaemonSocketPath(storagePath),
@@ -86,13 +84,11 @@ async function init(): Promise<void> {
   });
   daemonConnectionManager.start();
 
-  // Initialize engine with sync server so CLI can connect,
-  // and connect to remote sync server if configured
-  todu = await createTodu({
-    storagePath,
-    syncServer: true,
-    remoteSync: remoteSync ?? undefined,
+  await ensureDaemonReady(daemonConnectionManager, {
+    protocolVersion: DAEMON_PROTOCOL_VERSION,
   });
+
+  const daemonTodu = createDaemonToduClient(daemonConnectionManager);
 
   // Register all IPC handlers
   registerIpcHandlers({
@@ -107,10 +103,10 @@ async function init(): Promise<void> {
   // Initialize settings, OAuth, and agent
   registerSettingsIpc();
   registerOAuthIpc(mainWindow);
-  setupAgent(todu, mainWindow);
+  setupAgent(daemonTodu, mainWindow);
 
   // Set up system tray
-  setupTray(todu, getMainWindow, () => showWindowWithAction("new-task"));
+  setupTray(daemonTodu, getMainWindow, () => showWindowWithAction("new-task"));
 
   // Register global shortcuts
   registerGlobalShortcuts(getMainWindow);
@@ -136,7 +132,13 @@ async function init(): Promise<void> {
   });
 }
 
-app.whenReady().then(init);
+app
+  .whenReady()
+  .then(init)
+  .catch((error) => {
+    console.error(error);
+    app.quit();
+  });
 
 // Mark as quitting so the close handler allows it through
 app.on("before-quit", () => {
@@ -155,10 +157,6 @@ app.on("window-all-closed", async () => {
   daemonConnectionManager?.stop();
   daemonConnectionManager = null;
 
-  if (todu) {
-    await todu.close();
-    todu = null;
-  }
   app.quit();
 });
 
@@ -169,7 +167,7 @@ app.on("will-quit", () => {
 
 app.on("activate", () => {
   // macOS: re-create window when dock icon clicked
-  if (BrowserWindow.getAllWindows().length === 0 && todu) {
+  if (BrowserWindow.getAllWindows().length === 0) {
     const windowState = restoreWindowState();
     mainWindow = createWindow(windowState);
   } else if (mainWindow && !mainWindow.isVisible()) {

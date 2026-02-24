@@ -34,6 +34,10 @@ Migrate Electron to daemon-first architecture by replacing direct engine/storage
    - Remove direct persistent storage ownership assumptions from Electron startup
    - Electron should no longer be local state owner
 
+   Status update:
+   - Electron startup no longer initializes a local engine instance (`createTodu`) and now relies on daemon readiness before opening the runtime UI path.
+   - Startup emits actionable daemon-unavailable guidance (`todu daemon start`) instead of falling back to local ownership.
+
 4. **Reactivity parity**
    - Preserve renderer invalidation/update behavior from daemon events
    - Maintain sync status indicators from `sync.statusChanged`
@@ -68,6 +72,17 @@ Migrate Electron to daemon-first architecture by replacing direct engine/storage
 
 - Temporary daemon unavailability should degrade gracefully
 - UI should recover automatically once connection returns
+
+### Troubleshooting: daemon unavailable at startup
+
+- Electron startup now requires local daemon availability and no longer falls back to local storage ownership.
+- If startup fails with a daemon-unavailable error, start the local daemon first:
+
+```bash
+todu daemon start
+```
+
+- Relaunch Electron after the daemon is running.
 
 ## Acceptance Criteria
 
