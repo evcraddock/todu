@@ -72,17 +72,7 @@ PR Pipeline Status
 - Any unhandled rejection in CI is treated as a failure and must be fixed, even if retries pass.
 - Agent review helps catch issues early and does not grant merge permission.
 - Never merge without explicit human approval.
-- If a commit reaches `main` and push CI fails, `main-ci-auto-revert.yml` may revert that commit automatically to keep `main` healthy.
-
-### Main auto-revert validation
-
-You can validate the revert workflow behavior in dry-run mode without pushing a revert:
-
-```bash
-gh workflow run main-ci-auto-revert.yml -f head_sha=<main-commit-sha> -f dry_run=true
-```
-
-Use `dry_run=false` only with explicit human approval.
+- `main` must be protected by pre-merge CI and merge policy; do not rely on post-merge rollback automation.
 
 ## Tooling
 
