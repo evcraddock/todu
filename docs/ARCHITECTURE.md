@@ -179,6 +179,13 @@ Each worker declares required domain capabilities. Daemon behavior:
 - block worker start if required domains are disabled/missing
 - expose blocked reason in status/logs/errors
 
+Baseline worker lifecycle states are:
+- `registered`
+- `running`
+- `blocked`
+- `error`
+- `stopped`
+
 ### Recurring behavior
 
 - Recurring automation is a worker capability.

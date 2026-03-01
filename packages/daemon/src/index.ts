@@ -80,3 +80,26 @@ export {
   type UdsTransport,
   type UdsTransportConfig,
 } from "./transport.js";
+
+export {
+  type CreateWorkerRegistryOptions,
+  createWorkerRegistry,
+  isWorkerDomainCapability,
+  isWorkerLifecycleState,
+  isWorkerRoleHint,
+  type RegisteredWorkerSnapshot,
+  validateWorkerManifest,
+  WORKER_DOMAIN_CAPABILITIES,
+  WORKER_LIFECYCLE_STATES,
+  WORKER_REGISTRY_ERROR_CODES,
+  WORKER_ROLE_HINTS,
+  type WorkerDomainCapability,
+  type WorkerLifecycleState,
+  type WorkerLifecycleTransitionDetails,
+  type WorkerManifest,
+  type WorkerRegistration,
+  type WorkerRegistry,
+  type WorkerRegistryError,
+  type WorkerRegistryErrorCode,
+  type WorkerRoleHint,
+} from "./workers.js";

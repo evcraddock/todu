@@ -1,5 +1,5 @@
 import type { DocumentId } from "@automerge/automerge-repo";
-import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
+import { type RemoteSyncConfig, type Result, resolveStoragePath } from "@todu/core";
 import { beginCatalogJoinSwitch, createTodu, initJoinStorage, type Todu } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
@@ -27,6 +27,14 @@ import {
   type UdsEndpoint,
   type UdsTransport,
 } from "./transport.js";
+import {
+  createWorkerRegistry,
+  type RegisteredWorkerSnapshot,
+  type WorkerLifecycleState,
+  type WorkerLifecycleTransitionDetails,
+  type WorkerRegistration,
+  type WorkerRegistryError,
+} from "./workers.js";
 
 export const DAEMON_ROLES = ["node", "authority"] as const;
 
@@ -50,6 +58,7 @@ export interface DaemonRuntimeConfig {
   logger?: DaemonLogger;
   rpcMethodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
   rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
+  workerRegistrations?: WorkerRegistration[];
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -76,6 +85,16 @@ export interface DaemonRuntime {
   stop(): Promise<void>;
   status(): DaemonRuntimeStatus;
   config(): ResolvedDaemonRuntimeConfig;
+  registerWorker(
+    registration: WorkerRegistration,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError>;
+  transitionWorkerState(
+    workerType: string,
+    state: WorkerLifecycleState,
+    details?: WorkerLifecycleTransitionDetails,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError>;
+  getWorker(workerType: string): RegisteredWorkerSnapshot | undefined;
+  listWorkers(): RegisteredWorkerSnapshot[];
 }
 
 interface JoinOperationResult {
@@ -117,6 +136,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     state: "stopped",
     role: resolvedConfig.role,
   };
+
+  const workerRegistry = createWorkerRegistry();
+
+  for (const registration of config.workerRegistrations ?? []) {
+    const registerResult = workerRegistry.register(registration);
+    if (!registerResult.ok) {
+      const workerType = registration.manifest?.type ?? "unknown";
+      throw new Error(
+        `Invalid worker registration for daemon runtime (${workerType}): ${registerResult.error.message}`,
+      );
+    }
+  }
 
   const runtimeLogger =
     config.logger ??
@@ -530,6 +561,26 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       });
 
       return stopPromise;
+    },
+
+    registerWorker(registration): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+      return workerRegistry.register(registration);
+    },
+
+    transitionWorkerState(
+      workerType,
+      state,
+      details,
+    ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+      return workerRegistry.transition(workerType, state, details);
+    },
+
+    getWorker(workerType): RegisteredWorkerSnapshot | undefined {
+      return workerRegistry.get(workerType);
+    },
+
+    listWorkers(): RegisteredWorkerSnapshot[] {
+      return workerRegistry.list();
     },
 
     status(): DaemonRuntimeStatus {
