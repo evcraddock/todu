@@ -48,9 +48,10 @@ After implementation is complete, follow this sequence in order:
 2. Commit changes.
 3. Push branch and open/update PR.
 4. Wait for CI to finish and pass before requesting review.
-5. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
-6. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
-7. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
+5. Treat any unhandled rejection or race-signature failure in candidate CI runs as a merge blocker (even if a rerun later passes); root-cause and fix before proceeding.
+6. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
+7. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
+8. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
 
 If CI fails, fix the issue, recommit, push again, and wait for CI to pass.
 
@@ -68,8 +69,20 @@ PR Pipeline Status
 ## Review and merge rules
 
 - CI must pass before requesting review.
+- Any unhandled rejection in CI is treated as a failure and must be fixed, even if retries pass.
 - Agent review helps catch issues early and does not grant merge permission.
 - Never merge without explicit human approval.
+- If a commit reaches `main` and push CI fails, `main-ci-auto-revert.yml` may revert that commit automatically to keep `main` healthy.
+
+### Main auto-revert validation
+
+You can validate the revert workflow behavior in dry-run mode without pushing a revert:
+
+```bash
+gh workflow run main-ci-auto-revert.yml -f head_sha=<main-commit-sha> -f dry_run=true
+```
+
+Use `dry_run=false` only with explicit human approval.
 
 ## Tooling
 
@@ -79,6 +92,7 @@ PR Pipeline Status
 | `make test` | Run tests |
 | `make check` | Lint + format + typecheck |
 | `make pre-pr` | Full pre-PR checks (check + test) |
+| `npm run test:storage-stability` | Repeat storage teardown tests to detect race leaks |
 | `make run ARGS="..."` | Run CLI |
 
 For targeted verification during daemon protocol work:

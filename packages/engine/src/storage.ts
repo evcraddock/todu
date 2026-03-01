@@ -129,15 +129,22 @@ export function beginCatalogJoinSwitch(
 export async function initBootstrapStorage(storagePath: string, repo?: Repo): Promise<Storage> {
   fs.mkdirSync(storagePath, { recursive: true });
 
+  const ownsRepo = repo === undefined;
   const actualRepo =
     repo ??
     new Repo({
       storage: new NodeFSStorageAdapter(storagePath),
     });
 
-  const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
-
-  return createPersistentStorage(actualRepo, catalog);
+  try {
+    const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
+    return createPersistentStorage(actualRepo, catalog);
+  } catch (error) {
+    if (ownsRepo) {
+      await shutdownRepoQuietly(actualRepo);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -154,15 +161,22 @@ export async function initJoinStorage(
 ): Promise<Storage> {
   fs.mkdirSync(storagePath, { recursive: true });
 
+  const ownsRepo = repo === undefined;
   const actualRepo =
     repo ??
     new Repo({
       storage: new NodeFSStorageAdapter(storagePath),
     });
 
-  const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
-
-  return createPersistentStorage(actualRepo, catalog);
+  try {
+    const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
+    return createPersistentStorage(actualRepo, catalog);
+  } catch (error) {
+    if (ownsRepo) {
+      await shutdownRepoQuietly(actualRepo);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -246,6 +260,24 @@ export async function initEphemeralStorage(storagePath: string): Promise<
       };
     },
   };
+}
+
+async function shutdownRepoQuietly(repo: Repo): Promise<void> {
+  try {
+    await repo.flush();
+  } catch {
+    // Safe to ignore — requesting docs have no content to save
+  }
+
+  try {
+    await repo.shutdown();
+  } catch {
+    // Safe to ignore — shutdown may race with pending requesting docs
+  }
+
+  // Allow any queued storage adapter writes to settle before callers clean up
+  // temporary directories in tests.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>): Storage {

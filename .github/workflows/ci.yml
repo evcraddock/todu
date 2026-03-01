@@ -35,6 +35,9 @@ jobs:
       - name: Protocol conformance
         run: npm run test:conformance
 
+      - name: Storage stability
+        run: npm run test:storage-stability
+
       - name: Test
         run: make test
 
