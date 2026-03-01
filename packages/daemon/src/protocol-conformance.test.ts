@@ -240,6 +240,26 @@ describe("daemon protocol conformance suite", () => {
 
       expect(typeof syncCatalog.result).toBe("string");
       expect((syncCatalog.result as string).length).toBeGreaterThan(0);
+
+      const joinCheck = await sendRequest(runtime.config().socketPath, {
+        id: "sync-join-check-conformance",
+        method: "sync.join",
+        params: {
+          catalogId: syncCatalog.result,
+          check: true,
+        },
+      });
+
+      expect(joinCheck).toEqual({
+        id: "sync-join-check-conformance",
+        result: {
+          mode: "check",
+          previousCatalogId: syncCatalog.result,
+          targetCatalogId: syncCatalog.result,
+          switched: false,
+          rolledBack: false,
+        },
+      });
     });
   });
 

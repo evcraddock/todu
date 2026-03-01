@@ -2,7 +2,9 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
+import * as engine from "@todu/engine";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProtocolSuccessFrame } from "./protocol.js";
 import {
   DAEMON_CAPABILITY_EVENTS,
@@ -80,7 +82,7 @@ describe("createDaemonRuntime", () => {
     });
 
     expect(DAEMON_CAPABILITY_METHODS).toEqual(
-      expect.arrayContaining(["recurring.process", "habit.history", "sync.catalogId"]),
+      expect.arrayContaining(["recurring.process", "habit.history", "sync.catalogId", "sync.join"]),
     );
 
     await runtime.stop();
@@ -845,6 +847,132 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
+  it("supports sync.join check mode without switching catalog pointer", async () => {
+    const alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
+    const markerPath = path.join(tmpDir, "todu-catalog.id");
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const previousCatalogId = runtime.status().catalogId;
+    if (!previousCatalogId) {
+      throw new Error("Expected runtime catalog id");
+    }
+
+    const checkResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-join-check-1",
+      method: "sync.join",
+      params: {
+        catalogId: alternateCatalogId,
+        check: true,
+      },
+    });
+
+    expect(checkResponse).toEqual({
+      id: "sync-join-check-1",
+      result: {
+        mode: "check",
+        previousCatalogId,
+        targetCatalogId: alternateCatalogId,
+        switched: false,
+        rolledBack: false,
+      },
+    });
+
+    expect(runtime.status().catalogId).toBe(previousCatalogId);
+    expect(fs.readFileSync(markerPath, "utf-8").trim()).toBe(previousCatalogId);
+
+    await runtime.stop();
+  });
+
+  it("switches catalog pointer transactionally on sync.join success", async () => {
+    const alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
+    const markerPath = path.join(tmpDir, "todu-catalog.id");
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const previousCatalogId = runtime.status().catalogId;
+    if (!previousCatalogId) {
+      throw new Error("Expected runtime catalog id");
+    }
+
+    const joinResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-join-1",
+      method: "sync.join",
+      params: {
+        catalogId: alternateCatalogId,
+      },
+    });
+
+    expect(joinResponse).toEqual({
+      id: "sync-join-1",
+      result: {
+        mode: "join",
+        previousCatalogId,
+        targetCatalogId: alternateCatalogId,
+        switched: true,
+        rolledBack: false,
+      },
+    });
+
+    expect(runtime.status().catalogId).toBe(alternateCatalogId);
+    expect(fs.readFileSync(markerPath, "utf-8").trim()).toBe(alternateCatalogId);
+
+    await runtime.stop();
+  });
+
+  it("rolls back marker and preserves prior dataset when sync.join switch fails", async () => {
+    const alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
+    const markerPath = path.join(tmpDir, "todu-catalog.id");
+    const originalCreateTodu = engine.createTodu;
+    const createToduSpy = vi.spyOn(engine, "createTodu");
+
+    let createInvocation = 0;
+    createToduSpy.mockImplementation(async (config) => {
+      createInvocation += 1;
+      if (createInvocation === 2) {
+        throw new Error("simulated join switch failure");
+      }
+      return originalCreateTodu(config);
+    });
+
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    try {
+      await runtime.start();
+
+      const previousCatalogId = runtime.status().catalogId;
+      if (!previousCatalogId) {
+        throw new Error("Expected runtime catalog id");
+      }
+
+      const joinResponse = await sendRequest(runtime.config().socketPath, {
+        id: "sync-join-fail-1",
+        method: "sync.join",
+        params: {
+          catalogId: alternateCatalogId,
+        },
+      });
+
+      expect(joinResponse.id).toBe("sync-join-fail-1");
+      expect(joinResponse.error).toMatchObject({
+        code: "JOIN_FAILED",
+        details: {
+          stage: "switch",
+          previousCatalogId,
+          targetCatalogId: alternateCatalogId,
+        },
+      });
+
+      expect(runtime.status().catalogId).toBe(previousCatalogId);
+      expect(fs.readFileSync(markerPath, "utf-8").trim()).toBe(previousCatalogId);
+    } finally {
+      await runtime.stop();
+      createToduSpy.mockRestore();
+    }
+  });
+
   it("maps domain and request validation errors for project/task/label/note/recurring/habit/sync methods", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
@@ -1141,6 +1269,31 @@ describe("createDaemonRuntime", () => {
     await expect(runtime.stop()).resolves.toBeUndefined();
   });
 });
+
+async function createAlternateCatalogDocument(storagePath: string): Promise<string> {
+  const storage = await engine.initBootstrapStorage(storagePath);
+
+  try {
+    const alternateCatalog = storage.repo.create<CatalogDocument>();
+    alternateCatalog.change((doc: CatalogDocument) => {
+      const empty = createEmptyCatalog();
+      doc.version = empty.version;
+      doc.projects = empty.projects;
+      doc.labels = empty.labels;
+      doc.recurringTemplates = empty.recurringTemplates;
+      doc.habits = empty.habits;
+      doc.habitLogDocIds = empty.habitLogDocIds;
+      doc.taskListDocIds = empty.taskListDocIds;
+      doc.settings = empty.settings;
+    });
+
+    await storage.repo.flush();
+
+    return alternateCatalog.documentId;
+  } finally {
+    await storage.close();
+  }
+}
 
 function sendRequest(
   socketPath: string,
