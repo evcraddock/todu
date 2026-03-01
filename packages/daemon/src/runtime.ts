@@ -1,5 +1,6 @@
+import type { DocumentId } from "@automerge/automerge-repo";
 import { type RemoteSyncConfig, resolveStoragePath } from "@todu/core";
-import { createTodu, type Todu } from "@todu/engine";
+import { beginCatalogJoinSwitch, createTodu, initJoinStorage, type Todu } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
   createDaemonLogger,
@@ -7,6 +8,12 @@ import {
   type DaemonLogLevel,
   resolveDaemonLogLevelFromEnv,
 } from "./logger.js";
+import {
+  createProtocolError,
+  createProtocolErrorFrame,
+  createProtocolSuccessFrame,
+  type ProtocolRequestFrame,
+} from "./protocol.js";
 import {
   createDaemonRpcRouter,
   type DaemonRpcMethodHandler,
@@ -71,6 +78,14 @@ export interface DaemonRuntime {
   config(): ResolvedDaemonRuntimeConfig;
 }
 
+interface JoinOperationResult {
+  mode: "check" | "join";
+  previousCatalogId: string;
+  targetCatalogId: string;
+  switched: boolean;
+  rolledBack: boolean;
+}
+
 export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRuntime {
   const resolvedStoragePath = config.storagePath ?? resolveStoragePath();
   const resolvedSocketPath = resolveUdsSocketPath(resolvedStoragePath, config.socketPath);
@@ -94,6 +109,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let todu: Todu | null = null;
   let startPromise: Promise<DaemonRuntimeStatus> | null = null;
   let stopPromise: Promise<void> | null = null;
+  let joinPromise: Promise<JoinOperationResult> | null = null;
   let changeSubscriptionCleanup: (() => void) | null = null;
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
 
@@ -102,16 +118,19 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     role: resolvedConfig.role,
   };
 
-  const defaultNamespaceHandlers = createCoreNamespaceHandlers({
-    getTodu: () => todu,
-  });
-
   const runtimeLogger =
     config.logger ??
     createDaemonLogger({
       component: "daemon.runtime",
       level: resolvedConfig.logLevel,
     });
+
+  const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
+    createCoreNamespaceHandlers({
+      getTodu: () => todu,
+    }),
+    createJoinSyncNamespaceHandlers(),
+  );
 
   const rpcLogger = runtimeLogger.child("rpc");
 
@@ -161,6 +180,22 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
   }
 
+  function attachEventSubscriptions(activeTodu: Todu): void {
+    clearEventSubscriptions();
+
+    changeSubscriptionCleanup = activeTodu.onChange(() => {
+      rpcRouter.dispatchEvent("data.changed", {
+        catalog: {
+          id: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
+        },
+      });
+    });
+
+    syncStatusSubscriptionCleanup = activeTodu.sync.onStatusChange((status) => {
+      rpcRouter.dispatchEvent("sync.statusChanged", status);
+    });
+  }
+
   function cloneStatus(): DaemonRuntimeStatus {
     return {
       state: runtimeStatus.state,
@@ -181,27 +216,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     try {
       const endpoint = await transport.start();
 
-      todu = await createTodu({
+      const startedTodu = await createTodu({
         storagePath: resolvedConfig.storagePath,
         remoteSync: resolvedConfig.remoteSync,
       });
 
+      todu = startedTodu;
       runtimeStatus.state = "running";
       runtimeStatus.startedAt = new Date().toISOString();
-      runtimeStatus.catalogId = todu.sync.getCatalogId();
+      runtimeStatus.catalogId = startedTodu.sync.getCatalogId();
       runtimeStatus.transport = endpoint;
 
-      changeSubscriptionCleanup = todu.onChange(() => {
-        rpcRouter.dispatchEvent("data.changed", {
-          catalog: {
-            id: todu?.sync.getCatalogId() ?? runtimeStatus.catalogId ?? null,
-          },
-        });
-      });
-
-      syncStatusSubscriptionCleanup = todu.sync.onStatusChange((status) => {
-        rpcRouter.dispatchEvent("sync.statusChanged", status);
-      });
+      attachEventSubscriptions(startedTodu);
 
       runtimeLogger.info("daemon runtime started", {
         role: runtimeStatus.role,
@@ -222,6 +248,223 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+  }
+
+  function createJoinSyncNamespaceHandlers(): DaemonRpcNamespaceHandlers {
+    return {
+      sync: {
+        join: async (request) => {
+          const parsedRequest = parseJoinRequest(request);
+          if ("error" in parsedRequest) {
+            return parsedRequest.error;
+          }
+
+          if (joinPromise) {
+            return createProtocolErrorFrame(
+              request.id,
+              createProtocolError("CONFLICT", "Join operation already in progress", {
+                method: request.method,
+              }),
+            );
+          }
+
+          joinPromise = executeJoinOperation(
+            parsedRequest.targetCatalogId,
+            parsedRequest.checkOnly,
+          );
+
+          try {
+            const result = await joinPromise;
+            return createProtocolSuccessFrame(request.id, result);
+          } catch (error) {
+            return createProtocolErrorFrame(request.id, error);
+          } finally {
+            joinPromise = null;
+          }
+        },
+      },
+    };
+  }
+
+  function parseJoinRequest(request: ProtocolRequestFrame):
+    | {
+        targetCatalogId: string;
+        checkOnly: boolean;
+      }
+    | {
+        error: ReturnType<typeof createProtocolErrorFrame>;
+      } {
+    const catalogIdParam = request.params.catalogId;
+
+    if (typeof catalogIdParam !== "string" || catalogIdParam.trim().length === 0) {
+      return {
+        error: createProtocolErrorFrame(
+          request.id,
+          createProtocolError("BAD_REQUEST", "sync.join requires params.catalogId string", {
+            field: "catalogId",
+          }),
+        ),
+      };
+    }
+
+    const checkParam = request.params.check;
+    if (checkParam !== undefined && typeof checkParam !== "boolean") {
+      return {
+        error: createProtocolErrorFrame(
+          request.id,
+          createProtocolError("BAD_REQUEST", "sync.join requires params.check boolean", {
+            field: "check",
+          }),
+        ),
+      };
+    }
+
+    const targetCatalogId = catalogIdParam.trim();
+    if (!isValidJoinCodeFormat(targetCatalogId)) {
+      return {
+        error: createProtocolErrorFrame(
+          request.id,
+          createProtocolError("JOIN_FAILED", "Join validation failed", {
+            stage: "validate-format",
+            reason: "invalid_catalog_id_format",
+            targetCatalogId,
+          }),
+        ),
+      };
+    }
+
+    return {
+      targetCatalogId,
+      checkOnly: checkParam === true,
+    };
+  }
+
+  async function executeJoinOperation(
+    targetCatalogId: string,
+    checkOnly: boolean,
+  ): Promise<JoinOperationResult> {
+    if (runtimeStatus.state !== "running" || !todu) {
+      throw createProtocolError("PRECONDITION_FAILED", "Daemon runtime is not ready for join", {
+        state: runtimeStatus.state,
+      });
+    }
+
+    const previousCatalogId = todu.sync.getCatalogId();
+
+    if (targetCatalogId === previousCatalogId) {
+      return {
+        mode: checkOnly ? "check" : "join",
+        previousCatalogId,
+        targetCatalogId,
+        switched: false,
+        rolledBack: false,
+      };
+    }
+
+    await validateJoinTarget(targetCatalogId);
+
+    if (checkOnly) {
+      return {
+        mode: "check",
+        previousCatalogId,
+        targetCatalogId,
+        switched: false,
+        rolledBack: false,
+      };
+    }
+
+    const targetDocumentId = targetCatalogId as DocumentId;
+    const tx = beginCatalogJoinSwitch(resolvedConfig.storagePath, targetDocumentId);
+    const previousTodu = todu;
+
+    try {
+      clearEventSubscriptions();
+      todu = null;
+      await previousTodu.close();
+
+      const joinedTodu = await createTodu({
+        storagePath: resolvedConfig.storagePath,
+        remoteSync: resolvedConfig.remoteSync,
+      });
+
+      todu = joinedTodu;
+      runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();
+      attachEventSubscriptions(joinedTodu);
+      tx.commit();
+
+      return {
+        mode: "join",
+        previousCatalogId,
+        targetCatalogId,
+        switched: runtimeStatus.catalogId === targetCatalogId,
+        rolledBack: false,
+      };
+    } catch (error) {
+      tx.rollback();
+
+      let restoredCatalogId = previousCatalogId;
+      try {
+        const restoredTodu = await createTodu({
+          storagePath: resolvedConfig.storagePath,
+          remoteSync: resolvedConfig.remoteSync,
+        });
+        todu = restoredTodu;
+        runtimeStatus.catalogId = restoredTodu.sync.getCatalogId();
+        restoredCatalogId = runtimeStatus.catalogId;
+        attachEventSubscriptions(restoredTodu);
+      } catch (restoreError) {
+        runtimeLogger.error("daemon join rollback restore failed", {
+          previousCatalogId,
+          targetCatalogId,
+          switchError: getErrorMessage(error),
+          restoreError: getErrorMessage(restoreError),
+        });
+
+        todu = null;
+        clearEventSubscriptions();
+        runtimeStatus.catalogId = undefined;
+
+        throw createProtocolError(
+          "JOIN_FAILED",
+          "Join failed and rollback restore could not recover runtime",
+          {
+            stage: "rollback-restore",
+            previousCatalogId,
+            targetCatalogId,
+            switchError: getErrorMessage(error),
+            restoreError: getErrorMessage(restoreError),
+          },
+        );
+      }
+
+      throw createProtocolError(
+        "JOIN_FAILED",
+        "Join switch failed; rolled back to previous catalog",
+        {
+          stage: "switch",
+          previousCatalogId,
+          targetCatalogId,
+          restoredCatalogId,
+          cause: getErrorMessage(error),
+        },
+      );
+    }
+  }
+
+  async function validateJoinTarget(targetCatalogId: string): Promise<void> {
+    try {
+      const validationStorage = await initJoinStorage(
+        resolvedConfig.storagePath,
+        targetCatalogId as DocumentId,
+      );
+      await validationStorage.close();
+    } catch (error) {
+      throw createProtocolError("JOIN_FAILED", "Join validation failed", {
+        stage: "validate-reachability",
+        targetCatalogId,
+        cause: getErrorMessage(error),
+      });
     }
   }
 
@@ -306,6 +549,22 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       };
     },
   };
+}
+
+function isValidJoinCodeFormat(value: string): boolean {
+  if (value.length < 10) {
+    return false;
+  }
+
+  return /^[a-zA-Z0-9+/=_-]+$/.test(value);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 function parsePositiveInteger(value: string | undefined): number | undefined {

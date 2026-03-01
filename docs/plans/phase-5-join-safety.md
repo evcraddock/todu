@@ -73,6 +73,33 @@ CLI output should clearly indicate:
 - target catalog ID
 - success or rollback outcome
 
+### Daemon join API behavior (Phase 5 implementation)
+
+Daemon exposes `sync.join` with params:
+- `catalogId` (required string)
+- `check` (optional boolean, default `false`)
+
+Behavior:
+- `check=true`: validation-only path (format + reachability), no catalog pointer switch
+- `check=false`: transactional switch path using marker snapshot + rollback on failure
+
+Result shape:
+- `mode`: `check` | `join`
+- `previousCatalogId`
+- `targetCatalogId`
+- `switched`
+- `rolledBack`
+
+### Join error semantics
+
+Join failures return `JOIN_FAILED` with structured details:
+- `stage=validate-format` for malformed join codes
+- `stage=validate-reachability` when target catalog cannot be loaded
+- `stage=switch` when transactional switch fails and rollback restores previous catalog
+- `stage=rollback-restore` when switch fails and runtime recovery also fails
+
+Details include relevant catalog IDs (`previousCatalogId`, `targetCatalogId`) and failure context (`cause`/`restoreError`) for operator troubleshooting.
+
 ### Host/context rule
 
 Join is per daemon instance, not per app.

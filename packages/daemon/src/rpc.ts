@@ -59,7 +59,7 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
     "streak",
     "history",
   ],
-  sync: ["start", "stop", "status", "catalogId"],
+  sync: ["start", "stop", "status", "catalogId", "join"],
 } as const;
 
 export const RESERVED_DAEMON_NAMESPACES = ["worker"] as const;
