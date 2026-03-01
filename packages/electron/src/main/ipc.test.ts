@@ -1,7 +1,3 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { CATALOG_DOC_KEY } from "@todu/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDaemonIpcHandlers, mapDaemonErrorToToduError } from "./ipc.js";
 
@@ -17,10 +13,6 @@ describe("createDaemonIpcHandlers", () => {
     const handlers = createDaemonIpcHandlers({
       daemon,
       storagePath: "/tmp/todu-ipc-test",
-      appLifecycle: {
-        relaunch: vi.fn(),
-        exit: vi.fn(),
-      },
     });
 
     const result = await handlers["todu:task:get"](undefined, "task-1");
@@ -50,10 +42,6 @@ describe("createDaemonIpcHandlers", () => {
     const handlers = createDaemonIpcHandlers({
       daemon,
       storagePath: "/tmp/todu-ipc-test",
-      appLifecycle: {
-        relaunch: vi.fn(),
-        exit: vi.fn(),
-      },
     });
 
     const result = await handlers["todu:task:get"](undefined, "task-999");
@@ -84,10 +72,6 @@ describe("createDaemonIpcHandlers", () => {
     const handlers = createDaemonIpcHandlers({
       daemon,
       storagePath: "/tmp/todu-ipc-test",
-      appLifecycle: {
-        relaunch: vi.fn(),
-        exit: vi.fn(),
-      },
     });
 
     const result = await handlers["todu:sync:status"](undefined);
@@ -96,30 +80,71 @@ describe("createDaemonIpcHandlers", () => {
     expect(result).toEqual(syncStatus);
   });
 
-  it("writes join marker and requests relaunch for valid join code", async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-ipc-join-test-"));
-    const relaunch = vi.fn();
-    const exit = vi.fn();
+  it("invokes daemon sync.join for join-check", async () => {
+    const daemon = {
+      request: vi.fn().mockResolvedValue({
+        ok: true,
+        value: {
+          mode: "check",
+          previousCatalogId: "catalog-a",
+          targetCatalogId: "catalog-b",
+          switched: false,
+          rolledBack: false,
+        },
+      }),
+    };
 
     const handlers = createDaemonIpcHandlers({
-      daemon: {
-        request: vi.fn(),
-      },
-      storagePath: tmpDir,
-      appLifecycle: {
-        relaunch,
-        exit,
-      },
+      daemon,
+      storagePath: "/tmp/todu-ipc-test",
     });
 
-    const catalogId = "2sFuwGcFcU9fkQDnYCdveNPoF6nK";
+    const result = await handlers["todu:sync:join-check"](undefined, "catalog-b");
 
-    await handlers["todu:sync:join"](undefined, catalogId);
+    expect(daemon.request).toHaveBeenCalledWith("sync.join", {
+      catalogId: "catalog-b",
+      check: true,
+    });
+    expect(result).toEqual({
+      mode: "check",
+      previousCatalogId: "catalog-a",
+      targetCatalogId: "catalog-b",
+      switched: false,
+      rolledBack: false,
+    });
+  });
 
-    const markerPath = path.join(tmpDir, `${CATALOG_DOC_KEY}.id`);
-    expect(fs.readFileSync(markerPath, "utf-8")).toBe(catalogId);
-    expect(relaunch).toHaveBeenCalledTimes(1);
-    expect(exit).toHaveBeenCalledWith(0);
+  it("invokes daemon sync.join for transactional join", async () => {
+    const daemon = {
+      request: vi.fn().mockResolvedValue({
+        ok: true,
+        value: {
+          mode: "join",
+          previousCatalogId: "catalog-a",
+          targetCatalogId: "catalog-b",
+          switched: true,
+          rolledBack: false,
+        },
+      }),
+    };
+
+    const handlers = createDaemonIpcHandlers({
+      daemon,
+      storagePath: "/tmp/todu-ipc-test",
+    });
+
+    const result = await handlers["todu:sync:join"](undefined, "catalog-b");
+
+    expect(daemon.request).toHaveBeenCalledWith("sync.join", {
+      catalogId: "catalog-b",
+    });
+    expect(result).toEqual({
+      mode: "join",
+      previousCatalogId: "catalog-a",
+      targetCatalogId: "catalog-b",
+      switched: true,
+      rolledBack: false,
+    });
   });
 });
 

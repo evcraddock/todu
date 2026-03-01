@@ -25,7 +25,28 @@ export function mapDaemonErrorToToduError(method: string, error: DaemonConnectio
 }
 
 export function formatDaemonInvocationError(method: string, error: DaemonConnectionError): string {
-  return `${method} failed (${error.code}): ${error.message}`;
+  if (error.code !== "JOIN_FAILED") {
+    return `${method} failed (${error.code}): ${error.message}`;
+  }
+
+  const stage = stringDetail(error, "stage");
+  const previousCatalogId = stringDetail(error, "previousCatalogId");
+  const targetCatalogId = stringDetail(error, "targetCatalogId");
+  const cause =
+    stringDetail(error, "cause") ??
+    stringDetail(error, "switchError") ??
+    stringDetail(error, "restoreError");
+
+  const contextParts = [
+    stage ? `stage=${stage}` : null,
+    previousCatalogId ? `previous=${previousCatalogId}` : null,
+    targetCatalogId ? `target=${targetCatalogId}` : null,
+  ].filter((value): value is string => value !== null);
+
+  const context = contextParts.length > 0 ? ` (${contextParts.join(", ")})` : "";
+  const causeText = cause ? ` Cause: ${cause}` : "";
+
+  return `${method} failed (${error.code}): ${error.message}${context}${causeText}`;
 }
 
 function inferEntityFromMethod(method: string): string {

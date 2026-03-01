@@ -5,6 +5,7 @@ import type {
   OAuthEvent,
   OAuthStatus,
   ProviderInfo,
+  SyncJoinResult,
   SyncStatus,
 } from "../types/window.js";
 
@@ -34,7 +35,9 @@ export function SettingsView({
   const [copied, setCopied] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
+  const [validatingJoin, setValidatingJoin] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinResult, setJoinResult] = useState<SyncJoinResult | null>(null);
 
   // OAuth state
   const [oauthStatuses, setOauthStatuses] = useState<OAuthStatus[]>([]);
@@ -223,6 +226,14 @@ export function SettingsView({
 
   // ── Sync handlers ────────────────────────────────────────────────
 
+  const formatJoinErrorMessage = useCallback((error: unknown): string => {
+    if (!(error instanceof Error)) {
+      return String(error);
+    }
+
+    return error.message;
+  }, []);
+
   const handleCopyCatalogId = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(catalogId);
@@ -234,19 +245,42 @@ export function SettingsView({
     }
   }, [catalogId]);
 
+  const handleValidateJoin = useCallback(async () => {
+    const code = joinCode.trim();
+    if (!code) return;
+
+    setValidatingJoin(true);
+    setJoinError(null);
+
+    try {
+      const result = await window.todu.sync.joinCheck(code);
+      setJoinResult(result);
+    } catch (err) {
+      setJoinError(formatJoinErrorMessage(err));
+    } finally {
+      setValidatingJoin(false);
+    }
+  }, [formatJoinErrorMessage, joinCode]);
+
   const handleJoin = useCallback(async () => {
     const code = joinCode.trim();
     if (!code) return;
+
     setJoining(true);
     setJoinError(null);
+
     try {
-      await window.todu.sync.join(code);
-      // App will restart — no further state update needed
+      const result = await window.todu.sync.join(code);
+      setJoinResult(result);
+      setCatalogId(result.targetCatalogId);
+      const refreshedStatus = await window.todu.sync.status();
+      setSyncStatus(refreshedStatus);
     } catch (err) {
-      setJoinError(err instanceof Error ? err.message : String(err));
+      setJoinError(formatJoinErrorMessage(err));
+    } finally {
       setJoining(false);
     }
-  }, [joinCode]);
+  }, [formatJoinErrorMessage, joinCode]);
 
   if (!settings || providers.length === 0) {
     return <div className="loading-state">Loading settings...</div>;
@@ -492,8 +526,8 @@ export function SettingsView({
                   <span className="settings-key-label">Join another device</span>
                 </div>
                 <p className="settings-hint">
-                  Enter a join code from another device. The app will restart and replace your local
-                  data with that device&apos;s data.
+                  Enter a join code from another device. Validate first to confirm reachability,
+                  then run transactional join to switch this daemon safely.
                 </p>
                 <div className="settings-key-input-row">
                   <input
@@ -501,11 +535,23 @@ export function SettingsView({
                     className="input settings-key-input"
                     placeholder="Paste join code here"
                     value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value)}
+                    onChange={(e) => {
+                      setJoinCode(e.target.value);
+                      setJoinResult(null);
+                      setJoinError(null);
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") void handleJoin();
+                      if (e.key === "Enter") void handleValidateJoin();
                     }}
                   />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!joinCode.trim() || validatingJoin || joining}
+                    onClick={() => void handleValidateJoin()}
+                  >
+                    {validatingJoin ? "Validating..." : "Validate"}
+                  </button>
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
@@ -515,6 +561,15 @@ export function SettingsView({
                     {joining ? "Joining..." : "Join"}
                   </button>
                 </div>
+                {joinResult && (
+                  <div className="settings-hint">
+                    <div>Mode: {joinResult.mode}</div>
+                    <div>Previous: {joinResult.previousCatalogId}</div>
+                    <div>Target: {joinResult.targetCatalogId}</div>
+                    <div>Switched: {joinResult.switched ? "yes" : "no"}</div>
+                    <div>Rolled back: {joinResult.rolledBack ? "yes" : "no"}</div>
+                  </div>
+                )}
                 {joinError && <div className="settings-oauth-error">{joinError}</div>}
               </div>
             </>

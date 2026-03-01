@@ -82,6 +82,26 @@ toduai --format json daemon status
 
 If the daemon is healthy, status reports `running: true` and includes daemon health details.
 
+## Join operations (per host daemon)
+
+Use daemon-owned join flows from CLI:
+
+```bash
+toduai sync join <catalogId> --check
+toduai sync join <catalogId>
+toduai sync join <catalogId> --yes
+```
+
+Behavior:
+- `--check` validates format + reachability only (no catalog switch)
+- default join prompts for confirmation before transactional switch
+- `--yes` skips confirmation for non-interactive automation
+- result output includes previous/target catalog context and switch/rollback outcome
+
+Operational note:
+- Join is scoped to the local daemon instance.
+- For multi-host setups, run join separately in each host/context that should switch datasets.
+
 ## Expected fail-fast errors
 
 ### Daemon unavailable
