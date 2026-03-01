@@ -129,15 +129,26 @@ export function beginCatalogJoinSwitch(
 export async function initBootstrapStorage(storagePath: string, repo?: Repo): Promise<Storage> {
   fs.mkdirSync(storagePath, { recursive: true });
 
+  const ownsRepo = repo === undefined;
   const actualRepo =
     repo ??
     new Repo({
       storage: new NodeFSStorageAdapter(storagePath),
     });
 
-  const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
-
-  return createPersistentStorage(actualRepo, catalog);
+  try {
+    const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
+    return createPersistentStorage(actualRepo, catalog);
+  } catch (error) {
+    if (ownsRepo) {
+      try {
+        await actualRepo.shutdown();
+      } catch {
+        // Safe to ignore during failed initialization
+      }
+    }
+    throw error;
+  }
 }
 
 /**
@@ -154,15 +165,26 @@ export async function initJoinStorage(
 ): Promise<Storage> {
   fs.mkdirSync(storagePath, { recursive: true });
 
+  const ownsRepo = repo === undefined;
   const actualRepo =
     repo ??
     new Repo({
       storage: new NodeFSStorageAdapter(storagePath),
     });
 
-  const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
-
-  return createPersistentStorage(actualRepo, catalog);
+  try {
+    const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
+    return createPersistentStorage(actualRepo, catalog);
+  } catch (error) {
+    if (ownsRepo) {
+      try {
+        await actualRepo.shutdown();
+      } catch {
+        // Safe to ignore during failed initialization
+      }
+    }
+    throw error;
+  }
 }
 
 /**

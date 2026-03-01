@@ -18,7 +18,8 @@ describe("createDaemonRuntime", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-runtime-test-"));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
