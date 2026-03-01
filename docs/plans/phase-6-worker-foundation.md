@@ -45,6 +45,27 @@ Implement the first worker/plugin runtime layer in daemon architecture. Focus on
    - Provide worker state visibility via daemon protocol
    - `worker.*` namespace may be minimal initially but must support status visibility
 
+### Baseline Worker Contract (Task #1950)
+
+Worker manifests include:
+- `type`
+- `requiredDomains`
+- `optionalDomains`
+- `roleHints`
+
+Canonical lifecycle states:
+- `registered`
+- `running`
+- `blocked`
+- `error`
+- `stopped`
+
+Daemon runtime registration/lifecycle entrypoints:
+- `registerWorker(...)`
+- `transitionWorkerState(...)`
+- `getWorker(...)`
+- `listWorkers()`
+
 ## Requirements
 
 ### Dependency Enforcement
