@@ -275,9 +275,10 @@ async function shutdownRepoQuietly(repo: Repo): Promise<void> {
     // Safe to ignore — shutdown may race with pending requesting docs
   }
 
-  // Allow any queued storage adapter writes to settle before callers clean up
-  // temporary directories in tests.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Allow queued storage adapter writes to settle before callers clean up
+  // temporary directories. A full sync-throttle window avoids ENOENT races
+  // observed in repeated failure-path teardown tests.
+  await new Promise((resolve) => setTimeout(resolve, SYNC_THROTTLE_MS + SYNC_DELIVERY_MS));
 }
 
 function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>): Storage {
