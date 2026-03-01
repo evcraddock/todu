@@ -8,7 +8,7 @@ This project uses an AI-first development process. Agents do the work, automatio
 2. Read relevant files before editing.
 3. Make the smallest change that satisfies the task.
 4. Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
-5. Set task status to `inprogress` when implementation starts.
+5. Use the `task-update` skill to set task status to `inprogress` when implementation starts.
 6. If blocked, ambiguous, or conflicting requirements are found, stop and report `BLOCKED` with reason.
 7. Add task comments only via the `task-comment-create` skill.
 8. Do not add manual line breaks in markdown paragraphs.
