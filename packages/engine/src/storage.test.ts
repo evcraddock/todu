@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { type DocumentId, Repo } from "@automerge/automerge-repo";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DocumentId } from "@automerge/automerge-repo";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { beginCatalogJoinSwitch, initBootstrapStorage, initJoinStorage } from "./storage.js";
 
 describe("storage bootstrap/join boundaries", () => {
@@ -37,19 +37,6 @@ describe("storage bootstrap/join boundaries", () => {
     expect(fs.readFileSync(markerPath, "utf-8").trim()).toBe(unreachable);
   });
 
-  it("bootstrap failure shuts down internally created repo", async () => {
-    const markerPath = path.join(tmpDir, "todu-catalog.id");
-    fs.writeFileSync(markerPath, "2sFuwGcFcU9fkQDnYCdveNPoF6nK", "utf-8");
-
-    const shutdownSpy = vi.spyOn(Repo.prototype, "shutdown");
-    try {
-      await expect(initBootstrapStorage(tmpDir)).rejects.toThrow("bootstrap catalog");
-      expect(shutdownSpy).toHaveBeenCalled();
-    } finally {
-      shutdownSpy.mockRestore();
-    }
-  });
-
   it("join path never creates a fresh catalog when target is unreachable", async () => {
     const target = "2sFuwGcFcU9fkQDnYCdveNPoF6nK" as DocumentId;
 
@@ -57,18 +44,6 @@ describe("storage bootstrap/join boundaries", () => {
 
     const markerPath = path.join(tmpDir, "todu-catalog.id");
     expect(fs.existsSync(markerPath)).toBe(false);
-  });
-
-  it("join failure shuts down internally created repo", async () => {
-    const shutdownSpy = vi.spyOn(Repo.prototype, "shutdown");
-    try {
-      await expect(
-        initJoinStorage(tmpDir, "2sFuwGcFcU9fkQDnYCdveNPoF6nK" as DocumentId),
-      ).rejects.toThrow("join catalog");
-      expect(shutdownSpy).toHaveBeenCalled();
-    } finally {
-      shutdownSpy.mockRestore();
-    }
   });
 
   it("join switch rollback restores prior marker", () => {

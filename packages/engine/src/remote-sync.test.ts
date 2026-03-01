@@ -59,9 +59,6 @@ async function startRelay(port: number): Promise<{ relay: Todu; relayDir: string
 async function stopRelay(relay: Todu, relayDir: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 100));
   await relay.close();
-  // Repo shutdown resolves before all adapter persistence callbacks settle.
-  // Wait briefly so NodeFS adapter writes complete before removing the temp dir.
-  await new Promise((r) => setTimeout(r, 250));
   fs.rmSync(relayDir, { recursive: true, force: true });
 }
 
