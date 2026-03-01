@@ -113,6 +113,7 @@ const api = {
     start: () => ipcRenderer.invoke("todu:sync:start"),
     stop: () => ipcRenderer.invoke("todu:sync:stop"),
     getCatalogId: () => ipcRenderer.invoke("todu:sync:catalog-id"),
+    joinCheck: (catalogId: string) => ipcRenderer.invoke("todu:sync:join-check", catalogId),
     join: (catalogId: string) => ipcRenderer.invoke("todu:sync:join", catalogId),
   },
 

@@ -1,22 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
-import { CATALOG_DOC_KEY, err, ok, type Result, type ToduError } from "@todu/core";
-import { app, ipcMain } from "electron";
+import { err, ok, type Result, type ToduError } from "@todu/core";
+import { ipcMain } from "electron";
 import type { DaemonConnectionManager } from "./daemon-connection-manager.js";
 import { formatDaemonInvocationError, mapDaemonErrorToToduError } from "./daemon-error-mapping.js";
-
-interface IpcAppLifecycle {
-  relaunch(): void;
-  exit(code?: number): void;
-}
 
 interface RegisterIpcHandlersOptions {
   daemon: Pick<DaemonConnectionManager, "request">;
   storagePath: string;
-}
-
-interface CreateDaemonIpcHandlersOptions extends RegisterIpcHandlersOptions {
-  appLifecycle: IpcAppLifecycle;
 }
 
 type IpcHandler = (_event: unknown, ...args: unknown[]) => Promise<unknown> | unknown;
@@ -29,10 +18,7 @@ export { mapDaemonErrorToToduError };
  * Channel naming convention: todu:<namespace>:<method>
  */
 export function registerIpcHandlers(options: RegisterIpcHandlersOptions): void {
-  const handlers = createDaemonIpcHandlers({
-    ...options,
-    appLifecycle: app,
-  });
+  const handlers = createDaemonIpcHandlers(options);
 
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.handle(channel, handler);
@@ -40,7 +26,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): void {
 }
 
 export function createDaemonIpcHandlers(
-  options: CreateDaemonIpcHandlersOptions,
+  options: RegisterIpcHandlersOptions,
 ): Record<string, IpcHandler> {
   const invokeResult = <T>(method: string, params: Record<string, unknown> = {}) =>
     invokeDaemonResult<T>(options.daemon, method, params);
@@ -110,32 +96,29 @@ export function createDaemonIpcHandlers(
     "todu:sync:stop": () => invokeRaw("sync.stop"),
     "todu:sync:catalog-id": () => invokeRaw("sync.catalogId"),
 
-    // Join flow: Device B writes Device A's catalog document ID to the
-    // marker file and restarts so the engine picks it up on next launch.
-    //
-    // Basic format guard: Automerge document IDs are URL-safe base58/base64
-    // strings of ~22+ characters. Reject obviously malformed input to avoid
-    // restarting into a broken state that requires manual file recovery.
-    "todu:sync:join": (_event, catalogId: unknown) => {
-      if (typeof catalogId !== "string") {
-        throw new Error("Invalid join code: must be a string");
-      }
-
-      const trimmed = catalogId.trim();
-      if (trimmed.length < 10) {
-        throw new Error("Invalid join code: too short");
-      }
-
-      if (!/^[a-zA-Z0-9+/=_-]+$/.test(trimmed)) {
-        throw new Error("Invalid join code: contains unexpected characters");
-      }
-
-      const markerPath = path.join(options.storagePath, `${CATALOG_DOC_KEY}.id`);
-      fs.writeFileSync(markerPath, trimmed, "utf-8");
-      options.appLifecycle.relaunch();
-      options.appLifecycle.exit(0);
-    },
+    "todu:sync:join-check": (_event, catalogId: unknown) =>
+      invokeRaw("sync.join", {
+        catalogId: parseJoinCatalogId(catalogId),
+        check: true,
+      }),
+    "todu:sync:join": (_event, catalogId: unknown) =>
+      invokeRaw("sync.join", {
+        catalogId: parseJoinCatalogId(catalogId),
+      }),
   };
+}
+
+function parseJoinCatalogId(catalogId: unknown): string {
+  if (typeof catalogId !== "string") {
+    throw new Error("Invalid join code: must be a string");
+  }
+
+  const trimmed = catalogId.trim();
+  if (trimmed.length === 0) {
+    throw new Error("Invalid join code: cannot be empty");
+  }
+
+  return trimmed;
 }
 
 async function invokeDaemonResult<T>(

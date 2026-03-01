@@ -61,6 +61,10 @@ On failure:
 - show explicit error
 - dataset remains unchanged
 
+Implementation note:
+- Electron Settings uses daemon `sync.join` for both validate and join actions.
+- Electron no longer writes catalog marker files directly.
+
 ### CLI UX
 
 - `toduai sync status` — show daemon/catalog state
@@ -72,6 +76,11 @@ CLI output should clearly indicate:
 - previous catalog ID
 - target catalog ID
 - success or rollback outcome
+
+Implementation note:
+- `toduai sync join <catalogId> --check` calls daemon `sync.join` with `check=true`
+- `toduai sync join <catalogId>` performs validation first, prompts for confirmation, then calls daemon `sync.join`
+- `--yes` skips confirmation for non-interactive flows
 
 ### Daemon join API behavior (Phase 5 implementation)
 

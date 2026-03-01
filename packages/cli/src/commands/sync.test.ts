@@ -2,11 +2,15 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
+import * as engine from "@todu/engine";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { invokeDaemonMethod } from "../daemon-transport.js";
 import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("sync CLI commands", () => {
   let tmpDir: string;
+  let alternateCatalogId: string;
   let daemon: DaemonHandle | null = null;
   const rootDir = path.resolve(__dirname, "../../../..");
   const cliPath = path.resolve(rootDir, "packages/cli/dist/index.js");
@@ -17,6 +21,7 @@ describe("sync CLI commands", () => {
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-sync-test-"));
+    alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
     daemon = await startDaemonForTests(rootDir, tmpDir);
   });
 
@@ -60,6 +65,44 @@ describe("sync CLI commands", () => {
     expect(status.remote.state).toBe("disconnected");
   });
 
+  it("sync join --check validates target via daemon without switching catalog", async () => {
+    const initialCatalogId = await readCatalogId(tmpDir);
+    const targetCatalogId = alternateCatalogId;
+
+    const output = run(`sync join ${targetCatalogId} --check --format json`);
+    const result = JSON.parse(output);
+
+    expect(result).toEqual({
+      mode: "check",
+      previousCatalogId: initialCatalogId,
+      targetCatalogId,
+      switched: false,
+      rolledBack: false,
+    });
+
+    const afterCatalogId = await readCatalogId(tmpDir);
+    expect(afterCatalogId).toBe(initialCatalogId);
+  });
+
+  it("sync join --yes switches catalog via daemon", async () => {
+    const initialCatalogId = await readCatalogId(tmpDir);
+    const targetCatalogId = alternateCatalogId;
+
+    const output = run(`sync join ${targetCatalogId} --yes --format json`);
+    const result = JSON.parse(output);
+
+    expect(result).toEqual({
+      mode: "join",
+      previousCatalogId: initialCatalogId,
+      targetCatalogId,
+      switched: true,
+      rolledBack: false,
+    });
+
+    const afterCatalogId = await readCatalogId(tmpDir);
+    expect(afterCatalogId).toBe(targetCatalogId);
+  });
+
   it("fails fast when daemon is unavailable", async () => {
     if (daemon) {
       await daemon.stop("unavailable-test");
@@ -70,3 +113,58 @@ describe("sync CLI commands", () => {
     expect(output).toContain("local daemon is required but unavailable");
   });
 });
+
+async function readCatalogId(storagePath: string): Promise<string> {
+  const socketPath = path.join(storagePath, "daemon.sock");
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await invokeDaemonMethod<string>({
+      socketPath,
+      method: "sync.catalogId",
+    });
+
+    if (response.ok) {
+      return response.value;
+    }
+
+    if (response.error.message.includes("Daemon runtime is not ready")) {
+      await sleep(100);
+      continue;
+    }
+
+    throw new Error(`sync.catalogId failed: ${response.error.code} ${response.error.message}`);
+  }
+
+  throw new Error("sync.catalogId failed: daemon runtime did not become ready in time");
+}
+
+async function createAlternateCatalogDocument(storagePath: string): Promise<string> {
+  const storage = await engine.initBootstrapStorage(storagePath);
+
+  try {
+    const alternateCatalog = storage.repo.create<CatalogDocument>();
+    alternateCatalog.change((doc: CatalogDocument) => {
+      const empty = createEmptyCatalog();
+      doc.version = empty.version;
+      doc.projects = empty.projects;
+      doc.labels = empty.labels;
+      doc.recurringTemplates = empty.recurringTemplates;
+      doc.habits = empty.habits;
+      doc.habitLogDocIds = empty.habitLogDocIds;
+      doc.taskListDocIds = empty.taskListDocIds;
+      doc.settings = empty.settings;
+    });
+
+    await storage.repo.flush();
+
+    return alternateCatalog.documentId;
+  } finally {
+    await storage.close();
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}

@@ -25,12 +25,54 @@ export function createCliDaemonInvoker(program: Command): CliDaemonInvoker {
   };
 }
 
-export function formatDaemonCommandError(error: { code: string; message: string }): string {
+export function formatDaemonCommandError(error: {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}): string {
   if (error.code === "DAEMON_UNAVAILABLE") {
     return `Error: local daemon is required but unavailable (${error.message}). Start the daemon and retry.`;
   }
 
+  if (error.code === "JOIN_FAILED") {
+    return formatJoinFailedError(error);
+  }
+
   return `Error: ${error.message}`;
+}
+
+function formatJoinFailedError(error: {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}): string {
+  const stage = stringDetail(error.details, "stage");
+  const previousCatalogId = stringDetail(error.details, "previousCatalogId");
+  const targetCatalogId = stringDetail(error.details, "targetCatalogId");
+  const cause =
+    stringDetail(error.details, "cause") ??
+    stringDetail(error.details, "switchError") ??
+    stringDetail(error.details, "restoreError");
+
+  const contextParts = [
+    stage ? `stage=${stage}` : null,
+    previousCatalogId ? `previous=${previousCatalogId}` : null,
+    targetCatalogId ? `target=${targetCatalogId}` : null,
+  ].filter((value): value is string => value !== null);
+
+  const context = contextParts.length > 0 ? ` (${contextParts.join(", ")})` : "";
+  const causeText = cause ? ` Cause: ${cause}` : "";
+
+  return `Error: ${error.message}${context}${causeText}`;
+}
+
+function stringDetail(details: Record<string, unknown> | undefined, key: string): string | null {
+  const value = details?.[key];
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+
+  return value;
 }
 
 export function resolveDaemonSocketPath(storagePath: string): string {

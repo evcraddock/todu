@@ -156,6 +156,14 @@ export interface SyncStatus {
   remote: { state: RemoteSyncState; server?: string; lastSync?: string };
 }
 
+export interface SyncJoinResult {
+  mode: "check" | "join";
+  previousCatalogId: string;
+  targetCatalogId: string;
+  switched: boolean;
+  rolledBack: boolean;
+}
+
 export interface ToduSyncApi {
   /** Get current sync status. */
   status(): Promise<SyncStatus>;
@@ -168,11 +176,10 @@ export interface ToduSyncApi {
    * Share this as a join code so other devices can sync with this one.
    */
   getCatalogId(): Promise<string>;
-  /**
-   * Join another device's data by entering its catalog document ID.
-   * Writes the ID to the marker file and restarts the app.
-   */
-  join(catalogId: string): Promise<void>;
+  /** Validate join reachability/format without switching the local catalog pointer. */
+  joinCheck(catalogId: string): Promise<SyncJoinResult>;
+  /** Perform transactional join switch through the daemon-owned join API. */
+  join(catalogId: string): Promise<SyncJoinResult>;
 }
 
 export interface ToduApi {
