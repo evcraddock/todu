@@ -44,12 +44,13 @@ Task: #<task-id>
 
 After implementation is complete, follow this sequence in order:
 
-1. Commit changes.
-2. Push branch and open/update PR.
-3. Wait for CI to finish and pass before requesting review.
-4. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
-5. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
-6. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
+1. Run local checks with `make pre-pr` and fix all failures.
+2. Commit changes.
+3. Push branch and open/update PR.
+4. Wait for CI to finish and pass before requesting review.
+5. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
+6. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
+7. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
 
 If CI fails, fix the issue, recommit, push again, and wait for CI to pass.
 
@@ -77,7 +78,15 @@ PR Pipeline Status
 | `make build` | Build all packages (core → engine → cli) |
 | `make test` | Run tests |
 | `make check` | Lint + format + typecheck |
+| `make pre-pr` | Full pre-PR checks (check + test) |
 | `make run ARGS="..."` | Run CLI |
+
+For targeted verification during daemon protocol work:
+
+```bash
+npm run test:conformance
+npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
+```
 
 See also:
 
