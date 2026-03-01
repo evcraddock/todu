@@ -1,14 +1,22 @@
 # Contributing
 
-This project uses an AI-first development process. Agents do the work, automation enforces quality, humans approve.
+This project uses an AI-first development process. Agents do the work, automation enforces quality, and humans decide merges.
 
-## Workflow
+## Required workflow
 
-### 1. Pick Up a Task
+1. Work only within task scope.
+2. Read relevant files before editing.
+3. Make the smallest change that satisfies the task.
+4. Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+5. Set task status to `inprogress` when implementation starts.
+6. If blocked, ambiguous, or conflicting requirements are found, stop and report `BLOCKED` with reason.
+7. Add task comments only via the `task-comment-create` skill.
+8. Do not add manual line breaks in markdown paragraphs.
+9. Summarize changed files and verification results in your handoff.
 
-Get assigned a task or pick from available tasks. Understand requirements before starting.
+## Branch and commits
 
-### 2. Create a Branch
+Start from the latest main branch and create a task branch:
 
 ```bash
 git checkout main && git pull
@@ -22,16 +30,9 @@ Branch prefixes:
 - `docs/` — Documentation only
 - `chore/` — Maintenance
 
-### 3. Implement
-
-- Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) — this is the review checklist
-- Follow [ARCHITECTURE.md](ARCHITECTURE.md) — package structure, where logic belongs
-- Write tests as you go
-- Commit frequently with clear messages
-
 Commit format:
 
-```
+```text
 <type>: <short description>
 
 <optional body explaining why>
@@ -39,66 +40,35 @@ Commit format:
 Task: #<task-id>
 ```
 
-### 4. Verify Quality
+## Required post-PR pipeline (non-optional)
 
-Before opening a PR:
+After implementation is complete, follow this sequence in order:
 
-```bash
-make pre-pr
+1. Commit changes.
+2. Push branch and open/update PR.
+3. Wait for CI to finish and pass before requesting review.
+4. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
+5. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
+6. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
+
+If CI fails, fix the issue, recommit, push again, and wait for CI to pass.
+
+Use this status format at gates:
+
+```text
+PR Pipeline Status
+- local_checks: pass|fail
+- push: done|pending
+- ci: pass|fail|unavailable-needs-human-decision
+- review: pending|approved|warnings|changes-requested
+- merge_approval: waiting-human|approved
 ```
 
-This runs formatting, linting, type checking, protocol conformance, and tests. Do not open a PR if this fails.
+## Review and merge rules
 
-### Protocol Conformance Suite
-
-For targeted daemon protocol contract checks:
-
-```bash
-npm run test:conformance
-```
-
-This runs the Phase 1 protocol conformance harness (`packages/daemon/src/protocol-conformance.test.ts`) and is gated in CI.
-
-### Daemon Event + Parity Suites
-
-For targeted event/parity checks during daemon protocol work:
-
-```bash
-npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
-```
-
-These suites are also included in the standard test run (`npm test`) and therefore enforced by `make pre-pr` and CI.
-
-### 5. Open PR
-
-Push and create PR with clear description linking to the task.
-
-### 6. Review and Merge
-
-- CI must pass before requesting review
-- Agent review first, then human approval
-- Address review feedback
-- Squash and merge after explicit human approval
-
-**Never merge without human approval.** Agent reviews catch issues early — they are not permission to merge.
-
-## Git Hooks
-
-The project uses [Husky](https://typicode.github.io/husky/) for git hooks:
-
-| Hook | Trigger | What runs |
-|------|---------|-----------|
-| **pre-commit** | `git commit` | Lint, format, typecheck (`npm run check`) |
-| **pre-push** | `git push` | Full test suite (`npm test`) |
-
-If a hook fails, the operation is blocked. Fix the issue before retrying.
-
-To bypass in emergencies (use sparingly):
-
-```bash
-git commit --no-verify   # skip pre-commit
-git push --no-verify     # skip pre-push
-```
+- CI must pass before requesting review.
+- Agent review helps catch issues early and does not grant merge permission.
+- Never merge without explicit human approval.
 
 ## Tooling
 
@@ -107,17 +77,17 @@ git push --no-verify     # skip pre-push
 | `make build` | Build all packages (core → engine → cli) |
 | `make test` | Run tests |
 | `make check` | Lint + format + typecheck |
-| `make pre-pr` | Full pre-PR checks (check + test) |
 | `make run ARGS="..."` | Run CLI |
 
 See also:
+
 - [CLI Daemon Usage](cli-daemon-usage.md) for daemon-required CLI behavior
 - [Daemon Service Operations](daemon-service-operations.md) for Linux/macOS service setup and lifecycle commands
 
-## When Stuck
+## When stuck
 
 After 3 failed attempts at the same problem:
 
-1. **Stop** — Don't keep trying the same approach
-2. **Document** — What was tried and why it failed
-3. **Ask** — Request guidance or suggest alternatives
+1. Stop.
+2. Document what was tried and why it failed.
+3. Ask for guidance or propose alternatives.
