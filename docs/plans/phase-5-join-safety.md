@@ -138,6 +138,28 @@ Join is per daemon instance, not per app.
 - [ ] Electron and CLI UX flows are available as specified
 - [ ] Join behavior is covered by automated tests
 
+## Progress Notes
+
+### 2026-03-01 — Task #1949
+
+- Added a dedicated join safety integration suite in `packages/daemon/src/join-safety.integration.test.ts`.
+- Expanded integration coverage for join safety, rollback guarantees, and host authority migration workflows.
+
+Coverage matrix status:
+
+| Scenario | Status | Test |
+|---|---|---|
+| Failed join preserves existing dataset after switch failure | ✅ Covered | `preserves existing dataset when join switch fails after snapshot` |
+| Successful join converges runtime to target catalog dataset | ✅ Covered | `switches to target catalog and converges runtime data to target dataset` |
+| Join-check failure classes (`validate-format`, `validate-reachability`) | ✅ Covered | `covers sync.join check failure classes without switching catalog pointer` |
+| Authority migration scenario (source daemon → destination daemon) | ✅ Covered | `supports authority migration from source daemon to destination daemon` |
+
+Migration runbook references:
+
+- `docs/cli-daemon-usage.md#join-operations-per-host-daemon`
+- `docs/plans/1923-automerge-sync-refactor-research.md` (authority migration sequence)
+- `docs/plans/phase-8-ops-controls.md` (runbook deliverable phase for multi-host operations)
+
 ## Non-Goals
 
 - Worker/plugin lifecycle design

@@ -102,6 +102,11 @@ Operational note:
 - Join is scoped to the local daemon instance.
 - For multi-host setups, run join separately in each host/context that should switch datasets.
 
+Authority migration references:
+- [`plans/1923-automerge-sync-refactor-research.md`](plans/1923-automerge-sync-refactor-research.md) — authority migration sequence (Mac mini → k3s example)
+- [`plans/phase-5-join-safety.md`](plans/phase-5-join-safety.md) — join safety coverage and migration validation matrix
+- [`plans/phase-8-ops-controls.md`](plans/phase-8-ops-controls.md) — operational runbook deliverables for multi-host failover
+
 ## Expected fail-fast errors
 
 ### Daemon unavailable
