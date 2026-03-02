@@ -54,6 +54,7 @@ export const WORKER_REGISTRY_ERROR_CODES = [
   "NOT_FOUND",
   "INVALID_TRANSITION",
   "MISSING_BLOCKED_REASON",
+  "DEPENDENCY_BLOCKED",
 ] as const;
 
 export type WorkerRegistryErrorCode = (typeof WORKER_REGISTRY_ERROR_CODES)[number];
@@ -318,6 +319,21 @@ export function isWorkerRoleHint(value: string): value is WorkerRoleHint {
 
 export function isWorkerLifecycleState(value: string): value is WorkerLifecycleState {
   return (WORKER_LIFECYCLE_STATES as readonly string[]).includes(value);
+}
+
+export function findMissingRequiredWorkerDomains(
+  requiredDomains: readonly WorkerDomainCapability[],
+  enabledDomains: readonly WorkerDomainCapability[],
+): WorkerDomainCapability[] {
+  const enabledSet = new Set(enabledDomains);
+  return requiredDomains.filter((domain) => !enabledSet.has(domain));
+}
+
+export function createWorkerDependencyBlockedReason(
+  missingRequiredDomains: readonly WorkerDomainCapability[],
+): string {
+  const domains = missingRequiredDomains.join(", ");
+  return `required domains are disabled or missing: ${domains}`;
 }
 
 function cloneRegisteredWorker(worker: RegisteredWorkerSnapshot): RegisteredWorkerSnapshot {

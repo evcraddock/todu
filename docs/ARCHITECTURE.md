@@ -179,6 +179,11 @@ Each worker declares required domain capabilities. Daemon behavior:
 - block worker start if required domains are disabled/missing
 - expose blocked reason in status/logs/errors
 
+Dependency gating semantics:
+- Workers may register even when dependencies are unavailable; they are held in `blocked` state.
+- Transitioning a dependency-blocked worker to `running` returns a dependency error and preserves `blocked` state.
+- Block reasons must include the missing/disabled required domains in deterministic order.
+
 Baseline worker lifecycle states are:
 - `registered`
 - `running`
