@@ -42,8 +42,9 @@ Implement the first worker/plugin runtime layer in daemon architecture. Focus on
    - Surface worker state for operational inspection
 
 6. **Protocol surface baseline**
-   - Provide worker state visibility via daemon protocol
-   - `worker.*` namespace may be minimal initially but must support status visibility
+   - Provide worker state visibility via daemon protocol.
+   - Implement `worker.status` for status visibility.
+   - Keep non-implemented worker control methods returning `UNSUPPORTED_CAPABILITY` until control APIs land.
 
 ### Baseline Worker Contract (Task #1950)
 
@@ -90,6 +91,17 @@ Daemon runtime registration/lifecycle entrypoints:
 - Required-domain checks run for workers loaded at daemon startup and for runtime registrations (reload-equivalent path).
 - If a required domain is unavailable, the worker transitions to `blocked` with a deterministic blocked reason that lists missing/disabled domains.
 - Attempting to transition a dependency-blocked worker to `running` returns a dependency-blocked error and keeps worker state `blocked`.
+
+## Worker Status Protocol Contract (Initial)
+
+- Method: `worker.status`
+- Optional input: `params.workerType` (non-empty string) to query a single worker.
+- Output includes:
+  - `workers[]` entries with `type`, `state`, `blockedReason`, `errorMessage`, `updatedAt`
+  - assignment context (`isAssigned` per worker and global assigned worker list)
+  - dependency context (`missingRequiredDomains` per worker and enabled worker domains)
+- Unknown worker requested via `params.workerType` returns `NOT_FOUND`.
+- Non-implemented worker control methods remain unsupported and return `UNSUPPORTED_CAPABILITY`.
 
 ## Acceptance Criteria
 

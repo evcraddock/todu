@@ -263,22 +263,40 @@ describe("daemon protocol conformance suite", () => {
     });
   });
 
-  it("returns UNSUPPORTED_CAPABILITY for reserved worker namespace methods", async () => {
+  it("returns worker status and keeps non-implemented worker control methods unsupported", async () => {
     await withRunningRuntime({}, async (runtime) => {
-      const response = await sendRequest(runtime.config().socketPath, {
-        id: "worker-status-unsupported",
+      const statusResponse = await sendRequest(runtime.config().socketPath, {
+        id: "worker-status-1",
         method: "worker.status",
         params: {},
       });
 
-      expect(response).toEqual({
-        id: "worker-status-unsupported",
+      expect(statusResponse).toEqual({
+        id: "worker-status-1",
+        result: {
+          workers: [],
+          assignment: {
+            assignedWorkerTypes: null,
+          },
+          enabledWorkerDomains: ["project", "task", "label", "note", "recurring", "habit", "sync"],
+        },
+      });
+
+      const unsupportedControlResponse = await sendRequest(runtime.config().socketPath, {
+        id: "worker-start-unsupported",
+        method: "worker.start",
+        params: {},
+      });
+
+      expect(unsupportedControlResponse).toEqual({
+        id: "worker-start-unsupported",
         error: {
           code: "UNSUPPORTED_CAPABILITY",
-          message: "Namespace is reserved but not implemented: worker",
+          message: "Method is not implemented: worker.start",
           details: {
             namespace: "worker",
-            method: "worker.status",
+            method: "worker.start",
+            capability: "worker.start",
           },
         },
       });
