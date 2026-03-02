@@ -82,8 +82,15 @@ export {
 } from "./transport.js";
 
 export {
+  type ParsedWorkerAssignmentEnv,
+  parseAssignedWorkerTypesFromEnv,
+  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+} from "./worker-assignment.js";
+
+export {
   type CreateWorkerRegistryOptions,
   createWorkerDependencyBlockedReason,
+  createWorkerNotAssignedReason,
   createWorkerRegistry,
   findMissingRequiredWorkerDomains,
   isWorkerDomainCapability,

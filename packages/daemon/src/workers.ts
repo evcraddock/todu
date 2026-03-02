@@ -55,6 +55,7 @@ export const WORKER_REGISTRY_ERROR_CODES = [
   "INVALID_TRANSITION",
   "MISSING_BLOCKED_REASON",
   "DEPENDENCY_BLOCKED",
+  "NOT_ASSIGNED",
 ] as const;
 
 export type WorkerRegistryErrorCode = (typeof WORKER_REGISTRY_ERROR_CODES)[number];
@@ -334,6 +335,10 @@ export function createWorkerDependencyBlockedReason(
 ): string {
   const domains = missingRequiredDomains.join(", ");
   return `required domains are disabled or missing: ${domains}`;
+}
+
+export function createWorkerNotAssignedReason(workerType: string): string {
+  return `worker is not assigned to this daemon: ${workerType}`;
 }
 
 function cloneRegisteredWorker(worker: RegisteredWorkerSnapshot): RegisteredWorkerSnapshot {

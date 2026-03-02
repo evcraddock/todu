@@ -73,6 +73,29 @@ Override with:
 
 - `TODUAI_DAEMON_SOCKET=/path/to/daemon.sock`
 
+## Worker assignment configuration
+
+Configure assigned worker types in config file:
+
+```yaml
+daemon:
+  workers:
+    assigned:
+      - recurring
+      - github-sync
+```
+
+Override with env var (comma-separated):
+
+```bash
+export TODUAI_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
+```
+
+Notes:
+- Env var overrides config file assignment.
+- Empty assignment (`TODUAI_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
+- Duplicate entries are tolerated and logged; first occurrence wins.
+
 ## Validate connectivity
 
 ```bash

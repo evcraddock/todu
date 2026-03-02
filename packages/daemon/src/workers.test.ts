@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 import {
   createWorkerDependencyBlockedReason,
+  createWorkerNotAssignedReason,
   createWorkerRegistry,
   findMissingRequiredWorkerDomains,
   validateWorkerManifest,
@@ -83,6 +84,11 @@ describe("worker dependency gating helpers", () => {
   it("creates blocked reasons with missing domain details", () => {
     const reason = createWorkerDependencyBlockedReason(["recurring", "sync"]);
     expect(reason).toBe("required domains are disabled or missing: recurring, sync");
+  });
+
+  it("creates not-assigned reasons with worker type details", () => {
+    const reason = createWorkerNotAssignedReason("recurring");
+    expect(reason).toBe("worker is not assigned to this daemon: recurring");
   });
 });
 
@@ -216,6 +222,105 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
     }
 
     expect(duplicateRegistration.error.code).toBe("ALREADY_REGISTERED");
+  });
+
+  it("blocks unassigned workers from running", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      assignedWorkerTypes: ["sync"],
+    });
+
+    const registerResult = runtime.registerWorker({
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring"],
+      },
+    });
+
+    expect(registerResult.ok).toBe(true);
+    if (!registerResult.ok) {
+      throw new Error("Expected registration to succeed with blocked state");
+    }
+
+    expect(registerResult.value.state).toBe("blocked");
+    expect(registerResult.value.blockedReason).toBe(
+      "worker is not assigned to this daemon: recurring",
+    );
+
+    const transitionResult = runtime.transitionWorkerState("recurring", "running");
+    expect(transitionResult.ok).toBe(false);
+    if (transitionResult.ok) {
+      throw new Error("Expected transition to running to fail for unassigned worker");
+    }
+
+    expect(transitionResult.error).toMatchObject({
+      code: "NOT_ASSIGNED",
+      details: {
+        workerType: "recurring",
+        blockedReason: "worker is not assigned to this daemon: recurring",
+        assignedWorkerTypes: ["sync"],
+      },
+    });
+  });
+
+  it("applies assignment gating to startup registrations", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      assignedWorkerTypes: ["sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+        },
+      ],
+    });
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "blocked",
+      blockedReason: "worker is not assigned to this daemon: recurring",
+    });
+  });
+
+  it("logs duplicate assignment entries from runtime config", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const warnings: Array<{ message: string; context?: Record<string, unknown> }> = [];
+
+    const runtimeLogger = {
+      level: "info" as const,
+      debug: () => {},
+      info: () => {},
+      warn: (message: string, context?: Record<string, unknown>) => {
+        warnings.push({ message, context });
+      },
+      error: () => {},
+      child: () => runtimeLogger,
+    };
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      assignedWorkerTypes: ["recurring", "sync", "recurring"],
+      logger: runtimeLogger,
+    });
+
+    expect(runtime.config().assignedWorkerTypes).toEqual(["recurring", "sync"]);
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "duplicate worker assignment entries detected",
+          context: expect.objectContaining({
+            duplicateWorkerTypes: ["recurring"],
+            assignedWorkerTypes: ["recurring", "sync"],
+          }),
+        }),
+      ]),
+    );
   });
 
   it("blocks worker registration when required domains are unavailable", () => {

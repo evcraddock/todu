@@ -209,9 +209,12 @@ Baseline worker lifecycle states are:
 
 ## Worker Assignment and Failover (Initial)
 
-- Assignment configured via local config file/env vars
-- No lease system initially
-- Duplicate assignment handling starts with logging/observability
+- Assignment configured via local config file/env vars.
+- Config file model uses `daemon.workers.assigned` (list of worker types).
+- Environment override uses `TODUAI_DAEMON_ASSIGNED_WORKERS` (comma-separated worker types) and takes precedence over file assignment.
+- Empty assignment is allowed and means no local workers are assigned.
+- Duplicate assignment entries are tolerated and logged for observability; first occurrence wins.
+- No lease system initially.
 
 ## Operational failover UX
 

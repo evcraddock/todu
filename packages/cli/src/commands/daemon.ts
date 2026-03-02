@@ -10,6 +10,10 @@ import {
   formatDaemonCommandError,
   resolveDaemonSocketPath,
 } from "../daemon-command-client.js";
+import {
+  resolveDaemonAssignedWorkers,
+  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+} from "../daemon-worker-assignment.js";
 import { formatJSON } from "../format.js";
 
 interface DaemonStatusResult {
@@ -53,6 +57,7 @@ interface DaemonCommandContext {
   daemonPidPath: string;
   daemonEntrypoint: string;
   remoteSyncServer: string | null;
+  assignedWorkersEnvValue: string | undefined;
 }
 
 const DIRECT_PID_FILENAME = "daemon.pid";
@@ -736,6 +741,7 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
   const fileConfig = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, fileConfig);
   const remoteSync = resolveRemoteSyncConfig(fileConfig);
+  const assignedWorkers = resolveDaemonAssignedWorkers(fileConfig);
 
   return {
     storagePath,
@@ -743,6 +749,7 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
     daemonPidPath: path.join(storagePath, DIRECT_PID_FILENAME),
     daemonEntrypoint: resolveDaemonEntrypoint(),
     remoteSyncServer: remoteSync?.server ?? null,
+    assignedWorkersEnvValue: assignedWorkers.value,
   };
 }
 
@@ -759,6 +766,10 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
 
   if (context.socketPath) {
     childEnv.TODUAI_DAEMON_SOCKET = context.socketPath;
+  }
+
+  if (context.assignedWorkersEnvValue !== undefined) {
+    childEnv[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV] = context.assignedWorkersEnvValue;
   }
 
   return childEnv;
