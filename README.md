@@ -2,136 +2,77 @@
 
 [![CI](https://github.com/evcraddock/todu/actions/workflows/ci.yml/badge.svg)](https://github.com/evcraddock/todu/actions/workflows/ci.yml)
 
-Local-first task management with offline support and seamless sync
+todu is a local-first task management project (CLI + Electron) backed by a local daemon and Automerge sync.
 
-## Prerequisites
+## Install
+
+### Prerequisites
 
 - Node.js 20+
-- Bun 1.0+ (for building standalone CLI binaries)
+- npm
+- Bun 1.0+ (only needed for standalone CLI binaries)
 
-## Installation
+### Build from source
 
 ```bash
 npm install
-```
-
-## Development
-
-### Run CLI Commands
-
-```bash
-make run ARGS="--help"
-make run ARGS="task list"
-```
-
-The packaged executable is currently named `toduai` to avoid collisions with production `todu` during migration.
-
-### Run daemon-backed dev environment (recommended)
-
-```bash
 make build
+```
+
+### Install desktop application (Linux/macOS)
+
+From source checkout:
+
+```bash
+make dist
+make install
+```
+
+- Linux install script uses the generated AppImage.
+- macOS install script mounts the generated DMG and copies the app to `/Applications`.
+
+## Work on the project
+
+Read first: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+
+### Dev prerequisites
+
+For the full local dev stack (`make dev`):
+
+- [overmind](https://github.com/DarthSim/overmind)
+- Docker (for local sync-server in `docker compose`)
+
+### Start/stop dev stack
+
+```bash
 make dev
-```
-
-`make dev` starts both processes under overmind:
-
-- local daemon (`toduai-daemon`) with test data dir: `.dev/data`
-- local sync server (docker compose): `ws://localhost:3030`
-
-To enable daemon debug logs during development:
-
-```bash
-TODUAI_LOG_LEVEL=debug make dev
-```
-
-In another terminal, run CRUD commands against that test instance:
-
-```bash
-make run ARGS="project list"
-make run ARGS="task create --project inbox --title 'test'"
-make run ARGS="note list"
-make run ARGS="daemon status"
-```
-
-Stop the dev environment:
-
-```bash
 make dev-stop
 ```
 
-### Run Tests and Linting
+This starts:
+- local daemon (`packages/daemon/src/entrypoint.ts`)
+- local sync-server (`docker compose up sync-server`)
+
+### Core development commands
 
 ```bash
+make run ARGS="daemon status"
 make check
-```
-
-### Available Commands
-
-Run `make help` to see all targets. Key commands:
-
-#### Build & Quality
-
-| Command               | Description                                        |
-| --------------------- | -------------------------------------------------- |
-| `make help`           | Show all available targets                         |
-| `make build`          | Build all packages (core → engine → cli)           |
-| `make test`           | Run tests                                          |
-| `make check`          | Lint + format + typecheck (auto-fixes formatting)  |
-| `make check-ci`       | Lint + format + typecheck (no auto-fix, CI mode)   |
-| `make typecheck`      | TypeScript type checking only                      |
-| `make pre-pr`         | Full pre-PR checks (check + test + build)          |
-| `make clean`          | Remove build artifacts                             |
-
-#### Development
-
-| Command                  | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `make run ARGS="..."`    | Run CLI (e.g. `make run ARGS="task list"`)               |
-| `make dev`              | Start overmind dev stack (daemon + local sync server)   |
-| `make dev-status`       | Show overmind stack status                               |
-| `make dev-logs`         | Connect to overmind session (interactive terminal)       |
-| `make dev-tail`         | Show recent overmind logs                                |
-| `make dev-stop`         | Stop overmind dev stack                                  |
-| `make dev-electron`     | Launch Electron app in dev mode (hot reload)            |
-
-#### CLI Binaries
-
-| Command                  | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `make build-cli-binary`  | Build standalone CLI binary for current platform  |
-| `make build-cli-binaries`| Build standalone CLI binaries for all platforms   |
-
-#### Electron & Distribution
-
-| Command              | Description                                   |
-| -------------------- | --------------------------------------------- |
-| `make build-electron`| Build Electron app for distribution            |
-| `make dist`          | Build installer for current platform           |
-| `make dist-linux`    | Build Linux installers (.deb, .rpm, .AppImage) |
-| `make dist-mac`      | Build macOS installer (.dmg)                   |
-| `make dist-win`      | Build Windows installer (.exe)                 |
-
-#### Version Management
-
-| Command              | Description                          |
-| -------------------- | ------------------------------------ |
-| `make version`       | Show current version of all packages |
-| `make version-check` | Verify all package versions match    |
-
-### Before Opening a PR
-
-```bash
+make test
 make pre-pr
 ```
 
-## Architecture
+If you are working on Electron UI:
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on:
+```bash
+make dev-electron
+```
 
-- Package structure
-- Automerge-based local-first design
-- Sync architecture
-- Plugin system
+## Key docs
+
+- Contributing and required workflow: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Daemon CLI behavior: [docs/cli-daemon-usage.md](docs/cli-daemon-usage.md)
 
 ## License
 
