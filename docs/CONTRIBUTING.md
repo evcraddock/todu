@@ -164,7 +164,8 @@ PR Pipeline Status
 | Command | Purpose |
 |---------|---------|
 | `make build` | Build all packages (core → engine → cli) |
-| `make test` | Run tests |
+| `make test` | Run default tests (excludes sync-server integration tests) |
+| `make test-sync-server-integration` | Run sync-server-backed integration tests explicitly |
 | `make check` | Lint + format + typecheck |
 | `make pre-pr` | Full pre-PR checks (check + test) |
 | `npm run test:storage-stability` | Repeat storage teardown tests to detect race leaks |
@@ -175,6 +176,12 @@ For targeted verification during daemon protocol work:
 ```bash
 npm run test:conformance
 npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
+```
+
+Sync-server-backed integration coverage is opt-in and must be run explicitly:
+
+```bash
+make test-sync-server-integration
 ```
 
 See also:

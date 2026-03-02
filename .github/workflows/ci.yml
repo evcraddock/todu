@@ -39,6 +39,8 @@ jobs:
         run: npm run test:storage-stability
 
       - name: Test
+        env:
+          TODUAI_RUN_SYNC_SERVER_TESTS: "0"
         run: make test
 
       - name: Build

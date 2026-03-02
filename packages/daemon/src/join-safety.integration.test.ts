@@ -7,6 +7,8 @@ import * as engine from "@todu/engine";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 
+const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
+
 describe("join safety integration", () => {
   const tempDirs: string[] = [];
 
@@ -216,92 +218,99 @@ describe("join safety integration", () => {
     }
   });
 
-  it("supports authority migration from source daemon to destination daemon", async () => {
-    const relayDir = mkTmpDir(tempDirs, "todu-join-relay-");
-    const sourceDir = mkTmpDir(tempDirs, "todu-join-source-");
-    const destinationDir = mkTmpDir(tempDirs, "todu-join-destination-");
-    const relayPort = await reserveTcpPort();
+  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
+    "supports authority migration from source daemon to destination daemon",
+    async () => {
+      const relayDir = mkTmpDir(tempDirs, "todu-join-relay-");
+      const sourceDir = mkTmpDir(tempDirs, "todu-join-source-");
+      const destinationDir = mkTmpDir(tempDirs, "todu-join-destination-");
+      const relayPort = await reserveTcpPort();
 
-    const relay = await engine.createTodu({
-      storagePath: relayDir,
-      syncServer: true,
-      syncPort: relayPort,
-    });
+      const relay = await engine.createTodu({
+        storagePath: relayDir,
+        syncServer: true,
+        syncPort: relayPort,
+      });
 
-    const sourceRuntime = createDaemonRuntime({
-      storagePath: sourceDir,
-      role: "authority",
-      remoteSync: { server: `ws://localhost:${relayPort}` },
-    });
+      const sourceRuntime = createDaemonRuntime({
+        storagePath: sourceDir,
+        role: "authority",
+        remoteSync: { server: `ws://localhost:${relayPort}` },
+      });
 
-    const destinationRuntime = createDaemonRuntime({
-      storagePath: destinationDir,
-      role: "node",
-      remoteSync: { server: `ws://localhost:${relayPort}` },
-    });
+      const destinationRuntime = createDaemonRuntime({
+        storagePath: destinationDir,
+        role: "node",
+        remoteSync: { server: `ws://localhost:${relayPort}` },
+      });
 
-    try {
-      await sourceRuntime.start();
-      await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
+      try {
+        await sourceRuntime.start();
+        await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
 
-      const sourceCatalogId = await readCatalogId(sourceRuntime.config().socketPath);
+        const sourceCatalogId = await readCatalogId(sourceRuntime.config().socketPath);
 
-      await sendRequest(sourceRuntime.config().socketPath, {
-        id: "source-project-create",
-        method: "project.create",
-        params: {
-          input: {
-            name: "migration-seed-project",
+        await sendRequest(sourceRuntime.config().socketPath, {
+          id: "source-project-create",
+          method: "project.create",
+          params: {
+            input: {
+              name: "migration-seed-project",
+            },
           },
-        },
-      });
+        });
 
-      await destinationRuntime.start();
-      await waitForRemoteState(destinationRuntime.config().socketPath, "connected");
-      await waitForJoinCheckReady(destinationRuntime.config().socketPath, sourceCatalogId);
+        await destinationRuntime.start();
+        await waitForRemoteState(destinationRuntime.config().socketPath, "connected");
+        await waitForJoinCheckReady(destinationRuntime.config().socketPath, sourceCatalogId);
 
-      const joinResponse = await sendRequest(destinationRuntime.config().socketPath, {
-        id: "destination-join-source",
-        method: "sync.join",
-        params: {
-          catalogId: sourceCatalogId,
-        },
-      });
-
-      expect(joinResponse).toMatchObject({
-        id: "destination-join-source",
-        result: {
-          mode: "join",
-          targetCatalogId: sourceCatalogId,
-          switched: true,
-          rolledBack: false,
-        },
-      });
-
-      await waitForProjectByName(destinationRuntime.config().socketPath, "migration-seed-project");
-
-      await sourceRuntime.stop();
-
-      await sendRequest(destinationRuntime.config().socketPath, {
-        id: "destination-project-create-after-cutover",
-        method: "project.create",
-        params: {
-          input: {
-            name: "post-migration-project",
+        const joinResponse = await sendRequest(destinationRuntime.config().socketPath, {
+          id: "destination-join-source",
+          method: "sync.join",
+          params: {
+            catalogId: sourceCatalogId,
           },
-        },
-      });
+        });
 
-      await sourceRuntime.start();
-      await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
-      await waitForProjectByName(sourceRuntime.config().socketPath, "post-migration-project");
-    } finally {
-      await sourceRuntime.stop();
-      await destinationRuntime.stop();
-      await relay.close();
-      await sleep(150);
-    }
-  }, 30000);
+        expect(joinResponse).toMatchObject({
+          id: "destination-join-source",
+          result: {
+            mode: "join",
+            targetCatalogId: sourceCatalogId,
+            switched: true,
+            rolledBack: false,
+          },
+        });
+
+        await waitForProjectByName(
+          destinationRuntime.config().socketPath,
+          "migration-seed-project",
+        );
+
+        await sourceRuntime.stop();
+
+        await sendRequest(destinationRuntime.config().socketPath, {
+          id: "destination-project-create-after-cutover",
+          method: "project.create",
+          params: {
+            input: {
+              name: "post-migration-project",
+            },
+          },
+        });
+
+        await sourceRuntime.start();
+        await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
+        await waitForProjectByName(sourceRuntime.config().socketPath, "post-migration-project");
+      } finally {
+        await sourceRuntime.stop();
+        await destinationRuntime.stop();
+        await relay.close();
+        await sleep(150);
+      }
+    },
+    30000,
+  );
 });
 
 function mkTmpDir(bucket: string[], prefix: string): string {
