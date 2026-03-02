@@ -34,6 +34,16 @@ describe("schema", () => {
       expect(catalog.taskListDocIds).toEqual({});
     });
 
+    it("creates a catalog with empty notesBucketDocIds", () => {
+      const catalog = createEmptyCatalog();
+      expect(catalog.notesBucketDocIds).toEqual({});
+    });
+
+    it("creates a catalog with empty noteBucketByNoteId", () => {
+      const catalog = createEmptyCatalog();
+      expect(catalog.noteBucketByNoteId).toEqual({});
+    });
+
     it("creates a catalog with settings", () => {
       const catalog = createEmptyCatalog();
       expect(catalog.settings.schemaVersion).toBe(SCHEMA_VERSION);

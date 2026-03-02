@@ -81,6 +81,20 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 - Dataset is rooted by a catalog document ID.
 - All clients/daemons for the same dataset should converge on the same catalog ID and referenced sub-document graph.
 
+### Notes storage partitioning
+
+Notes are partitioned into multiple Automerge documents instead of one global notes document.
+
+- Catalog keeps `notesBucketDocIds` (bucket key → document ID).
+- Catalog keeps `noteBucketByNoteId` (note ID → bucket key) for direct update/delete lookup.
+- Bucket selection:
+  - Entity-attached notes use `entity:<type>:<entityId>`.
+  - Standalone journal notes use monthly buckets `journal:<YYYY-MM>`.
+
+This keeps write contention localized and bounds per-document history growth as note volume increases.
+
+Diagnostics: set `TODU_NOTES_DIAGNOSTICS=1` to log notes bucket usage and legacy migration counts during engine operations.
+
 ### Bootstrap vs Join
 
 - **Bootstrap** (first run, no marker/catalog): creating initial catalog is allowed.

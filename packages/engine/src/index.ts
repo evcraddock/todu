@@ -134,6 +134,7 @@ export async function createTodu(
     const docIds: string[] = [
       ...Object.values(catalogDoc.taskListDocIds ?? {}),
       ...Object.values(catalogDoc.habitLogDocIds ?? {}),
+      ...Object.values(catalogDoc.notesBucketDocIds ?? {}),
     ];
     if (catalogDoc.notesDocId) docIds.push(catalogDoc.notesDocId);
     if (docIds.length > 0) {
