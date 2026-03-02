@@ -83,7 +83,9 @@ export {
 
 export {
   type CreateWorkerRegistryOptions,
+  createWorkerDependencyBlockedReason,
   createWorkerRegistry,
+  findMissingRequiredWorkerDomains,
   isWorkerDomainCapability,
   isWorkerLifecycleState,
   isWorkerRoleHint,

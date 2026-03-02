@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
-import { createWorkerRegistry, validateWorkerManifest } from "./workers.js";
+import {
+  createWorkerDependencyBlockedReason,
+  createWorkerRegistry,
+  findMissingRequiredWorkerDomains,
+  validateWorkerManifest,
+} from "./workers.js";
 
 describe("validateWorkerManifest", () => {
   it("accepts and normalizes valid manifests", () => {
@@ -66,6 +71,18 @@ describe("validateWorkerManifest", () => {
         overlappingDomains: ["sync"],
       },
     });
+  });
+});
+
+describe("worker dependency gating helpers", () => {
+  it("finds missing required domains deterministically", () => {
+    const missing = findMissingRequiredWorkerDomains(["recurring", "sync"], ["sync", "task"]);
+    expect(missing).toEqual(["recurring"]);
+  });
+
+  it("creates blocked reasons with missing domain details", () => {
+    const reason = createWorkerDependencyBlockedReason(["recurring", "sync"]);
+    expect(reason).toBe("required domains are disabled or missing: recurring, sync");
   });
 });
 
@@ -199,5 +216,120 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
     }
 
     expect(duplicateRegistration.error.code).toBe("ALREADY_REGISTERED");
+  });
+
+  it("blocks worker registration when required domains are unavailable", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["task", "sync"],
+    });
+
+    const registerResult = runtime.registerWorker({
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring"],
+      },
+    });
+
+    expect(registerResult.ok).toBe(true);
+    if (!registerResult.ok) {
+      throw new Error("Expected registration to succeed in blocked state");
+    }
+
+    expect(registerResult.value.state).toBe("blocked");
+    expect(registerResult.value.blockedReason).toBe(
+      "required domains are disabled or missing: recurring",
+    );
+  });
+
+  it("applies dependency gating to startup registrations", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+        },
+      ],
+    });
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "blocked",
+      blockedReason: "required domains are disabled or missing: recurring",
+    });
+  });
+
+  it("returns dependency-blocked errors when starting a blocked worker", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["task", "sync"],
+    });
+
+    runtime.registerWorker({
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring"],
+      },
+    });
+
+    const transitionResult = runtime.transitionWorkerState("recurring", "running");
+
+    expect(transitionResult.ok).toBe(false);
+    if (transitionResult.ok) {
+      throw new Error("Expected transition to running to fail due to dependency gating");
+    }
+
+    expect(transitionResult.error).toMatchObject({
+      code: "DEPENDENCY_BLOCKED",
+      details: {
+        workerType: "recurring",
+        blockedReason: "required domains are disabled or missing: recurring",
+        missingRequiredDomains: ["recurring"],
+      },
+    });
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "blocked",
+      blockedReason: "required domains are disabled or missing: recurring",
+    });
+  });
+
+  it("allows running transitions when required domains are enabled", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+    });
+
+    const registerResult = runtime.registerWorker({
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring"],
+      },
+    });
+
+    expect(registerResult.ok).toBe(true);
+    if (!registerResult.ok) {
+      throw new Error("Expected registration to succeed");
+    }
+
+    const transitionResult = runtime.transitionWorkerState("recurring", "running");
+    expect(transitionResult.ok).toBe(true);
+    if (!transitionResult.ok) {
+      throw new Error("Expected transition to running to succeed");
+    }
+
+    expect(transitionResult.value.state).toBe("running");
+    expect(transitionResult.value.blockedReason).toBeUndefined();
   });
 });

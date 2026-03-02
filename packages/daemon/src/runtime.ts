@@ -1,5 +1,5 @@
 import type { DocumentId } from "@automerge/automerge-repo";
-import { type RemoteSyncConfig, type Result, resolveStoragePath } from "@todu/core";
+import { err, ok, type RemoteSyncConfig, type Result, resolveStoragePath } from "@todu/core";
 import { beginCatalogJoinSwitch, createTodu, initJoinStorage, type Todu } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
@@ -28,8 +28,12 @@ import {
   type UdsTransport,
 } from "./transport.js";
 import {
+  createWorkerDependencyBlockedReason,
   createWorkerRegistry,
+  findMissingRequiredWorkerDomains,
   type RegisteredWorkerSnapshot,
+  WORKER_DOMAIN_CAPABILITIES,
+  type WorkerDomainCapability,
   type WorkerLifecycleState,
   type WorkerLifecycleTransitionDetails,
   type WorkerRegistration,
@@ -59,6 +63,7 @@ export interface DaemonRuntimeConfig {
   rpcMethodHandlers?: Partial<Record<string, DaemonRpcMethodHandler>>;
   rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
   workerRegistrations?: WorkerRegistration[];
+  enabledWorkerDomains?: WorkerDomainCapability[];
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -70,6 +75,7 @@ export interface ResolvedDaemonRuntimeConfig {
   daemonVersion: string;
   requestTimeoutMs: number;
   logLevel: DaemonLogLevel;
+  enabledWorkerDomains: WorkerDomainCapability[];
 }
 
 export interface DaemonRuntimeStatus {
@@ -109,6 +115,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   const resolvedStoragePath = config.storagePath ?? resolveStoragePath();
   const resolvedSocketPath = resolveUdsSocketPath(resolvedStoragePath, config.socketPath);
   const resolvedLogLevel = config.logLevel ?? resolveDaemonLogLevelFromEnv(process.env);
+  const resolvedEnabledWorkerDomains = resolveEnabledWorkerDomains(config.enabledWorkerDomains);
 
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
     storagePath: resolvedStoragePath,
@@ -123,6 +130,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       parsePositiveInteger(process.env.TODUAI_DAEMON_REQUEST_TIMEOUT_MS) ??
       DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
     logLevel: resolvedLogLevel,
+    enabledWorkerDomains: resolvedEnabledWorkerDomains,
   };
 
   let todu: Todu | null = null;
@@ -139,6 +147,78 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   const workerRegistry = createWorkerRegistry();
 
+  const runtimeLogger =
+    config.logger ??
+    createDaemonLogger({
+      component: "daemon.runtime",
+      level: resolvedConfig.logLevel,
+    });
+
+  function createDependencyBlockedError(
+    workerType: string,
+    missingRequiredDomains: readonly WorkerDomainCapability[],
+    blockedReason: string,
+  ): WorkerRegistryError {
+    return {
+      code: "DEPENDENCY_BLOCKED",
+      message: `Worker cannot transition to running because required domains are unavailable: ${workerType}`,
+      details: {
+        workerType,
+        blockedReason,
+        missingRequiredDomains,
+        enabledWorkerDomains: resolvedConfig.enabledWorkerDomains,
+      },
+    };
+  }
+
+  function applyWorkerDependencyGating(
+    workerType: string,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+    const normalizedWorkerType = workerType.trim();
+    const worker = workerRegistry.get(normalizedWorkerType);
+    if (!worker) {
+      return err({
+        code: "NOT_FOUND",
+        message: `Worker is not registered: ${normalizedWorkerType}`,
+        details: {
+          workerType: normalizedWorkerType,
+        },
+      });
+    }
+
+    const missingRequiredDomains = findMissingRequiredWorkerDomains(
+      worker.manifest.requiredDomains,
+      resolvedConfig.enabledWorkerDomains,
+    );
+
+    if (missingRequiredDomains.length === 0) {
+      return ok(worker);
+    }
+
+    const blockedReason = createWorkerDependencyBlockedReason(missingRequiredDomains);
+
+    if (worker.state === "blocked" && worker.blockedReason === blockedReason) {
+      return ok(worker);
+    }
+
+    const blockedTransition = workerRegistry.transition(normalizedWorkerType, "blocked", {
+      blockedReason,
+    });
+
+    if (!blockedTransition.ok) {
+      return blockedTransition;
+    }
+
+    runtimeLogger.warn("worker blocked by required-domain gating", {
+      workerType: normalizedWorkerType,
+      blockedReason,
+      missingRequiredDomains,
+      enabledWorkerDomains: resolvedConfig.enabledWorkerDomains,
+    });
+
+    return blockedTransition;
+  }
+
   for (const registration of config.workerRegistrations ?? []) {
     const registerResult = workerRegistry.register(registration);
     if (!registerResult.ok) {
@@ -147,14 +227,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         `Invalid worker registration for daemon runtime (${workerType}): ${registerResult.error.message}`,
       );
     }
-  }
 
-  const runtimeLogger =
-    config.logger ??
-    createDaemonLogger({
-      component: "daemon.runtime",
-      level: resolvedConfig.logLevel,
-    });
+    const dependencyGateResult = applyWorkerDependencyGating(registerResult.value.manifest.type);
+    if (!dependencyGateResult.ok) {
+      throw new Error(
+        `Failed to apply worker dependency gating for daemon runtime (${registerResult.value.manifest.type}): ${dependencyGateResult.error.message}`,
+      );
+    }
+  }
 
   const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
     createCoreNamespaceHandlers({
@@ -564,7 +644,12 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     },
 
     registerWorker(registration): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
-      return workerRegistry.register(registration);
+      const registerResult = workerRegistry.register(registration);
+      if (!registerResult.ok) {
+        return registerResult;
+      }
+
+      return applyWorkerDependencyGating(registerResult.value.manifest.type);
     },
 
     transitionWorkerState(
@@ -572,6 +657,34 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       state,
       details,
     ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+      if (state !== "running") {
+        return workerRegistry.transition(workerType, state, details);
+      }
+
+      const dependencyGateResult = applyWorkerDependencyGating(workerType);
+      if (!dependencyGateResult.ok) {
+        return dependencyGateResult;
+      }
+
+      const missingRequiredDomains = findMissingRequiredWorkerDomains(
+        dependencyGateResult.value.manifest.requiredDomains,
+        resolvedConfig.enabledWorkerDomains,
+      );
+
+      if (missingRequiredDomains.length > 0) {
+        const blockedReason =
+          dependencyGateResult.value.blockedReason ??
+          createWorkerDependencyBlockedReason(missingRequiredDomains);
+
+        return err(
+          createDependencyBlockedError(
+            dependencyGateResult.value.manifest.type,
+            missingRequiredDomains,
+            blockedReason,
+          ),
+        );
+      }
+
       return workerRegistry.transition(workerType, state, details);
     },
 
@@ -597,6 +710,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         daemonVersion: resolvedConfig.daemonVersion,
         requestTimeoutMs: resolvedConfig.requestTimeoutMs,
         logLevel: resolvedConfig.logLevel,
+        enabledWorkerDomains: [...resolvedConfig.enabledWorkerDomains],
       };
     },
   };
@@ -616,6 +730,23 @@ function getErrorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+function resolveEnabledWorkerDomains(
+  domains: readonly WorkerDomainCapability[] | undefined,
+): WorkerDomainCapability[] {
+  if (!domains) {
+    return [...WORKER_DOMAIN_CAPABILITIES];
+  }
+
+  const normalized: WorkerDomainCapability[] = [];
+  for (const domain of domains) {
+    if (!normalized.includes(domain)) {
+      normalized.push(domain);
+    }
+  }
+
+  return normalized;
 }
 
 function parsePositiveInteger(value: string | undefined): number | undefined {

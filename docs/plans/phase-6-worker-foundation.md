@@ -83,6 +83,12 @@ Daemon runtime registration/lifecycle entrypoints:
 - Core domains remain usable without workers
 - Worker lifecycle must not alter baseline core CRUD/query behavior
 
+## Phase 6 Gating Notes
+
+- Required-domain checks run for workers loaded at daemon startup and for runtime registrations (reload-equivalent path).
+- If a required domain is unavailable, the worker transitions to `blocked` with a deterministic blocked reason that lists missing/disabled domains.
+- Attempting to transition a dependency-blocked worker to `running` returns a dependency-blocked error and keeps worker state `blocked`.
+
 ## Acceptance Criteria
 
 - [ ] Worker registration contract implemented
