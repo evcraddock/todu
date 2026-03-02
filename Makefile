@@ -1,4 +1,4 @@
-.PHONY: build test check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
+.PHONY: build test test-sync-server-integration check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
@@ -27,8 +27,11 @@ help: ## Show this help
 build: node_modules ## Build all packages (core → engine → cli)
 	npm run build
 
-test: node_modules ## Run tests
+test: node_modules ## Run default tests (sync-server integration tests are excluded)
 	npm test
+
+test-sync-server-integration: node_modules ## Run sync-server-backed integration tests
+	npm run test:sync-server-integration
 
 check: node_modules ## Lint + format + typecheck (auto-fixes formatting)
 	npm run check

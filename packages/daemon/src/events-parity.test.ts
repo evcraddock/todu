@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 
 const RELAY_PORT = 24421;
+const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
 
 describe("daemon event parity", () => {
   let tmpDir: string;
@@ -79,87 +80,90 @@ describe("daemon event parity", () => {
     await runtime.stop();
   });
 
-  it("emits sync.statusChanged on sync.stop and sync.start transitions", async () => {
-    const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-relay-"));
-    const relay = await createTodu({
-      storagePath: relayDir,
-      syncServer: true,
-      syncPort: RELAY_PORT,
-    });
-
-    const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-sync-events-"));
-    const runtime = createDaemonRuntime({
-      storagePath: runtimeDir,
-      remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
-    });
-
-    try {
-      await runtime.start();
-      const client = await connectJsonLineClient(runtime.config().socketPath);
-
-      client.send({
-        id: "sub-sync-status",
-        method: "events.subscribe",
-        params: {
-          events: ["sync.statusChanged"],
-        },
+  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
+    "emits sync.statusChanged on sync.stop and sync.start transitions",
+    async () => {
+      const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-relay-"));
+      const relay = await createTodu({
+        storagePath: relayDir,
+        syncServer: true,
+        syncPort: RELAY_PORT,
       });
 
-      const subscribeResponse = await client.nextFrame();
-      expect(subscribeResponse).toEqual({
-        id: "sub-sync-status",
-        result: {
-          subscribed: ["sync.statusChanged"],
-        },
+      const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-sync-events-"));
+      const runtime = createDaemonRuntime({
+        storagePath: runtimeDir,
+        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
       });
 
-      client.send({
-        id: "sync-stop-for-event",
-        method: "sync.stop",
-        params: {},
-      });
+      try {
+        await runtime.start();
+        const client = await connectJsonLineClient(runtime.config().socketPath);
 
-      const stopFrames = await client.collectUntil((collected) => {
-        const hasResponse = collected.some((frame) => frame.id === "sync-stop-for-event");
-        const hasDisconnectedEvent = collected.some(
-          (frame) =>
-            frame.event === "sync.statusChanged" &&
-            (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
-              "disconnected",
-        );
-        return hasResponse && hasDisconnectedEvent;
-      }, 5000);
+        client.send({
+          id: "sub-sync-status",
+          method: "events.subscribe",
+          params: {
+            events: ["sync.statusChanged"],
+          },
+        });
 
-      expect(stopFrames.some((frame) => frame.id === "sync-stop-for-event")).toBe(true);
+        const subscribeResponse = await client.nextFrame();
+        expect(subscribeResponse).toEqual({
+          id: "sub-sync-status",
+          result: {
+            subscribed: ["sync.statusChanged"],
+          },
+        });
 
-      client.send({
-        id: "sync-start-for-event",
-        method: "sync.start",
-        params: {},
-      });
+        client.send({
+          id: "sync-stop-for-event",
+          method: "sync.stop",
+          params: {},
+        });
 
-      const startFrames = await client.collectUntil((collected) => {
-        const hasResponse = collected.some((frame) => frame.id === "sync-start-for-event");
-        const hasConnectedEvent = collected.some(
-          (frame) =>
-            frame.event === "sync.statusChanged" &&
-            (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
-              "connected",
-        );
-        return hasResponse && hasConnectedEvent;
-      }, 5000);
+        const stopFrames = await client.collectUntil((collected) => {
+          const hasResponse = collected.some((frame) => frame.id === "sync-stop-for-event");
+          const hasDisconnectedEvent = collected.some(
+            (frame) =>
+              frame.event === "sync.statusChanged" &&
+              (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
+                "disconnected",
+          );
+          return hasResponse && hasDisconnectedEvent;
+        }, 5000);
 
-      expect(startFrames.some((frame) => frame.id === "sync-start-for-event")).toBe(true);
+        expect(stopFrames.some((frame) => frame.id === "sync-stop-for-event")).toBe(true);
 
-      await client.close();
-    } finally {
-      await runtime.stop();
-      await relay.close();
-      await waitForStorageSettled();
-      fs.rmSync(runtimeDir, { recursive: true, force: true });
-      fs.rmSync(relayDir, { recursive: true, force: true });
-    }
-  });
+        client.send({
+          id: "sync-start-for-event",
+          method: "sync.start",
+          params: {},
+        });
+
+        const startFrames = await client.collectUntil((collected) => {
+          const hasResponse = collected.some((frame) => frame.id === "sync-start-for-event");
+          const hasConnectedEvent = collected.some(
+            (frame) =>
+              frame.event === "sync.statusChanged" &&
+              (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
+                "connected",
+          );
+          return hasResponse && hasConnectedEvent;
+        }, 5000);
+
+        expect(startFrames.some((frame) => frame.id === "sync-start-for-event")).toBe(true);
+
+        await client.close();
+      } finally {
+        await runtime.stop();
+        await relay.close();
+        await waitForStorageSettled();
+        fs.rmSync(runtimeDir, { recursive: true, force: true });
+        fs.rmSync(relayDir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 async function waitForStorageSettled(delayMs = 100): Promise<void> {

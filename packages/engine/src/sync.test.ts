@@ -6,8 +6,9 @@ import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
 const TEST_SYNC_PORT = 24399; // Avoid conflict with real instances on 24377
+const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
 
-describe("sync: ephemeral client + server", () => {
+(RUN_SYNC_SERVER_TESTS ? describe : describe.skip)("sync: ephemeral client + server", () => {
   let tmpDir: string;
   let server: Todu;
   let client: Todu;
