@@ -27,6 +27,13 @@ export interface ToduFileConfig {
       enabled?: boolean;
     };
   };
+  /** Daemon-specific configuration */
+  daemon?: {
+    workers?: {
+      /** Worker types statically assigned to this daemon */
+      assigned?: string[];
+    };
+  };
 }
 
 /** Resolved remote sync config — only present when server is set and enabled. */

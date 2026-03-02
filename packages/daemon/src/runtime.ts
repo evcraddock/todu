@@ -29,6 +29,7 @@ import {
 } from "./transport.js";
 import {
   createWorkerDependencyBlockedReason,
+  createWorkerNotAssignedReason,
   createWorkerRegistry,
   findMissingRequiredWorkerDomains,
   type RegisteredWorkerSnapshot,
@@ -64,6 +65,7 @@ export interface DaemonRuntimeConfig {
   rpcNamespaceHandlers?: DaemonRpcNamespaceHandlers;
   workerRegistrations?: WorkerRegistration[];
   enabledWorkerDomains?: WorkerDomainCapability[];
+  assignedWorkerTypes?: string[];
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -76,6 +78,7 @@ export interface ResolvedDaemonRuntimeConfig {
   requestTimeoutMs: number;
   logLevel: DaemonLogLevel;
   enabledWorkerDomains: WorkerDomainCapability[];
+  assignedWorkerTypes?: string[];
 }
 
 export interface DaemonRuntimeStatus {
@@ -116,6 +119,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   const resolvedSocketPath = resolveUdsSocketPath(resolvedStoragePath, config.socketPath);
   const resolvedLogLevel = config.logLevel ?? resolveDaemonLogLevelFromEnv(process.env);
   const resolvedEnabledWorkerDomains = resolveEnabledWorkerDomains(config.enabledWorkerDomains);
+  const assignmentResolution = resolveAssignedWorkerTypes(config.assignedWorkerTypes);
 
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
     storagePath: resolvedStoragePath,
@@ -131,6 +135,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
     logLevel: resolvedLogLevel,
     enabledWorkerDomains: resolvedEnabledWorkerDomains,
+    assignedWorkerTypes: assignmentResolution.assignedWorkerTypes,
   };
 
   let todu: Todu | null = null;
@@ -154,6 +159,13 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       level: resolvedConfig.logLevel,
     });
 
+  if (assignmentResolution.duplicateWorkerTypes.length > 0) {
+    runtimeLogger.warn("duplicate worker assignment entries detected", {
+      duplicateWorkerTypes: assignmentResolution.duplicateWorkerTypes,
+      assignedWorkerTypes: resolvedConfig.assignedWorkerTypes ?? null,
+    });
+  }
+
   function createDependencyBlockedError(
     workerType: string,
     missingRequiredDomains: readonly WorkerDomainCapability[],
@@ -169,6 +181,68 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         enabledWorkerDomains: resolvedConfig.enabledWorkerDomains,
       },
     };
+  }
+
+  function createNotAssignedError(workerType: string, blockedReason: string): WorkerRegistryError {
+    return {
+      code: "NOT_ASSIGNED",
+      message: `Worker is not assigned to this daemon: ${workerType}`,
+      details: {
+        workerType,
+        blockedReason,
+        assignedWorkerTypes: resolvedConfig.assignedWorkerTypes ?? null,
+      },
+    };
+  }
+
+  function isWorkerAssigned(workerType: string): boolean {
+    if (!resolvedConfig.assignedWorkerTypes) {
+      return true;
+    }
+
+    return resolvedConfig.assignedWorkerTypes.includes(workerType);
+  }
+
+  function applyWorkerAssignmentGating(
+    workerType: string,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+    const normalizedWorkerType = workerType.trim();
+    const worker = workerRegistry.get(normalizedWorkerType);
+    if (!worker) {
+      return err({
+        code: "NOT_FOUND",
+        message: `Worker is not registered: ${normalizedWorkerType}`,
+        details: {
+          workerType: normalizedWorkerType,
+        },
+      });
+    }
+
+    if (isWorkerAssigned(worker.manifest.type)) {
+      return ok(worker);
+    }
+
+    const blockedReason = createWorkerNotAssignedReason(worker.manifest.type);
+
+    if (worker.state === "blocked" && worker.blockedReason === blockedReason) {
+      return ok(worker);
+    }
+
+    const blockedTransition = workerRegistry.transition(normalizedWorkerType, "blocked", {
+      blockedReason,
+    });
+
+    if (!blockedTransition.ok) {
+      return blockedTransition;
+    }
+
+    runtimeLogger.warn("worker blocked by static assignment", {
+      workerType: normalizedWorkerType,
+      blockedReason,
+      assignedWorkerTypes: resolvedConfig.assignedWorkerTypes ?? null,
+    });
+
+    return blockedTransition;
   }
 
   function applyWorkerDependencyGating(
@@ -226,6 +300,17 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       throw new Error(
         `Invalid worker registration for daemon runtime (${workerType}): ${registerResult.error.message}`,
       );
+    }
+
+    const assignmentGateResult = applyWorkerAssignmentGating(registerResult.value.manifest.type);
+    if (!assignmentGateResult.ok) {
+      throw new Error(
+        `Failed to apply worker assignment gating for daemon runtime (${registerResult.value.manifest.type}): ${assignmentGateResult.error.message}`,
+      );
+    }
+
+    if (!isWorkerAssigned(registerResult.value.manifest.type)) {
+      continue;
     }
 
     const dependencyGateResult = applyWorkerDependencyGating(registerResult.value.manifest.type);
@@ -649,6 +734,15 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         return registerResult;
       }
 
+      const assignmentGateResult = applyWorkerAssignmentGating(registerResult.value.manifest.type);
+      if (!assignmentGateResult.ok) {
+        return assignmentGateResult;
+      }
+
+      if (!isWorkerAssigned(registerResult.value.manifest.type)) {
+        return assignmentGateResult;
+      }
+
       return applyWorkerDependencyGating(registerResult.value.manifest.type);
     },
 
@@ -659,6 +753,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
       if (state !== "running") {
         return workerRegistry.transition(workerType, state, details);
+      }
+
+      const assignmentGateResult = applyWorkerAssignmentGating(workerType);
+      if (!assignmentGateResult.ok) {
+        return assignmentGateResult;
+      }
+
+      if (!isWorkerAssigned(assignmentGateResult.value.manifest.type)) {
+        const blockedReason =
+          assignmentGateResult.value.blockedReason ??
+          createWorkerNotAssignedReason(assignmentGateResult.value.manifest.type);
+        return err(createNotAssignedError(assignmentGateResult.value.manifest.type, blockedReason));
       }
 
       const dependencyGateResult = applyWorkerDependencyGating(workerType);
@@ -711,6 +817,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         requestTimeoutMs: resolvedConfig.requestTimeoutMs,
         logLevel: resolvedConfig.logLevel,
         enabledWorkerDomains: [...resolvedConfig.enabledWorkerDomains],
+        assignedWorkerTypes: resolvedConfig.assignedWorkerTypes
+          ? [...resolvedConfig.assignedWorkerTypes]
+          : undefined,
       };
     },
   };
@@ -747,6 +856,42 @@ function resolveEnabledWorkerDomains(
   }
 
   return normalized;
+}
+
+function resolveAssignedWorkerTypes(workerTypes: readonly string[] | undefined): {
+  assignedWorkerTypes: string[] | undefined;
+  duplicateWorkerTypes: string[];
+} {
+  if (!workerTypes) {
+    return {
+      assignedWorkerTypes: undefined,
+      duplicateWorkerTypes: [],
+    };
+  }
+
+  const normalized: string[] = [];
+  const duplicates: string[] = [];
+
+  for (const workerType of workerTypes) {
+    const trimmedWorkerType = workerType.trim();
+    if (!trimmedWorkerType) {
+      continue;
+    }
+
+    if (normalized.includes(trimmedWorkerType)) {
+      if (!duplicates.includes(trimmedWorkerType)) {
+        duplicates.push(trimmedWorkerType);
+      }
+      continue;
+    }
+
+    normalized.push(trimmedWorkerType);
+  }
+
+  return {
+    assignedWorkerTypes: normalized,
+    duplicateWorkerTypes: duplicates,
+  };
 }
 
 function parsePositiveInteger(value: string | undefined): number | undefined {

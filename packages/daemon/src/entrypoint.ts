@@ -4,6 +4,10 @@ import { resolveRemoteSyncConfig } from "@todu/core";
 import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
 import { startDaemonProcess } from "./process.js";
 import { type DaemonRole, isDaemonRole } from "./runtime.js";
+import {
+  parseAssignedWorkerTypesFromEnv,
+  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+} from "./worker-assignment.js";
 
 function parseDaemonRole(value: string | undefined): DaemonRole {
   if (!value) {
@@ -27,6 +31,21 @@ export async function runDaemonEntrypoint(): Promise<void> {
   const daemonRole = parseDaemonRole(process.env.TODUAI_DAEMON_ROLE);
   const daemonSocketPath = process.env.TODUAI_DAEMON_SOCKET;
   const remoteSync = resolveRemoteSyncConfig({});
+  const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);
+
+  if (assignmentConfig.duplicateWorkerTypes.length > 0) {
+    logger.warn("duplicate daemon worker assignment entries detected", {
+      envVar: TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+      duplicateWorkerTypes: assignmentConfig.duplicateWorkerTypes,
+    });
+  }
+
+  if (assignmentConfig.ignoredEntries.length > 0) {
+    logger.warn("ignored empty daemon worker assignment entries", {
+      envVar: TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+      ignoredEntryCount: assignmentConfig.ignoredEntries.length,
+    });
+  }
 
   const daemon = await startDaemonProcess(
     {
@@ -34,6 +53,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
       socketPath: daemonSocketPath,
       remoteSync: remoteSync ?? undefined,
       logLevel: daemonLogLevel,
+      assignedWorkerTypes: assignmentConfig.assignedWorkerTypes,
     },
     {
       hooks: {
@@ -42,6 +62,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
             role: status.role,
             socketPath: status.transport?.path ?? "-",
             catalogId: status.catalogId ?? "-",
+            assignedWorkerTypes: assignmentConfig.assignedWorkerTypes ?? "all",
           });
         },
         onStopping: (reason) => {

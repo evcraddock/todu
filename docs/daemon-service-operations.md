@@ -161,6 +161,12 @@ tail -f ~/Library/Logs/toduai-daemon.out.log ~/Library/Logs/toduai-daemon.err.lo
 
 - Default data dir is config-resolved; examples use `~/.local/share/todu` for clarity.
 - Default daemon socket path is `<data_dir>/daemon.sock`.
+- Worker assignment env override (comma-separated worker types):
+
+```bash
+export TODUAI_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
+```
+
 - Optional socket override:
 
 ```bash
