@@ -174,7 +174,7 @@ export interface Label {
 }
 
 // ============================================================================
-// Note entity — stored in NotesDocument
+// Note entity — stored in partitioned NotesDocument buckets
 // ============================================================================
 
 export const NOTE_ENTITY_TYPES = ["task", "project", "habit"] as const;

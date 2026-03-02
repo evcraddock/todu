@@ -20,24 +20,58 @@ import {
 } from "@todu/core";
 import type { NoteNamespace } from "./todu.js";
 
+const NOTES_DIAGNOSTICS_ENV = "TODU_NOTES_DIAGNOSTICS";
+
+interface NoteLocation {
+  bucketKey: string;
+  handle: DocHandle<NotesDocument>;
+  index: number;
+}
+
 // ============================================================================
-// Note namespace — CRUD on NotesDocument
+// Note namespace — CRUD on partitioned NotesDocument buckets
 // ============================================================================
 
 export function createNoteNamespace(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
 ): NoteNamespace {
-  /**
-   * Get or create the global NotesDocument.
-   */
-  async function getOrCreateNotesDoc(): Promise<DocHandle<NotesDocument>> {
-    const catalogDoc = catalog.doc();
-    const existingDocId = catalogDoc?.notesDocId;
+  function diagnosticsEnabled(): boolean {
+    const value = process.env[NOTES_DIAGNOSTICS_ENV];
+    return value === "1" || value?.toLowerCase() === "true";
+  }
 
-    if (existingDocId) {
-      return await repo.find<NotesDocument>(existingDocId as DocumentId);
+  function emitDiagnostic(event: string, payload: Record<string, unknown>): void {
+    if (!diagnosticsEnabled()) return;
+    console.info(`[notes] ${event} ${JSON.stringify(payload)}`);
+  }
+
+  function noteBucketKeyForNote(note: Note): string {
+    if (note.entityType && note.entityId) {
+      return `entity:${note.entityType}:${note.entityId}`;
     }
+
+    // Standalone notes partition by month (YYYY-MM)
+    return `journal:${note.createdAt.slice(0, 7)}`;
+  }
+
+  function noteBucketKeyForFilter(filter: NoteFilter): string | null {
+    if (filter.entityType && filter.entityId) {
+      return `entity:${filter.entityType}:${filter.entityId}`;
+    }
+    return null;
+  }
+
+  async function getBucketHandle(bucketKey: string): Promise<DocHandle<NotesDocument> | null> {
+    const catalogDoc = catalog.doc();
+    const docId = catalogDoc?.notesBucketDocIds?.[bucketKey];
+    if (!docId) return null;
+    return repo.find<NotesDocument>(docId as DocumentId);
+  }
+
+  async function getOrCreateBucketHandle(bucketKey: string): Promise<DocHandle<NotesDocument>> {
+    const existing = await getBucketHandle(bucketKey);
+    if (existing) return existing;
 
     const handle = repo.create<NotesDocument>();
     const template = createNotesDocument();
@@ -46,10 +80,166 @@ export function createNoteNamespace(
     });
 
     catalog.change((doc) => {
-      doc.notesDocId = handle.documentId;
+      if (doc.notesBucketDocIds === undefined || doc.notesBucketDocIds === null) {
+        doc.notesBucketDocIds = {};
+      }
+      doc.notesBucketDocIds[bucketKey] = handle.documentId;
     });
 
     return handle;
+  }
+
+  function appendNotesWithoutDuplicates(handle: DocHandle<NotesDocument>, notes: Note[]): void {
+    handle.change((doc) => {
+      const existingIds = new Set(doc.notes.map((note) => note.id));
+      for (const note of notes) {
+        if (!existingIds.has(note.id)) {
+          doc.notes.push(toStorageNote(note));
+          existingIds.add(note.id);
+        }
+      }
+    });
+  }
+
+  async function migrateLegacyGlobalNotesDoc(): Promise<void> {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc?.notesDocId) return;
+
+    const legacyHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
+    const legacyDoc = legacyHandle.doc();
+    const notesToMigrate = legacyDoc?.notes.map(cloneNote) ?? [];
+
+    if (notesToMigrate.length === 0) {
+      catalog.change((doc) => {
+        delete doc.notesDocId;
+      });
+      return;
+    }
+
+    const byBucket = new Map<string, Note[]>();
+    for (const note of notesToMigrate) {
+      const bucketKey = noteBucketKeyForNote(note);
+      const bucketNotes = byBucket.get(bucketKey);
+      if (bucketNotes) {
+        bucketNotes.push(note);
+      } else {
+        byBucket.set(bucketKey, [note]);
+      }
+    }
+
+    for (const [bucketKey, notes] of byBucket) {
+      const bucketHandle = await getOrCreateBucketHandle(bucketKey);
+      appendNotesWithoutDuplicates(bucketHandle, notes);
+    }
+
+    catalog.change((doc) => {
+      if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
+        doc.noteBucketByNoteId = {};
+      }
+
+      for (const note of notesToMigrate) {
+        doc.noteBucketByNoteId[note.id] = noteBucketKeyForNote(note);
+      }
+
+      delete doc.notesDocId;
+    });
+
+    // Remove migrated entries from legacy doc to avoid future duplicate migrations.
+    legacyHandle.change((doc) => {
+      doc.notes.splice(0, doc.notes.length);
+    });
+
+    emitDiagnostic("legacy-migration", {
+      migratedNoteCount: notesToMigrate.length,
+      targetBucketCount: byBucket.size,
+    });
+  }
+
+  async function ensurePartitionModelReady(): Promise<void> {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc) return;
+
+    if (
+      catalogDoc.notesBucketDocIds === undefined ||
+      catalogDoc.notesBucketDocIds === null ||
+      catalogDoc.noteBucketByNoteId === undefined ||
+      catalogDoc.noteBucketByNoteId === null
+    ) {
+      catalog.change((doc) => {
+        if (doc.notesBucketDocIds === undefined || doc.notesBucketDocIds === null) {
+          doc.notesBucketDocIds = {};
+        }
+        if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
+          doc.noteBucketByNoteId = {};
+        }
+      });
+    }
+
+    await migrateLegacyGlobalNotesDoc();
+  }
+
+  async function findNoteLocation(id: NoteId): Promise<NoteLocation | null> {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc) return null;
+
+    const indexedBucketKey = catalogDoc.noteBucketByNoteId?.[id];
+    if (indexedBucketKey) {
+      const handle = await getBucketHandle(indexedBucketKey);
+      const notesDoc = handle?.doc();
+      if (handle && notesDoc) {
+        const index = notesDoc.notes.findIndex((n) => n.id === id);
+        if (index !== -1) {
+          return { bucketKey: indexedBucketKey, handle, index };
+        }
+      }
+
+      // Repair stale index entry.
+      catalog.change((doc) => {
+        if (!doc.noteBucketByNoteId) return;
+        delete doc.noteBucketByNoteId[id];
+      });
+    }
+
+    for (const [bucketKey, docId] of Object.entries(catalogDoc.notesBucketDocIds ?? {})) {
+      const handle = await repo.find<NotesDocument>(docId as DocumentId);
+      const notesDoc = handle.doc();
+      if (!notesDoc) continue;
+
+      const index = notesDoc.notes.findIndex((n) => n.id === id);
+      if (index === -1) continue;
+
+      catalog.change((doc) => {
+        if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
+          doc.noteBucketByNoteId = {};
+        }
+        doc.noteBucketByNoteId[id] = bucketKey;
+      });
+
+      return { bucketKey, handle, index };
+    }
+
+    return null;
+  }
+
+  function listBucketKeys(filter?: NoteFilter): string[] {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc?.notesBucketDocIds) return [];
+
+    const allBucketKeys = Object.keys(catalogDoc.notesBucketDocIds);
+
+    if (!filter) return allBucketKeys;
+
+    const exactEntityBucketKey = noteBucketKeyForFilter(filter);
+    if (exactEntityBucketKey) {
+      return catalogDoc.notesBucketDocIds[exactEntityBucketKey] ? [exactEntityBucketKey] : [];
+    }
+
+    if (filter.entityType) {
+      const prefix = `entity:${filter.entityType}:`;
+      return allBucketKeys.filter((bucketKey) => bucketKey.startsWith(prefix));
+    }
+
+    return allBucketKeys;
   }
 
   /**
@@ -81,6 +271,8 @@ export function createNoteNamespace(
       const validationErr = validateCreateNoteInput(input);
       if (validationErr) return err(validationErr);
 
+      await ensurePartitionModelReady();
+
       // Verify entity exists if attached
       if (input.entityType && input.entityId) {
         const exists = await entityExists(input.entityType, input.entityId);
@@ -102,23 +294,42 @@ export function createNoteNamespace(
       if (input.entityType !== undefined) note.entityType = input.entityType;
       if (input.entityId !== undefined) note.entityId = input.entityId;
 
-      const notesHandle = await getOrCreateNotesDoc();
-      notesHandle.change((doc) => {
-        doc.notes.push(note);
+      const bucketKey = noteBucketKeyForNote(note);
+      const notesHandle = await getOrCreateBucketHandle(bucketKey);
+      appendNotesWithoutDuplicates(notesHandle, [note]);
+
+      catalog.change((doc) => {
+        if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
+          doc.noteBucketByNoteId = {};
+        }
+        doc.noteBucketByNoteId[id] = bucketKey;
+      });
+
+      emitDiagnostic("create", {
+        noteId: id,
+        bucketKey,
       });
 
       return ok(note);
     },
 
     async list(filter?: NoteFilter): Promise<Result<Note[]>> {
-      const catalogDoc = catalog.doc();
-      if (!catalogDoc?.notesDocId) return ok([]);
+      await ensurePartitionModelReady();
 
-      const notesHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
-      const notesDoc = notesHandle.doc();
-      if (!notesDoc) return ok([]);
+      const bucketKeys = listBucketKeys(filter);
+      if (bucketKeys.length === 0) return ok([]);
 
-      let notes = notesDoc.notes.map(cloneNote);
+      const allNotes: Note[] = [];
+
+      for (const bucketKey of bucketKeys) {
+        const bucketHandle = await getBucketHandle(bucketKey);
+        const bucketDoc = bucketHandle?.doc();
+        if (!bucketDoc) continue;
+
+        allNotes.push(...bucketDoc.notes.map(cloneNote));
+      }
+
+      let notes = allNotes;
 
       // Apply filters
       if (filter?.entityType) {
@@ -128,14 +339,23 @@ export function createNoteNamespace(
         notes = notes.filter((n) => n.entityId === filter.entityId);
       }
       if (filter?.tag) {
-        notes = notes.filter((n) => n.tags.includes(filter.tag!));
+        const tag = filter.tag;
+        notes = notes.filter((n) => n.tags.includes(tag));
       }
       if (filter?.author) {
-        notes = notes.filter((n) => n.author === filter.author);
+        const author = filter.author;
+        notes = notes.filter((n) => n.author === author);
       }
 
       // Sort by createdAt desc (newest first)
       notes.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+      emitDiagnostic("list", {
+        bucketCount: bucketKeys.length,
+        resultCount: notes.length,
+        entityType: filter?.entityType,
+        hasEntityId: filter?.entityId !== undefined,
+      });
 
       return ok(notes);
     },
@@ -144,18 +364,13 @@ export function createNoteNamespace(
       const validationErr = validateUpdateNoteInput(input);
       if (validationErr) return err(validationErr);
 
-      const catalogDoc = catalog.doc();
-      if (!catalogDoc?.notesDocId) return err(notFound("note", id));
+      await ensurePartitionModelReady();
 
-      const notesHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
-      const notesDoc = notesHandle.doc();
-      if (!notesDoc) return err(notFound("note", id));
+      const location = await findNoteLocation(id);
+      if (!location) return err(notFound("note", id));
 
-      const index = notesDoc.notes.findIndex((n) => n.id === id);
-      if (index === -1) return err(notFound("note", id));
-
-      notesHandle.change((doc) => {
-        const note = doc.notes[index];
+      location.handle.change((doc) => {
+        const note = doc.notes[location.index];
         if (input.content !== undefined) note.content = input.content.trim();
         if (input.tags !== undefined) {
           // Clear and repopulate tags array for Automerge compatibility
@@ -164,23 +379,47 @@ export function createNoteNamespace(
         }
       });
 
-      const updated = notesHandle.doc()!.notes[index];
+      const updated = location.handle.doc()?.notes[location.index];
+      if (!updated) return err(notFound("note", id));
+
+      emitDiagnostic("update", {
+        noteId: id,
+        bucketKey: location.bucketKey,
+      });
+
       return ok(cloneNote(updated));
     },
 
     async delete(id: NoteId): Promise<Result<void>> {
-      const catalogDoc = catalog.doc();
-      if (!catalogDoc?.notesDocId) return err(notFound("note", id));
+      await ensurePartitionModelReady();
 
-      const notesHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
-      const notesDoc = notesHandle.doc();
-      if (!notesDoc) return err(notFound("note", id));
+      const location = await findNoteLocation(id);
+      if (!location) return err(notFound("note", id));
 
-      const index = notesDoc.notes.findIndex((n) => n.id === id);
-      if (index === -1) return err(notFound("note", id));
+      location.handle.change((doc) => {
+        doc.notes.splice(location.index, 1);
+      });
 
-      notesHandle.change((doc) => {
-        doc.notes.splice(index, 1);
+      const bucketIsEmpty = (location.handle.doc()?.notes.length ?? 0) === 0;
+
+      catalog.change((doc) => {
+        if (doc.noteBucketByNoteId !== undefined && doc.noteBucketByNoteId !== null) {
+          delete doc.noteBucketByNoteId[id];
+        }
+
+        if (
+          bucketIsEmpty &&
+          doc.notesBucketDocIds !== undefined &&
+          doc.notesBucketDocIds !== null
+        ) {
+          delete doc.notesBucketDocIds[location.bucketKey];
+        }
+      });
+
+      emitDiagnostic("delete", {
+        noteId: id,
+        bucketKey: location.bucketKey,
+        bucketDeleted: bucketIsEmpty,
       });
 
       return ok(undefined);
@@ -188,14 +427,21 @@ export function createNoteNamespace(
   };
 }
 
-function cloneNote(n: Note): Note {
-  return {
+function toStorageNote(n: Note): Note {
+  const note: Note = {
     id: n.id,
     content: n.content,
     author: n.author,
-    entityType: n.entityType,
-    entityId: n.entityId,
     tags: [...n.tags],
     createdAt: n.createdAt,
   };
+
+  if (n.entityType !== undefined) note.entityType = n.entityType;
+  if (n.entityId !== undefined) note.entityId = n.entityId;
+
+  return note;
+}
+
+function cloneNote(n: Note): Note {
+  return toStorageNote(n);
 }

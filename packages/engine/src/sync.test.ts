@@ -8,6 +8,17 @@ import type { Todu } from "./todu.js";
 const TEST_SYNC_PORT = 24399; // Avoid conflict with real instances on 24377
 const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
 
+async function waitFor<T>(fn: () => Promise<T>, predicate: (value: T) => boolean): Promise<T> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const value = await fn();
+    if (predicate(value)) return value;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  throw new Error("timed out waiting for expected sync state");
+}
+
 (RUN_SYNC_SERVER_TESTS ? describe : describe.skip)("sync: ephemeral client + server", () => {
   let tmpDir: string;
   let server: Todu;
@@ -79,6 +90,69 @@ const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
       expect(listResult.value.some((p) => p.name === "Client Project")).toBe(true);
     }
   });
+
+  it(
+    "syncs note create/update across server and ephemeral client",
+    { timeout: 20000 },
+    async () => {
+      const project = await server.project.create({ name: "Notes Sync Project" });
+      expect(project.ok).toBe(true);
+      if (!project.ok) return;
+
+      const task = await server.task.create({
+        title: "Notes Sync Task",
+        projectId: project.value.id,
+      });
+      expect(task.ok).toBe(true);
+      if (!task.ok) return;
+
+      const serverNote = await server.note.create({
+        content: "Created on server",
+        entityType: "task",
+        entityId: task.value.id,
+      });
+      expect(serverNote.ok).toBe(true);
+      if (!serverNote.ok) return;
+
+      client = await createTodu({
+        storagePath: tmpDir,
+        syncClient: true,
+        syncPort: TEST_SYNC_PORT,
+      });
+
+      const clientTaskNotes = await waitFor(
+        () => client.note.list({ entityType: "task", entityId: task.value.id }),
+        (result) => result.ok && result.value.some((note) => note.id === serverNote.value.id),
+      );
+      expect(clientTaskNotes.ok).toBe(true);
+
+      const updateFromClient = await client.note.update(serverNote.value.id, {
+        content: "Updated from client",
+        tags: ["synced"],
+      });
+      expect(updateFromClient.ok).toBe(true);
+
+      const serverTaskNotes = await waitFor(
+        () => server.note.list({ entityType: "task", entityId: task.value.id }),
+        (result) =>
+          result.ok &&
+          result.value.some(
+            (note) => note.id === serverNote.value.id && note.content === "Updated from client",
+          ),
+      );
+      expect(serverTaskNotes.ok).toBe(true);
+
+      const clientJournal = await client.note.create({ content: "Journal from client" });
+      expect(clientJournal.ok).toBe(true);
+      if (!clientJournal.ok) return;
+
+      const serverAllNotes = await waitFor(
+        () => server.note.list(),
+        (result) => result.ok && result.value.some((note) => note.id === clientJournal.value.id),
+      );
+      expect(serverAllNotes.ok).toBe(true);
+    },
+  );
 
   it("ephemeral client does not write to disk", { timeout: 15000 }, async () => {
     // Note the files before client connects

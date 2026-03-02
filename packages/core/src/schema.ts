@@ -36,8 +36,14 @@ export interface CatalogDocument {
    */
   taskListDocIds: Record<string, string>;
 
-  /** Automerge document ID for the notes document */
+  /** Legacy Automerge document ID for the old single notes document model */
   notesDocId?: string;
+
+  /** Map of notes partition key → Automerge document ID */
+  notesBucketDocIds: Record<string, string>;
+
+  /** Map of note ID → notes partition key */
+  noteBucketByNoteId: Record<string, string>;
 
   /** Recurring task templates */
   recurringTemplates: RecurringTemplate[];
@@ -88,12 +94,11 @@ export interface TaskDetailDocument {
 }
 
 /**
- * Notes document (one global).
- * Contains all notes — standalone journal entries and entity-attached notes.
- * Each note is ~200B, so thousands fit comfortably.
+ * Notes document (partition bucket).
+ * Each bucket stores a subset of notes to reduce write contention and history growth.
  */
 export interface NotesDocument {
-  /** All notes */
+  /** Notes for this bucket */
   notes: Note[];
 }
 
@@ -125,6 +130,8 @@ export function createEmptyCatalog(): CatalogDocument {
     projects: [],
     labels: [],
     taskListDocIds: {},
+    notesBucketDocIds: {},
+    noteBucketByNoteId: {},
     recurringTemplates: [],
     habits: [],
     habitLogDocIds: {},

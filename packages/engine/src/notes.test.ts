@@ -1,11 +1,39 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ProjectId } from "@todu/core";
-import { createNoteId } from "@todu/core";
+import type { DocumentId } from "@automerge/automerge-repo";
+import { Repo } from "@automerge/automerge-repo";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
+import {
+  type CatalogDocument,
+  createEmptyCatalog,
+  createNoteId,
+  createNotesDocument,
+  type Note,
+  type ProjectId,
+} from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
+
+async function readCatalogDocument(storagePath: string): Promise<CatalogDocument> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
+
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalog = await repo.find<CatalogDocument>(catalogId);
+    const doc = catalog.doc();
+    if (!doc) throw new Error("catalog document not available");
+
+    return JSON.parse(JSON.stringify(doc)) as CatalogDocument;
+  } finally {
+    await repo.shutdown();
+  }
+}
 
 describe("note namespace", () => {
   let tmpDir: string;
@@ -308,6 +336,93 @@ describe("note namespace", () => {
       expect(result.value).toHaveLength(1);
       expect(result.value[0].content).toBe("Persistent thought");
       expect(result.value[0].tags).toEqual(["journal"]);
+    });
+
+    it("stores notes in partitioned bucket documents", async () => {
+      const task = await todu.task.create({ title: "Task for notes", projectId });
+      if (!task.ok) throw new Error("create failed");
+
+      const journalNote = await todu.note.create({ content: "Journal" });
+      const taskNote = await todu.note.create({
+        content: "Task attached",
+        entityType: "task",
+        entityId: task.value.id,
+      });
+      if (!journalNote.ok || !taskNote.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const catalogDoc = await readCatalogDocument(tmpDir);
+      const month = journalNote.value.createdAt.slice(0, 7);
+      const journalBucket = `journal:${month}`;
+      const taskBucket = `entity:task:${task.value.id}`;
+
+      expect(catalogDoc.notesDocId).toBeUndefined();
+      expect(Object.keys(catalogDoc.notesBucketDocIds)).toEqual(
+        expect.arrayContaining([journalBucket, taskBucket]),
+      );
+      expect(catalogDoc.noteBucketByNoteId[journalNote.value.id]).toBe(journalBucket);
+      expect(catalogDoc.noteBucketByNoteId[taskNote.value.id]).toBe(taskBucket);
+    });
+
+    it("migrates legacy notesDocId data into partition buckets", async () => {
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const repo = new Repo({
+        storage: new NodeFSStorageAdapter(tmpDir),
+      });
+      const catalogHandle = repo.create<CatalogDocument>();
+      const legacyNotesHandle = repo.create<ReturnType<typeof createNotesDocument>>();
+      const legacyTemplate = createNotesDocument();
+      const legacyNote: Note = {
+        id: createNoteId("note-legacy"),
+        content: "Legacy note",
+        author: "user",
+        tags: ["legacy"],
+        createdAt: "2026-02-24T12:00:00.000Z",
+      };
+
+      legacyNotesHandle.change((doc) => {
+        doc.notes = legacyTemplate.notes;
+        doc.notes.push(legacyNote);
+      });
+
+      catalogHandle.change((doc) => {
+        const empty = createEmptyCatalog();
+        doc.version = empty.version;
+        doc.projects = empty.projects;
+        doc.labels = empty.labels;
+        doc.taskListDocIds = empty.taskListDocIds;
+        doc.notesBucketDocIds = empty.notesBucketDocIds;
+        doc.noteBucketByNoteId = empty.noteBucketByNoteId;
+        doc.notesDocId = legacyNotesHandle.documentId;
+        doc.recurringTemplates = empty.recurringTemplates;
+        doc.habits = empty.habits;
+        doc.habitLogDocIds = empty.habitLogDocIds;
+        doc.settings = empty.settings;
+      });
+
+      fs.writeFileSync(path.join(tmpDir, "todu-catalog.id"), catalogHandle.documentId, "utf-8");
+      await repo.flush();
+      await repo.shutdown();
+      await new Promise((r) => setTimeout(r, 50));
+
+      todu = await createTodu({ storagePath: tmpDir });
+      const notes = await todu.note.list();
+      expect(notes.ok).toBe(true);
+      if (!notes.ok) return;
+      expect(notes.value.map((note) => note.id)).toContain(legacyNote.id);
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const catalogDoc = await readCatalogDocument(tmpDir);
+      expect(catalogDoc.notesDocId).toBeUndefined();
+      expect(catalogDoc.noteBucketByNoteId[legacyNote.id]).toBe("journal:2026-02");
     });
   });
 });
