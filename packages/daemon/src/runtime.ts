@@ -322,10 +322,13 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   }
 
   const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
-    createCoreNamespaceHandlers({
-      getTodu: () => todu,
-    }),
-    createJoinSyncNamespaceHandlers(),
+    mergeNamespaceHandlerSets(
+      createCoreNamespaceHandlers({
+        getTodu: () => todu,
+      }),
+      createJoinSyncNamespaceHandlers(),
+    ),
+    createWorkerNamespaceHandlers(),
   );
 
   const rpcLogger = runtimeLogger.child("rpc");
@@ -478,6 +481,81 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           } finally {
             joinPromise = null;
           }
+        },
+      },
+    };
+  }
+
+  function createWorkerNamespaceHandlers(): DaemonRpcNamespaceHandlers {
+    return {
+      worker: {
+        status: (request) => {
+          const workerTypeParam = request.params.workerType;
+
+          let workers: RegisteredWorkerSnapshot[];
+          if (workerTypeParam === undefined) {
+            workers = workerRegistry.list();
+          } else {
+            if (typeof workerTypeParam !== "string" || workerTypeParam.trim().length === 0) {
+              return createProtocolErrorFrame(
+                request.id,
+                createProtocolError(
+                  "BAD_REQUEST",
+                  "worker.status requires optional params.workerType as a non-empty string",
+                  {
+                    field: "workerType",
+                  },
+                ),
+              );
+            }
+
+            const normalizedWorkerType = workerTypeParam.trim();
+            const worker = workerRegistry.get(normalizedWorkerType);
+            if (!worker) {
+              return createProtocolErrorFrame(
+                request.id,
+                createProtocolError(
+                  "NOT_FOUND",
+                  `Worker is not registered: ${normalizedWorkerType}`,
+                  {
+                    workerType: normalizedWorkerType,
+                  },
+                ),
+              );
+            }
+
+            workers = [worker];
+          }
+
+          return createProtocolSuccessFrame(request.id, {
+            workers: workers.map((worker) => {
+              const missingRequiredDomains = findMissingRequiredWorkerDomains(
+                worker.manifest.requiredDomains,
+                resolvedConfig.enabledWorkerDomains,
+              );
+
+              return {
+                type: worker.manifest.type,
+                state: worker.state,
+                blockedReason: worker.blockedReason ?? null,
+                errorMessage: worker.errorMessage ?? null,
+                updatedAt: worker.updatedAt,
+                requiredDomains: [...worker.manifest.requiredDomains],
+                optionalDomains: worker.manifest.optionalDomains
+                  ? [...worker.manifest.optionalDomains]
+                  : [],
+                roleHints: worker.manifest.roleHints ? [...worker.manifest.roleHints] : [],
+                isAssigned: isWorkerAssigned(worker.manifest.type),
+                missingRequiredDomains,
+              };
+            }),
+            assignment: {
+              assignedWorkerTypes: resolvedConfig.assignedWorkerTypes
+                ? [...resolvedConfig.assignedWorkerTypes]
+                : null,
+            },
+            enabledWorkerDomains: [...resolvedConfig.enabledWorkerDomains],
+          });
         },
       },
     };

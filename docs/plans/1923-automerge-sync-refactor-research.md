@@ -137,8 +137,8 @@ Practical rule: clients should converge on the same catalog document ID and refe
      - CLI: connect timeout 1s, request timeout 10s, no retries, fail-fast on unavailable daemon.
      - Electron: connect timeout 2s, reconnect backoff 250ms → 500ms → 1s → 2s (cap 2s); on reconnect, re-hello + re-subscribe + refresh.
      - Daemon: bounded per-request execution timeout (target 30s cap) returning `TIMEOUT` on overrun.
-   - Initial implemented namespaces: `daemon.*`, core domain namespaces, `events.*`.
-   - `worker.*` reserved for later and should return `UNSUPPORTED_CAPABILITY` until implemented.
+   - Initial implemented namespaces: `daemon.*`, core domain namespaces, `events.*`, and `worker.status`.
+   - Remaining `worker.*` control methods stay unsupported and return `UNSUPPORTED_CAPABILITY` until implemented.
 
 4. **Operational UX for manual worker reassignment/failover**
    - **Resolved in planning (initial model)**.

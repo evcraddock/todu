@@ -973,6 +973,101 @@ describe("createDaemonRuntime", () => {
     }
   });
 
+  it("returns worker status with assignment and dependency metadata", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      assignedWorkerTypes: ["sync"],
+      enabledWorkerDomains: ["task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+            optionalDomains: ["task"],
+            roleHints: ["authority"],
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    const listResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-list-1",
+      method: "worker.status",
+      params: {},
+    });
+
+    expect(listResponse).toEqual({
+      id: "worker-status-list-1",
+      result: {
+        workers: [
+          {
+            type: "recurring",
+            state: "blocked",
+            blockedReason: "worker is not assigned to this daemon: recurring",
+            errorMessage: null,
+            updatedAt: expect.any(String),
+            requiredDomains: ["recurring"],
+            optionalDomains: ["task"],
+            roleHints: ["authority"],
+            isAssigned: false,
+            missingRequiredDomains: ["recurring"],
+          },
+        ],
+        assignment: {
+          assignedWorkerTypes: ["sync"],
+        },
+        enabledWorkerDomains: ["task", "sync"],
+      },
+    });
+
+    const singleResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-single-1",
+      method: "worker.status",
+      params: {
+        workerType: "recurring",
+      },
+    });
+
+    expect(singleResponse.id).toBe("worker-status-single-1");
+    expect((singleResponse.result as { workers: unknown[] }).workers).toHaveLength(1);
+
+    const missingWorkerResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-missing-1",
+      method: "worker.status",
+      params: {
+        workerType: "unknown-worker",
+      },
+    });
+
+    expect(missingWorkerResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "Worker is not registered: unknown-worker",
+      details: {
+        workerType: "unknown-worker",
+      },
+    });
+
+    const invalidWorkerTypeResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-invalid-1",
+      method: "worker.status",
+      params: {
+        workerType: "",
+      },
+    });
+
+    expect(invalidWorkerTypeResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "worker.status requires optional params.workerType as a non-empty string",
+      details: {
+        field: "workerType",
+      },
+    });
+
+    await runtime.stop();
+  });
+
   it("maps domain and request validation errors for project/task/label/note/recurring/habit/sync methods", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
@@ -1119,18 +1214,19 @@ describe("createDaemonRuntime", () => {
       },
     });
 
-    const reservedNamespaceResponse = await sendRequest(runtime.config().socketPath, {
-      id: "worker-status-unsupported",
-      method: "worker.status",
+    const unsupportedWorkerControlResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-start-unsupported",
+      method: "worker.start",
       params: {},
     });
 
-    expect(reservedNamespaceResponse.error).toEqual({
+    expect(unsupportedWorkerControlResponse.error).toEqual({
       code: "UNSUPPORTED_CAPABILITY",
-      message: "Namespace is reserved but not implemented: worker",
+      message: "Method is not implemented: worker.start",
       details: {
         namespace: "worker",
-        method: "worker.status",
+        method: "worker.start",
+        capability: "worker.start",
       },
     });
 

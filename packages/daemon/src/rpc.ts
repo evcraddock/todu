@@ -63,10 +63,14 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
 } as const;
 
 export const RESERVED_DAEMON_NAMESPACES = ["worker"] as const;
+export const WORKER_DAEMON_NAMESPACE_METHODS = {
+  worker: ["status"],
+} as const;
 
 export const DAEMON_CAPABILITY_METHODS = [
   ...DAEMON_BASE_METHODS,
-  ...listCoreNamespaceMethods(),
+  ...listNamespaceMethods(CORE_DAEMON_NAMESPACE_METHODS),
+  ...listNamespaceMethods(WORKER_DAEMON_NAMESPACE_METHODS),
 ] as const;
 
 export type DaemonCapabilityEvent = (typeof DAEMON_CAPABILITY_EVENTS)[number];
@@ -217,17 +221,35 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     if (!handler) {
       const parsedMethod = parseMethod(request.method);
       if (parsedMethod && isReservedDaemonNamespace(parsedMethod.namespace)) {
-        response = createProtocolErrorFrame(
-          request.id,
-          createProtocolError(
-            "UNSUPPORTED_CAPABILITY",
-            `Namespace is reserved but not implemented: ${parsedMethod.namespace}`,
-            {
-              namespace: parsedMethod.namespace,
-              method: request.method,
-            },
-          ),
-        );
+        const hasNamespaceHandlers =
+          Object.keys(namespaceHandlers[parsedMethod.namespace] ?? {}).length > 0;
+
+        if (hasNamespaceHandlers) {
+          response = createProtocolErrorFrame(
+            request.id,
+            createProtocolError(
+              "UNSUPPORTED_CAPABILITY",
+              `Method is not implemented: ${request.method}`,
+              {
+                namespace: parsedMethod.namespace,
+                method: request.method,
+                capability: request.method,
+              },
+            ),
+          );
+        } else {
+          response = createProtocolErrorFrame(
+            request.id,
+            createProtocolError(
+              "UNSUPPORTED_CAPABILITY",
+              `Namespace is reserved but not implemented: ${parsedMethod.namespace}`,
+              {
+                namespace: parsedMethod.namespace,
+                method: request.method,
+              },
+            ),
+          );
+        }
       } else {
         response = createProtocolErrorFrame(
           request.id,
@@ -487,12 +509,12 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
   };
 }
 
-function listCoreNamespaceMethods(): string[] {
+function listNamespaceMethods(namespaceMethods: Record<string, readonly string[]>): string[] {
   const methods: string[] = [];
 
-  const namespaces = Object.keys(CORE_DAEMON_NAMESPACE_METHODS).sort() as CoreDaemonNamespace[];
+  const namespaces = Object.keys(namespaceMethods).sort();
   for (const namespace of namespaces) {
-    for (const methodName of CORE_DAEMON_NAMESPACE_METHODS[namespace]) {
+    for (const methodName of namespaceMethods[namespace] ?? []) {
       methods.push(`${namespace}.${methodName}`);
     }
   }

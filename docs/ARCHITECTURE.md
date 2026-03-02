@@ -132,6 +132,12 @@ JSON-RPC-style frames:
   - `sync.statusChanged`
 - Delivery is best-effort; clients re-fetch after reconnect
 
+## Worker protocol baseline
+
+- `worker.status` is available for worker lifecycle visibility.
+- Response includes worker state, blocked/error reason fields, assignment inclusion, and dependency context.
+- Non-implemented worker control methods (for example, `worker.start`) return `UNSUPPORTED_CAPABILITY` until control APIs are introduced.
+
 ## Error taxonomy (stable codes)
 
 Includes at least:

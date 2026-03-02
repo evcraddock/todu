@@ -369,6 +369,43 @@ describe("createDaemonRpcRouter", () => {
     });
   });
 
+  it("returns method-level unsupported errors for reserved namespaces with partial handlers", async () => {
+    const router = createDaemonRpcRouter({
+      namespaceHandlers: {
+        worker: {
+          status: (request) =>
+            createProtocolSuccessFrame(request.id, {
+              workers: [],
+            }),
+        },
+      },
+    });
+
+    const response = await router.handleRequest(
+      {
+        id: "worker-start-1",
+        method: "worker.start",
+        params: {},
+      },
+      context,
+    );
+
+    expect("error" in response).toBe(true);
+    if (!("error" in response)) {
+      throw new Error("Expected unsupported capability response");
+    }
+
+    expect(response.error).toEqual({
+      code: "UNSUPPORTED_CAPABILITY",
+      message: "Method is not implemented: worker.start",
+      details: {
+        namespace: "worker",
+        method: "worker.start",
+        capability: "worker.start",
+      },
+    });
+  });
+
   it("maps invalid JSON payloads to BAD_REQUEST through handlePayload", async () => {
     const router = createDaemonRpcRouter();
 
