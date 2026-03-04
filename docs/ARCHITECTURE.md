@@ -217,6 +217,14 @@ Baseline worker lifecycle states are:
 - `error`
 - `stopped`
 
+### External sync provider API contract
+
+- External sync plugins use the `SyncProvider` contract from `@todu/core`.
+- Plugin load paths must validate provider registrations at load time, including required lifecycle methods and API version compatibility.
+- Compatibility baseline is API-version based (current provider API version: `1`).
+- Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.
+- Author-facing contract and policy details are documented in `docs/plugin-sync-provider-api.md`.
+
 ### Recurring behavior
 
 - Recurring automation is a worker capability.
