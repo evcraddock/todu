@@ -102,7 +102,18 @@ export function validateSyncProviderRegistration(
 ): Result<SyncProviderRegistration, SyncProviderValidationError> {
   const supportedApiVersion = options.supportedApiVersion ?? SYNC_PROVIDER_API_VERSION;
 
-  const manifestName = registration.manifest.name.trim();
+  const manifestCandidate = registration.manifest as unknown;
+  if (!manifestCandidate || typeof manifestCandidate !== "object") {
+    return err(
+      createSyncProviderValidationError("INVALID_MANIFEST", "Sync provider manifest is required", {
+        field: "manifest",
+      }),
+    );
+  }
+
+  const manifestRecord = manifestCandidate as Record<string, unknown>;
+
+  const manifestName = normalizeNonEmptyString(manifestRecord.name);
   if (!manifestName) {
     return err(
       createSyncProviderValidationError(
@@ -115,7 +126,7 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  const manifestVersion = registration.manifest.version.trim();
+  const manifestVersion = normalizeNonEmptyString(manifestRecord.version);
   if (!manifestVersion) {
     return err(
       createSyncProviderValidationError(
@@ -128,26 +139,27 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  if (!Number.isInteger(registration.manifest.apiVersion) || registration.manifest.apiVersion < 1) {
+  const manifestApiVersion = normalizePositiveInteger(manifestRecord.apiVersion);
+  if (manifestApiVersion === null) {
     return err(
       createSyncProviderValidationError(
         "INVALID_MANIFEST",
         "Sync provider manifest requires positive integer apiVersion",
         {
           field: "apiVersion",
-          apiVersion: registration.manifest.apiVersion,
+          apiVersion: manifestRecord.apiVersion,
         },
       ),
     );
   }
 
-  if (!isSyncProviderApiVersionCompatible(registration.manifest.apiVersion, supportedApiVersion)) {
+  if (!isSyncProviderApiVersionCompatible(manifestApiVersion, supportedApiVersion)) {
     return err(
       createSyncProviderValidationError(
         "API_VERSION_MISMATCH",
-        `Sync provider API version mismatch: provider=${registration.manifest.apiVersion} host=${supportedApiVersion}`,
+        `Sync provider API version mismatch: provider=${manifestApiVersion} host=${supportedApiVersion}`,
         {
-          providerApiVersion: registration.manifest.apiVersion,
+          providerApiVersion: manifestApiVersion,
           supportedApiVersion,
         },
       ),
@@ -222,7 +234,7 @@ export function validateSyncProviderRegistration(
     manifest: {
       name: manifestName,
       version: manifestVersion,
-      apiVersion: registration.manifest.apiVersion,
+      apiVersion: manifestApiVersion,
     },
     provider: registration.provider,
   });
@@ -239,6 +251,14 @@ function normalizeNonEmptyString(value: unknown): string | null {
   }
 
   return normalizedValue;
+}
+
+function normalizePositiveInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    return null;
+  }
+
+  return value;
 }
 
 function createSyncProviderValidationError(

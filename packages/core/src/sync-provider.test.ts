@@ -112,6 +112,25 @@ describe("validateSyncProviderRegistration", () => {
       },
     });
   });
+
+  it("rejects non-string manifest name without throwing", () => {
+    const registration = createValidRegistration();
+    (registration.manifest as unknown as Record<string, unknown>).name = 42;
+
+    const result = validateSyncProviderRegistration(registration);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected registration to fail for non-string manifest name");
+    }
+
+    expect(result.error).toMatchObject({
+      code: "INVALID_MANIFEST",
+      details: {
+        field: "name",
+      },
+    });
+  });
 });
 
 function createValidRegistration(): SyncProviderRegistration {
