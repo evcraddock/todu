@@ -45,6 +45,7 @@ import {
   type WorkerLifecycleTransitionDetails,
   type WorkerRegistration,
   type WorkerRegistryError,
+  type WorkerRuntimeHandle,
 } from "./workers.js";
 
 export const DAEMON_ROLES = ["node", "authority"] as const;
@@ -150,6 +151,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let joinPromise: Promise<JoinOperationResult> | null = null;
   let changeSubscriptionCleanup: (() => void) | null = null;
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
+  const workerRuntimes = new Map<string, WorkerRegistration["runtime"]>();
+  const activeWorkerRuntimeHandles = new Map<string, WorkerRuntimeHandle>();
 
   const runtimeStatus: DaemonRuntimeStatus = {
     state: "stopped",
@@ -308,6 +311,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       );
     }
 
+    workerRuntimes.set(registerResult.value.manifest.type, registration.runtime);
+
     const assignmentGateResult = applyWorkerAssignmentGating(registerResult.value.manifest.type);
     if (!assignmentGateResult.ok) {
       throw new Error(
@@ -411,6 +416,184 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     };
   }
 
+  function startWorkerExecution(
+    workerType: string,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+    const normalizedWorkerType = workerType.trim();
+    const worker = workerRegistry.get(normalizedWorkerType);
+    if (!worker) {
+      return err({
+        code: "NOT_FOUND",
+        message: `Worker is not registered: ${normalizedWorkerType}`,
+        details: {
+          workerType: normalizedWorkerType,
+        },
+      });
+    }
+
+    const assignmentGateResult = applyWorkerAssignmentGating(normalizedWorkerType);
+    if (!assignmentGateResult.ok) {
+      return assignmentGateResult;
+    }
+
+    if (!isWorkerAssigned(assignmentGateResult.value.manifest.type)) {
+      return assignmentGateResult;
+    }
+
+    const dependencyGateResult = applyWorkerDependencyGating(normalizedWorkerType);
+    if (!dependencyGateResult.ok) {
+      return dependencyGateResult;
+    }
+
+    const missingRequiredDomains = findMissingRequiredWorkerDomains(
+      dependencyGateResult.value.manifest.requiredDomains,
+      resolvedConfig.enabledWorkerDomains,
+    );
+    if (missingRequiredDomains.length > 0) {
+      return dependencyGateResult;
+    }
+
+    if (activeWorkerRuntimeHandles.has(dependencyGateResult.value.manifest.type)) {
+      return ok(dependencyGateResult.value);
+    }
+
+    const runtime = workerRuntimes.get(dependencyGateResult.value.manifest.type);
+    if (!runtime) {
+      return err({
+        code: "NOT_FOUND",
+        message: `Worker runtime is not registered: ${dependencyGateResult.value.manifest.type}`,
+        details: {
+          workerType: dependencyGateResult.value.manifest.type,
+        },
+      });
+    }
+
+    try {
+      const runtimeHandle = runtime.start();
+      activeWorkerRuntimeHandles.set(dependencyGateResult.value.manifest.type, runtimeHandle);
+
+      const transitionResult = workerRegistry.transition(
+        dependencyGateResult.value.manifest.type,
+        "running",
+      );
+      if (!transitionResult.ok) {
+        runtimeHandle.stop();
+        activeWorkerRuntimeHandles.delete(dependencyGateResult.value.manifest.type);
+        return transitionResult;
+      }
+
+      runtimeLogger.info("worker started", {
+        workerType: dependencyGateResult.value.manifest.type,
+      });
+
+      return transitionResult;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      workerRegistry.transition(dependencyGateResult.value.manifest.type, "error", {
+        errorMessage,
+      });
+
+      runtimeLogger.error("worker start failed", {
+        workerType: dependencyGateResult.value.manifest.type,
+        error: errorMessage,
+      });
+
+      return err({
+        code: "START_FAILED",
+        message: `Worker failed to start: ${dependencyGateResult.value.manifest.type}`,
+        details: {
+          workerType: dependencyGateResult.value.manifest.type,
+          errorMessage,
+        },
+      });
+    }
+  }
+
+  function stopWorkerExecution(
+    workerType: string,
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+    const normalizedWorkerType = workerType.trim();
+    const worker = workerRegistry.get(normalizedWorkerType);
+    if (!worker) {
+      return err({
+        code: "NOT_FOUND",
+        message: `Worker is not registered: ${normalizedWorkerType}`,
+        details: {
+          workerType: normalizedWorkerType,
+        },
+      });
+    }
+
+    const runtimeHandle = activeWorkerRuntimeHandles.get(worker.manifest.type);
+
+    if (!runtimeHandle) {
+      if (worker.state === "running") {
+        return workerRegistry.transition(worker.manifest.type, "stopped");
+      }
+
+      return ok(worker);
+    }
+
+    try {
+      runtimeHandle.stop();
+      activeWorkerRuntimeHandles.delete(worker.manifest.type);
+
+      const transitionResult = workerRegistry.transition(worker.manifest.type, "stopped");
+      if (!transitionResult.ok) {
+        return transitionResult;
+      }
+
+      runtimeLogger.info("worker stopped", {
+        workerType: worker.manifest.type,
+      });
+
+      return transitionResult;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const transitionResult = workerRegistry.transition(worker.manifest.type, "error", {
+        errorMessage,
+      });
+      if (transitionResult.ok) {
+        activeWorkerRuntimeHandles.delete(worker.manifest.type);
+      }
+
+      runtimeLogger.error("worker stop failed", {
+        workerType: worker.manifest.type,
+        error: errorMessage,
+      });
+
+      return err({
+        code: "STOP_FAILED",
+        message: `Worker failed to stop: ${worker.manifest.type}`,
+        details: {
+          workerType: worker.manifest.type,
+          errorMessage,
+        },
+      });
+    }
+  }
+
+  function startRegisteredWorkers(): void {
+    const workers = workerRegistry.list();
+    for (const worker of workers) {
+      const startResult = startWorkerExecution(worker.manifest.type);
+      if (!startResult.ok && startResult.error.code !== "NOT_FOUND") {
+        runtimeLogger.warn("worker did not start", {
+          workerType: worker.manifest.type,
+          code: startResult.error.code,
+          message: startResult.error.message,
+        });
+      }
+    }
+  }
+
+  function stopActiveWorkers(): void {
+    const activeWorkerTypes = Array.from(activeWorkerRuntimeHandles.keys()).sort();
+    for (const workerType of activeWorkerTypes) {
+      stopWorkerExecution(workerType);
+    }
+  }
+
   async function createHostOwnedTodu(): Promise<Todu> {
     registerHabitProcessor();
 
@@ -442,6 +625,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.transport = endpoint;
 
       attachEventSubscriptions(startedTodu);
+      startRegisteredWorkers();
 
       runtimeLogger.info("daemon runtime started", {
         role: runtimeStatus.role,
@@ -451,6 +635,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
       return cloneStatus();
     } catch (error) {
+      stopActiveWorkers();
       clearEventSubscriptions();
       await safeStopTransport(transport);
       runtimeStatus.state = "stopped";
@@ -668,6 +853,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     const previousTodu = todu;
 
     try {
+      stopActiveWorkers();
       clearEventSubscriptions();
       todu = null;
       await previousTodu.close();
@@ -677,6 +863,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       todu = joinedTodu;
       runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();
       attachEventSubscriptions(joinedTodu);
+      startRegisteredWorkers();
       tx.commit();
 
       return {
@@ -696,6 +883,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         runtimeStatus.catalogId = restoredTodu.sync.getCatalogId();
         restoredCatalogId = runtimeStatus.catalogId;
         attachEventSubscriptions(restoredTodu);
+        startRegisteredWorkers();
       } catch (restoreError) {
         runtimeLogger.error("daemon join rollback restore failed", {
           previousCatalogId,
@@ -790,6 +978,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         runtimeStatus.state = "stopping";
 
         const currentTodu = todu;
+        stopActiveWorkers();
         todu = null;
         clearEventSubscriptions();
 
@@ -821,6 +1010,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         return registerResult;
       }
 
+      workerRuntimes.set(registerResult.value.manifest.type, registration.runtime);
+
       const assignmentGateResult = applyWorkerAssignmentGating(registerResult.value.manifest.type);
       if (!assignmentGateResult.ok) {
         return assignmentGateResult;
@@ -830,7 +1021,16 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         return assignmentGateResult;
       }
 
-      return applyWorkerDependencyGating(registerResult.value.manifest.type);
+      const dependencyGateResult = applyWorkerDependencyGating(registerResult.value.manifest.type);
+      if (!dependencyGateResult.ok) {
+        return dependencyGateResult;
+      }
+
+      if (runtimeStatus.state === "running") {
+        return startWorkerExecution(registerResult.value.manifest.type);
+      }
+
+      return dependencyGateResult;
     },
 
     transitionWorkerState(
@@ -839,6 +1039,19 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       details,
     ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
       if (state !== "running") {
+        if (state === "stopped") {
+          return stopWorkerExecution(workerType);
+        }
+
+        const normalizedWorkerType = workerType.trim();
+        const worker = workerRegistry.get(normalizedWorkerType);
+        if (worker && activeWorkerRuntimeHandles.has(worker.manifest.type)) {
+          const stopResult = stopWorkerExecution(worker.manifest.type);
+          if (!stopResult.ok) {
+            return stopResult;
+          }
+        }
+
         return workerRegistry.transition(workerType, state, details);
       }
 
@@ -876,6 +1089,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
             blockedReason,
           ),
         );
+      }
+
+      if (runtimeStatus.state === "running") {
+        return startWorkerExecution(dependencyGateResult.value.manifest.type);
       }
 
       return workerRegistry.transition(workerType, state, details);

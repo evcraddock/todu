@@ -31,8 +31,17 @@ export interface WorkerManifest {
   roleHints?: WorkerRoleHint[];
 }
 
+export interface WorkerRuntimeHandle {
+  stop(): void;
+}
+
+export interface WorkerRuntime {
+  start(): WorkerRuntimeHandle;
+}
+
 export interface WorkerRegistration {
   manifest: WorkerManifest;
+  runtime: WorkerRuntime;
 }
 
 export interface WorkerLifecycleTransitionDetails {
@@ -56,6 +65,8 @@ export const WORKER_REGISTRY_ERROR_CODES = [
   "MISSING_BLOCKED_REASON",
   "DEPENDENCY_BLOCKED",
   "NOT_ASSIGNED",
+  "START_FAILED",
+  "STOP_FAILED",
 ] as const;
 
 export type WorkerRegistryErrorCode = (typeof WORKER_REGISTRY_ERROR_CODES)[number];
@@ -101,6 +112,18 @@ export function createWorkerRegistry(options: CreateWorkerRegistryOptions = {}):
       const validatedManifest = validateWorkerManifest(registration.manifest);
       if (!validatedManifest.ok) {
         return validatedManifest;
+      }
+
+      if (!registration.runtime || typeof registration.runtime.start !== "function") {
+        return err(
+          createWorkerRegistryError(
+            "INVALID_MANIFEST",
+            "Worker registration requires executable runtime.start()",
+            {
+              field: "runtime",
+            },
+          ),
+        );
       }
 
       const workerType = validatedManifest.value.type;
@@ -339,6 +362,16 @@ export function createWorkerDependencyBlockedReason(
 
 export function createWorkerNotAssignedReason(workerType: string): string {
   return `worker is not assigned to this daemon: ${workerType}`;
+}
+
+export function createNoopWorkerRuntime(): WorkerRuntime {
+  return {
+    start(): WorkerRuntimeHandle {
+      return {
+        stop() {},
+      };
+    },
+  };
 }
 
 function cloneRegisteredWorker(worker: RegisteredWorkerSnapshot): RegisteredWorkerSnapshot {

@@ -204,6 +204,12 @@ Dependency gating semantics:
 - Transitioning a dependency-blocked worker to `running` returns a dependency error and preserves `blocked` state.
 - Block reasons must include the missing/disabled required domains in deterministic order.
 
+Executable worker runtime contract:
+- Worker registration includes both a manifest and executable runtime (`runtime.start()` returning a handle with `stop()`).
+- Daemon start attempts to start all assigned + dependency-clear workers.
+- Daemon stop and `sync.join` switch/rollback paths stop active workers before dataset teardown/switch, then restart eligible workers after successful reattachment.
+- Worker start/stop runtime failures transition worker state to `error` with actionable error context.
+
 Baseline worker lifecycle states are:
 - `registered`
 - `running`

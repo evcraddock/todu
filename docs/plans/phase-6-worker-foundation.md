@@ -105,12 +105,17 @@ Daemon runtime registration/lifecycle entrypoints:
 
 ## Acceptance Criteria
 
-- [ ] Worker registration contract implemented
-- [ ] Daemon can register/start/stop workers in baseline lifecycle
-- [ ] Required-domain gating blocks incompatible worker startup
-- [ ] Blocked status/reasons are visible via protocol/logging
-- [ ] Static assignment config is honored
-- [ ] Duplicate assignment conditions are logged
+- [x] Worker registration contract implemented
+- [x] Daemon can register/start/stop workers in baseline lifecycle
+- [x] Required-domain gating blocks incompatible worker startup
+- [x] Blocked status/reasons are visible via protocol/logging
+- [x] Static assignment config is honored
+- [x] Duplicate assignment conditions are logged
+
+## Implementation Notes
+
+- Task #2114 completed the execution-plane baseline by requiring executable worker runtime registration (`manifest` + `runtime`), wiring daemon-driven worker start/stop lifecycle, and enforcing clean worker stop/restart across `sync.join` switch and rollback flows.
+- Runtime failures during worker start/stop are surfaced as worker lifecycle `error` state with explicit error context (`START_FAILED`/`STOP_FAILED`).
 
 ## Non-Goals
 

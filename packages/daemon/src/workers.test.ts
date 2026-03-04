@@ -4,12 +4,15 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 import {
+  createNoopWorkerRuntime,
   createWorkerDependencyBlockedReason,
   createWorkerNotAssignedReason,
   createWorkerRegistry,
   findMissingRequiredWorkerDomains,
   validateWorkerManifest,
 } from "./workers.js";
+
+const noopWorkerRuntime = createNoopWorkerRuntime();
 
 describe("validateWorkerManifest", () => {
   it("accepts and normalizes valid manifests", () => {
@@ -93,6 +96,30 @@ describe("worker dependency gating helpers", () => {
 });
 
 describe("createWorkerRegistry", () => {
+  it("rejects registrations without executable runtime", () => {
+    const registry = createWorkerRegistry();
+
+    const registration = registry.register({
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring"],
+      },
+      runtime: undefined as unknown as { start(): { stop(): void } },
+    });
+
+    expect(registration.ok).toBe(false);
+    if (registration.ok) {
+      throw new Error("Expected registration to fail without runtime");
+    }
+
+    expect(registration.error).toMatchObject({
+      code: "INVALID_MANIFEST",
+      details: {
+        field: "runtime",
+      },
+    });
+  });
+
   it("tracks lifecycle transitions with deterministic state rules", () => {
     let tick = 0;
     const registry = createWorkerRegistry({
@@ -105,6 +132,7 @@ describe("createWorkerRegistry", () => {
         requiredDomains: ["recurring"],
         optionalDomains: ["task"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(registration.ok).toBe(true);
@@ -177,6 +205,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         optionalDomains: ["task"],
         roleHints: ["authority"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(registerResult.ok).toBe(true);
@@ -205,6 +234,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
             type: "recurring",
             requiredDomains: ["recurring"],
           },
+          runtime: noopWorkerRuntime,
         },
       ],
     });
@@ -214,6 +244,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         type: "recurring",
         requiredDomains: ["recurring"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(duplicateRegistration.ok).toBe(false);
@@ -237,6 +268,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         type: "recurring",
         requiredDomains: ["recurring"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(registerResult.ok).toBe(true);
@@ -277,6 +309,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
             type: "recurring",
             requiredDomains: ["recurring"],
           },
+          runtime: noopWorkerRuntime,
         },
       ],
     });
@@ -336,6 +369,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         type: "recurring",
         requiredDomains: ["recurring"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(registerResult.ok).toBe(true);
@@ -361,6 +395,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
             type: "recurring",
             requiredDomains: ["recurring"],
           },
+          runtime: noopWorkerRuntime,
         },
       ],
     });
@@ -384,6 +419,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         type: "recurring",
         requiredDomains: ["recurring"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     const transitionResult = runtime.transitionWorkerState("recurring", "running");
@@ -421,6 +457,7 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
         type: "recurring",
         requiredDomains: ["recurring"],
       },
+      runtime: noopWorkerRuntime,
     });
 
     expect(registerResult.ok).toBe(true);
@@ -436,5 +473,125 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
 
     expect(transitionResult.value.state).toBe("running");
     expect(transitionResult.value.blockedReason).toBeUndefined();
+  });
+
+  it("starts executable workers on daemon start and stops them on daemon stop", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    let startCount = 0;
+    let stopCount = 0;
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+          runtime: {
+            start() {
+              startCount += 1;
+              return {
+                stop() {
+                  stopCount += 1;
+                },
+              };
+            },
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    expect(startCount).toBe(1);
+    expect(runtime.getWorker("recurring")?.state).toBe("running");
+
+    await runtime.stop();
+
+    expect(stopCount).toBe(1);
+    expect(runtime.getWorker("recurring")?.state).toBe("stopped");
+  });
+
+  it("transitions workers to error when start throws", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+          runtime: {
+            start() {
+              throw new Error("boom");
+            },
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "error",
+      errorMessage: "boom",
+    });
+
+    await runtime.stop();
+  });
+
+  it("returns STOP_FAILED and transitions worker to error when stop throws", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+          runtime: {
+            start() {
+              return {
+                stop() {
+                  throw new Error("stop boom");
+                },
+              };
+            },
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    const stopResult = runtime.transitionWorkerState("recurring", "stopped");
+    expect(stopResult.ok).toBe(false);
+    if (stopResult.ok) {
+      throw new Error("Expected stop transition to fail when runtime stop throws");
+    }
+
+    expect(stopResult.error).toMatchObject({
+      code: "STOP_FAILED",
+      details: {
+        workerType: "recurring",
+        errorMessage: "stop boom",
+      },
+    });
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "error",
+      errorMessage: "stop boom",
+    });
+
+    await runtime.stop();
   });
 });
