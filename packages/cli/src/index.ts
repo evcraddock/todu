@@ -6,6 +6,7 @@ import { registerDaemonCommands } from "./commands/daemon.js";
 import { registerHabitCommands } from "./commands/habit.js";
 import { registerLabelCommands } from "./commands/label.js";
 import { registerNoteCommands } from "./commands/note.js";
+import { registerPluginCommands } from "./commands/plugin.js";
 import { registerProjectCommands } from "./commands/project.js";
 import { registerRecurringCommands } from "./commands/recurring.js";
 import { registerSyncCommands } from "./commands/sync.js";
@@ -45,6 +46,7 @@ registerNoteCommands(program, invokeDaemon);
 registerRecurringCommands(program, invokeDaemon);
 registerHabitCommands(program, invokeDaemon);
 registerSyncCommands(program, invokeDaemon);
+registerPluginCommands(program, invokeDaemon);
 registerConfigCommands(program);
 
 program.parse();

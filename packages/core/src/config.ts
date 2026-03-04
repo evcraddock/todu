@@ -36,6 +36,8 @@ export interface ToduFileConfig {
     plugins?: {
       /** Local plugin module entrypoints for daemon startup loading */
       paths?: string[];
+      /** Arbitrary plugin settings keyed by plugin name */
+      config?: Record<string, Record<string, unknown>>;
     };
   };
 }
