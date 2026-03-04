@@ -121,6 +121,25 @@ Notes:
 - Duplicate entries are tolerated and logged; first occurrence wins.
 - Changes require daemon restart to apply.
 
+## Plugin management commands
+
+Use CLI plugin commands to manage configured sync plugin modules:
+
+```bash
+toduai plugin install <module-path-or-package>
+toduai plugin list
+toduai plugin remove <plugin-name-or-module-path>
+toduai plugin config <plugin-name-or-module-path>
+toduai plugin config <plugin-name-or-module-path> --set '{"key":"value"}'
+toduai plugin config <plugin-name-or-module-path> --clear
+```
+
+Behavior notes:
+- `plugin install` validates provider compatibility before saving config.
+- `plugin list` shows configured plugins and daemon runtime worker state when daemon is available.
+- `plugin remove` and `plugin install` report when daemon restart is required for activation/removal.
+- `plugin config --set` requires a JSON object.
+
 ## Validate connectivity
 
 ```bash
