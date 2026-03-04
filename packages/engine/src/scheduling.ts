@@ -70,21 +70,28 @@ export function getRegisteredProcessors(): string[] {
 }
 
 /**
- * Process all due templates and habits.
+ * Process registered template processors.
  *
- * Called during createTodu() initialization. Runs each registered
- * processor in sequence. Each processor is responsible for:
- * 1. Reading its items from the catalog
- * 2. Checking which are due (nextDue <= today, not paused)
- * 3. Performing the appropriate action (generate tasks, advance nextDue, etc.)
- *
- * This function is the single entry point — no daemon, no polling,
- * no on-complete triggers. Just process on access.
+ * Processors run in registration order. Callers may exclude processor types
+ * (for example, skipping recurring during client startup).
  */
-export async function processTemplates(catalog: DocHandle<CatalogDocument>): Promise<void> {
+export async function processTemplates(
+  catalog: DocHandle<CatalogDocument>,
+  options: {
+    excludeTypes?: string[];
+  } = {},
+): Promise<void> {
   if (processors.size === 0) return;
 
+  const excluded = new Set(
+    (options.excludeTypes ?? []).map((type) => type.trim()).filter((type) => type.length > 0),
+  );
+
   for (const [type, processor] of processors) {
+    if (excluded.has(type)) {
+      continue;
+    }
+
     try {
       const context: ProcessingContext = {
         catalog,

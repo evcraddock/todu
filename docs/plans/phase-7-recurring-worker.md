@@ -52,11 +52,16 @@ Migrate recurring automation from implicit client startup behavior to explicit w
 
 ## Acceptance Criteria
 
-- [ ] Recurring is no longer auto-processed during normal client startup
+- [x] Recurring is no longer auto-processed during normal client startup
 - [ ] Assigned recurring worker generates due occurrences correctly
 - [ ] Manual recurring generation works when no recurring worker is active
 - [ ] Deterministic ID behavior remains intact and tested
 - [ ] Clear status messaging exists for recurring automation active/inactive state
+
+## Implementation Notes
+
+- Client startup auto-processing for recurring was removed in task #1954.
+- Recurring materialization remains available through explicit/manual paths while worker-based automation is implemented in later task(s).
 
 ## Non-Goals
 

@@ -364,21 +364,35 @@ describe("recurring templates", () => {
       expect(genResult.ok).toBe(false);
     });
 
-    it("process generates tasks for due templates", async () => {
-      // Create a template with startDate in the past
+    it("does not auto-process recurring on startup and still supports manual processing", async () => {
       const createResult = await todu.recurring.create({
         title: "Overdue daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
-        startDate: "2020-01-01", // way in the past — but nextDue should be near today
+        startDate: "2020-01-01",
         projectId,
       });
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      // Process should have run during createTodu, but let's process again
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const beforeManualProcess = await todu.task.list({ projectId });
+      expect(beforeManualProcess.ok).toBe(true);
+      if (!beforeManualProcess.ok) return;
+      expect(beforeManualProcess.value).toHaveLength(0);
+
       const processResult = await todu.recurring.process();
       expect(processResult.ok).toBe(true);
+      if (!processResult.ok) return;
+      expect(processResult.value.length).toBeGreaterThan(0);
+
+      const afterManualProcess = await todu.task.list({ projectId });
+      expect(afterManualProcess.ok).toBe(true);
+      if (!afterManualProcess.ok) return;
+      expect(afterManualProcess.value.length).toBeGreaterThan(0);
     });
 
     it("deterministic ID matches expected format", async () => {

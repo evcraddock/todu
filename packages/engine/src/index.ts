@@ -11,7 +11,7 @@ import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
-import { createRecurringNamespace, registerRecurringProcessor } from "./recurring.js";
+import { createRecurringNamespace } from "./recurring.js";
 import { processTemplates } from "./scheduling.js";
 import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
 import { addRemoteSyncAdapter, connectSyncClient } from "./sync-client.js";
@@ -63,8 +63,8 @@ export type {
  * Create a Todu SDK instance.
  *
  * Initializes Automerge storage, loads or creates the catalog document,
- * processes any due recurring templates/habits, and returns the SDK
- * with all operation namespaces.
+ * runs startup-safe processors (excluding recurring automation), and
+ * returns the SDK with all operation namespaces.
  *
  * Sync modes:
  * - `syncServer: true` — Start a WebSocket sync server. Other instances
@@ -116,14 +116,16 @@ export async function createTodu(
     }
   }
 
-  // Register processors before processing
-  registerRecurringProcessor(storage.catalog, storage.repo);
+  // Register startup-safe processors before processing.
+  // Recurring automation is intentionally excluded from client startup and
+  // runs through worker/manual paths only.
   registerHabitProcessor(storage.catalog, storage.repo);
 
-  // Process due templates/habits before returning the SDK.
-  // This is the "generate on access" pattern — every CLI invocation
-  // and Electron launch triggers template processing.
-  await processTemplates(storage.catalog);
+  // Process startup-safe processors before returning the SDK.
+  // Explicitly exclude recurring automation from startup execution.
+  await processTemplates(storage.catalog, {
+    excludeTypes: ["recurring"],
+  });
 
   // Prefetch all sub-documents referenced in the catalog so the relay
   // syncs them before the UI renders. Without this, notes and habit logs
