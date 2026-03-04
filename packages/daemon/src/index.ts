@@ -89,6 +89,7 @@ export {
 
 export {
   type CreateWorkerRegistryOptions,
+  createNoopWorkerRuntime,
   createWorkerDependencyBlockedReason,
   createWorkerNotAssignedReason,
   createWorkerRegistry,
@@ -111,4 +112,6 @@ export {
   type WorkerRegistryError,
   type WorkerRegistryErrorCode,
   type WorkerRoleHint,
+  type WorkerRuntime,
+  type WorkerRuntimeHandle,
 } from "./workers.js";

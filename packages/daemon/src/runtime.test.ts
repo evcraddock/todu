@@ -12,6 +12,9 @@ import {
   DAEMON_PROTOCOL_VERSION,
 } from "./rpc.js";
 import { createDaemonRuntime } from "./runtime.js";
+import { createNoopWorkerRuntime } from "./workers.js";
+
+const noopWorkerRuntime = createNoopWorkerRuntime();
 
 describe("createDaemonRuntime", () => {
   let tmpDir: string;
@@ -922,6 +925,68 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
+  it("stops and restarts active workers across sync.join transitions", async () => {
+    const alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
+
+    let startCount = 0;
+    let stopCount = 0;
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+          runtime: {
+            start() {
+              startCount += 1;
+              return {
+                stop() {
+                  stopCount += 1;
+                },
+              };
+            },
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    expect(startCount).toBe(1);
+    expect(runtime.getWorker("recurring")?.state).toBe("running");
+
+    const joinResponse = await sendRequest(runtime.config().socketPath, {
+      id: "sync-join-worker-1",
+      method: "sync.join",
+      params: {
+        catalogId: alternateCatalogId,
+      },
+    });
+
+    expect(joinResponse).toEqual({
+      id: "sync-join-worker-1",
+      result: expect.objectContaining({
+        mode: "join",
+        targetCatalogId: alternateCatalogId,
+        switched: true,
+        rolledBack: false,
+      }),
+    });
+
+    expect(stopCount).toBe(1);
+    expect(startCount).toBe(2);
+    expect(runtime.getWorker("recurring")?.state).toBe("running");
+
+    await runtime.stop();
+
+    expect(stopCount).toBe(2);
+    expect(runtime.getWorker("recurring")?.state).toBe("stopped");
+  });
+
   it("rolls back marker and preserves prior dataset when sync.join switch fails", async () => {
     const alternateCatalogId = await createAlternateCatalogDocument(tmpDir);
     const markerPath = path.join(tmpDir, "todu-catalog.id");
@@ -986,6 +1051,7 @@ describe("createDaemonRuntime", () => {
             optionalDomains: ["task"],
             roleHints: ["authority"],
           },
+          runtime: noopWorkerRuntime,
         },
       ],
     });
