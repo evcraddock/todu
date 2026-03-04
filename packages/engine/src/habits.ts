@@ -430,7 +430,7 @@ export function createHabitNamespace(
 // Habit processor for processTemplates()
 // ============================================================================
 
-export function registerHabitProcessor(_catalog: DocHandle<CatalogDocument>, _repo: Repo): void {
+export function registerHabitProcessor(): void {
   registerProcessor("habit", async (context) => {
     const doc = context.catalog.doc();
     if (!doc?.habits) return 0;

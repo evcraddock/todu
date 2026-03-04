@@ -57,6 +57,19 @@ export interface ToduConfig {
   syncClient?: boolean;
 
   /**
+   * Startup template processing policy.
+   *
+   * Processing is disabled by default. Hosts that own automation policy
+   * (for example daemon runtime) opt in explicitly.
+   */
+  startupTemplateProcessing?: {
+    /** Run registered processors during startup when true. */
+    enabled?: boolean;
+    /** Optional generic exclusions controlled by the host. */
+    excludeTypes?: string[];
+  };
+
+  /**
    * Remote multi-device sync configuration.
    * When provided, connects a second WebSocketClientAdapter to the remote server.
    * Used by Electron and toduai serve.
