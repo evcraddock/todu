@@ -96,6 +96,31 @@ Notes:
 - Empty assignment (`TODUAI_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 
+## Sync plugin module configuration
+
+Configure sync plugin module entrypoints in config file:
+
+```yaml
+daemon:
+  plugins:
+    paths:
+      - ./plugins/github-plugin/dist/index.js
+      - ./plugins/forgejo-plugin/dist/index.js
+```
+
+Override with env var (comma-separated module paths):
+
+```bash
+export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
+```
+
+Notes:
+- Env var overrides config file plugin paths.
+- Config file plugin paths are resolved relative to the config file directory.
+- Empty plugin path list (`TODUAI_DAEMON_PLUGIN_PATHS=""`) disables plugin loading.
+- Duplicate entries are tolerated and logged; first occurrence wins.
+- Changes require daemon restart to apply.
+
 ## Validate connectivity
 
 ```bash

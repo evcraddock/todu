@@ -33,6 +33,10 @@ export interface ToduFileConfig {
       /** Worker types statically assigned to this daemon */
       assigned?: string[];
     };
+    plugins?: {
+      /** Local plugin module entrypoints for daemon startup loading */
+      paths?: string[];
+    };
   };
 }
 

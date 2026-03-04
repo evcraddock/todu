@@ -167,6 +167,17 @@ tail -f ~/Library/Logs/toduai-daemon.out.log ~/Library/Logs/toduai-daemon.err.lo
 export TODUAI_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 ```
 
+- Sync plugin module paths can be defined in config file under `daemon.plugins.paths`.
+- Sync plugin module path env override (comma-separated module paths):
+
+```bash
+export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
+```
+
+- Plugin path resolution order is env first, then config file.
+- Config file plugin paths resolve relative to the config file directory.
+- Plugin path/config changes apply on daemon restart.
+
 - Optional socket override:
 
 ```bash

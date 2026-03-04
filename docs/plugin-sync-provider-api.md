@@ -78,6 +78,21 @@ Validation errors use structured codes:
 - `API_VERSION_MISMATCH`
 - `IDENTITY_MISMATCH`
 
+## Daemon Host Configuration
+
+Daemon plugin host loads sync plugin modules from configured local module paths.
+
+Resolution order:
+
+1. `TODUAI_DAEMON_PLUGIN_PATHS` env var (comma-separated module paths)
+2. `daemon.plugins.paths` in config file (paths resolved relative to config file location)
+
+Runtime behavior:
+
+- Plugin loading occurs at daemon startup.
+- Path/config changes apply on daemon restart.
+- Duplicate path entries are tolerated and logged; first occurrence wins.
+
 ## Conflict Resolution Baseline
 
 Provider sync conflict resolution baseline is `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs.
