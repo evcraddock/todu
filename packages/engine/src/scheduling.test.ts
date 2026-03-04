@@ -114,6 +114,29 @@ describe("processTemplates integration", () => {
     await todu.close();
   });
 
+  it("skips recurring processor during createTodu startup processing", async () => {
+    let recurringCalled = false;
+    let customCalled = false;
+
+    registerProcessor("recurring", async () => {
+      recurringCalled = true;
+      return 0;
+    });
+
+    registerProcessor("custom", async () => {
+      customCalled = true;
+      return 0;
+    });
+
+    const { createTodu } = await import("./index.js");
+    const todu = await createTodu({ storagePath: tmpDir });
+
+    expect(recurringCalled).toBe(false);
+    expect(customCalled).toBe(true);
+
+    await todu.close();
+  });
+
   it("continues processing if one processor fails", async () => {
     const order: string[] = [];
 

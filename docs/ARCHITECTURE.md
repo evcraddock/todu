@@ -214,6 +214,7 @@ Baseline worker lifecycle states are:
 ### Recurring behavior
 
 - Recurring automation is a worker capability.
+- Client startup paths (CLI/Electron/SDK bootstrap) do not auto-run recurring processing.
 - Without recurring worker:
   - recurring templates remain usable as data
   - manual occurrence generation remains available
