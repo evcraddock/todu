@@ -61,6 +61,7 @@ Migrate recurring automation from implicit client startup behavior to explicit w
 ## Implementation Notes
 
 - Client startup auto-processing for recurring was removed in task #1954.
+- Engine bootstrap plugin-name coupling was removed in task #2112 by moving startup processor policy ownership to daemon runtime wiring.
 - Recurring materialization remains available through explicit/manual paths while worker-based automation is implemented in later task(s).
 
 ## Non-Goals

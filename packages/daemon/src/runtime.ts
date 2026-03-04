@@ -1,6 +1,12 @@
 import type { DocumentId } from "@automerge/automerge-repo";
 import { err, ok, type RemoteSyncConfig, type Result, resolveStoragePath } from "@todu/core";
-import { beginCatalogJoinSwitch, createTodu, initJoinStorage, type Todu } from "@todu/engine";
+import {
+  beginCatalogJoinSwitch,
+  createTodu,
+  initJoinStorage,
+  registerHabitProcessor,
+  type Todu,
+} from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import {
   createDaemonLogger,
@@ -405,6 +411,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     };
   }
 
+  async function createHostOwnedTodu(): Promise<Todu> {
+    registerHabitProcessor();
+
+    return createTodu({
+      storagePath: resolvedConfig.storagePath,
+      remoteSync: resolvedConfig.remoteSync,
+      startupTemplateProcessing: {
+        enabled: true,
+      },
+    });
+  }
+
   async function startInternal(): Promise<DaemonRuntimeStatus> {
     runtimeStatus.state = "starting";
     runtimeLogger.info("daemon runtime start requested", {
@@ -415,10 +433,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     try {
       const endpoint = await transport.start();
 
-      const startedTodu = await createTodu({
-        storagePath: resolvedConfig.storagePath,
-        remoteSync: resolvedConfig.remoteSync,
-      });
+      const startedTodu = await createHostOwnedTodu();
 
       todu = startedTodu;
       runtimeStatus.state = "running";
@@ -657,10 +672,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       todu = null;
       await previousTodu.close();
 
-      const joinedTodu = await createTodu({
-        storagePath: resolvedConfig.storagePath,
-        remoteSync: resolvedConfig.remoteSync,
-      });
+      const joinedTodu = await createHostOwnedTodu();
 
       todu = joinedTodu;
       runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();
@@ -679,10 +691,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
       let restoredCatalogId = previousCatalogId;
       try {
-        const restoredTodu = await createTodu({
-          storagePath: resolvedConfig.storagePath,
-          remoteSync: resolvedConfig.remoteSync,
-        });
+        const restoredTodu = await createHostOwnedTodu();
         todu = restoredTodu;
         runtimeStatus.catalogId = restoredTodu.sync.getCatalogId();
         restoredCatalogId = runtimeStatus.catalogId;

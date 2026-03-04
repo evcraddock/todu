@@ -7,7 +7,7 @@ import {
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { observeAllChanges } from "./change-observer.js";
-import { createHabitNamespace, registerHabitProcessor } from "./habits.js";
+import { createHabitNamespace } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
@@ -26,6 +26,7 @@ import {
 } from "./todu.js";
 
 export type { RemoteSyncConfig } from "@todu/core";
+export { registerHabitProcessor } from "./habits.js";
 export type { UpcomingOccurrence } from "./recurring.js";
 // Re-export schedule utilities for consumers
 export {
@@ -63,8 +64,8 @@ export type {
  * Create a Todu SDK instance.
  *
  * Initializes Automerge storage, loads or creates the catalog document,
- * runs startup-safe processors (excluding recurring automation), and
- * returns the SDK with all operation namespaces.
+ * optionally runs host-configured startup processors, and returns the SDK
+ * with all operation namespaces.
  *
  * Sync modes:
  * - `syncServer: true` — Start a WebSocket sync server. Other instances
@@ -116,16 +117,13 @@ export async function createTodu(
     }
   }
 
-  // Register startup-safe processors before processing.
-  // Recurring automation is intentionally excluded from client startup and
-  // runs through worker/manual paths only.
-  registerHabitProcessor(storage.catalog, storage.repo);
-
-  // Process startup-safe processors before returning the SDK.
-  // Explicitly exclude recurring automation from startup execution.
-  await processTemplates(storage.catalog, {
-    excludeTypes: ["recurring"],
-  });
+  // Host-owned startup processing policy. Engine bootstrap does not
+  // register or special-case processor identities.
+  if (config?.startupTemplateProcessing?.enabled === true) {
+    await processTemplates(storage.catalog, {
+      excludeTypes: config.startupTemplateProcessing.excludeTypes,
+    });
+  }
 
   // Prefetch all sub-documents referenced in the catalog so the relay
   // syncs them before the UI renders. Without this, notes and habit logs

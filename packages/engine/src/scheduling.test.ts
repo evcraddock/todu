@@ -74,7 +74,7 @@ describe("processTemplates integration", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("runs registered processors during createTodu", async () => {
+  it("runs registered processors when startup processing is enabled", async () => {
     let processorCalled = false;
 
     registerProcessor("test", async (ctx: ProcessingContext) => {
@@ -86,14 +86,33 @@ describe("processTemplates integration", () => {
     });
 
     const { createTodu } = await import("./index.js");
-    const todu = await createTodu({ storagePath: tmpDir });
+    const todu = await createTodu({
+      storagePath: tmpDir,
+      startupTemplateProcessing: { enabled: true },
+    });
 
     expect(processorCalled).toBe(true);
 
     await todu.close();
   });
 
-  it("runs multiple processors in sequence", async () => {
+  it("does not run processors by default", async () => {
+    let processorCalled = false;
+
+    registerProcessor("test", async () => {
+      processorCalled = true;
+      return 0;
+    });
+
+    const { createTodu } = await import("./index.js");
+    const todu = await createTodu({ storagePath: tmpDir });
+
+    expect(processorCalled).toBe(false);
+
+    await todu.close();
+  });
+
+  it("runs multiple processors in sequence when startup processing is enabled", async () => {
     const order: string[] = [];
 
     registerProcessor("first", async () => {
@@ -107,14 +126,17 @@ describe("processTemplates integration", () => {
     });
 
     const { createTodu } = await import("./index.js");
-    const todu = await createTodu({ storagePath: tmpDir });
+    const todu = await createTodu({
+      storagePath: tmpDir,
+      startupTemplateProcessing: { enabled: true },
+    });
 
     expect(order).toEqual(["first", "second"]);
 
     await todu.close();
   });
 
-  it("skips recurring processor during createTodu startup processing", async () => {
+  it("does not single out processor types when startup processing is enabled", async () => {
     let recurringCalled = false;
     let customCalled = false;
 
@@ -129,9 +151,12 @@ describe("processTemplates integration", () => {
     });
 
     const { createTodu } = await import("./index.js");
-    const todu = await createTodu({ storagePath: tmpDir });
+    const todu = await createTodu({
+      storagePath: tmpDir,
+      startupTemplateProcessing: { enabled: true },
+    });
 
-    expect(recurringCalled).toBe(false);
+    expect(recurringCalled).toBe(true);
     expect(customCalled).toBe(true);
 
     await todu.close();
@@ -154,7 +179,10 @@ describe("processTemplates integration", () => {
     });
 
     const { createTodu } = await import("./index.js");
-    const todu = await createTodu({ storagePath: tmpDir });
+    const todu = await createTodu({
+      storagePath: tmpDir,
+      startupTemplateProcessing: { enabled: true },
+    });
 
     expect(order).toEqual(["failing", "succeeding"]);
     expect(consoleSpy).toHaveBeenCalledOnce();
