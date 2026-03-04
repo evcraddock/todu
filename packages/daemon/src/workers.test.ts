@@ -545,4 +545,53 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
 
     await runtime.stop();
   });
+
+  it("returns STOP_FAILED and transitions worker to error when stop throws", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      enabledWorkerDomains: ["recurring", "task", "sync"],
+      workerRegistrations: [
+        {
+          manifest: {
+            type: "recurring",
+            requiredDomains: ["recurring"],
+          },
+          runtime: {
+            start() {
+              return {
+                stop() {
+                  throw new Error("stop boom");
+                },
+              };
+            },
+          },
+        },
+      ],
+    });
+
+    await runtime.start();
+
+    const stopResult = runtime.transitionWorkerState("recurring", "stopped");
+    expect(stopResult.ok).toBe(false);
+    if (stopResult.ok) {
+      throw new Error("Expected stop transition to fail when runtime stop throws");
+    }
+
+    expect(stopResult.error).toMatchObject({
+      code: "STOP_FAILED",
+      details: {
+        workerType: "recurring",
+        errorMessage: "stop boom",
+      },
+    });
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "error",
+      errorMessage: "stop boom",
+    });
+
+    await runtime.stop();
+  });
 });
