@@ -222,6 +222,8 @@ Baseline worker lifecycle states are:
 - External sync plugins use the `SyncProvider` contract from `@todu/core`.
 - Plugin load paths must validate provider registrations at load time, including required lifecycle methods and API version compatibility.
 - Compatibility baseline is API-version based (current provider API version: `1`).
+- Daemon plugin module paths resolve from `TODUAI_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config; config file paths resolve relative to config location.
+- Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.
 - Author-facing contract and policy details are documented in `docs/plugin-sync-provider-api.md`.
 

@@ -9,6 +9,11 @@ export {
   resolveDaemonLogLevelFromEnv,
 } from "./logger.js";
 export {
+  type ParsedDaemonPluginPathsEnv,
+  parseDaemonPluginPathsFromEnv,
+  TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+} from "./plugin-paths.js";
+export {
   type DaemonProcess,
   type DaemonProcessHooks,
   type StartDaemonProcessOptions,
@@ -32,7 +37,6 @@ export {
   parseProtocolRequestFrame,
   parseProtocolRequestJson,
 } from "./protocol.js";
-
 export {
   CORE_DAEMON_NAMESPACE_METHODS,
   type CoreDaemonNamespace,
@@ -58,7 +62,6 @@ export {
   type EventsSubscribeResult,
   type EventsUnsubscribeResult,
 } from "./rpc.js";
-
 export {
   createDaemonRuntime,
   DAEMON_ROLES,
@@ -70,7 +73,13 @@ export {
   isDaemonRole,
   type ResolvedDaemonRuntimeConfig,
 } from "./runtime.js";
-
+export {
+  type LoadedSyncPlugin,
+  loadConfiguredSyncPlugins,
+  SYNC_PLUGIN_LOAD_ERROR_CODES,
+  type SyncPluginLoadError,
+  type SyncPluginLoadErrorCode,
+} from "./sync-plugin-loader.js";
 export {
   createUdsTransport,
   DEFAULT_DAEMON_SOCKET_FILENAME,

@@ -27,6 +27,7 @@ import {
   DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
+import { type LoadedSyncPlugin, loadConfiguredSyncPlugins } from "./sync-plugin-loader.js";
 import {
   createUdsTransport,
   resolveUdsSocketPath,
@@ -73,6 +74,7 @@ export interface DaemonRuntimeConfig {
   workerRegistrations?: WorkerRegistration[];
   enabledWorkerDomains?: WorkerDomainCapability[];
   assignedWorkerTypes?: string[];
+  syncPluginModulePaths?: string[];
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -86,6 +88,7 @@ export interface ResolvedDaemonRuntimeConfig {
   logLevel: DaemonLogLevel;
   enabledWorkerDomains: WorkerDomainCapability[];
   assignedWorkerTypes?: string[];
+  syncPluginModulePaths?: string[];
 }
 
 export interface DaemonRuntimeStatus {
@@ -127,6 +130,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   const resolvedLogLevel = config.logLevel ?? resolveDaemonLogLevelFromEnv(process.env);
   const resolvedEnabledWorkerDomains = resolveEnabledWorkerDomains(config.enabledWorkerDomains);
   const assignmentResolution = resolveAssignedWorkerTypes(config.assignedWorkerTypes);
+  const pluginPathResolution = resolveSyncPluginModulePaths(config.syncPluginModulePaths);
 
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
     storagePath: resolvedStoragePath,
@@ -143,6 +147,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     logLevel: resolvedLogLevel,
     enabledWorkerDomains: resolvedEnabledWorkerDomains,
     assignedWorkerTypes: assignmentResolution.assignedWorkerTypes,
+    syncPluginModulePaths: pluginPathResolution.modulePaths,
   };
 
   let todu: Todu | null = null;
@@ -153,6 +158,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
   const workerRuntimes = new Map<string, WorkerRegistration["runtime"]>();
   const activeWorkerRuntimeHandles = new Map<string, WorkerRuntimeHandle>();
+  const loadedSyncPlugins = new Map<string, LoadedSyncPlugin>();
 
   const runtimeStatus: DaemonRuntimeStatus = {
     state: "stopped",
@@ -172,6 +178,13 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     runtimeLogger.warn("duplicate worker assignment entries detected", {
       duplicateWorkerTypes: assignmentResolution.duplicateWorkerTypes,
       assignedWorkerTypes: resolvedConfig.assignedWorkerTypes ?? null,
+    });
+  }
+
+  if (pluginPathResolution.duplicateModulePaths.length > 0) {
+    runtimeLogger.warn("duplicate sync plugin module path entries detected", {
+      duplicateModulePaths: pluginPathResolution.duplicateModulePaths,
+      syncPluginModulePaths: resolvedConfig.syncPluginModulePaths ?? null,
     });
   }
 
@@ -302,34 +315,54 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     return blockedTransition;
   }
 
-  for (const registration of config.workerRegistrations ?? []) {
+  function registerRuntimeWorker(
+    registration: WorkerRegistration,
+    options: { throwOnFailure: boolean },
+  ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
     const registerResult = workerRegistry.register(registration);
     if (!registerResult.ok) {
-      const workerType = registration.manifest?.type ?? "unknown";
-      throw new Error(
-        `Invalid worker registration for daemon runtime (${workerType}): ${registerResult.error.message}`,
-      );
+      if (options.throwOnFailure) {
+        const workerType = registration.manifest?.type ?? "unknown";
+        throw new Error(
+          `Invalid worker registration for daemon runtime (${workerType}): ${registerResult.error.message}`,
+        );
+      }
+      return registerResult;
     }
 
     workerRuntimes.set(registerResult.value.manifest.type, registration.runtime);
 
     const assignmentGateResult = applyWorkerAssignmentGating(registerResult.value.manifest.type);
     if (!assignmentGateResult.ok) {
-      throw new Error(
-        `Failed to apply worker assignment gating for daemon runtime (${registerResult.value.manifest.type}): ${assignmentGateResult.error.message}`,
-      );
+      if (options.throwOnFailure) {
+        throw new Error(
+          `Failed to apply worker assignment gating for daemon runtime (${registerResult.value.manifest.type}): ${assignmentGateResult.error.message}`,
+        );
+      }
+      return assignmentGateResult;
     }
 
     if (!isWorkerAssigned(registerResult.value.manifest.type)) {
-      continue;
+      return assignmentGateResult;
     }
 
     const dependencyGateResult = applyWorkerDependencyGating(registerResult.value.manifest.type);
     if (!dependencyGateResult.ok) {
-      throw new Error(
-        `Failed to apply worker dependency gating for daemon runtime (${registerResult.value.manifest.type}): ${dependencyGateResult.error.message}`,
-      );
+      if (options.throwOnFailure) {
+        throw new Error(
+          `Failed to apply worker dependency gating for daemon runtime (${registerResult.value.manifest.type}): ${dependencyGateResult.error.message}`,
+        );
+      }
+      return dependencyGateResult;
     }
+
+    return dependencyGateResult;
+  }
+
+  for (const registration of config.workerRegistrations ?? []) {
+    registerRuntimeWorker(registration, {
+      throwOnFailure: true,
+    });
   }
 
   const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
@@ -594,6 +627,62 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
   }
 
+  async function loadConfiguredSyncPluginWorkers(): Promise<void> {
+    if (
+      !resolvedConfig.syncPluginModulePaths ||
+      resolvedConfig.syncPluginModulePaths.length === 0
+    ) {
+      return;
+    }
+
+    const unresolvedModulePaths = resolvedConfig.syncPluginModulePaths.filter((modulePath) =>
+      Array.from(loadedSyncPlugins.values()).every((plugin) => plugin.modulePath !== modulePath),
+    );
+
+    if (unresolvedModulePaths.length === 0) {
+      return;
+    }
+
+    const loadResult = await loadConfiguredSyncPlugins({
+      modulePaths: unresolvedModulePaths,
+    });
+
+    for (const failure of loadResult.failures) {
+      runtimeLogger.warn("sync plugin load failed", {
+        code: failure.code,
+        message: failure.message,
+        ...(failure.details ?? {}),
+      });
+    }
+
+    for (const loadedPlugin of loadResult.loadedPlugins) {
+      const registrationResult = registerRuntimeWorker(loadedPlugin.workerRegistration, {
+        throwOnFailure: false,
+      });
+
+      if (!registrationResult.ok) {
+        runtimeLogger.warn("sync plugin worker registration failed", {
+          modulePath: loadedPlugin.modulePath,
+          pluginName: loadedPlugin.manifest.name,
+          pluginVersion: loadedPlugin.manifest.version,
+          workerType: loadedPlugin.workerRegistration.manifest.type,
+          code: registrationResult.error.code,
+          message: registrationResult.error.message,
+        });
+        continue;
+      }
+
+      loadedSyncPlugins.set(registrationResult.value.manifest.type, loadedPlugin);
+
+      runtimeLogger.info("sync plugin loaded", {
+        modulePath: loadedPlugin.modulePath,
+        pluginName: loadedPlugin.manifest.name,
+        pluginVersion: loadedPlugin.manifest.version,
+        workerType: registrationResult.value.manifest.type,
+      });
+    }
+  }
+
   async function createHostOwnedTodu(): Promise<Todu> {
     registerHabitProcessor();
 
@@ -624,6 +713,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.catalogId = startedTodu.sync.getCatalogId();
       runtimeStatus.transport = endpoint;
 
+      await loadConfiguredSyncPluginWorkers();
       attachEventSubscriptions(startedTodu);
       startRegisteredWorkers();
 
@@ -1124,6 +1214,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         assignedWorkerTypes: resolvedConfig.assignedWorkerTypes
           ? [...resolvedConfig.assignedWorkerTypes]
           : undefined,
+        syncPluginModulePaths: resolvedConfig.syncPluginModulePaths
+          ? [...resolvedConfig.syncPluginModulePaths]
+          : undefined,
       };
     },
   };
@@ -1195,6 +1288,42 @@ function resolveAssignedWorkerTypes(workerTypes: readonly string[] | undefined):
   return {
     assignedWorkerTypes: normalized,
     duplicateWorkerTypes: duplicates,
+  };
+}
+
+function resolveSyncPluginModulePaths(modulePaths: readonly string[] | undefined): {
+  modulePaths: string[] | undefined;
+  duplicateModulePaths: string[];
+} {
+  if (!modulePaths) {
+    return {
+      modulePaths: undefined,
+      duplicateModulePaths: [],
+    };
+  }
+
+  const normalized: string[] = [];
+  const duplicates: string[] = [];
+
+  for (const modulePath of modulePaths) {
+    const trimmedModulePath = modulePath.trim();
+    if (!trimmedModulePath) {
+      continue;
+    }
+
+    if (normalized.includes(trimmedModulePath)) {
+      if (!duplicates.includes(trimmedModulePath)) {
+        duplicates.push(trimmedModulePath);
+      }
+      continue;
+    }
+
+    normalized.push(trimmedModulePath);
+  }
+
+  return {
+    modulePaths: normalized,
+    duplicateModulePaths: duplicates,
   };
 }
 

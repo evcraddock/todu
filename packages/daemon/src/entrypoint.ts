@@ -2,6 +2,7 @@
 
 import { resolveRemoteSyncConfig } from "@todu/core";
 import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
+import { parseDaemonPluginPathsFromEnv, TODUAI_DAEMON_PLUGIN_PATHS_ENV } from "./plugin-paths.js";
 import { startDaemonProcess } from "./process.js";
 import { type DaemonRole, isDaemonRole } from "./runtime.js";
 import {
@@ -32,6 +33,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
   const daemonSocketPath = process.env.TODUAI_DAEMON_SOCKET;
   const remoteSync = resolveRemoteSyncConfig({});
   const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);
+  const pluginPathsConfig = parseDaemonPluginPathsFromEnv(process.env);
 
   if (assignmentConfig.duplicateWorkerTypes.length > 0) {
     logger.warn("duplicate daemon worker assignment entries detected", {
@@ -47,6 +49,20 @@ export async function runDaemonEntrypoint(): Promise<void> {
     });
   }
 
+  if (pluginPathsConfig.duplicateModulePaths.length > 0) {
+    logger.warn("duplicate daemon plugin path entries detected", {
+      envVar: TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+      duplicateModulePaths: pluginPathsConfig.duplicateModulePaths,
+    });
+  }
+
+  if (pluginPathsConfig.ignoredEntries.length > 0) {
+    logger.warn("ignored empty daemon plugin path entries", {
+      envVar: TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+      ignoredEntryCount: pluginPathsConfig.ignoredEntries.length,
+    });
+  }
+
   const daemon = await startDaemonProcess(
     {
       role: daemonRole,
@@ -54,6 +70,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
       remoteSync: remoteSync ?? undefined,
       logLevel: daemonLogLevel,
       assignedWorkerTypes: assignmentConfig.assignedWorkerTypes,
+      syncPluginModulePaths: pluginPathsConfig.modulePaths,
     },
     {
       hooks: {
@@ -63,6 +80,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
             socketPath: status.transport?.path ?? "-",
             catalogId: status.catalogId ?? "-",
             assignedWorkerTypes: assignmentConfig.assignedWorkerTypes ?? "all",
+            configuredPluginModulePaths: pluginPathsConfig.modulePaths ?? [],
           });
         },
         onStopping: (reason) => {

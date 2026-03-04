@@ -1134,6 +1134,147 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
+  it("loads configured sync plugins and surfaces runtime state via worker.status", async () => {
+    const pluginPath = writeValidSyncPluginModule(tmpDir, "github-plugin.mjs", {
+      providerName: "github",
+      providerVersion: "1.0.0",
+    });
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [pluginPath],
+      enabledWorkerDomains: ["project", "task", "sync"],
+    });
+
+    await runtime.start();
+
+    expect(runtime.getWorker("github-sync")).toMatchObject({
+      state: "running",
+      manifest: {
+        type: "github-sync",
+        requiredDomains: ["sync", "task"],
+      },
+    });
+
+    const workerStatusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-plugin-1",
+      method: "worker.status",
+      params: {
+        workerType: "github-sync",
+      },
+    });
+
+    expect(workerStatusResponse).toEqual({
+      id: "worker-status-plugin-1",
+      result: {
+        workers: [
+          {
+            type: "github-sync",
+            state: "running",
+            blockedReason: null,
+            errorMessage: null,
+            updatedAt: expect.any(String),
+            requiredDomains: ["sync", "task"],
+            optionalDomains: [],
+            roleHints: ["node"],
+            isAssigned: true,
+            missingRequiredDomains: [],
+          },
+        ],
+        assignment: {
+          assignedWorkerTypes: null,
+        },
+        enabledWorkerDomains: ["project", "task", "sync"],
+      },
+    });
+
+    await runtime.stop();
+
+    expect(runtime.getWorker("github-sync")?.state).toBe("stopped");
+  });
+
+  it("fails invalid or unreachable sync plugin modules safely with diagnostics", async () => {
+    const incompatiblePluginPath = writeInvalidSyncPluginModule(tmpDir, "bad-plugin.mjs");
+    const missingPluginPath = path.join(tmpDir, "missing-plugin.mjs");
+
+    const warnings: Array<{ message: string; context?: Record<string, unknown> }> = [];
+    const runtimeLogger = {
+      level: "info" as const,
+      debug: () => {},
+      info: () => {},
+      warn: (message: string, context?: Record<string, unknown>) => {
+        warnings.push({ message, context });
+      },
+      error: () => {},
+      child: () => runtimeLogger,
+    };
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [incompatiblePluginPath, missingPluginPath],
+      logger: runtimeLogger,
+    });
+
+    await runtime.start();
+
+    expect(runtime.status().state).toBe("running");
+    expect(runtime.listWorkers()).toEqual([]);
+
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "sync plugin load failed",
+          context: expect.objectContaining({
+            code: "INVALID_PROVIDER",
+            modulePath: incompatiblePluginPath,
+          }),
+        }),
+        expect.objectContaining({
+          message: "sync plugin load failed",
+          context: expect.objectContaining({
+            code: "IMPORT_FAILED",
+            modulePath: missingPluginPath,
+          }),
+        }),
+      ]),
+    );
+
+    await runtime.stop();
+  });
+
+  it("loads sync plugin workers deterministically across daemon restarts", async () => {
+    const pluginPath = writeValidSyncPluginModule(tmpDir, "forgejo-plugin.mjs", {
+      providerName: "forgejo",
+      providerVersion: "1.0.0",
+    });
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [pluginPath],
+      enabledWorkerDomains: ["project", "task", "sync"],
+    });
+
+    await runtime.start();
+
+    expect(
+      runtime.listWorkers().filter((worker) => worker.manifest.type === "forgejo-sync"),
+    ).toHaveLength(1);
+    expect(runtime.getWorker("forgejo-sync")?.state).toBe("running");
+
+    await runtime.stop();
+
+    expect(runtime.getWorker("forgejo-sync")?.state).toBe("stopped");
+
+    await runtime.start();
+
+    expect(
+      runtime.listWorkers().filter((worker) => worker.manifest.type === "forgejo-sync"),
+    ).toHaveLength(1);
+    expect(runtime.getWorker("forgejo-sync")?.state).toBe("running");
+
+    await runtime.stop();
+  });
+
   it("maps domain and request validation errors for project/task/label/note/recurring/habit/sync methods", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
@@ -1431,6 +1572,101 @@ describe("createDaemonRuntime", () => {
     await expect(runtime.stop()).resolves.toBeUndefined();
   });
 });
+
+function writeValidSyncPluginModule(
+  directory: string,
+  filename: string,
+  options: {
+    providerName: string;
+    providerVersion: string;
+  },
+): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `export const syncProvider = {
+  manifest: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    apiVersion: 1,
+  },
+  provider: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    async initialize() {},
+    async shutdown() {},
+    async pull() {
+      return { tasks: [] };
+    },
+    async push() {},
+    mapToTask() {
+      return {
+        id: "task-1",
+        title: "Example",
+        status: "active",
+        priority: "medium",
+        projectId: "project-1",
+        labels: [],
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      };
+    },
+    mapFromTask() {
+      return {
+        externalId: "ext-1",
+        title: "Example",
+      };
+    },
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
+
+function writeInvalidSyncPluginModule(directory: string, filename: string): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `export default {
+  manifest: {
+    name: "github",
+    version: "1.0.0",
+    apiVersion: 999,
+  },
+  provider: {
+    name: "github",
+    version: "1.0.0",
+    async initialize() {},
+    async shutdown() {},
+    async pull() {
+      return { tasks: [] };
+    },
+    async push() {},
+    mapToTask() {
+      return {
+        id: "task-1",
+        title: "Example",
+        status: "active",
+        priority: "medium",
+        projectId: "project-1",
+        labels: [],
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      };
+    },
+    mapFromTask() {
+      return {
+        externalId: "ext-1",
+        title: "Example",
+      };
+    },
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
 
 async function createAlternateCatalogDocument(storagePath: string): Promise<string> {
   const storage = await engine.initBootstrapStorage(storagePath);
