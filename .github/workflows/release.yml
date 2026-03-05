@@ -102,6 +102,16 @@ jobs:
           # Also build native binary for electron bundling
           bun build --compile packages/cli/src/index.ts --outfile dist/cli/toduai
 
+      - name: Smoke test standalone CLI binary (linux x64)
+        run: |
+          dist/cli/toduai-cli-linux-x64 --version
+          dist/cli/toduai-cli-linux-x64 --help > /dev/null
+
+          if strings dist/cli/toduai-cli-linux-x64 | grep -F "/node_modules/@automerge/automerge/dist/mjs/wasm_bindgen_output/nodejs/automerge_wasm_bg.wasm" > /dev/null; then
+            echo "::error::Standalone CLI contains nodejs Automerge wasm file path reference"
+            exit 1
+          fi
+
       - name: Build Electron (linux)
         run: |
           make build-electron

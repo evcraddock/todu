@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { DocHandle, DocumentId } from "@automerge/automerge-repo";
-import { Repo } from "@automerge/automerge-repo";
+import type { DocHandle, DocumentId } from "@automerge/automerge-repo/slim";
+import { Repo } from "@automerge/automerge-repo/slim";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   CATALOG_DOC_KEY,
@@ -9,6 +9,7 @@ import {
   createEmptyCatalog,
   SCHEMA_VERSION,
 } from "@todu/core";
+import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 
 // ============================================================================
 // Storage layer — Automerge repo + document management
@@ -127,6 +128,7 @@ export function beginCatalogJoinSwitch(
  * - Existing but unreachable marker: fail (do not implicitly create a new catalog)
  */
 export async function initBootstrapStorage(storagePath: string, repo?: Repo): Promise<Storage> {
+  await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
   const ownsRepo = repo === undefined;
@@ -159,6 +161,7 @@ export async function initJoinStorage(
   targetCatalogId: DocumentId,
   repo?: Repo,
 ): Promise<Storage> {
+  await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
   const ownsRepo = repo === undefined;
@@ -205,6 +208,8 @@ export async function initEphemeralStorage(storagePath: string): Promise<
     findCatalog(): Promise<Storage>;
   }
 > {
+  await ensureAutomergeWasmInitialized();
+
   // Read the catalog document ID from the marker file
   const markerPath = getCatalogMarkerPath(storagePath);
   if (!fs.existsSync(markerPath)) {

@@ -3,9 +3,10 @@ import {
   type PeerCandidatePayload,
   type PeerDisconnectedPayload,
   Repo,
-} from "@automerge/automerge-repo";
+} from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
+import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
 import { createLabelNamespace } from "./labels.js";
@@ -80,6 +81,8 @@ export async function createTodu(
   const resolvedConfig: ToduConfig = {
     storagePath: config.storagePath,
   };
+
+  await ensureAutomergeWasmInitialized();
 
   // Sync client mode: ephemeral in-memory repo that syncs with server
   // Sync server mode: persistent repo that serves sync clients
