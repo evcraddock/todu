@@ -140,6 +140,27 @@ Behavior notes:
 - `plugin remove` and `plugin install` report when daemon restart is required for activation/removal.
 - `plugin config --set` requires a JSON object.
 
+Per-plugin sync scheduler fields are configured through `plugin config --set`:
+
+```bash
+toduai plugin config github --set '{"projectId":"proj-123","strategy":"bidirectional","intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}'
+```
+
+Supported scheduler fields:
+- `projectId` (string): local project to sync for this plugin.
+- `strategy` (`bidirectional` | `pull` | `push` | `none`): operation mode per cycle.
+- `intervalSeconds` (positive number): steady-state cycle interval.
+- `retryInitialSeconds` (positive number): first retry delay after a failed cycle.
+- `retryMaxSeconds` (positive number): upper bound for exponential backoff.
+- `enabled` (boolean, optional): disables execution when false.
+- `settings` (object, optional): provider-specific settings passed to `initialize(...)`.
+
+Retry policy:
+- Failures are logged with plugin name, attempt count, and next retry delay.
+- Backoff uses `retryInitialSeconds * 2^attempt`, capped at `retryMaxSeconds`.
+- A successful cycle resets retry attempt state.
+- Changes require daemon restart to apply.
+
 ## Validate connectivity
 
 ```bash

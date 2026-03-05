@@ -29,6 +29,10 @@ import {
 } from "./rpc.js";
 import { type LoadedSyncPlugin, loadConfiguredSyncPlugins } from "./sync-plugin-loader.js";
 import {
+  createSyncPluginWorkerRuntime,
+  resolveSyncPluginExecutionConfig,
+} from "./sync-worker-runtime.js";
+import {
   createUdsTransport,
   resolveUdsSocketPath,
   type UdsEndpoint,
@@ -75,6 +79,7 @@ export interface DaemonRuntimeConfig {
   enabledWorkerDomains?: WorkerDomainCapability[];
   assignedWorkerTypes?: string[];
   syncPluginModulePaths?: string[];
+  syncPluginConfigs?: Record<string, Record<string, unknown>>;
 }
 
 export interface ResolvedDaemonRuntimeConfig {
@@ -89,6 +94,7 @@ export interface ResolvedDaemonRuntimeConfig {
   enabledWorkerDomains: WorkerDomainCapability[];
   assignedWorkerTypes?: string[];
   syncPluginModulePaths?: string[];
+  syncPluginConfigs?: Record<string, Record<string, unknown>>;
 }
 
 export interface DaemonRuntimeStatus {
@@ -131,6 +137,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   const resolvedEnabledWorkerDomains = resolveEnabledWorkerDomains(config.enabledWorkerDomains);
   const assignmentResolution = resolveAssignedWorkerTypes(config.assignedWorkerTypes);
   const pluginPathResolution = resolveSyncPluginModulePaths(config.syncPluginModulePaths);
+  const pluginConfigResolution = resolveSyncPluginConfigs(config.syncPluginConfigs);
 
   const resolvedConfig: ResolvedDaemonRuntimeConfig = {
     storagePath: resolvedStoragePath,
@@ -148,6 +155,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     enabledWorkerDomains: resolvedEnabledWorkerDomains,
     assignedWorkerTypes: assignmentResolution.assignedWorkerTypes,
     syncPluginModulePaths: pluginPathResolution.modulePaths,
+    syncPluginConfigs: pluginConfigResolution.syncPluginConfigs,
   };
 
   let todu: Todu | null = null;
@@ -656,7 +664,33 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
 
     for (const loadedPlugin of loadResult.loadedPlugins) {
-      const registrationResult = registerRuntimeWorker(loadedPlugin.workerRegistration, {
+      const pluginConfigResolution = resolveSyncPluginExecutionConfig(
+        loadedPlugin.manifest.name,
+        resolvedConfig.syncPluginConfigs?.[loadedPlugin.manifest.name],
+      );
+
+      for (const warningMessage of pluginConfigResolution.warnings) {
+        runtimeLogger.warn(warningMessage, {
+          pluginName: loadedPlugin.manifest.name,
+          pluginVersion: loadedPlugin.manifest.version,
+          modulePath: loadedPlugin.modulePath,
+        });
+      }
+
+      const workerRegistration: WorkerRegistration = {
+        manifest: loadedPlugin.workerRegistration.manifest,
+        runtime: createSyncPluginWorkerRuntime({
+          pluginName: loadedPlugin.manifest.name,
+          pluginVersion: loadedPlugin.manifest.version,
+          modulePath: loadedPlugin.modulePath,
+          provider: loadedPlugin.provider,
+          config: pluginConfigResolution.config,
+          logger: runtimeLogger,
+          getTodu: () => todu,
+        }),
+      };
+
+      const registrationResult = registerRuntimeWorker(workerRegistration, {
         throwOnFailure: false,
       });
 
@@ -665,7 +699,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           modulePath: loadedPlugin.modulePath,
           pluginName: loadedPlugin.manifest.name,
           pluginVersion: loadedPlugin.manifest.version,
-          workerType: loadedPlugin.workerRegistration.manifest.type,
+          workerType: workerRegistration.manifest.type,
           code: registrationResult.error.code,
           message: registrationResult.error.message,
         });
@@ -679,6 +713,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         pluginName: loadedPlugin.manifest.name,
         pluginVersion: loadedPlugin.manifest.version,
         workerType: registrationResult.value.manifest.type,
+        intervalMs: pluginConfigResolution.config.intervalMs,
+        strategy: pluginConfigResolution.config.strategy,
+        projectId: pluginConfigResolution.config.projectId ?? null,
       });
     }
   }
@@ -1217,6 +1254,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         syncPluginModulePaths: resolvedConfig.syncPluginModulePaths
           ? [...resolvedConfig.syncPluginModulePaths]
           : undefined,
+        syncPluginConfigs: cloneSyncPluginConfigs(resolvedConfig.syncPluginConfigs),
       };
     },
   };
@@ -1324,6 +1362,49 @@ function resolveSyncPluginModulePaths(modulePaths: readonly string[] | undefined
   return {
     modulePaths: normalized,
     duplicateModulePaths: duplicates,
+  };
+}
+
+function cloneSyncPluginConfigs(
+  pluginConfigs: Record<string, Record<string, unknown>> | undefined,
+): Record<string, Record<string, unknown>> | undefined {
+  if (!pluginConfigs) {
+    return undefined;
+  }
+
+  const cloned: Record<string, Record<string, unknown>> = {};
+
+  for (const [pluginName, pluginConfig] of Object.entries(pluginConfigs)) {
+    cloned[pluginName] = { ...pluginConfig };
+  }
+
+  return cloned;
+}
+
+function resolveSyncPluginConfigs(
+  pluginConfigs: Record<string, Record<string, unknown>> | undefined,
+): {
+  syncPluginConfigs: Record<string, Record<string, unknown>> | undefined;
+} {
+  if (!pluginConfigs) {
+    return {
+      syncPluginConfigs: undefined,
+    };
+  }
+
+  const normalized: Record<string, Record<string, unknown>> = {};
+
+  for (const [pluginName, pluginConfig] of Object.entries(pluginConfigs)) {
+    const trimmedPluginName = pluginName.trim();
+    if (!trimmedPluginName) {
+      continue;
+    }
+
+    normalized[trimmedPluginName] = pluginConfig;
+  }
+
+  return {
+    syncPluginConfigs: normalized,
   };
 }
 

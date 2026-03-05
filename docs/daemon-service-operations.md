@@ -177,6 +177,11 @@ export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/p
 - Plugin path resolution order is env first, then config file.
 - Config file plugin paths resolve relative to the config file directory.
 - Plugin path/config changes apply on daemon restart.
+- Sync plugin scheduler config can be overridden via `TODUAI_DAEMON_PLUGIN_CONFIG` (JSON object keyed by plugin name).
+
+```bash
+export TODUAI_DAEMON_PLUGIN_CONFIG='{"github":{"projectId":"proj-123","intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60}}'
+```
 
 - Optional socket override:
 

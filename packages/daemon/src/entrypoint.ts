@@ -2,6 +2,10 @@
 
 import { resolveRemoteSyncConfig } from "@todu/core";
 import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
+import {
+  parseDaemonPluginConfigFromEnv,
+  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+} from "./plugin-config.js";
 import { parseDaemonPluginPathsFromEnv, TODUAI_DAEMON_PLUGIN_PATHS_ENV } from "./plugin-paths.js";
 import { startDaemonProcess } from "./process.js";
 import { type DaemonRole, isDaemonRole } from "./runtime.js";
@@ -34,6 +38,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
   const remoteSync = resolveRemoteSyncConfig({});
   const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);
   const pluginPathsConfig = parseDaemonPluginPathsFromEnv(process.env);
+  const pluginConfig = parseDaemonPluginConfigFromEnv(process.env);
 
   if (assignmentConfig.duplicateWorkerTypes.length > 0) {
     logger.warn("duplicate daemon worker assignment entries detected", {
@@ -63,6 +68,21 @@ export async function runDaemonEntrypoint(): Promise<void> {
     });
   }
 
+  if (pluginConfig.parseError) {
+    logger.warn("daemon plugin config parse failed", {
+      envVar: TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+      error: pluginConfig.parseError,
+    });
+  }
+
+  if (pluginConfig.ignoredEntries.length > 0) {
+    logger.warn("ignored invalid daemon plugin config entries", {
+      envVar: TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+      ignoredEntryCount: pluginConfig.ignoredEntries.length,
+      ignoredEntries: pluginConfig.ignoredEntries,
+    });
+  }
+
   const daemon = await startDaemonProcess(
     {
       role: daemonRole,
@@ -71,6 +91,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
       logLevel: daemonLogLevel,
       assignedWorkerTypes: assignmentConfig.assignedWorkerTypes,
       syncPluginModulePaths: pluginPathsConfig.modulePaths,
+      syncPluginConfigs: pluginConfig.pluginConfigs,
     },
     {
       hooks: {
@@ -81,6 +102,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
             catalogId: status.catalogId ?? "-",
             assignedWorkerTypes: assignmentConfig.assignedWorkerTypes ?? "all",
             configuredPluginModulePaths: pluginPathsConfig.modulePaths ?? [],
+            configuredPluginNames: Object.keys(pluginConfig.pluginConfigs ?? {}),
           });
         },
         onStopping: (reason) => {
