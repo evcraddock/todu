@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-05
+
+Patch release focused on standalone CLI reliability for release binaries.
+
+### Fixed
+
+- Standalone Linux CLI release binaries now initialize Automerge WASM using compile-safe/runtime-safe paths instead of build-host path resolution, preventing startup failures in released artifacts (#279)
+- Added a Linux release smoke gate that runs standalone CLI `--version` and `--help`, and fails if the known bad CI-only Automerge wasm path reference appears in the binary (#279)
+
 ## [0.2.0] - 2026-03-05
 
 Major daemon-first milestone release. This version moves CLI/Electron onto a local daemon RPC model, adds worker/plugin execution infrastructure, and ships recurring automation as a standalone plugin.
