@@ -21,6 +21,7 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/engine" },
+    { "path": "./packages/recurring-worker" },
     { "path": "./packages/daemon" },
     { "path": "./packages/cli" }
   ]

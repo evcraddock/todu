@@ -135,10 +135,18 @@ toduai plugin config <plugin-name-or-module-path> --clear
 ```
 
 Behavior notes:
-- `plugin install` validates provider compatibility before saving config.
-- `plugin list` shows configured plugins and daemon runtime worker state when daemon is available.
+- `plugin install` validates plugin exports before saving config.
+- Supported plugin exports are `workerPlugin` (generic worker plugin) and `syncProvider` (sync provider plugin).
+- `plugin list` shows configured plugins, plugin kind, and daemon runtime worker state when daemon is available.
 - `plugin remove` and `plugin install` report when daemon restart is required for activation/removal.
 - `plugin config --set` requires a JSON object.
+
+Recurring worker standalone plugin example (no daemon/core dependency wiring required):
+
+```bash
+toduai plugin install ./packages/recurring-worker/dist/index.js
+toduai plugin config recurring-worker --set '{"intervalSeconds":30}'
+```
 
 Per-plugin sync scheduler fields are configured through `plugin config --set`:
 

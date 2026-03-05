@@ -65,7 +65,13 @@ describe("plugin CLI commands", () => {
     const listJson = run("--format json plugin list");
     const listed = JSON.parse(listJson) as Array<{
       modulePath: string;
-      manifest: { name: string; version: string; apiVersion: number } | null;
+      pluginKind: "sync-provider" | "worker-plugin" | null;
+      manifest: {
+        name: string;
+        version: string;
+        apiVersion?: number;
+        worker?: { type: string };
+      } | null;
       runtimeState: string;
       status: string;
     }>;
@@ -73,6 +79,7 @@ describe("plugin CLI commands", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       modulePath: pluginPath,
+      pluginKind: "sync-provider",
       manifest: {
         name: "github",
         version: "1.0.0",
@@ -130,6 +137,41 @@ describe("plugin CLI commands", () => {
     const output = run("plugin remove missing-plugin", true);
 
     expect(output).toContain("Plugin not found: missing-plugin");
+  });
+
+  it("installs standalone worker plugins", () => {
+    const pluginPath = writeWorkerPluginModule(tmpDir, "recurring-worker-plugin.mjs", {
+      name: "recurring-worker",
+      version: "1.0.0",
+      workerType: "recurring",
+    });
+
+    const installOutput = run(`plugin install ${pluginPath}`);
+    expect(installOutput).toContain("Plugin installed: recurring-worker@1.0.0");
+
+    const listJson = run("--format json plugin list");
+    const listed = JSON.parse(listJson) as Array<{
+      pluginKind: "sync-provider" | "worker-plugin" | null;
+      manifest: { name: string; worker?: { type: string } } | null;
+      workerType: string | null;
+      status: string;
+    }>;
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      pluginKind: "worker-plugin",
+      manifest: {
+        name: "recurring-worker",
+        worker: {
+          type: "recurring",
+        },
+      },
+      workerType: "recurring",
+      status: "ok",
+    });
+
+    const removeOutput = run("plugin remove recurring-worker");
+    expect(removeOutput).toContain("Removed plugin: recurring-worker@1.0.0");
   });
 
   it("fails install for incompatible plugin API version", () => {
@@ -203,6 +245,43 @@ function writePluginModule(
         title: "Example",
       };
     },
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
+
+function writeWorkerPluginModule(
+  directory: string,
+  filename: string,
+  options: {
+    name: string;
+    version: string;
+    workerType: string;
+  },
+): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `export const workerPlugin = {
+  manifest: {
+    name: ${JSON.stringify(options.name)},
+    version: ${JSON.stringify(options.version)},
+    worker: {
+      type: ${JSON.stringify(options.workerType)},
+      requiredDomains: ["recurring", "task"],
+      roleHints: ["node"],
+    },
+  },
+  createRuntime() {
+    return {
+      start() {
+        return {
+          stop() {},
+        };
+      },
+    };
   },
 };`;
 

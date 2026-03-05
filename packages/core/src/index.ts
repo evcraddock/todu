@@ -5,3 +5,4 @@ export * from "./schema.js";
 export * from "./sync-provider.js";
 export * from "./types.js";
 export * from "./validation.js";
+export * from "./worker-plugin.js";

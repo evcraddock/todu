@@ -27,7 +27,7 @@ import {
   DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
-import { type LoadedSyncPlugin, loadConfiguredSyncPlugins } from "./sync-plugin-loader.js";
+import { type LoadedConfiguredPlugin, loadConfiguredPlugins } from "./sync-plugin-loader.js";
 import {
   createSyncPluginWorkerRuntime,
   resolveSyncPluginExecutionConfig,
@@ -166,7 +166,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
   const workerRuntimes = new Map<string, WorkerRegistration["runtime"]>();
   const activeWorkerRuntimeHandles = new Map<string, WorkerRuntimeHandle>();
-  const loadedSyncPlugins = new Map<string, LoadedSyncPlugin>();
+  const loadedPlugins = new Map<string, LoadedConfiguredPlugin>();
 
   const runtimeStatus: DaemonRuntimeStatus = {
     state: "stopped",
@@ -190,7 +190,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   }
 
   if (pluginPathResolution.duplicateModulePaths.length > 0) {
-    runtimeLogger.warn("duplicate sync plugin module path entries detected", {
+    runtimeLogger.warn("duplicate plugin module path entries detected", {
       duplicateModulePaths: pluginPathResolution.duplicateModulePaths,
       syncPluginModulePaths: resolvedConfig.syncPluginModulePaths ?? null,
     });
@@ -635,7 +635,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
   }
 
-  async function loadConfiguredSyncPluginWorkers(): Promise<void> {
+  async function loadConfiguredPluginWorkers(): Promise<void> {
     if (
       !resolvedConfig.syncPluginModulePaths ||
       resolvedConfig.syncPluginModulePaths.length === 0
@@ -644,19 +644,19 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
 
     const unresolvedModulePaths = resolvedConfig.syncPluginModulePaths.filter((modulePath) =>
-      Array.from(loadedSyncPlugins.values()).every((plugin) => plugin.modulePath !== modulePath),
+      Array.from(loadedPlugins.values()).every((plugin) => plugin.modulePath !== modulePath),
     );
 
     if (unresolvedModulePaths.length === 0) {
       return;
     }
 
-    const loadResult = await loadConfiguredSyncPlugins({
+    const loadResult = await loadConfiguredPlugins({
       modulePaths: unresolvedModulePaths,
     });
 
     for (const failure of loadResult.failures) {
-      runtimeLogger.warn("sync plugin load failed", {
+      runtimeLogger.warn("plugin load failed", {
         code: failure.code,
         message: failure.message,
         ...(failure.details ?? {}),
@@ -664,39 +664,69 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
 
     for (const loadedPlugin of loadResult.loadedPlugins) {
-      const pluginConfigResolution = resolveSyncPluginExecutionConfig(
-        loadedPlugin.manifest.name,
-        resolvedConfig.syncPluginConfigs?.[loadedPlugin.manifest.name],
-      );
-
-      for (const warningMessage of pluginConfigResolution.warnings) {
-        runtimeLogger.warn(warningMessage, {
-          pluginName: loadedPlugin.manifest.name,
-          pluginVersion: loadedPlugin.manifest.version,
-          modulePath: loadedPlugin.modulePath,
-        });
-      }
-
-      const workerRegistration: WorkerRegistration = {
-        manifest: loadedPlugin.workerRegistration.manifest,
-        runtime: createSyncPluginWorkerRuntime({
-          pluginName: loadedPlugin.manifest.name,
-          pluginVersion: loadedPlugin.manifest.version,
-          modulePath: loadedPlugin.modulePath,
-          provider: loadedPlugin.provider,
-          config: pluginConfigResolution.config,
-          logger: runtimeLogger,
-          getTodu: () => todu,
-        }),
+      const pluginConfig = {
+        ...(resolvedConfig.syncPluginConfigs?.[loadedPlugin.manifest.name] ?? {}),
       };
+      let workerRegistration: WorkerRegistration;
+
+      if (loadedPlugin.kind === "sync-provider") {
+        const pluginConfigResolution = resolveSyncPluginExecutionConfig(
+          loadedPlugin.manifest.name,
+          pluginConfig,
+        );
+
+        for (const warningMessage of pluginConfigResolution.warnings) {
+          runtimeLogger.warn(warningMessage, {
+            pluginName: loadedPlugin.manifest.name,
+            pluginVersion: loadedPlugin.manifest.version,
+            modulePath: loadedPlugin.modulePath,
+          });
+        }
+
+        workerRegistration = {
+          manifest: loadedPlugin.workerRegistration.manifest,
+          runtime: createSyncPluginWorkerRuntime({
+            pluginName: loadedPlugin.manifest.name,
+            pluginVersion: loadedPlugin.manifest.version,
+            modulePath: loadedPlugin.modulePath,
+            provider: loadedPlugin.provider,
+            config: pluginConfigResolution.config,
+            logger: runtimeLogger,
+            getTodu: () => todu,
+          }),
+        };
+      } else {
+        let workerRuntime: WorkerRegistration["runtime"];
+        try {
+          workerRuntime = loadedPlugin.createRuntime({
+            getTodu: () => todu,
+            logger: runtimeLogger.child(`plugin.${loadedPlugin.manifest.name}`),
+            config: pluginConfig,
+          });
+        } catch (error) {
+          runtimeLogger.warn("worker plugin runtime creation failed", {
+            pluginName: loadedPlugin.manifest.name,
+            pluginVersion: loadedPlugin.manifest.version,
+            modulePath: loadedPlugin.modulePath,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          continue;
+        }
+
+        workerRegistration = {
+          manifest: loadedPlugin.workerRegistration.manifest,
+          runtime: workerRuntime,
+        };
+      }
 
       const registrationResult = registerRuntimeWorker(workerRegistration, {
         throwOnFailure: false,
       });
 
       if (!registrationResult.ok) {
-        runtimeLogger.warn("sync plugin worker registration failed", {
+        runtimeLogger.warn("plugin worker registration failed", {
           modulePath: loadedPlugin.modulePath,
+          pluginKind: loadedPlugin.kind,
           pluginName: loadedPlugin.manifest.name,
           pluginVersion: loadedPlugin.manifest.version,
           workerType: workerRegistration.manifest.type,
@@ -706,16 +736,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         continue;
       }
 
-      loadedSyncPlugins.set(registrationResult.value.manifest.type, loadedPlugin);
+      loadedPlugins.set(registrationResult.value.manifest.type, loadedPlugin);
 
-      runtimeLogger.info("sync plugin loaded", {
+      runtimeLogger.info("plugin loaded", {
         modulePath: loadedPlugin.modulePath,
+        pluginKind: loadedPlugin.kind,
         pluginName: loadedPlugin.manifest.name,
         pluginVersion: loadedPlugin.manifest.version,
         workerType: registrationResult.value.manifest.type,
-        intervalMs: pluginConfigResolution.config.intervalMs,
-        strategy: pluginConfigResolution.config.strategy,
-        projectId: pluginConfigResolution.config.projectId ?? null,
       });
     }
   }
@@ -750,7 +778,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.catalogId = startedTodu.sync.getCatalogId();
       runtimeStatus.transport = endpoint;
 
-      await loadConfiguredSyncPluginWorkers();
+      await loadConfiguredPluginWorkers();
       attachEventSubscriptions(startedTodu);
       startRegisteredWorkers();
 

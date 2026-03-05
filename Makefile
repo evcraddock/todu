@@ -24,7 +24,7 @@ help: ## Show this help
 # Build & Quality
 # =============================================================================
 
-build: node_modules ## Build all packages (core → engine → cli)
+build: node_modules ## Build all packages (core → engine → recurring-worker → daemon → cli)
 	npm run build
 
 test: node_modules ## Run default tests (sync-server integration tests are excluded)

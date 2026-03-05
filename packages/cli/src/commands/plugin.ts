@@ -5,6 +5,9 @@ import {
   type SyncProviderRegistration,
   type ToduFileConfig,
   validateSyncProviderRegistration,
+  validateWorkerPluginRegistration,
+  type WorkerPluginManifest,
+  type WorkerPluginRegistration,
 } from "@todu/core";
 import type { Command } from "commander";
 import { getConfigPath, loadConfig, saveConfig } from "../config.js";
@@ -14,6 +17,7 @@ import { formatJSON, formatTable } from "../format.js";
 const PLUGIN_COLUMNS = [
   { key: "name", label: "Name" },
   { key: "version", label: "Version" },
+  { key: "kind", label: "Kind" },
   { key: "runtime", label: "Runtime" },
   { key: "modulePath", label: "Module" },
   { key: "status", label: "Status" },
@@ -26,25 +30,42 @@ interface WorkerStatusResult {
   }>;
 }
 
+type PluginKind = "sync-provider" | "worker-plugin";
+
+type InspectPluginSuccess = InspectSyncPluginSuccess | InspectWorkerPluginSuccess;
+
+type InspectablePluginManifest = SyncProviderManifest | WorkerPluginManifest;
+
 interface PluginListItem {
   modulePath: string;
-  manifest: SyncProviderManifest | null;
+  pluginKind: PluginKind | null;
+  manifest: InspectablePluginManifest | null;
   workerType: string | null;
   status: "ok" | "error";
   errorCode?: string;
   errorMessage?: string;
 }
 
-interface InspectPluginSuccess {
+interface InspectSyncPluginSuccess {
   ok: true;
+  pluginKind: "sync-provider";
   modulePath: string;
   manifest: SyncProviderManifest;
+  workerType: string;
+}
+
+interface InspectWorkerPluginSuccess {
+  ok: true;
+  pluginKind: "worker-plugin";
+  modulePath: string;
+  manifest: WorkerPluginManifest;
+  workerType: string;
 }
 
 interface InspectPluginFailure {
   ok: false;
   modulePath: string;
-  code: "IMPORT_FAILED" | "INVALID_EXPORT" | "INVALID_PROVIDER";
+  code: "IMPORT_FAILED" | "INVALID_EXPORT" | "INVALID_PROVIDER" | "INVALID_WORKER_PLUGIN";
   message: string;
 }
 
@@ -63,10 +84,11 @@ interface PluginConfigCommandResult {
 interface PluginModuleShape {
   default?: unknown;
   syncProvider?: unknown;
+  workerPlugin?: unknown;
 }
 
 export function registerPluginCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
-  const plugin = program.command("plugin").description("Manage sync plugins");
+  const plugin = program.command("plugin").description("Manage daemon worker plugins");
 
   plugin
     .command("install <modulePath>")
@@ -98,7 +120,12 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
         plugin: {
           name: inspectedPlugin.manifest.name,
           version: inspectedPlugin.manifest.version,
-          apiVersion: inspectedPlugin.manifest.apiVersion,
+          kind: inspectedPlugin.pluginKind,
+          workerType: inspectedPlugin.workerType,
+          apiVersion:
+            inspectedPlugin.pluginKind === "sync-provider"
+              ? inspectedPlugin.manifest.apiVersion
+              : undefined,
           modulePath: normalizedModulePath,
         },
         daemonRestartRequired: daemonRunning,
@@ -157,6 +184,7 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
         if (!inspectedPlugin.ok) {
           return {
             modulePath: inspectedPlugin.modulePath,
+            pluginKind: null,
             manifest: null,
             workerType: null,
             status: "error",
@@ -167,8 +195,9 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
 
         return {
           modulePath: inspectedPlugin.modulePath,
+          pluginKind: inspectedPlugin.pluginKind,
           manifest: inspectedPlugin.manifest,
-          workerType: createSyncPluginWorkerType(inspectedPlugin.manifest.name),
+          workerType: inspectedPlugin.workerType,
           status: "ok",
         };
       });
@@ -178,6 +207,7 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
           formatJSON(
             items.map((item) => ({
               modulePath: item.modulePath,
+              pluginKind: item.pluginKind,
               manifest: item.manifest,
               workerType: item.workerType,
               runtimeState: resolveRuntimeState(item, runtimeLookup),
@@ -195,6 +225,7 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
         return {
           name: item.manifest?.name ?? "(unresolved)",
           version: item.manifest?.version ?? "-",
+          kind: item.pluginKind ?? "-",
           runtime: runtimeState,
           modulePath: item.modulePath,
           status: item.status === "ok" ? "ok" : `${item.errorCode}: ${item.errorMessage}`,
@@ -436,30 +467,53 @@ async function inspectPluginModule(modulePath: string): Promise<InspectPluginRes
     };
   }
 
-  const registrationCandidate = extractSyncProviderRegistration(moduleExports);
-  if (!registrationCandidate) {
+  const workerRegistrationCandidate = extractWorkerPluginRegistration(moduleExports);
+  if (workerRegistrationCandidate) {
+    const workerValidation = validateWorkerPluginRegistration(workerRegistrationCandidate);
+    if (!workerValidation.ok) {
+      return {
+        ok: false,
+        modulePath,
+        code: "INVALID_WORKER_PLUGIN",
+        message: `${workerValidation.error.code}: ${workerValidation.error.message}`,
+      };
+    }
+
+    return {
+      ok: true,
+      pluginKind: "worker-plugin",
+      modulePath,
+      manifest: workerValidation.value.manifest,
+      workerType: workerValidation.value.manifest.worker.type,
+    };
+  }
+
+  const syncRegistrationCandidate = extractSyncProviderRegistration(moduleExports);
+  if (!syncRegistrationCandidate) {
     return {
       ok: false,
       modulePath,
       code: "INVALID_EXPORT",
-      message: `module must export syncProvider or default registration (${modulePath})`,
+      message: `module must export workerPlugin, syncProvider, or default registration (${modulePath})`,
     };
   }
 
-  const validation = validateSyncProviderRegistration(registrationCandidate);
-  if (!validation.ok) {
+  const syncValidation = validateSyncProviderRegistration(syncRegistrationCandidate);
+  if (!syncValidation.ok) {
     return {
       ok: false,
       modulePath,
       code: "INVALID_PROVIDER",
-      message: `${validation.error.code}: ${validation.error.message}`,
+      message: `${syncValidation.error.code}: ${syncValidation.error.message}`,
     };
   }
 
   return {
     ok: true,
+    pluginKind: "sync-provider",
     modulePath,
-    manifest: validation.value.manifest,
+    manifest: syncValidation.value.manifest,
+    workerType: createSyncPluginWorkerType(syncValidation.value.manifest.name),
   };
 }
 
@@ -476,6 +530,21 @@ function extractSyncProviderRegistration(moduleExports: unknown): SyncProviderRe
   }
 
   return registrationCandidate as unknown as SyncProviderRegistration;
+}
+
+function extractWorkerPluginRegistration(moduleExports: unknown): WorkerPluginRegistration | null {
+  if (!isRecord(moduleExports)) {
+    return null;
+  }
+
+  const moduleShape = moduleExports as PluginModuleShape;
+  const registrationCandidate = moduleShape.workerPlugin;
+
+  if (!isRecord(registrationCandidate)) {
+    return null;
+  }
+
+  return registrationCandidate as unknown as WorkerPluginRegistration;
 }
 
 async function isDaemonRunning(invokeDaemon: CliDaemonInvoker): Promise<boolean> {
