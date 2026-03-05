@@ -9,6 +9,11 @@ export {
   resolveDaemonLogLevelFromEnv,
 } from "./logger.js";
 export {
+  type ParsedDaemonPluginConfigEnv,
+  parseDaemonPluginConfigFromEnv,
+  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+} from "./plugin-config.js";
+export {
   type ParsedDaemonPluginPathsEnv,
   parseDaemonPluginPathsFromEnv,
   TODUAI_DAEMON_PLUGIN_PATHS_ENV,
@@ -80,6 +85,14 @@ export {
   type SyncPluginLoadError,
   type SyncPluginLoadErrorCode,
 } from "./sync-plugin-loader.js";
+export {
+  type CreateSyncPluginWorkerRuntimeOptions,
+  computeRetryDelayMs,
+  createSyncPluginWorkerRuntime,
+  type ResolveSyncPluginExecutionConfigResult,
+  resolveSyncPluginExecutionConfig,
+  type SyncPluginExecutionConfig,
+} from "./sync-worker-runtime.js";
 export {
   createUdsTransport,
   DEFAULT_DAEMON_SOCKET_FILENAME,

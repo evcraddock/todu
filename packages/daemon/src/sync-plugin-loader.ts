@@ -29,6 +29,7 @@ export interface SyncPluginLoadError {
 export interface LoadedSyncPlugin {
   workerRegistration: WorkerRegistration;
   manifest: SyncProviderRegistration["manifest"];
+  provider: SyncProviderRegistration["provider"];
   modulePath: string;
 }
 
@@ -112,6 +113,7 @@ export async function loadConfiguredSyncPlugins(
     loadedPlugins.push({
       modulePath,
       manifest: validation.value.manifest,
+      provider: validation.value.provider,
       workerRegistration: {
         manifest: createSyncPluginWorkerManifest(workerType),
         runtime: createNoopWorkerRuntime(),

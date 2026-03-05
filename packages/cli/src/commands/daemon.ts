@@ -11,6 +11,10 @@ import {
   resolveDaemonSocketPath,
 } from "../daemon-command-client.js";
 import {
+  resolveDaemonPluginConfig,
+  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+} from "../daemon-plugin-config.js";
+import {
   resolveDaemonPluginPaths,
   TODUAI_DAEMON_PLUGIN_PATHS_ENV,
 } from "../daemon-plugin-paths.js";
@@ -63,6 +67,7 @@ interface DaemonCommandContext {
   remoteSyncServer: string | null;
   assignedWorkersEnvValue: string | undefined;
   pluginPathsEnvValue: string | undefined;
+  pluginConfigEnvValue: string | undefined;
 }
 
 const DIRECT_PID_FILENAME = "daemon.pid";
@@ -748,6 +753,7 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
   const remoteSync = resolveRemoteSyncConfig(fileConfig);
   const assignedWorkers = resolveDaemonAssignedWorkers(fileConfig);
   const pluginPaths = resolveDaemonPluginPaths(configPath, fileConfig);
+  const pluginConfig = resolveDaemonPluginConfig(fileConfig);
 
   return {
     storagePath,
@@ -757,6 +763,7 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
     remoteSyncServer: remoteSync?.server ?? null,
     assignedWorkersEnvValue: assignedWorkers.value,
     pluginPathsEnvValue: pluginPaths.value,
+    pluginConfigEnvValue: pluginConfig.value,
   };
 }
 
@@ -781,6 +788,10 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
 
   if (context.pluginPathsEnvValue !== undefined) {
     childEnv[TODUAI_DAEMON_PLUGIN_PATHS_ENV] = context.pluginPathsEnvValue;
+  }
+
+  if (context.pluginConfigEnvValue !== undefined) {
+    childEnv[TODUAI_DAEMON_PLUGIN_CONFIG_ENV] = context.pluginConfigEnvValue;
   }
 
   return childEnv;

@@ -93,6 +93,22 @@ Runtime behavior:
 - Path/config changes apply on daemon restart.
 - Duplicate path entries are tolerated and logged; first occurrence wins.
 
+Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginName>` in config file or `TODUAI_DAEMON_PLUGIN_CONFIG` env var (JSON object). Supported fields:
+
+- `projectId`: target local project ID.
+- `strategy`: `bidirectional`, `pull`, `push`, or `none`.
+- `intervalSeconds`: steady-state cycle interval.
+- `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls.
+- `enabled`: optional execution toggle.
+- `settings`: provider-specific object passed to `initialize(...)`.
+
+Retry policy:
+
+- Pull/push cycle failures are logged and retried with exponential backoff.
+- Delay formula is `retryInitialSeconds * 2^attempt`, capped by `retryMaxSeconds`.
+- Retry state resets after a successful cycle.
+- Daemon shutdown stops further scheduling and calls provider `shutdown()`.
+
 ## Conflict Resolution Baseline
 
 Provider sync conflict resolution baseline is `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs.
