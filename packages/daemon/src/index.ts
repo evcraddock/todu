@@ -79,7 +79,10 @@ export {
   type ResolvedDaemonRuntimeConfig,
 } from "./runtime.js";
 export {
+  type LoadedConfiguredPlugin,
   type LoadedSyncPlugin,
+  type LoadedWorkerPlugin,
+  loadConfiguredPlugins,
   loadConfiguredSyncPlugins,
   SYNC_PLUGIN_LOAD_ERROR_CODES,
   type SyncPluginLoadError,

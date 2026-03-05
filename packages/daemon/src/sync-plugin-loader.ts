@@ -4,6 +4,9 @@ import {
   type SyncProviderRegistration,
   type SyncProviderValidationError,
   validateSyncProviderRegistration,
+  validateWorkerPluginRegistration,
+  type WorkerPluginRegistration,
+  type WorkerPluginValidationError,
 } from "@todu/core";
 import {
   createNoopWorkerRuntime,
@@ -15,6 +18,7 @@ export const SYNC_PLUGIN_LOAD_ERROR_CODES = [
   "IMPORT_FAILED",
   "INVALID_EXPORT",
   "INVALID_PROVIDER",
+  "INVALID_WORKER_PLUGIN",
   "DUPLICATE_WORKER_TYPE",
 ] as const;
 
@@ -27,18 +31,29 @@ export interface SyncPluginLoadError {
 }
 
 export interface LoadedSyncPlugin {
+  kind: "sync-provider";
   workerRegistration: WorkerRegistration;
   manifest: SyncProviderRegistration["manifest"];
   provider: SyncProviderRegistration["provider"];
   modulePath: string;
 }
 
-export interface LoadConfiguredSyncPluginsResult {
-  loadedPlugins: LoadedSyncPlugin[];
+export interface LoadedWorkerPlugin {
+  kind: "worker-plugin";
+  workerRegistration: WorkerRegistration;
+  manifest: WorkerPluginRegistration["manifest"];
+  createRuntime: WorkerPluginRegistration["createRuntime"];
+  modulePath: string;
+}
+
+export type LoadedConfiguredPlugin = LoadedSyncPlugin | LoadedWorkerPlugin;
+
+export interface LoadConfiguredPluginsResult {
+  loadedPlugins: LoadedConfiguredPlugin[];
   failures: SyncPluginLoadError[];
 }
 
-export interface LoadConfiguredSyncPluginsOptions {
+export interface LoadConfiguredPluginsOptions {
   modulePaths: string[];
   importModule?: (specifier: string) => Promise<unknown>;
 }
@@ -46,13 +61,14 @@ export interface LoadConfiguredSyncPluginsOptions {
 interface SyncPluginModuleShape {
   default?: unknown;
   syncProvider?: unknown;
+  workerPlugin?: unknown;
 }
 
-export async function loadConfiguredSyncPlugins(
-  options: LoadConfiguredSyncPluginsOptions,
-): Promise<LoadConfiguredSyncPluginsResult> {
+export async function loadConfiguredPlugins(
+  options: LoadConfiguredPluginsOptions,
+): Promise<LoadConfiguredPluginsResult> {
   const importModule = options.importModule ?? ((specifier) => import(specifier));
-  const loadedPlugins: LoadedSyncPlugin[] = [];
+  const loadedPlugins: LoadedConfiguredPlugin[] = [];
   const failures: SyncPluginLoadError[] = [];
   const seenWorkerTypes = new Set<string>();
 
@@ -65,7 +81,7 @@ export async function loadConfiguredSyncPlugins(
     } catch (error) {
       failures.push({
         code: "IMPORT_FAILED",
-        message: `Failed to import sync plugin module: ${modulePath}`,
+        message: `Failed to import plugin module: ${modulePath}`,
         details: {
           modulePath,
           importSpecifier,
@@ -75,11 +91,48 @@ export async function loadConfiguredSyncPlugins(
       continue;
     }
 
-    const registrationCandidate = extractSyncProviderRegistration(moduleExports);
-    if (!registrationCandidate) {
+    const workerPluginCandidate = extractWorkerPluginRegistration(moduleExports);
+    if (workerPluginCandidate) {
+      const workerValidation = validateWorkerPluginRegistration(workerPluginCandidate);
+      if (!workerValidation.ok) {
+        failures.push(createInvalidWorkerPluginError(modulePath, workerValidation.error));
+        continue;
+      }
+
+      const workerManifest = createWorkerManifestFromWorkerPlugin(workerValidation.value.manifest);
+      if (seenWorkerTypes.has(workerManifest.type)) {
+        failures.push({
+          code: "DUPLICATE_WORKER_TYPE",
+          message: `Plugin worker type collision: ${workerManifest.type}`,
+          details: {
+            modulePath,
+            workerType: workerManifest.type,
+            pluginName: workerValidation.value.manifest.name,
+          },
+        });
+        continue;
+      }
+
+      seenWorkerTypes.add(workerManifest.type);
+
+      loadedPlugins.push({
+        kind: "worker-plugin",
+        modulePath,
+        manifest: workerValidation.value.manifest,
+        createRuntime: workerValidation.value.createRuntime,
+        workerRegistration: {
+          manifest: workerManifest,
+          runtime: createNoopWorkerRuntime(),
+        },
+      });
+      continue;
+    }
+
+    const syncRegistrationCandidate = extractSyncProviderRegistration(moduleExports);
+    if (!syncRegistrationCandidate) {
       failures.push({
         code: "INVALID_EXPORT",
-        message: `Sync plugin module must export syncProvider or default registration: ${modulePath}`,
+        message: `Plugin module must export workerPlugin, syncProvider, or default registration: ${modulePath}`,
         details: {
           modulePath,
           exportNames: Object.keys((moduleExports ?? {}) as Record<string, unknown>),
@@ -88,21 +141,21 @@ export async function loadConfiguredSyncPlugins(
       continue;
     }
 
-    const validation = validateSyncProviderRegistration(registrationCandidate);
-    if (!validation.ok) {
-      failures.push(createInvalidProviderError(modulePath, validation.error));
+    const syncValidation = validateSyncProviderRegistration(syncRegistrationCandidate);
+    if (!syncValidation.ok) {
+      failures.push(createInvalidProviderError(modulePath, syncValidation.error));
       continue;
     }
 
-    const workerType = createSyncPluginWorkerType(validation.value.manifest.name);
+    const workerType = createSyncPluginWorkerType(syncValidation.value.manifest.name);
     if (seenWorkerTypes.has(workerType)) {
       failures.push({
         code: "DUPLICATE_WORKER_TYPE",
-        message: `Sync plugin worker type collision: ${workerType}`,
+        message: `Plugin worker type collision: ${workerType}`,
         details: {
           modulePath,
           workerType,
-          pluginName: validation.value.manifest.name,
+          pluginName: syncValidation.value.manifest.name,
         },
       });
       continue;
@@ -111,9 +164,10 @@ export async function loadConfiguredSyncPlugins(
     seenWorkerTypes.add(workerType);
 
     loadedPlugins.push({
+      kind: "sync-provider",
       modulePath,
-      manifest: validation.value.manifest,
-      provider: validation.value.provider,
+      manifest: syncValidation.value.manifest,
+      provider: syncValidation.value.provider,
       workerRegistration: {
         manifest: createSyncPluginWorkerManifest(workerType),
         runtime: createNoopWorkerRuntime(),
@@ -127,13 +181,33 @@ export async function loadConfiguredSyncPlugins(
   };
 }
 
+export async function loadConfiguredSyncPlugins(
+  options: LoadConfiguredPluginsOptions,
+): Promise<LoadConfiguredPluginsResult> {
+  return loadConfiguredPlugins(options);
+}
+
 function createInvalidProviderError(
   modulePath: string,
   validationError: SyncProviderValidationError,
 ): SyncPluginLoadError {
   return {
     code: "INVALID_PROVIDER",
-    message: `Invalid sync plugin provider registration: ${modulePath}`,
+    message: `Invalid sync provider registration: ${modulePath}`,
+    details: {
+      modulePath,
+      validationError,
+    },
+  };
+}
+
+function createInvalidWorkerPluginError(
+  modulePath: string,
+  validationError: WorkerPluginValidationError,
+): SyncPluginLoadError {
+  return {
+    code: "INVALID_WORKER_PLUGIN",
+    message: `Invalid worker plugin registration: ${modulePath}`,
     details: {
       modulePath,
       validationError,
@@ -155,11 +229,36 @@ function extractSyncProviderRegistration(moduleExports: unknown): SyncProviderRe
   return candidate as SyncProviderRegistration;
 }
 
+function extractWorkerPluginRegistration(moduleExports: unknown): WorkerPluginRegistration | null {
+  if (!moduleExports || typeof moduleExports !== "object") {
+    return null;
+  }
+
+  const moduleShape = moduleExports as SyncPluginModuleShape;
+  const candidate = moduleShape.workerPlugin;
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  return candidate as WorkerPluginRegistration;
+}
+
 function createSyncPluginWorkerManifest(workerType: string): WorkerManifest {
   return {
     type: workerType,
     requiredDomains: ["sync", "task"],
     roleHints: ["node"],
+  };
+}
+
+function createWorkerManifestFromWorkerPlugin(
+  manifest: WorkerPluginRegistration["manifest"],
+): WorkerManifest {
+  return {
+    type: manifest.worker.type,
+    requiredDomains: [...manifest.worker.requiredDomains],
+    optionalDomains: [...(manifest.worker.optionalDomains ?? [])],
+    roleHints: [...(manifest.worker.roleHints ?? [])],
   };
 }
 

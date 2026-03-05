@@ -1,0 +1,44 @@
+{
+  "name": "@todu/recurring-worker",
+  "version": "0.1.1",
+  "description": "Standalone recurring automation worker plugin for todu daemon",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsgo -p tsconfig.build.json",
+    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+  },
+  "dependencies": {
+    "@todu/core": "*",
+    "@todu/engine": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evcraddock/todu.git",
+    "directory": "packages/recurring-worker"
+  },
+  "license": "MIT",
+  "keywords": [
+    "todu",
+    "daemon",
+    "worker",
+    "recurring",
+    "plugin"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

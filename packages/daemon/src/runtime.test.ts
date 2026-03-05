@@ -2,7 +2,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
+import { type CatalogDocument, createEmptyCatalog, generateScheduledTaskId } from "@todu/core";
 import * as engine from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProtocolSuccessFrame } from "./protocol.js";
@@ -1193,7 +1193,178 @@ describe("createDaemonRuntime", () => {
     expect(runtime.getWorker("github-sync")?.state).toBe("stopped");
   });
 
-  it("fails invalid or unreachable sync plugin modules safely with diagnostics", async () => {
+  it("loads configured worker plugins and surfaces runtime state via worker.status", async () => {
+    const pluginPath = writeValidWorkerPluginModule(tmpDir, "recurring-plugin.mjs", {
+      pluginName: "recurring-worker",
+      pluginVersion: "1.0.0",
+      workerType: "recurring",
+    });
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [pluginPath],
+      enabledWorkerDomains: ["project", "task", "recurring"],
+    });
+
+    await runtime.start();
+
+    expect(runtime.getWorker("recurring")).toMatchObject({
+      state: "running",
+      manifest: {
+        type: "recurring",
+        requiredDomains: ["recurring", "task"],
+      },
+    });
+
+    const workerStatusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-recurring-plugin-1",
+      method: "worker.status",
+      params: {
+        workerType: "recurring",
+      },
+    });
+
+    expect(workerStatusResponse).toEqual({
+      id: "worker-status-recurring-plugin-1",
+      result: {
+        workers: [
+          {
+            type: "recurring",
+            state: "running",
+            blockedReason: null,
+            errorMessage: null,
+            updatedAt: expect.any(String),
+            requiredDomains: ["recurring", "task"],
+            optionalDomains: [],
+            roleHints: ["node"],
+            isAssigned: true,
+            missingRequiredDomains: [],
+          },
+        ],
+        assignment: {
+          assignedWorkerTypes: null,
+        },
+        enabledWorkerDomains: ["project", "task", "recurring"],
+      },
+    });
+
+    await runtime.stop();
+
+    expect(runtime.getWorker("recurring")?.state).toBe("stopped");
+  });
+
+  it("recurring worker plugin generates due tasks idempotently with deterministic IDs", async () => {
+    const pluginPath = writeRecurringAutomationWorkerPluginModule(
+      tmpDir,
+      "recurring-automation-plugin.mjs",
+      {
+        pluginName: "recurring-worker",
+        pluginVersion: "1.0.0",
+        workerType: "recurring",
+      },
+    );
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [pluginPath],
+      enabledWorkerDomains: ["project", "task", "recurring"],
+    });
+
+    await runtime.start();
+
+    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-recurring-worker-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Recurring Worker Project",
+        },
+      },
+    });
+
+    const projectId = (createProjectResponse.result as { id: string }).id;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const createRecurringResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-worker-template-create",
+      method: "recurring.create",
+      params: {
+        input: {
+          title: "Worker daily",
+          schedule: "FREQ=DAILY",
+          timezone: "UTC",
+          startDate: today,
+          projectId,
+        },
+      },
+    });
+
+    const recurringId = (createRecurringResponse.result as { id: string }).id;
+
+    await runtime.stop();
+    await runtime.start();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const firstListResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-list-after-worker-run-1",
+      method: "task.list",
+      params: {
+        filter: {
+          projectId,
+        },
+      },
+    });
+
+    const firstTasks = (
+      firstListResponse.result as Array<{
+        id: string;
+        templateId?: string;
+        scheduledDate?: string;
+      }>
+    ).filter((task) => task.templateId === recurringId);
+
+    expect(firstTasks).toHaveLength(1);
+
+    const firstTask = firstTasks[0];
+    const scheduledDate = firstTask?.scheduledDate ?? today;
+    expect(firstTask?.id).toBe(generateScheduledTaskId(recurringId, scheduledDate));
+
+    await runtime.stop();
+    await runtime.start();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const secondListResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-list-after-worker-run-2",
+      method: "task.list",
+      params: {
+        filter: {
+          projectId,
+        },
+      },
+    });
+
+    const secondTasks = (
+      secondListResponse.result as Array<{ id: string; templateId?: string }>
+    ).filter((task) => task.templateId === recurringId);
+
+    expect(secondTasks).toHaveLength(1);
+    expect(secondTasks[0]?.id).toBe(firstTask?.id);
+
+    const generateAgainResponse = await sendRequest(runtime.config().socketPath, {
+      id: "recurring-worker-generate-again",
+      method: "recurring.generate",
+      params: {
+        templateId: recurringId,
+        date: scheduledDate,
+      },
+    });
+
+    expect((generateAgainResponse.result as { id: string }).id).toBe(firstTask?.id);
+
+    await runtime.stop();
+  });
+
+  it("fails invalid or unreachable plugin modules safely with diagnostics", async () => {
     const incompatiblePluginPath = writeInvalidSyncPluginModule(tmpDir, "bad-plugin.mjs");
     const missingPluginPath = path.join(tmpDir, "missing-plugin.mjs");
 
@@ -1223,14 +1394,14 @@ describe("createDaemonRuntime", () => {
     expect(warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          message: "sync plugin load failed",
+          message: "plugin load failed",
           context: expect.objectContaining({
             code: "INVALID_PROVIDER",
             modulePath: incompatiblePluginPath,
           }),
         }),
         expect.objectContaining({
-          message: "sync plugin load failed",
+          message: "plugin load failed",
           context: expect.objectContaining({
             code: "IMPORT_FAILED",
             modulePath: missingPluginPath,
@@ -1616,6 +1787,103 @@ function writeValidSyncPluginModule(
         title: "Example",
       };
     },
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
+
+function writeValidWorkerPluginModule(
+  directory: string,
+  filename: string,
+  options: {
+    pluginName: string;
+    pluginVersion: string;
+    workerType: string;
+  },
+): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `export const workerPlugin = {
+  manifest: {
+    name: ${JSON.stringify(options.pluginName)},
+    version: ${JSON.stringify(options.pluginVersion)},
+    worker: {
+      type: ${JSON.stringify(options.workerType)},
+      requiredDomains: ["recurring", "task"],
+      roleHints: ["node"],
+    },
+  },
+  createRuntime() {
+    return {
+      start() {
+        return {
+          stop() {},
+        };
+      },
+    };
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
+
+function writeRecurringAutomationWorkerPluginModule(
+  directory: string,
+  filename: string,
+  options: {
+    pluginName: string;
+    pluginVersion: string;
+    workerType: string;
+  },
+): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `export const workerPlugin = {
+  manifest: {
+    name: ${JSON.stringify(options.pluginName)},
+    version: ${JSON.stringify(options.pluginVersion)},
+    worker: {
+      type: ${JSON.stringify(options.workerType)},
+      requiredDomains: ["recurring", "task"],
+      roleHints: ["node"],
+    },
+  },
+  createRuntime(context) {
+    return {
+      start() {
+        let stopped = false;
+
+        const runOnce = async () => {
+          if (stopped) {
+            return;
+          }
+
+          const activeTodu = context.getTodu();
+          if (!activeTodu) {
+            return;
+          }
+
+          await activeTodu.recurring.process();
+        };
+
+        void runOnce();
+
+        return {
+          stop() {
+            if (stopped) {
+              return;
+            }
+
+            stopped = true;
+          },
+        };
+      },
+    };
   },
 };`;
 

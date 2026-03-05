@@ -2,6 +2,8 @@
 
 This document defines the external sync plugin contract exported by `@todu/core`.
 
+For generic daemon worker plugins, see `docs/worker-plugin-api.md`.
+
 ## Purpose
 
 `SyncProvider` is the runtime contract for plugins that synchronize todu data with external systems (for example, GitHub or Forgejo issue trackers).
