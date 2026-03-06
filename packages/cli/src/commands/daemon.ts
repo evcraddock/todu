@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveRemoteSyncConfig } from "@todu/core";
+import { runDaemonEntrypoint } from "@todu/daemon";
 import type { Command } from "commander";
 import { getConfigPath, loadConfig, resolveDataDir } from "../config.js";
 import {
@@ -63,7 +64,6 @@ interface DaemonCommandContext {
   storagePath: string;
   socketPath: string;
   daemonPidPath: string;
-  daemonEntrypoint: string;
   remoteSyncServer: string | null;
   assignedWorkersEnvValue: string | undefined;
   pluginPathsEnvValue: string | undefined;
@@ -76,29 +76,31 @@ const SYSTEMD_SERVICE_PATH = ".config/systemd/user/toduai-daemon.service";
 const LAUNCHD_LABEL = "com.todu.daemon";
 const LAUNCHD_PLIST_PATH = "Library/LaunchAgents/com.todu.daemon.plist";
 const LIFECYCLE_MODE_ENV = "TODUAI_DAEMON_LIFECYCLE_MODE";
+const INTERNAL_DAEMON_RUN_SUBCOMMAND = "__run-internal";
 const STARTUP_TIMEOUT_MS = 5_000;
 const STOP_TIMEOUT_MS = 5_000;
 
 export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const daemon = program.command("daemon").description("Manage local daemon lifecycle");
 
+  daemon.command(INTERNAL_DAEMON_RUN_SUBCOMMAND, { hidden: true }).action(async () => {
+    await runDaemonEntrypoint();
+  });
+
   daemon
     .command("run")
     .description("Run local daemon in foreground mode")
     .action(async () => {
       const context = resolveDaemonCommandContext(program);
-
-      if (!fs.existsSync(context.daemonEntrypoint)) {
-        console.error(`Error: daemon entrypoint not found at ${context.daemonEntrypoint}`);
-        process.exitCode = 1;
-        return;
-      }
-
-      const child = spawn(process.execPath, [context.daemonEntrypoint], {
-        cwd: process.cwd(),
-        stdio: "inherit",
-        env: createDaemonChildEnv(context),
-      });
+      const child = spawn(
+        process.execPath,
+        resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
+        {
+          cwd: process.cwd(),
+          stdio: "inherit",
+          env: createDaemonChildEnv(context),
+        },
+      );
 
       const forwardSigInt = () => {
         child.kill("SIGINT");
@@ -504,24 +506,18 @@ async function executeDirectStart(
     };
   }
 
-  if (!fs.existsSync(context.daemonEntrypoint)) {
-    return {
-      action,
-      ok: false,
-      mode: "direct",
-      delegated: false,
-      message: `daemon entrypoint not found at ${context.daemonEntrypoint}`,
-    };
-  }
-
   fs.mkdirSync(context.storagePath, { recursive: true });
 
-  const daemonProcess = spawn(process.execPath, [context.daemonEntrypoint], {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: "ignore",
-    env: createDaemonChildEnv(context),
-  });
+  const daemonProcess = spawn(
+    process.execPath,
+    resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
+    {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: "ignore",
+      env: createDaemonChildEnv(context),
+    },
+  );
 
   const daemonPid = daemonProcess.pid;
   if (!daemonPid) {
@@ -759,7 +755,6 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
     storagePath,
     socketPath: resolveDaemonSocketPath(storagePath),
     daemonPidPath: path.join(storagePath, DIRECT_PID_FILENAME),
-    daemonEntrypoint: resolveDaemonEntrypoint(),
     remoteSyncServer: remoteSync?.server ?? null,
     assignedWorkersEnvValue: assignedWorkers.value,
     pluginPathsEnvValue: pluginPaths.value,
@@ -795,6 +790,28 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
   }
 
   return childEnv;
+}
+
+function resolveSelfInvocationArgs(commandArgs: string[]): string[] {
+  const scriptPath = process.argv[1];
+
+  if (scriptPath && isNodeScriptEntrypointPath(scriptPath) && isExistingFile(scriptPath)) {
+    return [scriptPath, ...commandArgs];
+  }
+
+  return commandArgs;
+}
+
+function isNodeScriptEntrypointPath(filePath: string): boolean {
+  return filePath.endsWith(".js") || filePath.endsWith(".mjs") || filePath.endsWith(".cjs");
+}
+
+function isExistingFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function resolveLifecycleMode(): DaemonLifecycleMode {
@@ -856,15 +873,6 @@ function runCommand(command: string, args: string[]): CommandRunResult {
     ok: true,
     message: result.stdout?.trim() ?? "",
   };
-}
-
-function resolveDaemonEntrypoint(): string {
-  const explicit = process.env.TODUAI_DAEMON_ENTRYPOINT;
-  if (explicit && explicit.trim().length > 0) {
-    return path.resolve(explicit);
-  }
-
-  return path.resolve(import.meta.dirname, "../../../daemon/dist/entrypoint.js");
 }
 
 function sleep(ms: number): Promise<void> {

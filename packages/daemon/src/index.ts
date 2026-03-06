@@ -67,6 +67,7 @@ export {
   type EventsSubscribeResult,
   type EventsUnsubscribeResult,
 } from "./rpc.js";
+export { runDaemonEntrypoint } from "./run-daemon.js";
 export {
   createDaemonRuntime,
   DAEMON_ROLES,
@@ -105,13 +106,11 @@ export {
   type UdsTransport,
   type UdsTransportConfig,
 } from "./transport.js";
-
 export {
   type ParsedWorkerAssignmentEnv,
   parseAssignedWorkerTypesFromEnv,
   TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "./worker-assignment.js";
-
 export {
   type CreateWorkerRegistryOptions,
   createNoopWorkerRuntime,
