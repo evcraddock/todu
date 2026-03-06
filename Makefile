@@ -184,15 +184,16 @@ version: ## Show current version of all packages
 	@echo "  cli:      $$(node -p "require('./packages/cli/package.json').version")"
 	@echo "  electron: $$(node -p "require('./packages/electron/package.json').version")"
 
-version-check: ## Verify all package versions match
+version-check: ## Verify all package versions match, including generated CLI version source
 	@V1=$$(node -p "require('./packages/core/package.json').version") && \
 	V2=$$(node -p "require('./packages/engine/package.json').version") && \
 	V3=$$(node -p "require('./packages/cli/package.json').version") && \
 	V4=$$(node -p "require('./packages/electron/package.json').version") && \
-	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ]; then \
-		echo "✅ All packages at version $$V1"; \
+	V5=$$(node -e "const fs=require('fs'); const src=fs.readFileSync('./packages/cli/src/version.ts','utf8'); const m=src.match(/VERSION = \\\"([^\\\"]+)\\\"/); if (!m) { process.exit(1); } process.stdout.write(m[1]);") && \
+	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ] && [ "$$V4" = "$$V5" ]; then \
+		echo "✅ All versions in sync at $$V1"; \
 	else \
-		echo "❌ Version mismatch: core=$$V1 engine=$$V2 cli=$$V3 electron=$$V4"; \
+		echo "❌ Version mismatch: core=$$V1 engine=$$V2 cli=$$V3 electron=$$V4 cli_src=$$V5"; \
 		exit 1; \
 	fi
 

@@ -8,10 +8,11 @@
 # This script handles the mechanical release steps:
 #   1. Validate on main with no unpushed commits
 #   2. Update version in all package.json files
-#   3. Commit CHANGELOG.md + package.json files
-#   4. Create annotated tag
-#   5. Push commit and tag
-#   6. Verify tag exists on remote
+#   3. Regenerate tracked version artifacts
+#   4. Commit CHANGELOG.md + package.json files + generated artifacts
+#   5. Create annotated tag
+#   6. Push commit and tag
+#   7. Verify tag exists on remote
 #
 # Prerequisites:
 #   - CHANGELOG.md must already be updated (agent does this conversationally)
@@ -95,11 +96,15 @@ done
 # Also update electron-builder electronVersion if needed
 # (this stays pinned to the installed electron version, not the app version)
 
-# --- Step 3: Commit ---
+# --- Step 3: Regenerate tracked version artifacts ---
+node packages/cli/generate-version.mjs
+
+# --- Step 4: Commit ---
 git add CHANGELOG.md
 for pkg in "${PACKAGES[@]}"; do
   git add "$pkg"
 done
+git add packages/cli/src/version.ts
 
 # Check if there are changes to commit
 if git diff --cached --quiet; then
@@ -109,15 +114,15 @@ else
   info "Committed release v${NEW_VERSION}"
 fi
 
-# --- Step 4: Create annotated tag ---
+# --- Step 5: Create annotated tag ---
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
 info "Created tag: $NEW_TAG"
 
-# --- Step 5: Push ---
+# --- Step 6: Push ---
 info "Pushing to origin..."
 git push origin main --follow-tags
 
-# --- Step 6: Verify tag on remote ---
+# --- Step 7: Verify tag on remote ---
 info "Verifying tag on remote..."
 sleep 2
 
