@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "check": "biome check --write --error-on-warnings . && npm run typecheck",
     "check:ci": "biome check --error-on-warnings . && npm run typecheck",
-    "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/recurring-worker typecheck && npm run --workspace=packages/daemon typecheck && npm run --workspace=packages/cli typecheck",
+    "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/recurring-worker typecheck && npm run --workspace=packages/daemon build && npm run --workspace=packages/cli typecheck",
     "prepare": "husky"
   },
   "devDependencies": {
