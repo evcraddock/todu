@@ -16,6 +16,7 @@
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
+    "@todu/daemon": "*",
     "@todu/engine": "*",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",
