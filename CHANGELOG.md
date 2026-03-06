@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-06
+
+Patch release focused on standalone CLI daemon lifecycle reliability and release/tooling consistency.
+
+### Fixed
+
+- Standalone compiled CLI binaries now start and run the daemon in direct mode using an internal self-relaunch path instead of JS entrypoint path spawning, fixing direct lifecycle failures in release binaries (#281, #2145).
+- CLI typecheck/release flow now consistently resolves daemon workspace artifacts in CI, preventing false-negative typecheck failures during release validation (#281, #2145).
+- Release tooling now keeps CLI version source metadata in sync with package release versioning (commit `95c0c66`).
+
+### Changed
+
+- Daemon bootstrap logic is now exposed for CLI reuse through a dedicated runtime entry module, while the daemon script entrypoint remains a thin launcher (#281).
+
 ## [0.2.1] - 2026-03-05
 
 Patch release focused on standalone CLI reliability for release binaries.
