@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProjectId, type ProjectId, type RecurringId } from "@todu/core";
+import { createProjectId, createRecurringId, type ProjectId, type RecurringId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
+import { createRecurringNamespace } from "./recurring.js";
 import { todayInTimezone } from "./schedule.js";
 import { clearProcessors } from "./scheduling.js";
+import { initBootstrapStorage } from "./storage.js";
+import { createTaskNamespace } from "./tasks.js";
 import type { Todu } from "./todu.js";
 
 describe("recurring templates", () => {
@@ -451,40 +454,123 @@ describe("recurring templates", () => {
   });
 
   describe("processing semantics", () => {
-    it("treats templates without an explicit missPolicy as accumulate", async () => {
+    it("preserves explicit accumulate catch-up behavior when nextDue is behind today", async () => {
       const today = todayInTimezone("UTC");
       const twoDaysAgo = shiftDate(today, -2);
+      const yesterday = shiftDate(today, -1);
       const tomorrow = shiftDate(today, 1);
 
-      const createResult = await todu.recurring.create({
-        title: "Backlog daily",
-        schedule: "FREQ=DAILY",
-        timezone: "UTC",
-        startDate: twoDaysAgo,
-        projectId,
-      });
-      expect(createResult.ok).toBe(true);
-      if (!createResult.ok) return;
+      await todu.close();
+      const storage = await initBootstrapStorage(tmpDir);
+      const recurring = createRecurringNamespace(storage.catalog, storage.repo);
+      const task = createTaskNamespace(storage.catalog, storage.repo);
+      const templateId = createRecurringId("rec-legacy-accumulate");
 
-      const processResult = await todu.recurring.process();
+      storage.catalog.change((doc) => {
+        doc.recurringTemplates.push({
+          id: templateId,
+          title: "Backlog daily",
+          projectId,
+          labels: [],
+          priority: "medium",
+          schedule: "FREQ=DAILY",
+          timezone: "UTC",
+          startDate: twoDaysAgo,
+          nextDue: twoDaysAgo,
+          missPolicy: "accumulate",
+          skippedDates: [],
+          paused: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      const processResult = await recurring.process();
       expect(processResult.ok).toBe(true);
       if (!processResult.ok) return;
 
-      expect(processResult.value).toHaveLength(1);
-      expect(processResult.value[0].scheduledDate).toBe(today);
+      expect(processResult.value.map((item) => item.scheduledDate)).toEqual([
+        twoDaysAgo,
+        yesterday,
+        today,
+      ]);
 
-      const tasks = await todu.task.list({ projectId });
+      const tasks = await task.list({ projectId });
       expect(tasks.ok).toBe(true);
-      if (!tasks.ok) return;
-      expect(tasks.value).toHaveLength(1);
-      expect(tasks.value[0].scheduledDate).toBe(today);
+      if (tasks.ok) {
+        const scheduledDates = tasks.value
+          .map((item) => item.scheduledDate)
+          .sort((a, b) => String(a).localeCompare(String(b)));
+        expect(scheduledDates).toEqual([twoDaysAgo, yesterday, today]);
+      }
 
-      const template = await todu.recurring.get(createResult.value.id);
+      const template = await recurring.get(templateId);
       expect(template.ok).toBe(true);
       if (template.ok) {
         expect(template.value.missPolicy).toBe("accumulate");
         expect(template.value.nextDue).toBe(tomorrow);
       }
+
+      await storage.close();
+    });
+
+    it("treats legacy templates without missPolicy as accumulate", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+      const yesterday = shiftDate(today, -1);
+      const tomorrow = shiftDate(today, 1);
+
+      await todu.close();
+      const storage = await initBootstrapStorage(tmpDir);
+      const recurring = createRecurringNamespace(storage.catalog, storage.repo);
+      const task = createTaskNamespace(storage.catalog, storage.repo);
+      const templateId = createRecurringId("rec-legacy-no-policy");
+
+      storage.catalog.change((doc) => {
+        doc.recurringTemplates.push({
+          id: templateId,
+          title: "Legacy backlog daily",
+          projectId,
+          labels: [],
+          priority: "medium",
+          schedule: "FREQ=DAILY",
+          timezone: "UTC",
+          startDate: twoDaysAgo,
+          nextDue: twoDaysAgo,
+          skippedDates: [],
+          paused: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      const processResult = await recurring.process();
+      expect(processResult.ok).toBe(true);
+      if (!processResult.ok) return;
+
+      expect(processResult.value.map((item) => item.scheduledDate)).toEqual([
+        twoDaysAgo,
+        yesterday,
+        today,
+      ]);
+
+      const tasks = await task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (tasks.ok) {
+        const scheduledDates = tasks.value
+          .map((item) => item.scheduledDate)
+          .sort((a, b) => String(a).localeCompare(String(b)));
+        expect(scheduledDates).toEqual([twoDaysAgo, yesterday, today]);
+      }
+
+      const template = await recurring.get(templateId);
+      expect(template.ok).toBe(true);
+      if (template.ok) {
+        expect(template.value.missPolicy).toBeUndefined();
+        expect(template.value.nextDue).toBe(tomorrow);
+      }
+
+      await storage.close();
     });
 
     it("creates only the latest due occurrence for rollForward templates", async () => {
