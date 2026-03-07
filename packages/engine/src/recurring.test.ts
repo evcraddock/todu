@@ -1,10 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createProjectId, type ProjectId, type RecurringId } from "@todu/core";
+import { createProjectId, createRecurringId, type ProjectId, type RecurringId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
+import { createRecurringNamespace } from "./recurring.js";
+import { todayInTimezone } from "./schedule.js";
 import { clearProcessors } from "./scheduling.js";
+import { initBootstrapStorage } from "./storage.js";
+import { createTaskNamespace } from "./tasks.js";
 import type { Todu } from "./todu.js";
 
 describe("recurring templates", () => {
@@ -49,6 +53,7 @@ describe("recurring templates", () => {
       expect(result.value.paused).toBe(false);
       expect(result.value.priority).toBe("medium");
       expect(result.value.labels).toEqual([]);
+      expect(result.value.missPolicy).toBe("accumulate");
       expect(result.value.skippedDates).toEqual([]);
       expect(result.value.id).toMatch(/^rec-/);
     });
@@ -64,6 +69,7 @@ describe("recurring templates", () => {
         labels: ["work"],
         priority: "high",
         endDate: "2026-12-31",
+        missPolicy: "rollForward",
       });
 
       expect(result.ok).toBe(true);
@@ -73,6 +79,7 @@ describe("recurring templates", () => {
       expect(result.value.labels).toEqual(["work"]);
       expect(result.value.priority).toBe("high");
       expect(result.value.endDate).toBe("2026-12-31");
+      expect(result.value.missPolicy).toBe("rollForward");
     });
 
     it("rejects invalid RRULE", async () => {
@@ -241,12 +248,14 @@ describe("recurring templates", () => {
       const updateResult = await todu.recurring.update(createResult.value.id, {
         title: "Updated",
         priority: "high",
+        missPolicy: "rollForward",
       });
 
       expect(updateResult.ok).toBe(true);
       if (updateResult.ok) {
         expect(updateResult.value.title).toBe("Updated");
         expect(updateResult.value.priority).toBe("high");
+        expect(updateResult.value.missPolicy).toBe("rollForward");
       }
     });
 
@@ -444,6 +453,258 @@ describe("recurring templates", () => {
     });
   });
 
+  describe("processing semantics", () => {
+    it("preserves explicit accumulate catch-up behavior when nextDue is behind today", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+      const yesterday = shiftDate(today, -1);
+      const tomorrow = shiftDate(today, 1);
+
+      await todu.close();
+      const storage = await initBootstrapStorage(tmpDir);
+      const recurring = createRecurringNamespace(storage.catalog, storage.repo);
+      const task = createTaskNamespace(storage.catalog, storage.repo);
+      const templateId = createRecurringId("rec-legacy-accumulate");
+
+      storage.catalog.change((doc) => {
+        doc.recurringTemplates.push({
+          id: templateId,
+          title: "Backlog daily",
+          projectId,
+          labels: [],
+          priority: "medium",
+          schedule: "FREQ=DAILY",
+          timezone: "UTC",
+          startDate: twoDaysAgo,
+          nextDue: twoDaysAgo,
+          missPolicy: "accumulate",
+          skippedDates: [],
+          paused: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      const processResult = await recurring.process();
+      expect(processResult.ok).toBe(true);
+      if (!processResult.ok) return;
+
+      expect(processResult.value.map((item) => item.scheduledDate)).toEqual([
+        twoDaysAgo,
+        yesterday,
+        today,
+      ]);
+
+      const tasks = await task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (tasks.ok) {
+        const scheduledDates = tasks.value
+          .map((item) => item.scheduledDate)
+          .sort((a, b) => String(a).localeCompare(String(b)));
+        expect(scheduledDates).toEqual([twoDaysAgo, yesterday, today]);
+      }
+
+      const template = await recurring.get(templateId);
+      expect(template.ok).toBe(true);
+      if (template.ok) {
+        expect(template.value.missPolicy).toBe("accumulate");
+        expect(template.value.nextDue).toBe(tomorrow);
+      }
+
+      await storage.close();
+    });
+
+    it("treats legacy templates without missPolicy as accumulate", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+      const yesterday = shiftDate(today, -1);
+      const tomorrow = shiftDate(today, 1);
+
+      await todu.close();
+      const storage = await initBootstrapStorage(tmpDir);
+      const recurring = createRecurringNamespace(storage.catalog, storage.repo);
+      const task = createTaskNamespace(storage.catalog, storage.repo);
+      const templateId = createRecurringId("rec-legacy-no-policy");
+
+      storage.catalog.change((doc) => {
+        doc.recurringTemplates.push({
+          id: templateId,
+          title: "Legacy backlog daily",
+          projectId,
+          labels: [],
+          priority: "medium",
+          schedule: "FREQ=DAILY",
+          timezone: "UTC",
+          startDate: twoDaysAgo,
+          nextDue: twoDaysAgo,
+          skippedDates: [],
+          paused: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      const processResult = await recurring.process();
+      expect(processResult.ok).toBe(true);
+      if (!processResult.ok) return;
+
+      expect(processResult.value.map((item) => item.scheduledDate)).toEqual([
+        twoDaysAgo,
+        yesterday,
+        today,
+      ]);
+
+      const tasks = await task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (tasks.ok) {
+        const scheduledDates = tasks.value
+          .map((item) => item.scheduledDate)
+          .sort((a, b) => String(a).localeCompare(String(b)));
+        expect(scheduledDates).toEqual([twoDaysAgo, yesterday, today]);
+      }
+
+      const template = await recurring.get(templateId);
+      expect(template.ok).toBe(true);
+      if (template.ok) {
+        expect(template.value.missPolicy).toBeUndefined();
+        expect(template.value.nextDue).toBe(tomorrow);
+      }
+
+      await storage.close();
+    });
+
+    it("creates only the latest due occurrence for rollForward templates", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+      const tomorrow = shiftDate(today, 1);
+
+      const createResult = await todu.recurring.create({
+        title: "Roll forward daily",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: twoDaysAgo,
+        projectId,
+        missPolicy: "rollForward",
+      });
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const processResult = await todu.recurring.process();
+      expect(processResult.ok).toBe(true);
+      if (!processResult.ok) return;
+
+      expect(processResult.value).toHaveLength(1);
+      expect(processResult.value[0].scheduledDate).toBe(today);
+
+      const tasks = await todu.task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (!tasks.ok) return;
+      expect(tasks.value).toHaveLength(1);
+      expect(tasks.value[0].scheduledDate).toBe(today);
+
+      const template = await todu.recurring.get(createResult.value.id);
+      expect(template.ok).toBe(true);
+      if (template.ok) {
+        expect(template.value.nextDue).toBe(tomorrow);
+      }
+    });
+
+    it("keeps rollForward processing idempotent across repeated runs", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+
+      const createResult = await todu.recurring.create({
+        title: "Idempotent roll forward",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: twoDaysAgo,
+        projectId,
+        missPolicy: "rollForward",
+      });
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const firstProcess = await todu.recurring.process();
+      const secondProcess = await todu.recurring.process();
+      expect(firstProcess.ok).toBe(true);
+      expect(secondProcess.ok).toBe(true);
+      if (!firstProcess.ok || !secondProcess.ok) return;
+
+      expect(firstProcess.value).toHaveLength(1);
+      expect(secondProcess.value).toHaveLength(0);
+
+      const tasks = await todu.task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (tasks.ok) {
+        expect(tasks.value).toHaveLength(1);
+        expect(tasks.value[0].scheduledDate).toBe(today);
+      }
+    });
+
+    it("allows explicit manual generation for earlier rollForward occurrences", async () => {
+      const today = todayInTimezone("UTC");
+      const twoDaysAgo = shiftDate(today, -2);
+
+      const createResult = await todu.recurring.create({
+        title: "Manual roll forward",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: twoDaysAgo,
+        projectId,
+        missPolicy: "rollForward",
+      });
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const genResult = await todu.recurring.generate(createResult.value.id, twoDaysAgo);
+      expect(genResult.ok).toBe(true);
+      if (genResult.ok) {
+        expect(genResult.value.scheduledDate).toBe(twoDaysAgo);
+      }
+    });
+
+    it("does not recreate a deleted rollForward occurrence on the same day", async () => {
+      const today = todayInTimezone("UTC");
+      const yesterday = shiftDate(today, -1);
+
+      const createResult = await todu.recurring.create({
+        title: "Skippable roll forward",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: yesterday,
+        projectId,
+        missPolicy: "rollForward",
+      });
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const firstProcess = await todu.recurring.process();
+      expect(firstProcess.ok).toBe(true);
+      if (!firstProcess.ok) return;
+      expect(firstProcess.value).toHaveLength(1);
+
+      const deleteResult = await todu.task.delete(firstProcess.value[0].id);
+      expect(deleteResult.ok).toBe(true);
+
+      const secondProcess = await todu.recurring.process();
+      expect(secondProcess.ok).toBe(true);
+      if (!secondProcess.ok) return;
+      expect(secondProcess.value).toHaveLength(0);
+
+      const tasks = await todu.task.list({ projectId });
+      expect(tasks.ok).toBe(true);
+      if (tasks.ok) {
+        expect(tasks.value).toHaveLength(0);
+      }
+
+      const template = await todu.recurring.get(createResult.value.id);
+      expect(template.ok).toBe(true);
+      if (template.ok) {
+        expect(template.value.skippedDates).toContain(today);
+      }
+    });
+  });
+
   describe("upcoming", () => {
     it("returns projected occurrences without creating tasks", async () => {
       await todu.recurring.create({
@@ -497,3 +758,12 @@ describe("recurring templates", () => {
     });
   });
 });
+
+function shiftDate(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
