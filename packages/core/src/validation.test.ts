@@ -9,6 +9,7 @@ import {
   validateCreateLabelInput,
   validateCreateNoteInput,
   validateCreateProjectInput,
+  validateCreateRecurringInput,
   validateCreateTaskInput,
   validateDescription,
   validateISODate,
@@ -20,6 +21,7 @@ import {
   validateUpdateLabelInput,
   validateUpdateNoteInput,
   validateUpdateProjectInput,
+  validateUpdateRecurringInput,
   validateUpdateTaskInput,
 } from "./validation.js";
 
@@ -277,6 +279,58 @@ describe("validateUpdateTaskInput", () => {
 
   it("skips transition check when currentStatus not provided", () => {
     expect(validateUpdateTaskInput({ status: "done" })).toBeNull();
+  });
+});
+
+describe("validateCreateRecurringInput", () => {
+  const projectId = createProjectId("proj-recurring");
+
+  it("accepts valid recurring missPolicy values", () => {
+    expect(
+      validateCreateRecurringInput({
+        title: "Daily review",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-03-01",
+        projectId,
+        missPolicy: "accumulate",
+      }),
+    ).toBeNull();
+
+    expect(
+      validateCreateRecurringInput({
+        title: "Daily review",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-03-01",
+        projectId,
+        missPolicy: "rollForward",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid recurring missPolicy values", () => {
+    const error = validateCreateRecurringInput({
+      title: "Daily review",
+      schedule: "FREQ=DAILY",
+      timezone: "UTC",
+      startDate: "2026-03-01",
+      projectId,
+      missPolicy: "skip" as "accumulate",
+    });
+
+    expect(error?.field).toBe("missPolicy");
+  });
+});
+
+describe("validateUpdateRecurringInput", () => {
+  it("accepts recurring missPolicy-only updates", () => {
+    expect(validateUpdateRecurringInput({ missPolicy: "rollForward" })).toBeNull();
+  });
+
+  it("rejects invalid recurring missPolicy updates", () => {
+    const error = validateUpdateRecurringInput({ missPolicy: "skip" as "accumulate" });
+    expect(error?.field).toBe("missPolicy");
   });
 });
 

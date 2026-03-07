@@ -233,6 +233,11 @@ Baseline worker lifecycle states are:
 
 - Recurring automation is a worker capability.
 - Client startup paths (CLI/Electron/SDK bootstrap) do not auto-run recurring processing.
+- Recurring templates support `missPolicy`:
+  - `accumulate` (default) preserves existing catch-up behavior and materializes every due occurrence
+  - `rollForward` materializes only the latest due occurrence and does not create backlog debt for missed earlier dates
+- Templates without an explicit `missPolicy` are treated as `accumulate` for backward compatibility.
+- Manual occurrence generation remains explicit and available regardless of `missPolicy`.
 - Without recurring worker:
   - recurring templates remain usable as data
   - manual occurrence generation remains available

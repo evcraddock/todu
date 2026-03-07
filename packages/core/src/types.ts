@@ -309,6 +309,9 @@ export function isValidStatusTransition(from: TaskStatus, to: TaskStatus): boole
 // RecurringTemplate entity — stored in catalog document
 // ============================================================================
 
+export const RECURRING_MISS_POLICIES = ["accumulate", "rollForward"] as const;
+export type RecurringMissPolicy = (typeof RECURRING_MISS_POLICIES)[number];
+
 export interface RecurringTemplate {
   id: RecurringId;
   title: string;
@@ -321,6 +324,7 @@ export interface RecurringTemplate {
   startDate: string;
   endDate?: string;
   nextDue: string;
+  missPolicy?: RecurringMissPolicy;
   skippedDates: string[];
   paused: boolean;
   createdAt: string;
@@ -341,6 +345,7 @@ export interface CreateRecurringInput {
   labels?: string[];
   priority?: TaskPriority;
   endDate?: string;
+  missPolicy?: RecurringMissPolicy;
 }
 
 export interface UpdateRecurringInput {
@@ -352,6 +357,7 @@ export interface UpdateRecurringInput {
   labels?: string[];
   priority?: TaskPriority;
   endDate?: string;
+  missPolicy?: RecurringMissPolicy;
   paused?: boolean;
 }
 

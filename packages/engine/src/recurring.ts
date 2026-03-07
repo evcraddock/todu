@@ -88,6 +88,7 @@ export function createRecurringNamespace(
         timezone: input.timezone,
         startDate: input.startDate,
         nextDue: initialNextDue,
+        missPolicy: input.missPolicy ?? "accumulate",
         skippedDates: [],
         paused: false,
         createdAt: now,
@@ -166,6 +167,7 @@ export function createRecurringNamespace(
         if (input.schedule !== undefined) t.schedule = input.schedule;
         if (input.timezone !== undefined) t.timezone = input.timezone;
         if (input.endDate !== undefined) t.endDate = input.endDate;
+        if (input.missPolicy !== undefined) t.missPolicy = input.missPolicy;
         if (input.paused !== undefined) t.paused = input.paused;
         t.updatedAt = new Date().toISOString();
       });
@@ -386,7 +388,8 @@ async function generateTaskFromTemplate(
 
 /**
  * Process all due recurring templates — called by the scheduling framework.
- * Generates tasks for all missed occurrences (catch-up behavior).
+ * `accumulate` generates all missed occurrences, while `rollForward`
+ * represents only the latest due occurrence.
  */
 async function processRecurringTemplates(
   catalog: DocHandle<CatalogDocument>,
@@ -404,30 +407,49 @@ async function processRecurringTemplates(
     const today = todayInTimezone(template.timezone);
     let currentNextDue = template.nextDue;
 
-    // Generate tasks for all due dates (catch-up)
-    while (currentNextDue <= today) {
-      // Check skip list
-      if (!template.skippedDates.includes(currentNextDue)) {
-        const result = await generateTaskFromTemplate(template, currentNextDue, catalog, taskNs);
+    if (getMissPolicy(template) === "rollForward") {
+      const latestDue = latestDueOccurrenceOnOrBefore(template, currentNextDue, today);
+      if (!latestDue) continue;
+
+      if (!template.skippedDates.includes(latestDue)) {
+        const result = await generateTaskFromTemplate(template, latestDue, catalog, taskNs);
         if (result.ok) {
           created.push(result.value);
         }
       }
 
-      // Advance to next occurrence
       const next = nextOccurrence(
         template.schedule,
         template.startDate,
         template.timezone,
-        currentNextDue,
+        latestDue,
         template.endDate,
       );
 
-      if (!next) break; // No more occurrences
-      currentNextDue = next;
+      currentNextDue = next ?? latestDue;
+    } else {
+      // Generate tasks for all due dates (catch-up)
+      while (currentNextDue <= today) {
+        if (!template.skippedDates.includes(currentNextDue)) {
+          const result = await generateTaskFromTemplate(template, currentNextDue, catalog, taskNs);
+          if (result.ok) {
+            created.push(result.value);
+          }
+        }
+
+        const next = nextOccurrence(
+          template.schedule,
+          template.startDate,
+          template.timezone,
+          currentNextDue,
+          template.endDate,
+        );
+
+        if (!next) break;
+        currentNextDue = next;
+      }
     }
 
-    // Update nextDue in catalog
     if (currentNextDue !== template.nextDue) {
       catalog.change((doc) => {
         doc.recurringTemplates[i].nextDue = currentNextDue;
@@ -478,6 +500,33 @@ export function addToSkipList(
 // Helpers
 // ============================================================================
 
+function getMissPolicy(template: RecurringTemplate): "accumulate" | "rollForward" {
+  return template.missPolicy ?? "accumulate";
+}
+
+function latestDueOccurrenceOnOrBefore(
+  template: RecurringTemplate,
+  firstDue: string,
+  today: string,
+): string | null {
+  if (firstDue > today) return null;
+
+  let latestDue = firstDue;
+
+  while (true) {
+    const next = nextOccurrence(
+      template.schedule,
+      template.startDate,
+      template.timezone,
+      latestDue,
+      template.endDate,
+    );
+
+    if (!next || next > today) return latestDue;
+    latestDue = next;
+  }
+}
+
 function cloneTemplate(t: RecurringTemplate): RecurringTemplate {
   return {
     id: t.id,
@@ -491,6 +540,7 @@ function cloneTemplate(t: RecurringTemplate): RecurringTemplate {
     startDate: t.startDate,
     endDate: t.endDate,
     nextDue: t.nextDue,
+    missPolicy: t.missPolicy,
     skippedDates: [...t.skippedDates],
     paused: t.paused,
     createdAt: t.createdAt,

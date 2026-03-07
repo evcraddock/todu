@@ -21,6 +21,7 @@ import {
   isTaskPriority,
   isTaskStatus,
   isValidStatusTransition,
+  RECURRING_MISS_POLICIES,
   validationError,
 } from "./types.js";
 
@@ -354,6 +355,10 @@ export function validateCreateRecurringInput(input: CreateRecurringInput): Valid
     return validationError("priority", `Invalid priority: ${input.priority}`);
   }
 
+  if (input.missPolicy !== undefined && !RECURRING_MISS_POLICIES.includes(input.missPolicy)) {
+    return validationError("missPolicy", `Invalid recurring miss policy: ${input.missPolicy}`);
+  }
+
   return null;
 }
 
@@ -367,6 +372,7 @@ export function validateUpdateRecurringInput(input: UpdateRecurringInput): Valid
     input.labels === undefined &&
     input.priority === undefined &&
     input.endDate === undefined &&
+    input.missPolicy === undefined &&
     input.paused === undefined
   ) {
     return validationError("input", "At least one field must be provided");
@@ -399,6 +405,10 @@ export function validateUpdateRecurringInput(input: UpdateRecurringInput): Valid
   if (input.endDate !== undefined) {
     const endError = validateDateString("endDate", input.endDate);
     if (endError) return endError;
+  }
+
+  if (input.missPolicy !== undefined && !RECURRING_MISS_POLICIES.includes(input.missPolicy)) {
+    return validationError("missPolicy", `Invalid recurring miss policy: ${input.missPolicy}`);
   }
 
   return null;
