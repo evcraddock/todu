@@ -1,5 +1,6 @@
 import type {
   CreateHabitInput,
+  CreateIntegrationBindingInput,
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
@@ -11,6 +12,10 @@ import type {
   HabitHistoryEntry,
   HabitId,
   HabitStreak,
+  IntegrationBinding,
+  IntegrationBindingFilter,
+  IntegrationBindingId,
+  IntegrationBindingStatus,
   Label,
   LabelId,
   Note,
@@ -31,6 +36,8 @@ import type {
   TaskWithDetail,
   ToduError,
   UpdateHabitInput,
+  UpdateIntegrationBindingInput,
+  UpdateIntegrationBindingStatusInput,
   UpdateLabelInput,
   UpdateNoteInput,
   UpdateProjectInput,
@@ -108,6 +115,22 @@ export interface LabelNamespace {
   list(): Promise<Result<Label[]>>;
   update(id: LabelId, input: UpdateLabelInput): Promise<Result<Label>>;
   delete(id: LabelId): Promise<Result<void>>;
+}
+
+export interface IntegrationNamespace {
+  create(input: CreateIntegrationBindingInput): Promise<Result<IntegrationBinding>>;
+  list(filter?: IntegrationBindingFilter): Promise<Result<IntegrationBinding[]>>;
+  get(id: IntegrationBindingId): Promise<Result<IntegrationBinding>>;
+  update(
+    id: IntegrationBindingId,
+    input: UpdateIntegrationBindingInput,
+  ): Promise<Result<IntegrationBinding>>;
+  delete(id: IntegrationBindingId): Promise<Result<void>>;
+  getStatus(id: IntegrationBindingId): Promise<Result<IntegrationBindingStatus>>;
+  updateStatus(
+    id: IntegrationBindingId,
+    input: UpdateIntegrationBindingStatusInput,
+  ): Promise<Result<IntegrationBindingStatus>>;
 }
 
 export interface NoteNamespace {
@@ -200,6 +223,7 @@ export interface Todu {
   project: ProjectNamespace;
   task: TaskNamespace;
   label: LabelNamespace;
+  integration: IntegrationNamespace;
   note: NoteNamespace;
   recurring: RecurringNamespace;
   habit: HabitNamespace;
@@ -248,6 +272,15 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       list: stub,
       update: stub,
       delete: stub,
+    },
+    integration: {
+      create: stub,
+      list: stub,
+      get: stub,
+      update: stub,
+      delete: stub,
+      getStatus: stub,
+      updateStatus: stub,
     },
     note: {
       create: stub,

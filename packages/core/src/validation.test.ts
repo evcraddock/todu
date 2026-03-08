@@ -23,6 +23,7 @@ import {
   validateProjectName,
   validateTaskTitle,
   validateUpdateIntegrationBindingInput,
+  validateUpdateIntegrationBindingStatusInput,
   validateUpdateLabelInput,
   validateUpdateNoteInput,
   validateUpdateProjectInput,
@@ -322,6 +323,47 @@ describe("validateUpdateIntegrationBindingInput", () => {
         { bindings, currentBindingId: bindingId },
       ),
     ).toBeNull();
+  });
+});
+
+describe("validateUpdateIntegrationBindingStatusInput", () => {
+  it("accepts a valid status update", () => {
+    expect(
+      validateUpdateIntegrationBindingStatusInput({
+        state: "running",
+        authorityId: "authority-daemon-1",
+        lastAttemptedSyncAt: "2026-03-08T10:00:00Z",
+        lastSuccessfulSyncAt: "2026-03-08T10:01:00Z",
+        lastErrorSummary: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects an empty update", () => {
+    const error = validateUpdateIntegrationBindingStatusInput({});
+    expect(error?.field).toBe("input");
+  });
+
+  it("rejects an invalid state", () => {
+    const error = validateUpdateIntegrationBindingStatusInput({ state: "pending" as "idle" });
+    expect(error?.field).toBe("state");
+  });
+
+  it("rejects an invalid timestamp", () => {
+    const error = validateUpdateIntegrationBindingStatusInput({
+      lastAttemptedSyncAt: "not-a-date",
+    });
+    expect(error?.field).toBe("lastAttemptedSyncAt");
+  });
+
+  it("rejects blank authority IDs", () => {
+    const error = validateUpdateIntegrationBindingStatusInput({ authorityId: "   " });
+    expect(error?.field).toBe("authorityId");
+  });
+
+  it("rejects blank error summaries", () => {
+    const error = validateUpdateIntegrationBindingStatusInput({ lastErrorSummary: "   " });
+    expect(error?.field).toBe("lastErrorSummary");
   });
 });
 
