@@ -138,8 +138,10 @@ export async function createTodu(
       ...Object.values(catalogDoc.taskListDocIds ?? {}),
       ...Object.values(catalogDoc.habitLogDocIds ?? {}),
       ...Object.values(catalogDoc.notesBucketDocIds ?? {}),
+      ...Object.values(catalogDoc.integrationStatusDocIds ?? {}),
     ];
     if (catalogDoc.notesDocId) docIds.push(catalogDoc.notesDocId);
+    if (catalogDoc.integrationRegistryDocId) docIds.push(catalogDoc.integrationRegistryDocId);
     if (docIds.length > 0) {
       const settled = await Promise.allSettled(
         docIds.map((id) =>

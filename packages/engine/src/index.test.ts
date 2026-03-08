@@ -8,6 +8,26 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
 
+async function readCatalogDocument(storagePath: string): Promise<CatalogDocument> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const handle = await repo.find<CatalogDocument>(catalogId);
+    await handle.whenReady();
+    const doc = handle.doc();
+    if (!doc) {
+      throw new Error("catalog document not available");
+    }
+    return JSON.parse(JSON.stringify(doc)) as CatalogDocument;
+  } finally {
+    await repo.shutdown();
+  }
+}
+
 describe("createTodu", () => {
   let tmpDir: string;
   let todu: Todu | null = null;
@@ -133,7 +153,8 @@ describe("createTodu", () => {
     handle.change((doc) => {
       doc.version = 1;
       doc.projects = [];
-      // Deliberately missing: labels, taskListDocIds, settings
+      // Deliberately missing: labels, taskListDocIds, notes bucket fields,
+      // integration status doc IDs, recurring templates, habits, and settings.
     });
     const markerPath = path.join(tmpDir, "todu-catalog.id");
     fs.writeFileSync(markerPath, handle.documentId, "utf-8");
@@ -156,5 +177,18 @@ describe("createTodu", () => {
 
     const notes = await todu.note.list();
     expect(notes.ok).toBe(true);
+
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    const migratedCatalog = await readCatalogDocument(tmpDir);
+    expect(migratedCatalog.taskListDocIds).toEqual({});
+    expect(migratedCatalog.notesBucketDocIds).toEqual({});
+    expect(migratedCatalog.noteBucketByNoteId).toEqual({});
+    expect(migratedCatalog.integrationStatusDocIds).toEqual({});
+    expect(migratedCatalog.recurringTemplates).toEqual([]);
+    expect(migratedCatalog.habits).toEqual([]);
+    expect(migratedCatalog.settings.schemaVersion).toBe(1);
   });
 });

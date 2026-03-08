@@ -1,13 +1,17 @@
 import { validateDateString, validateRRule, validateTimezone } from "./schedule.js";
 import type {
   CreateHabitInput,
+  CreateIntegrationBindingInput,
   CreateLabelInput,
   CreateNoteInput,
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  IntegrationBinding,
+  IntegrationBindingId,
   TaskStatus,
   UpdateHabitInput,
+  UpdateIntegrationBindingInput,
   UpdateLabelInput,
   UpdateNoteInput,
   UpdateProjectInput,
@@ -18,6 +22,7 @@ import type {
 import {
   isNoteEntityType,
   isProjectStatus,
+  isSyncStrategy,
   isTaskPriority,
   isTaskStatus,
   isValidStatusTransition,
@@ -34,6 +39,7 @@ export const MAX_TASK_TITLE_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 2000;
 export const MAX_LABEL_NAME_LENGTH = 50;
 export const MAX_NOTE_CONTENT_LENGTH = 5000;
+export const MAX_INTEGRATION_FIELD_LENGTH = 255;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
@@ -60,6 +66,40 @@ export function validateDescription(description: string): ValidationError | null
       `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`,
     );
   }
+  return null;
+}
+
+export function validateIntegrationBindingField(
+  field: "provider" | "targetKind" | "targetRef",
+  value: string,
+): ValidationError | null {
+  if (!value || value.trim().length === 0) {
+    return validationError(field, `${field} is required`);
+  }
+
+  if (value.trim().length > MAX_INTEGRATION_FIELD_LENGTH) {
+    return validationError(
+      field,
+      `${field} must be ${MAX_INTEGRATION_FIELD_LENGTH} characters or less`,
+    );
+  }
+
+  return null;
+}
+
+export function validateIntegrationBindingProjectUniqueness(
+  projectId: string,
+  bindings: IntegrationBinding[],
+  currentBindingId?: IntegrationBindingId,
+): ValidationError | null {
+  const hasConflict = bindings.some(
+    (binding) => binding.projectId === projectId && binding.id !== currentBindingId,
+  );
+
+  if (hasConflict) {
+    return validationError("projectId", `Project already has an integration binding: ${projectId}`);
+  }
+
   return null;
 }
 
@@ -110,6 +150,76 @@ export function validateUpdateProjectInput(input: UpdateProjectInput): Validatio
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
     return validationError("priority", `Invalid priority: ${input.priority}`);
+  }
+
+  return null;
+}
+
+export function validateCreateIntegrationBindingInput(
+  input: CreateIntegrationBindingInput,
+  bindings: IntegrationBinding[] = [],
+): ValidationError | null {
+  const providerError = validateIntegrationBindingField("provider", input.provider);
+  if (providerError) return providerError;
+
+  const targetKindError = validateIntegrationBindingField("targetKind", input.targetKind);
+  if (targetKindError) return targetKindError;
+
+  const targetRefError = validateIntegrationBindingField("targetRef", input.targetRef);
+  if (targetRefError) return targetRefError;
+
+  if (input.strategy !== undefined && !isSyncStrategy(input.strategy)) {
+    return validationError("strategy", `Invalid sync strategy: ${input.strategy}`);
+  }
+
+  return validateIntegrationBindingProjectUniqueness(input.projectId, bindings);
+}
+
+export interface ValidateUpdateIntegrationBindingOptions {
+  bindings?: IntegrationBinding[];
+  currentBindingId?: IntegrationBindingId;
+}
+
+export function validateUpdateIntegrationBindingInput(
+  input: UpdateIntegrationBindingInput,
+  options: ValidateUpdateIntegrationBindingOptions = {},
+): ValidationError | null {
+  if (
+    input.provider === undefined &&
+    input.projectId === undefined &&
+    input.targetKind === undefined &&
+    input.targetRef === undefined &&
+    input.strategy === undefined &&
+    input.enabled === undefined
+  ) {
+    return validationError("input", "At least one field must be provided");
+  }
+
+  if (input.provider !== undefined) {
+    const providerError = validateIntegrationBindingField("provider", input.provider);
+    if (providerError) return providerError;
+  }
+
+  if (input.targetKind !== undefined) {
+    const targetKindError = validateIntegrationBindingField("targetKind", input.targetKind);
+    if (targetKindError) return targetKindError;
+  }
+
+  if (input.targetRef !== undefined) {
+    const targetRefError = validateIntegrationBindingField("targetRef", input.targetRef);
+    if (targetRefError) return targetRefError;
+  }
+
+  if (input.strategy !== undefined && !isSyncStrategy(input.strategy)) {
+    return validationError("strategy", `Invalid sync strategy: ${input.strategy}`);
+  }
+
+  if (input.projectId !== undefined) {
+    return validateIntegrationBindingProjectUniqueness(
+      input.projectId,
+      options.bindings ?? [],
+      options.currentBindingId,
+    );
   }
 
   return null;

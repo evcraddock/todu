@@ -367,6 +367,7 @@ function createBootstrapCatalog(repo: Repo, markerPath: string): DocHandle<Catal
     doc.taskListDocIds = empty.taskListDocIds;
     doc.notesBucketDocIds = empty.notesBucketDocIds;
     doc.noteBucketByNoteId = empty.noteBucketByNoteId;
+    doc.integrationStatusDocIds = empty.integrationStatusDocIds;
     doc.settings = empty.settings;
   });
 
@@ -397,6 +398,8 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
   if (doc.notesBucketDocIds === undefined || doc.notesBucketDocIds === null) needsMigration = true;
   if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null)
     needsMigration = true;
+  if (doc.integrationStatusDocIds === undefined || doc.integrationStatusDocIds === null)
+    needsMigration = true;
   if (doc.settings === undefined || doc.settings === null) needsMigration = true;
   if (doc.version === undefined || doc.version === null) needsMigration = true;
 
@@ -415,6 +418,8 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
       d.notesBucketDocIds = defaults.notesBucketDocIds;
     if (d.noteBucketByNoteId === undefined || d.noteBucketByNoteId === null)
       d.noteBucketByNoteId = defaults.noteBucketByNoteId;
+    if (d.integrationStatusDocIds === undefined || d.integrationStatusDocIds === null)
+      d.integrationStatusDocIds = defaults.integrationStatusDocIds;
     if (d.settings === undefined || d.settings === null) d.settings = defaults.settings;
     if (d.version === undefined || d.version === null) d.version = SCHEMA_VERSION;
   });

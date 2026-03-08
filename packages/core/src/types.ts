@@ -8,6 +8,7 @@ export type LabelId = string & { readonly __brand: "LabelId" };
 export type NoteId = string & { readonly __brand: "NoteId" };
 export type HabitId = string & { readonly __brand: "HabitId" };
 export type RecurringId = string & { readonly __brand: "RecurringId" };
+export type IntegrationBindingId = string & { readonly __brand: "IntegrationBindingId" };
 
 export function createTaskId(id: string): TaskId {
   return id as TaskId;
@@ -31,6 +32,10 @@ export function createHabitId(id: string): HabitId {
 
 export function createRecurringId(id: string): RecurringId {
   return id as RecurringId;
+}
+
+export function createIntegrationBindingId(id: string): IntegrationBindingId {
+  return id as IntegrationBindingId;
 }
 
 // ============================================================================
@@ -63,6 +68,13 @@ export type SyncStrategy = (typeof SYNC_STRATEGIES)[number];
 
 export function isSyncStrategy(value: string): value is SyncStrategy {
   return (SYNC_STRATEGIES as readonly string[]).includes(value);
+}
+
+export const INTEGRATION_BINDING_STATES = ["running", "idle", "blocked", "error"] as const;
+export type IntegrationBindingState = (typeof INTEGRATION_BINDING_STATES)[number];
+
+export function isIntegrationBindingState(value: string): value is IntegrationBindingState {
+  return (INTEGRATION_BINDING_STATES as readonly string[]).includes(value);
 }
 
 // ============================================================================
@@ -138,6 +150,32 @@ export interface ProjectFilter {
 }
 
 // ============================================================================
+// Integration binding entities — shared desired state for external integrations
+// ============================================================================
+
+export interface IntegrationBinding {
+  id: IntegrationBindingId;
+  provider: string;
+  projectId: ProjectId;
+  targetKind: string;
+  targetRef: string;
+  strategy: SyncStrategy;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationBindingStatus {
+  bindingId: IntegrationBindingId;
+  state: IntegrationBindingState;
+  authorityId: string | null;
+  lastSuccessfulSyncAt: string | null;
+  lastAttemptedSyncAt: string | null;
+  lastErrorSummary: string | null;
+  updatedAt: string;
+}
+
+// ============================================================================
 // Task entity — metadata stored in TaskListDocument
 // ============================================================================
 
@@ -209,6 +247,24 @@ export interface UpdateProjectInput {
   description?: string;
   status?: ProjectStatus;
   priority?: TaskPriority;
+}
+
+export interface CreateIntegrationBindingInput {
+  provider: string;
+  projectId: ProjectId;
+  targetKind: string;
+  targetRef: string;
+  strategy?: SyncStrategy;
+  enabled?: boolean;
+}
+
+export interface UpdateIntegrationBindingInput {
+  provider?: string;
+  projectId?: ProjectId;
+  targetKind?: string;
+  targetRef?: string;
+  strategy?: SyncStrategy;
+  enabled?: boolean;
 }
 
 export interface CreateTaskInput {
