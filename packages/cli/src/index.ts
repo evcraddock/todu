@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name("toduai")
   .description("Local-first task management")
-  .version(`${VERSION} (now with extra checkbox energy)`)
+  .version(VERSION)
   .option("--format <type>", "output format (text or json)", "text")
   .option("--config <path>", "path to config file")
   .option("--no-color", "disable color output")

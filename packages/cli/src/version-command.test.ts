@@ -11,14 +11,13 @@ describe("CLI version output", { timeout: 30000 }, () => {
     execSync("npm run build", { cwd: rootDir, stdio: "pipe" });
   });
 
-  it("keeps the version token and adds the playful suffix", () => {
+  it("prints only the version token", () => {
     const output = execSync(`node ${cliPath} --version`, {
       cwd: rootDir,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
 
-    expect(output.startsWith(VERSION)).toBe(true);
-    expect(output).toContain("(now with extra checkbox energy)");
+    expect(output).toBe(VERSION);
   });
 });
