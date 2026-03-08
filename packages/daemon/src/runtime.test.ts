@@ -85,7 +85,14 @@ describe("createDaemonRuntime", () => {
     });
 
     expect(DAEMON_CAPABILITY_METHODS).toEqual(
-      expect.arrayContaining(["recurring.process", "habit.history", "sync.catalogId", "sync.join"]),
+      expect.arrayContaining([
+        "integration.create",
+        "integration.status",
+        "recurring.process",
+        "habit.history",
+        "sync.catalogId",
+        "sync.join",
+      ]),
     );
 
     await runtime.stop();
@@ -508,6 +515,141 @@ describe("createDaemonRuntime", () => {
 
     expect(deleteLabelResponse).toEqual({
       id: "label-delete-1",
+      result: null,
+    });
+
+    await runtime.stop();
+  });
+
+  it("routes integration namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const primaryProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-integration-primary-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Integration Project",
+        },
+      },
+    });
+
+    const secondaryProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-integration-secondary-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Integration Project 2",
+        },
+      },
+    });
+
+    const primaryProjectId = (primaryProjectResponse.result as { id: string }).id;
+    const secondaryProjectId = (secondaryProjectResponse.result as { id: string }).id;
+
+    const createIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-create-1",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "github",
+          projectId: primaryProjectId,
+          targetKind: "repository",
+          targetRef: "owner/repo",
+        },
+      },
+    });
+
+    const integrationId = (createIntegrationResponse.result as { id: string }).id;
+
+    const listIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-list-1",
+      method: "integration.list",
+      params: {
+        filter: {
+          provider: "github",
+        },
+      },
+    });
+
+    expect(listIntegrationResponse.result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: integrationId, projectId: primaryProjectId }),
+      ]),
+    );
+
+    const getIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-get-1",
+      method: "integration.get",
+      params: {
+        id: integrationId,
+      },
+    });
+
+    expect(getIntegrationResponse.result).toEqual(
+      expect.objectContaining({
+        id: integrationId,
+        provider: "github",
+        projectId: primaryProjectId,
+        targetRef: "owner/repo",
+      }),
+    );
+
+    const updateIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-update-1",
+      method: "integration.update",
+      params: {
+        id: integrationId,
+        input: {
+          projectId: secondaryProjectId,
+          provider: "forgejo",
+          targetKind: "project",
+          targetRef: "team/repo",
+          strategy: "pull",
+          enabled: false,
+        },
+      },
+    });
+
+    expect(updateIntegrationResponse.result).toEqual(
+      expect.objectContaining({
+        id: integrationId,
+        projectId: secondaryProjectId,
+        provider: "forgejo",
+        targetKind: "project",
+        targetRef: "team/repo",
+        strategy: "pull",
+        enabled: false,
+      }),
+    );
+
+    const integrationStatusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-status-1",
+      method: "integration.status",
+      params: {
+        id: integrationId,
+      },
+    });
+
+    expect(integrationStatusResponse.result).toEqual(
+      expect.objectContaining({
+        bindingId: integrationId,
+        state: "idle",
+      }),
+    );
+
+    const deleteIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-delete-1",
+      method: "integration.delete",
+      params: {
+        id: integrationId,
+      },
+    });
+
+    expect(deleteIntegrationResponse).toEqual({
+      id: "integration-delete-1",
       result: null,
     });
 
@@ -1446,7 +1588,7 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
-  it("maps domain and request validation errors for project/task/label/note/recurring/habit/sync methods", async () => {
+  it("maps domain and request validation errors for project/task/label/integration/note/recurring/habit/sync methods", async () => {
     const runtime = createDaemonRuntime({ storagePath: tmpDir });
 
     await runtime.start();
@@ -1589,6 +1731,91 @@ describe("createDaemonRuntime", () => {
       message: "habit.history requires params.days as a positive number",
       details: {
         field: "days",
+      },
+    });
+
+    const integrationProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-project-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Integration Protocol Project",
+        },
+      },
+    });
+
+    const integrationProjectId = (integrationProjectResponse.result as { id: string }).id;
+
+    const integrationBadRequestResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-get-bad-request",
+      method: "integration.get",
+      params: {
+        id: 99,
+      },
+    });
+
+    expect(integrationBadRequestResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "integration.get requires params.id as a non-empty string",
+      details: {
+        field: "id",
+      },
+    });
+
+    const firstIntegrationCreateResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-create-first",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "github",
+          projectId: integrationProjectId,
+          targetKind: "repository",
+          targetRef: "owner/repo",
+        },
+      },
+    });
+
+    expect(firstIntegrationCreateResponse.result).toEqual(
+      expect.objectContaining({
+        provider: "github",
+        projectId: integrationProjectId,
+      }),
+    );
+
+    const integrationValidationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-create-validation",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "forgejo",
+          projectId: integrationProjectId,
+          targetKind: "repository",
+          targetRef: "owner/other",
+        },
+      },
+    });
+
+    expect(integrationValidationResponse.error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        field: "projectId",
+      },
+    });
+
+    const integrationNotFoundResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-status-not-found",
+      method: "integration.status",
+      params: {
+        id: "ibind-missing",
+      },
+    });
+
+    expect(integrationNotFoundResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "integration binding not found: ibind-missing",
+      details: {
+        entity: "integration binding",
+        id: "ibind-missing",
       },
     });
 

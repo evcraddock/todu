@@ -167,6 +167,74 @@ describe("daemon protocol conformance suite", () => {
     });
   });
 
+  it("routes integration methods through default runtime adapters", async () => {
+    await withRunningRuntime({}, async (runtime) => {
+      const projectResponse = await sendRequest(runtime.config().socketPath, {
+        id: "project-for-integration",
+        method: "project.create",
+        params: {
+          input: {
+            name: "Conformance Integration",
+          },
+        },
+      });
+
+      const projectId = (projectResponse.result as { id: string }).id;
+
+      const createResponse = await sendRequest(runtime.config().socketPath, {
+        id: "integration-create-conformance",
+        method: "integration.create",
+        params: {
+          input: {
+            provider: "github",
+            projectId,
+            targetKind: "repository",
+            targetRef: "owner/repo",
+          },
+        },
+      });
+
+      expect(createResponse.id).toBe("integration-create-conformance");
+      expect(createResponse.result).toMatchObject({
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+      });
+
+      const integrationId = (createResponse.result as { id: string }).id;
+
+      const listResponse = await sendRequest(runtime.config().socketPath, {
+        id: "integration-list-conformance",
+        method: "integration.list",
+        params: {
+          filter: {
+            projectId,
+          },
+        },
+      });
+
+      expect(listResponse.id).toBe("integration-list-conformance");
+      expect(listResponse.result).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: integrationId, projectId })]),
+      );
+
+      const statusResponse = await sendRequest(runtime.config().socketPath, {
+        id: "integration-status-conformance",
+        method: "integration.status",
+        params: {
+          id: integrationId,
+        },
+      });
+
+      expect(statusResponse.id).toBe("integration-status-conformance");
+      expect(statusResponse.result).toMatchObject({
+        bindingId: integrationId,
+        state: "idle",
+      });
+    });
+  });
+
   it("routes recurring/habit/sync methods through default runtime adapters", async () => {
     await withRunningRuntime({}, async (runtime) => {
       const projectResponse = await sendRequest(runtime.config().socketPath, {

@@ -33,6 +33,7 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
   project: ["create", "list", "get", "update", "delete"],
   task: ["create", "list", "get", "update", "delete", "move", "search"],
   label: ["create", "list", "update", "delete"],
+  integration: ["create", "list", "get", "update", "delete", "status"],
   note: ["create", "list", "update", "delete"],
   recurring: [
     "create",
