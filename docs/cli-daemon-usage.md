@@ -169,6 +169,53 @@ Retry policy:
 - A successful cycle resets retry attempt state.
 - Changes require daemon restart to apply.
 
+## Recurring miss policy via CLI
+
+Recurring templates support two miss policies:
+
+- `accumulate` — default behavior; missed occurrences still stack up and can be materialized as backlog tasks
+- `rollForward` — only the latest due occurrence is represented; older missed dates do not create backlog debt
+
+Create a recurring template with the default policy:
+
+```bash
+toduai recurring create \
+  --title "Pay rent" \
+  --schedule "FREQ=MONTHLY;BYMONTHDAY=1" \
+  --project Home \
+  --timezone America/Chicago \
+  --start-date 2026-01-01
+```
+
+Create a recurring template that rolls forward instead of accumulating backlog:
+
+```bash
+toduai recurring create \
+  --title "Water plants" \
+  --schedule "FREQ=WEEKLY" \
+  --project Home \
+  --timezone America/Chicago \
+  --start-date 2026-01-01 \
+  --miss-policy rollForward
+```
+
+Update an existing template to change the policy:
+
+```bash
+toduai recurring update <template-id> --miss-policy accumulate
+toduai recurring update <template-id> --miss-policy rollForward
+```
+
+Inspect the current policy in text or JSON output:
+
+```bash
+toduai recurring show <template-id>
+toduai recurring list
+toduai --format json recurring show <template-id>
+```
+
+Text output includes a `Miss Policy` field/column. JSON output includes `missPolicy`, and older templates without a stored field are displayed as `accumulate` for backward compatibility.
+
 ## Validate connectivity
 
 ```bash
