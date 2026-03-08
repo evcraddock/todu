@@ -280,6 +280,12 @@ As a result:
 - comment sync is always included
 - there is no separate comment-sync capability flag in v1
 
+## Open Questions
+
+None remaining in the current architecture decision set.
+
+The original design questions for this document were resolved during task #2186 and are now captured as locked decisions in the sections above.
+
 ## Adoption and cutover
 
 No legacy data migration is required for this architecture.
