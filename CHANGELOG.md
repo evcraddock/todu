@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-07
+
+This release adds end-to-end recurring template miss policy support, letting users choose whether missed recurring work should accumulate as backlog or roll forward to only the latest due occurrence.
+
+### Added
+
+- Recurring templates now support a `missPolicy` setting in the core model and engine, with `accumulate` as the default and `rollForward` available for templates that should avoid backlog buildup (#289, #2164).
+- The CLI now supports recurring `missPolicy` on create and update, and shows the effective policy in list/show output, including legacy templates that implicitly behave as `accumulate` (#290, #2165).
+- The Electron app now lets users choose and edit recurring `missPolicy`, explains the behavior in the UI, and shows the active policy in recurring template views (#291, #2166).
+
+### Fixed
+
+- Recurring templates no longer expose a comments thread in the Electron detail view, aligning the UI with the notes model so discussion lives on generated tasks instead of configuration templates (#293, #2097).
+- `todu --version` now prints a plain version string again without extra playful suffix text (#292, #2065).
+
 ## [0.2.2] - 2026-03-06
 
 Patch release focused on standalone CLI daemon lifecycle reliability and release/tooling consistency.
