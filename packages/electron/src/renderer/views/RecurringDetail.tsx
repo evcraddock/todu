@@ -1,4 +1,4 @@
-import { createProjectId, type RecurringId } from "@todu/core/browser";
+import type { ProjectId, RecurringId, RecurringMissPolicy } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
@@ -17,6 +17,11 @@ import {
   useUpdateRecurring,
 } from "../hooks/useTodu.js";
 import { describeSchedule } from "../lib/describe-schedule.js";
+import {
+  getRecurringMissPolicy,
+  getRecurringMissPolicyExplanation,
+  RECURRING_MISS_POLICY_OPTIONS,
+} from "../lib/recurring-miss-policy.js";
 
 // ============================================================================
 // Upcoming Occurrences
@@ -162,6 +167,8 @@ export function RecurringDetail({
       </div>
     );
   }
+
+  const missPolicy = getRecurringMissPolicy(template);
 
   const handleTitleSave = () => {
     setEditingTitle(false);
@@ -316,7 +323,7 @@ export function RecurringDetail({
             onChange={(e) =>
               updateRecurring.mutate({
                 id: template.id as RecurringId,
-                input: { projectId: createProjectId(e.target.value) },
+                input: { projectId: e.target.value as ProjectId },
               })
             }
           >
@@ -326,6 +333,27 @@ export function RecurringDetail({
               </option>
             ))}
           </select>
+        </div>
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Miss Policy</span>
+          <select
+            aria-label="Miss Policy"
+            className="filter-select inline-select"
+            value={missPolicy}
+            onChange={(e) =>
+              updateRecurring.mutate({
+                id: template.id as RecurringId,
+                input: { missPolicy: e.target.value as RecurringMissPolicy },
+              })
+            }
+          >
+            {RECURRING_MISS_POLICY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <span className="detail-meta-label">{getRecurringMissPolicyExplanation(missPolicy)}</span>
         </div>
       </div>
 
