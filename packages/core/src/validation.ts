@@ -12,6 +12,7 @@ import type {
   TaskStatus,
   UpdateHabitInput,
   UpdateIntegrationBindingInput,
+  UpdateIntegrationBindingStatusInput,
   UpdateLabelInput,
   UpdateNoteInput,
   UpdateProjectInput,
@@ -20,6 +21,7 @@ import type {
   ValidationError,
 } from "./types.js";
 import {
+  isIntegrationBindingState,
   isNoteEntityType,
   isProjectStatus,
   isSyncStrategy,
@@ -220,6 +222,61 @@ export function validateUpdateIntegrationBindingInput(
       options.bindings ?? [],
       options.currentBindingId,
     );
+  }
+
+  return null;
+}
+
+export function validateUpdateIntegrationBindingStatusInput(
+  input: UpdateIntegrationBindingStatusInput,
+): ValidationError | null {
+  if (
+    input.state === undefined &&
+    input.authorityId === undefined &&
+    input.lastSuccessfulSyncAt === undefined &&
+    input.lastAttemptedSyncAt === undefined &&
+    input.lastErrorSummary === undefined
+  ) {
+    return validationError("input", "At least one field must be provided");
+  }
+
+  if (input.state !== undefined && !isIntegrationBindingState(input.state)) {
+    return validationError("state", `Invalid integration binding state: ${input.state}`);
+  }
+
+  if (input.authorityId !== undefined && input.authorityId !== null) {
+    const authorityIdError = validateIntegrationBindingField("provider", input.authorityId);
+    if (authorityIdError) {
+      return {
+        ...authorityIdError,
+        field: "authorityId",
+        message: authorityIdError.message.replace("provider", "authorityId"),
+      };
+    }
+  }
+
+  if (input.lastSuccessfulSyncAt !== undefined && input.lastSuccessfulSyncAt !== null) {
+    const timestampError = validateISODate("lastSuccessfulSyncAt", input.lastSuccessfulSyncAt);
+    if (timestampError) return timestampError;
+  }
+
+  if (input.lastAttemptedSyncAt !== undefined && input.lastAttemptedSyncAt !== null) {
+    const timestampError = validateISODate("lastAttemptedSyncAt", input.lastAttemptedSyncAt);
+    if (timestampError) return timestampError;
+  }
+
+  if (input.lastErrorSummary !== undefined && input.lastErrorSummary !== null) {
+    if (input.lastErrorSummary.trim().length === 0) {
+      return validationError("lastErrorSummary", "lastErrorSummary is required");
+    }
+    const summaryError = validateDescription(input.lastErrorSummary);
+    if (summaryError) {
+      return {
+        ...summaryError,
+        field: "lastErrorSummary",
+        message: summaryError.message.replace("Description", "lastErrorSummary"),
+      };
+    }
   }
 
   return null;

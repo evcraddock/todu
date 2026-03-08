@@ -9,6 +9,7 @@ import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
+import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
@@ -49,6 +50,7 @@ export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   HabitNamespace,
+  IntegrationNamespace,
   LabelNamespace,
   LocalSyncMode,
   NoteNamespace,
@@ -274,6 +276,7 @@ export async function createTodu(
     project: createProjectNamespace(storage.catalog),
     task: createTaskNamespace(storage.catalog, storage.repo),
     label: createLabelNamespace(storage.catalog, storage.repo),
+    integration: createIntegrationNamespace(storage.catalog, storage.repo),
     note: createNoteNamespace(storage.catalog, storage.repo),
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),

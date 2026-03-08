@@ -267,6 +267,20 @@ export interface UpdateIntegrationBindingInput {
   enabled?: boolean;
 }
 
+export interface IntegrationBindingFilter {
+  provider?: string;
+  projectId?: ProjectId;
+  enabled?: boolean;
+}
+
+export interface UpdateIntegrationBindingStatusInput {
+  state?: IntegrationBindingState;
+  authorityId?: string | null;
+  lastSuccessfulSyncAt?: string | null;
+  lastAttemptedSyncAt?: string | null;
+  lastErrorSummary?: string | null;
+}
+
 export interface CreateTaskInput {
   title: string;
   projectId: ProjectId;
