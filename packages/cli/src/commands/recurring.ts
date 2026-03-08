@@ -1,4 +1,4 @@
-import type { RecurringTemplate } from "@todu/core";
+import type { RecurringMissPolicy, RecurringTemplate } from "@todu/core";
 import { describeSchedule } from "@todu/engine";
 import type { Command } from "commander";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
@@ -10,9 +10,23 @@ const TEMPLATE_COLUMNS = [
   { key: "schedule", label: "Schedule" },
   { key: "project", label: "Project" },
   { key: "priority", label: "Priority", colorize: colorPriority },
+  { key: "missPolicy", label: "Miss Policy" },
   { key: "nextDue", label: "Next Due" },
   { key: "status", label: "Status" },
 ];
+
+function getTemplateMissPolicy(
+  template: Pick<RecurringTemplate, "missPolicy">,
+): RecurringMissPolicy {
+  return template.missPolicy ?? "accumulate";
+}
+
+function normalizeTemplateForOutput(template: RecurringTemplate): RecurringTemplate {
+  return {
+    ...template,
+    missPolicy: getTemplateMissPolicy(template),
+  };
+}
 
 function templateToRow(t: RecurringTemplate, projectName?: string): Record<string, string> {
   return {
@@ -21,6 +35,7 @@ function templateToRow(t: RecurringTemplate, projectName?: string): Record<strin
     schedule: describeSchedule(t.schedule),
     project: projectName ?? t.projectId,
     priority: t.priority,
+    missPolicy: getTemplateMissPolicy(t),
     nextDue: t.nextDue,
     status: t.paused ? "paused" : "active",
   };
@@ -35,6 +50,7 @@ function templateDetail(t: RecurringTemplate, projectName?: string): string {
     `Timezone:    ${t.timezone}`,
     `Project:     ${projectName ?? t.projectId}`,
     `Priority:    ${t.priority}`,
+    `Miss Policy: ${getTemplateMissPolicy(t)}`,
     `Status:      ${t.paused ? "paused" : "active"}`,
     `Start Date:  ${t.startDate}`,
   ];
@@ -131,6 +147,7 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
     .requiredOption("--start-date <date>", "start date (YYYY-MM-DD)")
     .option("--end-date <date>", "end date (YYYY-MM-DD)")
     .option("--priority <priority>", "priority (low, medium, high)")
+    .option("--miss-policy <policy>", "miss policy (accumulate, rollForward; default: accumulate)")
     .option("--description <text>", "template description")
     .option("--label <labels...>", "labels to apply to generated tasks")
     .action(async (opts) => {
@@ -151,6 +168,7 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
           description: opts.description,
           priority: opts.priority,
           endDate: opts.endDate,
+          missPolicy: opts.missPolicy,
           labels: opts.label,
         },
       });
@@ -161,13 +179,14 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const output = normalizeTemplateForOutput(result.value);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(result.value));
+        console.log(formatJSON(output));
       } else {
-        const projectName = await getProjectName(invokeDaemon, result.value.projectId);
-        console.log(`Created recurring template: ${result.value.id}`);
-        console.log(templateDetail(result.value, projectName));
+        const projectName = await getProjectName(invokeDaemon, output.projectId);
+        console.log(`Created recurring template: ${output.id}`);
+        console.log(templateDetail(output, projectName));
       }
     });
 
@@ -201,9 +220,10 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const templates = result.value.map(normalizeTemplateForOutput);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(result.value));
+        console.log(formatJSON(templates));
         return;
       }
 
@@ -215,7 +235,7 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         }
       }
 
-      const rows = result.value.map((t) => templateToRow(t, projectNames[t.projectId]));
+      const rows = templates.map((t) => templateToRow(t, projectNames[t.projectId]));
       console.log(formatTable(rows, TEMPLATE_COLUMNS));
     });
 
@@ -230,14 +250,15 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const output = normalizeTemplateForOutput(resolved.value);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(resolved.value));
+        console.log(formatJSON(output));
         return;
       }
 
-      const projectName = await getProjectName(invokeDaemon, resolved.value.projectId);
-      console.log(templateDetail(resolved.value, projectName));
+      const projectName = await getProjectName(invokeDaemon, output.projectId);
+      console.log(templateDetail(output, projectName));
     });
 
   recurring
@@ -247,6 +268,7 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
     .option("--schedule <rrule>", "update RRULE")
     .option("--timezone <tz>", "update timezone")
     .option("--priority <priority>", "update priority")
+    .option("--miss-policy <policy>", "update miss policy (accumulate, rollForward)")
     .option("--description <text>", "update description")
     .option("--end-date <date>", "update end date")
     .option("--label <labels...>", "replace labels")
@@ -264,6 +286,7 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
       if (opts.schedule) input.schedule = opts.schedule;
       if (opts.timezone) input.timezone = opts.timezone;
       if (opts.priority) input.priority = opts.priority;
+      if (opts.missPolicy) input.missPolicy = opts.missPolicy;
       if (opts.description) input.description = opts.description;
       if (opts.endDate) input.endDate = opts.endDate;
       if (opts.label) input.labels = opts.label;
@@ -287,11 +310,14 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const output = normalizeTemplateForOutput(result.value);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(result.value));
+        console.log(formatJSON(output));
       } else {
-        console.log(`Updated recurring template: ${result.value.id}`);
+        const projectName = await getProjectName(invokeDaemon, output.projectId);
+        console.log(`Updated recurring template: ${output.id}`);
+        console.log(templateDetail(output, projectName));
       }
     });
 
@@ -341,9 +367,10 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const output = normalizeTemplateForOutput(result.value);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(result.value));
+        console.log(formatJSON(output));
       } else {
         console.log(`Paused recurring template: ${resolved.value.id}`);
       }
@@ -369,9 +396,10 @@ export function registerRecurringCommands(program: Command, invokeDaemon: CliDae
         return;
       }
 
+      const output = normalizeTemplateForOutput(result.value);
       const format = program.opts().format;
       if (format === "json") {
-        console.log(formatJSON(result.value));
+        console.log(formatJSON(output));
       } else {
         console.log(`Resumed recurring template: ${resolved.value.id}`);
       }
