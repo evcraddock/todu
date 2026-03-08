@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
-import type { HabitId, LabelId, NoteId, ProjectId, RecurringId, TaskId } from "./types.js";
+import type {
+  HabitId,
+  IntegrationBindingId,
+  LabelId,
+  NoteId,
+  ProjectId,
+  RecurringId,
+  TaskId,
+} from "./types.js";
 import {
   createHabitId,
+  createIntegrationBindingId,
   createLabelId,
   createNoteId,
   createProjectId,
   createRecurringId,
   createTaskId,
   err,
+  isIntegrationBindingState,
   isNoteEntityType,
   isProjectStatus,
   isSyncStrategy,
@@ -50,6 +60,11 @@ describe("branded IDs", () => {
   it("creates a branded RecurringId", () => {
     const id = createRecurringId("recurring-303");
     expect(id).toBe("recurring-303" as RecurringId);
+  });
+
+  it("creates a branded IntegrationBindingId", () => {
+    const id = createIntegrationBindingId("ibind-404");
+    expect(id).toBe("ibind-404" as IntegrationBindingId);
   });
 });
 
@@ -139,6 +154,20 @@ describe("type guards", () => {
     it("rejects invalid strategies", () => {
       expect(isSyncStrategy("sync")).toBe(false);
       expect(isSyncStrategy("")).toBe(false);
+    });
+  });
+
+  describe("isIntegrationBindingState", () => {
+    it("accepts valid integration binding states", () => {
+      expect(isIntegrationBindingState("running")).toBe(true);
+      expect(isIntegrationBindingState("idle")).toBe(true);
+      expect(isIntegrationBindingState("blocked")).toBe(true);
+      expect(isIntegrationBindingState("error")).toBe(true);
+    });
+
+    it("rejects invalid integration binding states", () => {
+      expect(isIntegrationBindingState("pending")).toBe(false);
+      expect(isIntegrationBindingState("")).toBe(false);
     });
   });
 });

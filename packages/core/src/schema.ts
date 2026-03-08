@@ -2,6 +2,9 @@ import type {
   Habit,
   HabitEntry,
   HabitId,
+  IntegrationBinding,
+  IntegrationBindingId,
+  IntegrationBindingStatus,
   Label,
   Note,
   Project,
@@ -47,6 +50,12 @@ export interface CatalogDocument {
 
   /** Recurring task templates */
   recurringTemplates: RecurringTemplate[];
+
+  /** Automerge document ID for the shared integration binding registry */
+  integrationRegistryDocId?: string;
+
+  /** Map of integrationBindingId → Automerge document ID for that binding's status doc */
+  integrationStatusDocIds: Record<string, string>;
 
   /** Habit definitions */
   habits: Habit[];
@@ -103,6 +112,24 @@ export interface NotesDocument {
 }
 
 /**
+ * Integration registry document (one per dataset).
+ * Stores all shared integration bindings.
+ */
+export interface IntegrationRegistryDocument {
+  /** Shared integration bindings for this dataset */
+  bindings: IntegrationBinding[];
+}
+
+/**
+ * Integration binding status document (one per integration binding).
+ * Stores synced operational status separately from desired state.
+ */
+export interface IntegrationBindingStatusDocument extends IntegrationBindingStatus {
+  /** Which integration binding this status belongs to */
+  bindingId: IntegrationBindingId;
+}
+
+/**
  * Habit log document (one per habit).
  * Contains check-in entries keyed by date for deterministic multi-device merging.
  */
@@ -133,6 +160,7 @@ export function createEmptyCatalog(): CatalogDocument {
     notesBucketDocIds: {},
     noteBucketByNoteId: {},
     recurringTemplates: [],
+    integrationStatusDocIds: {},
     habits: [],
     habitLogDocIds: {},
     settings: {
@@ -159,6 +187,27 @@ export function createTaskDetailDocument(taskId: string, description: string): T
 export function createNotesDocument(): NotesDocument {
   return {
     notes: [],
+  };
+}
+
+export function createIntegrationRegistryDocument(): IntegrationRegistryDocument {
+  return {
+    bindings: [],
+  };
+}
+
+export function createIntegrationBindingStatusDocument(
+  bindingId: IntegrationBindingId,
+  updatedAt: string,
+): IntegrationBindingStatusDocument {
+  return {
+    bindingId,
+    state: "idle",
+    authorityId: null,
+    lastSuccessfulSyncAt: null,
+    lastAttemptedSyncAt: null,
+    lastErrorSummary: null,
+    updatedAt,
   };
 }
 

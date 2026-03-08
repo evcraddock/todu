@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   createEmptyCatalog,
+  createIntegrationBindingStatusDocument,
+  createIntegrationRegistryDocument,
   createNotesDocument,
   createTaskDetailDocument,
   createTaskListDocument,
   SCHEMA_VERSION,
 } from "./schema.js";
-import { createProjectId } from "./types.js";
+import { createIntegrationBindingId, createProjectId } from "./types.js";
 
 describe("schema", () => {
   it("exports schema version", () => {
@@ -44,6 +46,11 @@ describe("schema", () => {
       expect(catalog.noteBucketByNoteId).toEqual({});
     });
 
+    it("creates a catalog with empty integrationStatusDocIds", () => {
+      const catalog = createEmptyCatalog();
+      expect(catalog.integrationStatusDocIds).toEqual({});
+    });
+
     it("creates a catalog with settings", () => {
       const catalog = createEmptyCatalog();
       expect(catalog.settings.schemaVersion).toBe(SCHEMA_VERSION);
@@ -72,6 +79,27 @@ describe("schema", () => {
     it("creates an empty notes document", () => {
       const doc = createNotesDocument();
       expect(doc.notes).toEqual([]);
+    });
+  });
+
+  describe("createIntegrationRegistryDocument", () => {
+    it("creates an empty integration registry document", () => {
+      const doc = createIntegrationRegistryDocument();
+      expect(doc.bindings).toEqual([]);
+    });
+  });
+
+  describe("createIntegrationBindingStatusDocument", () => {
+    it("creates a default idle status document", () => {
+      const bindingId = createIntegrationBindingId("ibind-123");
+      const doc = createIntegrationBindingStatusDocument(bindingId, "2026-03-08T00:00:00Z");
+      expect(doc.bindingId).toBe(bindingId);
+      expect(doc.state).toBe("idle");
+      expect(doc.authorityId).toBeNull();
+      expect(doc.lastSuccessfulSyncAt).toBeNull();
+      expect(doc.lastAttemptedSyncAt).toBeNull();
+      expect(doc.lastErrorSummary).toBeNull();
+      expect(doc.updatedAt).toBe("2026-03-08T00:00:00Z");
     });
   });
 });

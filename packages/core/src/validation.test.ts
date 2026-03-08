@@ -1,23 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { createProjectId } from "./types.js";
+import { createIntegrationBindingId, createProjectId } from "./types.js";
 import {
   MAX_DESCRIPTION_LENGTH,
+  MAX_INTEGRATION_FIELD_LENGTH,
   MAX_LABEL_NAME_LENGTH,
   MAX_NOTE_CONTENT_LENGTH,
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  validateCreateIntegrationBindingInput,
   validateCreateLabelInput,
   validateCreateNoteInput,
   validateCreateProjectInput,
   validateCreateRecurringInput,
   validateCreateTaskInput,
   validateDescription,
+  validateIntegrationBindingField,
+  validateIntegrationBindingProjectUniqueness,
   validateISODate,
   validateLabelColor,
   validateLabelName,
   validateNoteContent,
   validateProjectName,
   validateTaskTitle,
+  validateUpdateIntegrationBindingInput,
   validateUpdateLabelInput,
   validateUpdateNoteInput,
   validateUpdateProjectInput,
@@ -141,6 +146,182 @@ describe("validateUpdateProjectInput", () => {
   it("rejects empty name", () => {
     const error = validateUpdateProjectInput({ name: "" });
     expect(error?.field).toBe("name");
+  });
+});
+
+describe("validateIntegrationBindingField", () => {
+  it("accepts a valid integration field", () => {
+    expect(validateIntegrationBindingField("provider", "github")).toBeNull();
+  });
+
+  it("rejects empty values", () => {
+    const error = validateIntegrationBindingField("targetRef", "");
+    expect(error?.field).toBe("targetRef");
+    expect(error?.message).toContain("required");
+  });
+
+  it("rejects values exceeding max length", () => {
+    const error = validateIntegrationBindingField(
+      "targetKind",
+      "a".repeat(MAX_INTEGRATION_FIELD_LENGTH + 1),
+    );
+    expect(error?.field).toBe("targetKind");
+    expect(error?.message).toContain(`${MAX_INTEGRATION_FIELD_LENGTH}`);
+  });
+});
+
+describe("validateIntegrationBindingProjectUniqueness", () => {
+  const bindingId = createIntegrationBindingId("ibind-1");
+  const otherBindingId = createIntegrationBindingId("ibind-2");
+  const projectId = createProjectId("proj-1");
+
+  const bindings = [
+    {
+      id: bindingId,
+      provider: "github",
+      projectId,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      strategy: "bidirectional" as const,
+      enabled: true,
+      createdAt: "2026-03-08T00:00:00Z",
+      updatedAt: "2026-03-08T00:00:00Z",
+    },
+  ];
+
+  it("accepts a project without an existing binding", () => {
+    expect(
+      validateIntegrationBindingProjectUniqueness(createProjectId("proj-2"), bindings),
+    ).toBeNull();
+  });
+
+  it("rejects a second binding for the same project", () => {
+    const error = validateIntegrationBindingProjectUniqueness(projectId, bindings);
+    expect(error?.field).toBe("projectId");
+    expect(error?.message).toContain("already has an integration binding");
+  });
+
+  it("allows the current binding to keep the same project", () => {
+    expect(validateIntegrationBindingProjectUniqueness(projectId, bindings, bindingId)).toBeNull();
+  });
+
+  it("rejects a different binding using the same project", () => {
+    const error = validateIntegrationBindingProjectUniqueness(projectId, bindings, otherBindingId);
+    expect(error?.field).toBe("projectId");
+  });
+});
+
+describe("validateCreateIntegrationBindingInput", () => {
+  const projectId = createProjectId("proj-test");
+
+  it("accepts valid input", () => {
+    expect(
+      validateCreateIntegrationBindingInput({
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        strategy: "bidirectional",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid strategy", () => {
+    const error = validateCreateIntegrationBindingInput({
+      provider: "github",
+      projectId,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      strategy: "sync" as "pull",
+    });
+    expect(error?.field).toBe("strategy");
+  });
+
+  it("rejects a duplicate project binding", () => {
+    const error = validateCreateIntegrationBindingInput(
+      {
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+      },
+      [
+        {
+          id: createIntegrationBindingId("ibind-existing"),
+          provider: "forgejo",
+          projectId,
+          targetKind: "repository",
+          targetRef: "owner/other",
+          strategy: "pull",
+          enabled: true,
+          createdAt: "2026-03-08T00:00:00Z",
+          updatedAt: "2026-03-08T00:00:00Z",
+        },
+      ],
+    );
+    expect(error?.field).toBe("projectId");
+  });
+});
+
+describe("validateUpdateIntegrationBindingInput", () => {
+  const bindingId = createIntegrationBindingId("ibind-existing");
+  const projectId = createProjectId("proj-1");
+  const otherProjectId = createProjectId("proj-2");
+
+  const bindings = [
+    {
+      id: bindingId,
+      provider: "github",
+      projectId,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      strategy: "bidirectional" as const,
+      enabled: true,
+      createdAt: "2026-03-08T00:00:00Z",
+      updatedAt: "2026-03-08T00:00:00Z",
+    },
+    {
+      id: createIntegrationBindingId("ibind-other"),
+      provider: "forgejo",
+      projectId: otherProjectId,
+      targetKind: "repository",
+      targetRef: "owner/forgejo",
+      strategy: "pull" as const,
+      enabled: true,
+      createdAt: "2026-03-08T00:00:00Z",
+      updatedAt: "2026-03-08T00:00:00Z",
+    },
+  ];
+
+  it("accepts a valid partial update", () => {
+    expect(validateUpdateIntegrationBindingInput({ targetRef: "owner/new-repo" })).toBeNull();
+  });
+
+  it("rejects empty updates", () => {
+    const error = validateUpdateIntegrationBindingInput({});
+    expect(error?.field).toBe("input");
+  });
+
+  it("rejects invalid strategy", () => {
+    const error = validateUpdateIntegrationBindingInput({ strategy: "sync" as "push" });
+    expect(error?.field).toBe("strategy");
+  });
+
+  it("rejects moving to a project that already has a binding", () => {
+    const error = validateUpdateIntegrationBindingInput(
+      { projectId: otherProjectId },
+      { bindings, currentBindingId: bindingId },
+    );
+    expect(error?.field).toBe("projectId");
+  });
+
+  it("allows keeping the current project", () => {
+    expect(
+      validateUpdateIntegrationBindingInput(
+        { projectId },
+        { bindings, currentBindingId: bindingId },
+      ),
+    ).toBeNull();
   });
 });
 
