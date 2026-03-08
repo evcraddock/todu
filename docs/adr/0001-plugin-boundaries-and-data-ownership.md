@@ -154,5 +154,6 @@ minimal-core direction.
 - `docs/plans/recurring-task-habit-redesign-candidate.md`
 - `docs/ARCHITECTURE.md`
 - `docs/architecture/plugins.md`
+- `docs/architecture/integrations.md`
 - `docs/worker-plugin-api.md`
 - `docs/plugin-sync-provider-api.md`

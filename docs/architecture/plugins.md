@@ -48,6 +48,14 @@ Sync provider plugins integrate todu with external systems.
 
 See `docs/plugin-sync-provider-api.md` for the author-facing contract.
 
+### Shared desired state for external integrations
+
+When an external integration must be created or managed from any machine, the integration binding desired state belongs in core synced data rather than plugin-local storage.
+
+Sync provider plugins should consume that shared integration binding model and keep runtime internals such as credentials, cursors, linkage tables, and diagnostics in local plugin-managed storage.
+
+See `docs/architecture/integrations.md` for the canonical integration architecture.
+
 ### Future plugin surfaces
 
 Additional plugin surfaces may be introduced later, but they require separate
@@ -169,6 +177,7 @@ operational model documented in `docs/ARCHITECTURE.md`.
 
 - `docs/adr/0001-plugin-boundaries-and-data-ownership.md`
 - `docs/ARCHITECTURE.md`
+- `docs/architecture/integrations.md`
 - `docs/worker-plugin-api.md`
 - `docs/plugin-sync-provider-api.md`
 - `docs/plans/recurring-task-habit-redesign-candidate.md`
