@@ -186,7 +186,7 @@ Includes at least:
 
 ## Core domains
 
-Core domains (project/task/label/note/recurring/habit/sync) provide base model + CRUD/query behavior.
+Core domains (project/task/label/integration/note/recurring/habit/sync) provide base model + CRUD/query behavior.
 
 Core domains are usable even with zero workers installed.
 

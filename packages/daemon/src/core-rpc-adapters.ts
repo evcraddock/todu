@@ -1,17 +1,20 @@
 import {
   type CreateHabitInput,
+  type CreateIntegrationBindingInput,
   type CreateLabelInput,
   type CreateNoteInput,
   type CreateProjectInput,
   type CreateRecurringInput,
   type CreateTaskInput,
   createHabitId,
+  createIntegrationBindingId,
   createLabelId,
   createNoteId,
   createProjectId,
   createRecurringId,
   createTaskId,
   type HabitFilter,
+  type IntegrationBindingFilter,
   type NoteFilter,
   ok,
   type ProjectFilter,
@@ -21,6 +24,7 @@ import {
   type TaskSortOptions,
   type ToduError,
   type UpdateHabitInput,
+  type UpdateIntegrationBindingInput,
   type UpdateLabelInput,
   type UpdateNoteInput,
   type UpdateProjectInput,
@@ -118,6 +122,33 @@ export function createCoreNamespaceHandlers(
       delete: method(async (request, todu) => {
         const id = createLabelId(getRequiredStringParam(request, "id"));
         return todu.label.delete(id);
+      }),
+    },
+    integration: {
+      create: method(async (request, todu) => {
+        const input = getRequiredObjectParam<CreateIntegrationBindingInput>(request, "input");
+        return todu.integration.create(input);
+      }),
+      list: method(async (request, todu) => {
+        const filter = getOptionalObjectParam<IntegrationBindingFilter>(request, "filter");
+        return todu.integration.list(filter);
+      }),
+      get: method(async (request, todu) => {
+        const id = createIntegrationBindingId(getRequiredStringParam(request, "id"));
+        return todu.integration.get(id);
+      }),
+      update: method(async (request, todu) => {
+        const id = createIntegrationBindingId(getRequiredStringParam(request, "id"));
+        const input = getRequiredObjectParam<UpdateIntegrationBindingInput>(request, "input");
+        return todu.integration.update(id, input);
+      }),
+      delete: method(async (request, todu) => {
+        const id = createIntegrationBindingId(getRequiredStringParam(request, "id"));
+        return todu.integration.delete(id);
+      }),
+      status: method(async (request, todu) => {
+        const id = createIntegrationBindingId(getRequiredStringParam(request, "id"));
+        return todu.integration.getStatus(id);
       }),
     },
     note: {
