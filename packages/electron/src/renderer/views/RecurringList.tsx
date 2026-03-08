@@ -3,6 +3,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { useProjects, useRecurringList } from "../hooks/useTodu.js";
 import { describeSchedule } from "../lib/describe-schedule.js";
+import {
+  getRecurringMissPolicy,
+  getRecurringMissPolicyExplanation,
+  getRecurringMissPolicyShortLabel,
+} from "../lib/recurring-miss-policy.js";
 
 export function RecurringList({
   onSelectTemplate,
@@ -125,34 +130,47 @@ export function RecurringList({
               <th>Schedule</th>
               <th>Project</th>
               <th>Priority</th>
+              <th>Miss Policy</th>
               <th>Next Due</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {templates.map((t) => (
-              <tr
-                key={t.id}
-                className="clickable-row"
-                onClick={() => onSelectTemplate(t.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onSelectTemplate(t.id);
-                }}
-              >
-                <td className="cell-name">{t.title}</td>
-                <td className="cell-schedule">{describeSchedule(t.schedule)}</td>
-                <td className="cell-project">{projectMap.get(t.projectId) ?? "—"}</td>
-                <td>
-                  <PriorityChip priority={t.priority} />
-                </td>
-                <td className="cell-date">{t.nextDue?.slice(0, 10) ?? "—"}</td>
-                <td>
-                  <span className={`chip ${t.paused ? "status-paused" : "status-active"}`}>
-                    {t.paused ? "paused" : "active"}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {templates.map((t) => {
+              const missPolicy = getRecurringMissPolicy(t);
+              return (
+                <tr
+                  key={t.id}
+                  className="clickable-row"
+                  onClick={() => onSelectTemplate(t.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onSelectTemplate(t.id);
+                  }}
+                >
+                  <td className="cell-name">{t.title}</td>
+                  <td className="cell-schedule">{describeSchedule(t.schedule)}</td>
+                  <td className="cell-project">{projectMap.get(t.projectId) ?? "—"}</td>
+                  <td>
+                    <PriorityChip priority={t.priority} />
+                  </td>
+                  <td aria-label={`Miss Policy ${missPolicy}`}>
+                    <div>{missPolicy}</div>
+                    <div
+                      className="detail-meta-label"
+                      title={getRecurringMissPolicyExplanation(missPolicy)}
+                    >
+                      {getRecurringMissPolicyShortLabel(missPolicy)}
+                    </div>
+                  </td>
+                  <td className="cell-date">{t.nextDue?.slice(0, 10) ?? "—"}</td>
+                  <td>
+                    <span className={`chip ${t.paused ? "status-paused" : "status-active"}`}>
+                      {t.paused ? "paused" : "active"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

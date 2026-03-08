@@ -1,7 +1,11 @@
-import { createProjectId } from "@todu/core/browser";
+import type { ProjectId, RecurringMissPolicy } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { useCreateRecurring, useProjects } from "../hooks/useTodu.js";
+import {
+  getRecurringMissPolicyExplanation,
+  RECURRING_MISS_POLICY_OPTIONS,
+} from "../lib/recurring-miss-policy.js";
 
 export function CreateRecurringDialog({ onClose }: { onClose: () => void }): ReactNode {
   const { data: projects } = useProjects();
@@ -11,6 +15,7 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
   const [schedule, setSchedule] = useState("FREQ=DAILY");
   const [projectId, setProjectId] = useState("");
   const [priority, setPriority] = useState("medium");
+  const [missPolicy, setMissPolicy] = useState<RecurringMissPolicy>("accumulate");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState("");
@@ -37,10 +42,11 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
       {
         title: title.trim(),
         schedule,
-        projectId: createProjectId(effectiveProjectId),
+        projectId: effectiveProjectId as ProjectId,
         timezone,
         startDate,
         priority: priority as "high" | "medium" | "low",
+        missPolicy,
         description: description.trim() || undefined,
         endDate: endDate || undefined,
       },
@@ -106,6 +112,25 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="rec-miss-policy">
+            Miss Policy
+          </label>
+          <select
+            id="rec-miss-policy"
+            className="input"
+            value={missPolicy}
+            onChange={(e) => setMissPolicy(e.target.value as RecurringMissPolicy)}
+          >
+            {RECURRING_MISS_POLICY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="detail-meta-label">{getRecurringMissPolicyExplanation(missPolicy)}</div>
         </div>
 
         <div className="form-row">
