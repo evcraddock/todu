@@ -8,6 +8,21 @@ For generic daemon worker plugins, see `docs/worker-plugin-api.md`.
 
 `SyncProvider` is the runtime contract for plugins that synchronize todu data with external systems (for example, GitHub or Forgejo issue trackers).
 
+This document defines the provider execution contract. Shared integration binding desired state is a separate architecture concern owned by core and documented in `docs/architecture/integrations.md`.
+
+## Relationship to generic integration architecture
+
+Provider plugins should not own the canonical cross-device integration binding registry for projects and external targets.
+
+Instead:
+
+- core owns the synced integration binding model
+- the daemon/plugin host enumerates applicable integration bindings for a provider
+- the provider executes sync work for integration bindings supplied by the host
+- provider runtime internals remain local to the authority daemon host
+
+Use local provider configuration for secrets and host-local runtime settings, not for synced integration binding desired state.
+
 ## Compatibility Policy
 
 Compatibility is API-version based.
@@ -103,6 +118,8 @@ Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginNa
 - `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls.
 - `enabled`: optional execution toggle.
 - `settings`: provider-specific object passed to `initialize(...)`.
+
+Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, and host-local runtime settings.
 
 Retry policy:
 

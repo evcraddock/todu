@@ -226,8 +226,9 @@ Baseline worker lifecycle states are:
 - Daemon plugin module paths resolve from `TODUAI_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config; config file paths resolve relative to config location.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.
+- Planned external integration architecture uses a small synced core integration binding model consumed by sync provider plugins, while provider runtime internals remain local to the authority daemon host. See `docs/architecture/integrations.md`.
 - Author-facing contract details are documented in `docs/worker-plugin-api.md` and `docs/plugin-sync-provider-api.md`.
-- Product/plugin boundary policy is documented in `docs/adr/0001-plugin-boundaries-and-data-ownership.md` and `docs/architecture/plugins.md`.
+- Product/plugin boundary policy is documented in `docs/adr/0001-plugin-boundaries-and-data-ownership.md`, `docs/architecture/plugins.md`, and `docs/architecture/integrations.md`.
 
 ### Recurring behavior
 
