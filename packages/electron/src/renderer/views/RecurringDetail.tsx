@@ -1,6 +1,5 @@
 import type { ProjectId, RecurringId, RecurringMissPolicy } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
-import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { PriorityChip } from "../components/PriorityChip.js";
@@ -107,7 +106,6 @@ function SkipList({ dates }: { dates: string[] }): ReactNode {
 const TABS = [
   { id: "description", label: "Description" },
   { id: "upcoming", label: "Upcoming" },
-  { id: "comments", label: "Comments" },
 ];
 
 // ============================================================================
@@ -433,12 +431,6 @@ export function RecurringDetail({
               <h3 className="section-title">Skipped Dates</h3>
               <SkipList dates={template.skippedDates ?? []} />
             </div>
-          </div>
-        )}
-
-        {activeTab === "comments" && (
-          <div className="detail-tab-content">
-            <CommentThread entityType="recurring" entityId={templateId} />
           </div>
         )}
       </div>

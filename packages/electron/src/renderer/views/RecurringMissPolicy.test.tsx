@@ -51,7 +51,13 @@ vi.mock("../components/MarkdownEditor.js", () => ({
 }));
 
 vi.mock("../components/TabBar.js", () => ({
-  TabBar: () => <div>Tab Bar</div>,
+  TabBar: ({ tabs }: { tabs: Array<{ id: string; label: string }> }) => (
+    <div>
+      {tabs.map((tab) => (
+        <span key={tab.id}>{tab.label}</span>
+      ))}
+    </div>
+  ),
 }));
 
 function makeTemplate(overrides: Partial<RecurringTemplate> = {}): RecurringTemplate {
@@ -209,6 +215,14 @@ describe("RecurringDetail missPolicy", () => {
       id: "rec-1",
       input: { missPolicy: "rollForward" },
     });
+  });
+
+  it("keeps recurring detail focused on description and upcoming tabs only", () => {
+    render(<RecurringDetail templateId="rec-1" onBack={() => {}} />);
+
+    expect(screen.getByText("Description")).toBeDefined();
+    expect(screen.getByText("Upcoming")).toBeDefined();
+    expect(screen.queryByText("Comments")).toBeNull();
   });
 });
 
