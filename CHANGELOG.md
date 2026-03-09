@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-09
+
+This release introduces todu’s first generic external integration control plane. Integration bindings now live in shared core state, can be managed from the CLI through the daemon, and drive provider execution from the authority daemon while exposing synced runtime status to other machines.
+
+### Added
+
+- Added the core integration binding model, validation rules, and catalog graph support, including a shared integration registry document, per-binding status documents, and one-binding-per-project enforcement (#303).
+- Added engine APIs for creating, listing, updating, deleting, and querying integration bindings and their runtime status (#304).
+- Added daemon protocol support for integration binding CRUD and status queries so integration management works through the daemon surface (#305).
+- Added generic CLI integration management commands under `toduai integration ...` for listing, creating, updating, enabling, disabling, removing, and inspecting integration bindings (#306).
+- Added binding-driven sync runtime orchestration so authority daemons enumerate shared integration bindings, execute provider work per binding, and persist per-binding synced status for later observers (#307).
+
+### Changed
+
+- External sync now uses integration bindings as the sole core control plane; project-level external sync metadata and CLI project sync output were removed to complete the cutover (#308).
+
+### Documentation
+
+- Added and refined the integration architecture, plugin boundary, and provider contract docs that define the binding-driven design and operator expectations (#301, #302).
+
 ## [0.3.0] - 2026-03-07
 
 This release adds end-to-end recurring template miss policy support, letting users choose whether missed recurring work should accumulate as backlog or roll forward to only the latest due occurrence.
