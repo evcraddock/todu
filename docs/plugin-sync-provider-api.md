@@ -58,8 +58,8 @@ interface SyncProvider {
   readonly version: string;
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
-  pull(project: Project): Promise<SyncProviderPullResult>;
-  push(tasks: Task[], project: Project): Promise<void>;
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
+  push(binding: IntegrationBinding, tasks: Task[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
   mapFromTask(task: Task, project: Project): ExternalTask;
 }
@@ -69,8 +69,8 @@ Expected lifecycle:
 
 1. Load plugin module.
 2. Validate registration and compatibility.
-3. Call `initialize(...)` once before sync operations.
-4. Call `pull(...)` and `push(...)` according to scheduler/strategy.
+3. Call `initialize(...)` once before binding-driven sync operations.
+4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy.
 5. Call `shutdown()` during daemon stop/unload.
 
 ## Load-Time Enforcement
@@ -112,14 +112,14 @@ Runtime behavior:
 
 Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginName>` in config file or `TODUAI_DAEMON_PLUGIN_CONFIG` env var (JSON object). Supported fields:
 
-- `projectId`: target local project ID.
-- `strategy`: `bidirectional`, `pull`, `push`, or `none`.
 - `intervalSeconds`: steady-state cycle interval.
 - `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls.
-- `enabled`: optional execution toggle.
+- `enabled`: optional execution toggle for the local provider worker.
 - `settings`: provider-specific object passed to `initialize(...)`.
 
-Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, and host-local runtime settings.
+Binding desired state is no longer configured through local plugin config. The daemon host now enumerates shared integration bindings from core state, filters by provider name and `enabled` state, and executes provider work according to each binding's `strategy`, `projectId`, `targetKind`, and `targetRef`.
+
+Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, retry tuning, and other host-local runtime settings.
 
 Retry policy:
 

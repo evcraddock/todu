@@ -181,7 +181,7 @@ export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/p
 - Sync plugin scheduler config can be overridden via `TODUAI_DAEMON_PLUGIN_CONFIG` (JSON object keyed by plugin name).
 
 ```bash
-export TODUAI_DAEMON_PLUGIN_CONFIG='{"github":{"projectId":"proj-123","intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60}}'
+export TODUAI_DAEMON_PLUGIN_CONFIG='{"github":{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}}'
 ```
 
 - Optional socket override:

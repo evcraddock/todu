@@ -1,6 +1,9 @@
 import {
+  createIntegrationBindingId,
   createProjectId,
   createTaskId,
+  type IntegrationBinding,
+  type IntegrationBindingStatus,
   ok,
   type Project,
   type SyncProvider,
@@ -25,77 +28,114 @@ describe("sync-worker-runtime", () => {
     vi.restoreAllMocks();
   });
 
-  it("executes pull/push cycles on configured interval", async () => {
+  it("executes cycles for enabled matching integration bindings and updates status", async () => {
     const provider = createProvider();
     const project = createProject();
     const task = createTask(project.id);
+    const binding = createBinding(project.id, {
+      id: "ibind-1",
+      provider: "github",
+      strategy: "bidirectional",
+      enabled: true,
+    });
+    const otherProviderBinding = createBinding(project.id, {
+      id: "ibind-2",
+      provider: "forgejo",
+      strategy: "bidirectional",
+      enabled: true,
+    });
+    const disabledBinding = createBinding(project.id, {
+      id: "ibind-3",
+      provider: "github",
+      strategy: "bidirectional",
+      enabled: false,
+    });
+    const todu = createTodu(project, [task], [binding, otherProviderBinding, disabledBinding]);
 
     const runtime = createSyncPluginWorkerRuntime({
       pluginName: "github",
       pluginVersion: "1.0.0",
       modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
       provider,
       config: {
         enabled: true,
-        projectId: project.id,
-        strategy: "bidirectional",
         intervalMs: 1_000,
         retryInitialMs: 100,
         retryMaxMs: 800,
         settings: {},
       },
       logger: createLogger(),
-      getTodu: () => createTodu(project, [task]),
+      getTodu: () => todu.instance,
     });
 
     const handle = runtime.start();
 
     await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.integration.list).toHaveBeenCalledWith({
+      provider: "github",
+      enabled: true,
+    });
     expect(provider.initialize).toHaveBeenCalledTimes(1);
+    expect(provider.initialize).toHaveBeenCalledWith({
+      settings: {},
+    });
     expect(provider.pull).toHaveBeenCalledTimes(1);
+    expect(provider.pull).toHaveBeenCalledWith(binding, project);
     expect(provider.push).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(999);
-    expect(provider.pull).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(provider.pull).toHaveBeenCalledTimes(2);
-    expect(provider.push).toHaveBeenCalledTimes(2);
+    expect(provider.push).toHaveBeenCalledWith(binding, [task], project);
+    expect(todu.integration.updateStatus).toHaveBeenCalledTimes(2);
+    expect(todu.integration.updateStatus).toHaveBeenNthCalledWith(1, binding.id, {
+      authorityId: "daemon://authority-1",
+      state: "running",
+      lastAttemptedSyncAt: expect.any(String),
+      lastSuccessfulSyncAt: undefined,
+      lastErrorSummary: null,
+    });
+    expect(todu.integration.updateStatus).toHaveBeenNthCalledWith(2, binding.id, {
+      authorityId: "daemon://authority-1",
+      state: "idle",
+      lastAttemptedSyncAt: expect.any(String),
+      lastSuccessfulSyncAt: expect.any(String),
+      lastErrorSummary: null,
+    });
 
     handle.stop();
     await vi.advanceTimersByTimeAsync(10_000);
 
-    expect(provider.pull).toHaveBeenCalledTimes(2);
-    expect(provider.push).toHaveBeenCalledTimes(2);
     expect(provider.shutdown).toHaveBeenCalledTimes(1);
   });
 
-  it("retries failed cycles with exponential backoff", async () => {
+  it("retries failed cycles with exponential backoff and writes error status", async () => {
     const provider = createProvider({
       pull: vi
         .fn<SyncProvider["pull"]>()
         .mockRejectedValueOnce(new Error("network down"))
         .mockRejectedValueOnce(new Error("network down"))
-        .mockResolvedValue(undefined),
+        .mockResolvedValue({ tasks: [] }),
     });
     const project = createProject();
+    const binding = createBinding(project.id, {
+      strategy: "pull",
+    });
+    const todu = createTodu(project, [], [binding]);
 
     const runtime = createSyncPluginWorkerRuntime({
       pluginName: "github",
       pluginVersion: "1.0.0",
       modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
       provider,
       config: {
         enabled: true,
-        projectId: project.id,
-        strategy: "pull",
         intervalMs: 1_000,
         retryInitialMs: 100,
         retryMaxMs: 400,
         settings: {},
       },
       logger: createLogger(),
-      getTodu: () => createTodu(project, []),
+      getTodu: () => todu.instance,
     });
 
     const handle = runtime.start();
@@ -115,12 +155,11 @@ describe("sync-worker-runtime", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(provider.pull).toHaveBeenCalledTimes(3);
 
-    await vi.advanceTimersByTimeAsync(999);
-    expect(provider.pull).toHaveBeenCalledTimes(3);
+    const statusTransitions = todu.integration.updateStatus.mock.calls
+      .map((call) => call[1]?.state)
+      .filter((value) => value !== undefined);
 
-    await vi.advanceTimersByTimeAsync(1);
-    expect(provider.pull).toHaveBeenCalledTimes(4);
-
+    expect(statusTransitions).toEqual(["running", "error", "running", "error", "running", "idle"]);
     expect(provider.initialize).toHaveBeenCalledTimes(1);
 
     handle.stop();
@@ -131,26 +170,30 @@ describe("sync-worker-runtime", () => {
     const provider = createProvider({
       pull: vi.fn<SyncProvider["pull"]>().mockImplementation(async () => {
         await deferred.promise;
+        return { tasks: [] };
       }),
     });
     const project = createProject();
+    const binding = createBinding(project.id, {
+      strategy: "pull",
+    });
+    const todu = createTodu(project, [], [binding]);
 
     const runtime = createSyncPluginWorkerRuntime({
       pluginName: "github",
       pluginVersion: "1.0.0",
       modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
       provider,
       config: {
         enabled: true,
-        projectId: project.id,
-        strategy: "pull",
         intervalMs: 1_000,
         retryInitialMs: 100,
         retryMaxMs: 400,
         settings: {},
       },
       logger: createLogger(),
-      getTodu: () => createTodu(project, []),
+      getTodu: () => todu.instance,
     });
 
     const handle = runtime.start();
@@ -173,11 +216,12 @@ describe("sync-worker-runtime", () => {
     expect(provider.pull).toHaveBeenCalledTimes(1);
   });
 
-  it("resolves config defaults and clamps retry max", () => {
+  it("resolves config defaults and ignores deprecated projectId and strategy settings", () => {
     const resolved = resolveSyncPluginExecutionConfig("github", {
       retryInitialSeconds: 12,
       retryMaxSeconds: 5,
-      strategy: "invalid",
+      strategy: "pull",
+      projectId: "proj-1",
       enabled: "yes",
       intervalSeconds: -1,
       settings: "oops",
@@ -185,14 +229,21 @@ describe("sync-worker-runtime", () => {
 
     expect(resolved.config).toEqual({
       enabled: true,
-      projectId: undefined,
-      strategy: "bidirectional",
       intervalMs: 300_000,
       retryInitialMs: 12_000,
       retryMaxMs: 12_000,
       settings: {},
     });
-    expect(resolved.warnings.length).toBeGreaterThan(0);
+    expect(resolved.warnings).toEqual(
+      expect.arrayContaining([
+        "sync plugin config warning (github): enabled must be boolean; using true",
+        "sync plugin config warning (github): intervalSeconds must be a positive number; using 300",
+        "sync plugin config warning (github): retryMaxSeconds is less than retryInitialSeconds; using retryInitialSeconds value",
+        "sync plugin config warning (github): projectId is ignored; shared integration bindings define project linkage",
+        "sync plugin config warning (github): strategy is ignored; shared integration bindings define sync strategy",
+        "sync plugin config warning (github): settings must be an object; using empty settings",
+      ]),
+    );
     expect(computeRetryDelayMs(0, resolved.config)).toBe(12_000);
     expect(computeRetryDelayMs(3, resolved.config)).toBe(12_000);
   });
@@ -201,12 +252,12 @@ describe("sync-worker-runtime", () => {
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     initialize: vi.fn<SyncProvider["initialize"]>().mockResolvedValue(undefined),
-    pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue(undefined),
+    pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({ tasks: [] }),
     push: vi.fn<SyncProvider["push"]>().mockResolvedValue(undefined),
     shutdown: vi.fn<SyncProvider["shutdown"]>().mockResolvedValue(undefined),
     mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockImplementation((item) => ({
-      id: createTaskId(String(item.id)),
-      title: String(item.id),
+      id: createTaskId(String(item.externalId)),
+      title: item.title,
       status: "todo",
       priority: "medium",
       projectId: createProject().id,
@@ -215,9 +266,11 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
       updatedAt: new Date(0).toISOString(),
     })),
     mapFromTask: vi.fn<SyncProvider["mapFromTask"]>().mockImplementation((task) => ({
-      id: task.id,
+      externalId: task.id,
       title: task.title,
     })),
+    name: "github",
+    version: "1.0.0",
     ...overrides,
   };
 }
@@ -251,15 +304,113 @@ function createTask(projectId: Project["id"]): Task {
   };
 }
 
-function createTodu(project: Project, tasks: Task[]): Todu {
+function createBinding(
+  projectId: Project["id"],
+  overrides: Partial<IntegrationBinding> = {},
+): IntegrationBinding {
+  const now = new Date(0).toISOString();
+
   return {
-    project: {
-      get: vi.fn().mockResolvedValue(ok(project)),
+    id: createIntegrationBindingId(overrides.id ?? "ibind-1"),
+    provider: overrides.provider ?? "github",
+    projectId,
+    targetKind: overrides.targetKind ?? "repository",
+    targetRef: overrides.targetRef ?? "owner/repo",
+    strategy: overrides.strategy ?? "bidirectional",
+    enabled: overrides.enabled ?? true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createTodu(
+  project: Project,
+  tasks: Task[],
+  bindings: IntegrationBinding[],
+): {
+  instance: Todu;
+  integration: {
+    list: ReturnType<typeof vi.fn>;
+    updateStatus: ReturnType<typeof vi.fn>;
+  };
+} {
+  const statuses = new Map<string, IntegrationBindingStatus>();
+  const integrationList = vi.fn(async (filter?: { provider?: string; enabled?: boolean }) => {
+    let filtered = bindings;
+
+    if (filter?.provider !== undefined) {
+      filtered = filtered.filter((binding) => binding.provider === filter.provider);
+    }
+    if (filter?.enabled !== undefined) {
+      filtered = filtered.filter((binding) => binding.enabled === filter.enabled);
+    }
+
+    return ok(filtered);
+  });
+
+  const updateStatus = vi.fn(
+    async (
+      id: string,
+      input: {
+        state?: IntegrationBindingStatus["state"];
+        authorityId?: string | null;
+        lastAttemptedSyncAt?: string | null;
+        lastSuccessfulSyncAt?: string | null;
+        lastErrorSummary?: string | null;
+      },
+    ) => {
+      const previous =
+        statuses.get(id) ??
+        ({
+          bindingId: createIntegrationBindingId(id),
+          state: "idle",
+          authorityId: null,
+          lastAttemptedSyncAt: null,
+          lastSuccessfulSyncAt: null,
+          lastErrorSummary: null,
+          updatedAt: new Date(0).toISOString(),
+        } satisfies IntegrationBindingStatus);
+
+      const next: IntegrationBindingStatus = {
+        bindingId: previous.bindingId,
+        state: input.state ?? previous.state,
+        authorityId: input.authorityId ?? previous.authorityId,
+        lastAttemptedSyncAt:
+          input.lastAttemptedSyncAt !== undefined
+            ? input.lastAttemptedSyncAt
+            : previous.lastAttemptedSyncAt,
+        lastSuccessfulSyncAt:
+          input.lastSuccessfulSyncAt !== undefined
+            ? input.lastSuccessfulSyncAt
+            : previous.lastSuccessfulSyncAt,
+        lastErrorSummary:
+          input.lastErrorSummary !== undefined ? input.lastErrorSummary : previous.lastErrorSummary,
+        updatedAt: new Date(0).toISOString(),
+      };
+
+      statuses.set(id, next);
+      return ok(next);
     },
-    task: {
-      list: vi.fn().mockResolvedValue(ok(tasks)),
+  );
+
+  return {
+    instance: {
+      project: {
+        get: vi.fn().mockResolvedValue(ok(project)),
+      },
+      task: {
+        list: vi.fn().mockResolvedValue(ok(tasks)),
+      },
+      integration: {
+        list: integrationList,
+        updateStatus,
+      },
+    } as unknown as Todu,
+    integration: {
+      list: integrationList,
+      updateStatus,
     },
-  } as unknown as Todu;
+  };
 }
 
 function createLogger(): DaemonLogger {

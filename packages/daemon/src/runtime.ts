@@ -689,6 +689,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
             pluginName: loadedPlugin.manifest.name,
             pluginVersion: loadedPlugin.manifest.version,
             modulePath: loadedPlugin.modulePath,
+            authorityId: resolvedConfig.socketPath,
             provider: loadedPlugin.provider,
             config: pluginConfigResolution.config,
             logger: runtimeLogger,
