@@ -1,8 +1,7 @@
 import {
   createProjectId,
-  isSyncStrategy,
+  type IntegrationBinding,
   type SyncProvider,
-  type SyncStrategy,
   type ToduError,
 } from "@todu/core";
 import type { Todu } from "@todu/engine";
@@ -15,8 +14,6 @@ const DEFAULT_RETRY_MAX_SECONDS = 60;
 
 export interface SyncPluginExecutionConfig {
   enabled: boolean;
-  projectId?: string;
-  strategy: SyncStrategy;
   intervalMs: number;
   retryInitialMs: number;
   retryMaxMs: number;
@@ -32,6 +29,7 @@ export interface CreateSyncPluginWorkerRuntimeOptions {
   pluginName: string;
   pluginVersion: string;
   modulePath: string;
+  authorityId: string;
   provider: SyncProvider;
   config: SyncPluginExecutionConfig;
   logger: DaemonLogger;
@@ -50,9 +48,6 @@ export function resolveSyncPluginExecutionConfig(
   const warnings: string[] = [];
 
   const enabled = parseBoolean(rawConfig?.enabled, true, warnings, "enabled", pluginName);
-  const projectId = parseOptionalString(rawConfig?.projectId);
-  const strategy = parseStrategy(rawConfig?.strategy, warnings, pluginName);
-
   const intervalMs = parseSecondsAsMs(
     rawConfig?.intervalSeconds,
     DEFAULT_SYNC_INTERVAL_SECONDS,
@@ -82,13 +77,25 @@ export function resolveSyncPluginExecutionConfig(
     retryMaxMs = retryInitialMs;
   }
 
+  const projectId = parseOptionalString(rawConfig?.projectId);
+  if (projectId) {
+    warnings.push(
+      `sync plugin config warning (${pluginName}): projectId is ignored; shared integration bindings define project linkage`,
+    );
+  }
+
+  const strategy = parseOptionalString(rawConfig?.strategy);
+  if (strategy) {
+    warnings.push(
+      `sync plugin config warning (${pluginName}): strategy is ignored; shared integration bindings define sync strategy`,
+    );
+  }
+
   const settings = parseSettings(rawConfig?.settings, warnings, pluginName);
 
   return {
     config: {
       enabled,
-      projectId,
-      strategy,
       intervalMs,
       retryInitialMs,
       retryMaxMs,
@@ -120,7 +127,6 @@ export function createSyncPluginWorkerRuntime(
       let initialized = false;
       let pendingShutdown = false;
       let retryAttempt = 0;
-      let missingProjectWarningLogged = false;
       let timer: ReturnType<typeof setTimeout> | null = null;
 
       const scheduleNext = (delayMs: number): void => {
@@ -152,6 +158,93 @@ export function createSyncPluginWorkerRuntime(
         }
       };
 
+      const ensureInitialized = async (): Promise<void> => {
+        if (initialized) {
+          return;
+        }
+
+        await options.provider.initialize({
+          settings: config.settings,
+        });
+        initialized = true;
+      };
+
+      const updateBindingStatus = async (
+        activeTodu: Todu,
+        binding: IntegrationBinding,
+        input: {
+          state?: "running" | "idle" | "blocked" | "error";
+          lastAttemptedSyncAt?: string | null;
+          lastSuccessfulSyncAt?: string | null;
+          lastErrorSummary?: string | null;
+        },
+      ): Promise<void> => {
+        const result = await activeTodu.integration.updateStatus(binding.id, {
+          authorityId: options.authorityId,
+          state: input.state,
+          lastAttemptedSyncAt: input.lastAttemptedSyncAt,
+          lastSuccessfulSyncAt: input.lastSuccessfulSyncAt,
+          lastErrorSummary: input.lastErrorSummary,
+        });
+
+        if (!result.ok) {
+          runtimeLogger.warn("sync plugin failed to update integration binding status", {
+            pluginName: options.pluginName,
+            pluginVersion: options.pluginVersion,
+            modulePath: options.modulePath,
+            bindingId: binding.id,
+            error: formatToduError(result.error),
+          });
+        }
+      };
+
+      const runBindingCycle = async (
+        activeTodu: Todu,
+        binding: IntegrationBinding,
+        startedAt: string,
+      ): Promise<void> => {
+        if (binding.strategy === "none") {
+          await updateBindingStatus(activeTodu, binding, {
+            state: "idle",
+            lastErrorSummary: null,
+          });
+          return;
+        }
+
+        await updateBindingStatus(activeTodu, binding, {
+          state: "running",
+          lastAttemptedSyncAt: startedAt,
+          lastErrorSummary: null,
+        });
+
+        const projectResult = await activeTodu.project.get(createProjectId(binding.projectId));
+        if (!projectResult.ok) {
+          throw new Error(`project load failed: ${formatToduError(projectResult.error)}`);
+        }
+
+        await ensureInitialized();
+
+        if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
+          await options.provider.pull(binding, projectResult.value);
+        }
+
+        if (binding.strategy === "push" || binding.strategy === "bidirectional") {
+          const tasksResult = await activeTodu.task.list({ projectId: projectResult.value.id });
+          if (!tasksResult.ok) {
+            throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
+          }
+
+          await options.provider.push(binding, tasksResult.value, projectResult.value);
+        }
+
+        await updateBindingStatus(activeTodu, binding, {
+          state: "idle",
+          lastAttemptedSyncAt: startedAt,
+          lastSuccessfulSyncAt: new Date(now()).toISOString(),
+          lastErrorSummary: null,
+        });
+      };
+
       const runCycle = async (): Promise<void> => {
         if (stopped || running) {
           return;
@@ -159,30 +252,10 @@ export function createSyncPluginWorkerRuntime(
 
         running = true;
         const startedAtMs = now();
+        const startedAt = new Date(startedAtMs).toISOString();
 
         try {
           if (!config.enabled) {
-            retryAttempt = 0;
-            scheduleNext(config.intervalMs);
-            return;
-          }
-
-          if (config.strategy === "none") {
-            retryAttempt = 0;
-            scheduleNext(config.intervalMs);
-            return;
-          }
-
-          if (!config.projectId) {
-            if (!missingProjectWarningLogged) {
-              runtimeLogger.warn("sync plugin projectId is not configured; skipping sync cycle", {
-                pluginName: options.pluginName,
-                pluginVersion: options.pluginVersion,
-                modulePath: options.modulePath,
-              });
-              missingProjectWarningLogged = true;
-            }
-
             retryAttempt = 0;
             scheduleNext(config.intervalMs);
             return;
@@ -193,33 +266,27 @@ export function createSyncPluginWorkerRuntime(
             throw new Error("daemon data host unavailable");
           }
 
-          missingProjectWarningLogged = false;
-
-          if (!initialized) {
-            await options.provider.initialize({
-              projectId: config.projectId,
-              strategy: config.strategy,
-              settings: config.settings,
-            });
-            initialized = true;
+          const bindingsResult = await activeTodu.integration.list({
+            provider: options.pluginName,
+            enabled: true,
+          });
+          if (!bindingsResult.ok) {
+            throw new Error(
+              `integration binding list failed: ${formatToduError(bindingsResult.error)}`,
+            );
           }
 
-          const projectResult = await activeTodu.project.get(createProjectId(config.projectId));
-          if (!projectResult.ok) {
-            throw new Error(`project load failed: ${formatToduError(projectResult.error)}`);
-          }
-
-          if (config.strategy === "pull" || config.strategy === "bidirectional") {
-            await options.provider.pull(projectResult.value);
-          }
-
-          if (config.strategy === "push" || config.strategy === "bidirectional") {
-            const tasksResult = await activeTodu.task.list({ projectId: projectResult.value.id });
-            if (!tasksResult.ok) {
-              throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
+          for (const binding of bindingsResult.value) {
+            try {
+              await runBindingCycle(activeTodu, binding, startedAt);
+            } catch (error) {
+              await updateBindingStatus(activeTodu, binding, {
+                state: "error",
+                lastAttemptedSyncAt: startedAt,
+                lastErrorSummary: summarizeError(error),
+              });
+              throw error;
             }
-
-            await options.provider.push(tasksResult.value, projectResult.value);
           }
 
           retryAttempt = 0;
@@ -227,8 +294,7 @@ export function createSyncPluginWorkerRuntime(
             pluginName: options.pluginName,
             pluginVersion: options.pluginVersion,
             modulePath: options.modulePath,
-            strategy: config.strategy,
-            projectId: config.projectId,
+            bindingCount: bindingsResult.value.length,
             durationMs: Math.max(0, Math.round(now() - startedAtMs)),
           });
 
@@ -241,11 +307,9 @@ export function createSyncPluginWorkerRuntime(
             pluginName: options.pluginName,
             pluginVersion: options.pluginVersion,
             modulePath: options.modulePath,
-            strategy: config.strategy,
-            projectId: config.projectId ?? null,
             attempt: retryAttempt,
             nextRetryMs: delayMs,
-            error: error instanceof Error ? error.message : String(error),
+            error: summarizeError(error),
           });
 
           scheduleNext(delayMs);
@@ -297,6 +361,14 @@ function formatToduError(error: ToduError): string {
   }
 }
 
+function summarizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 function parseSettings(
   value: unknown,
   warnings: string[],
@@ -314,23 +386,6 @@ function parseSettings(
     `sync plugin config warning (${pluginName}): settings must be an object; using empty settings`,
   );
   return {};
-}
-
-function parseStrategy(value: unknown, warnings: string[], pluginName: string): SyncStrategy {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    return "bidirectional";
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (isSyncStrategy(normalized)) {
-    return normalized;
-  }
-
-  warnings.push(
-    `sync plugin config warning (${pluginName}): strategy must be one of bidirectional/pull/push/none; using bidirectional`,
-  );
-
-  return "bidirectional";
 }
 
 function parseBoolean(

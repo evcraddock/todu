@@ -1,4 +1,4 @@
-import { err, ok, type Project, type Result, type SyncStrategy, type Task } from "./types.js";
+import { err, type IntegrationBinding, ok, type Project, type Result, type Task } from "./types.js";
 
 export const SYNC_PROVIDER_API_VERSION = 1 as const;
 
@@ -35,8 +35,6 @@ export interface ExternalComment {
 }
 
 export interface SyncProviderConfig {
-  projectId: string;
-  strategy: SyncStrategy;
   settings: Record<string, unknown>;
 }
 
@@ -50,8 +48,8 @@ export interface SyncProvider {
   readonly version: string;
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
-  pull(project: Project): Promise<SyncProviderPullResult>;
-  push(tasks: Task[], project: Project): Promise<void>;
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
+  push(binding: IntegrationBinding, tasks: Task[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
   mapFromTask(task: Task, project: Project): ExternalTask;
 }

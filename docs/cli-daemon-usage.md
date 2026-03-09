@@ -151,17 +151,17 @@ toduai plugin config recurring-worker --set '{"intervalSeconds":30}'
 Per-plugin sync scheduler fields are configured through `plugin config --set`:
 
 ```bash
-toduai plugin config github --set '{"projectId":"proj-123","strategy":"bidirectional","intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}'
+toduai plugin config github --set '{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}'
 ```
 
 Supported scheduler fields:
-- `projectId` (string): local project to sync for this plugin.
-- `strategy` (`bidirectional` | `pull` | `push` | `none`): operation mode per cycle.
 - `intervalSeconds` (positive number): steady-state cycle interval.
 - `retryInitialSeconds` (positive number): first retry delay after a failed cycle.
 - `retryMaxSeconds` (positive number): upper bound for exponential backoff.
-- `enabled` (boolean, optional): disables execution when false.
+- `enabled` (boolean, optional): disables the local provider worker when false.
 - `settings` (object, optional): provider-specific settings passed to `initialize(...)`.
+
+Integration binding desired state is not configured through local plugin config. The local plugin config only controls host-local execution settings and credentials.
 
 Retry policy:
 - Failures are logged with plugin name, attempt count, and next retry delay.

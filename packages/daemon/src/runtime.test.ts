@@ -1335,6 +1335,154 @@ describe("createDaemonRuntime", () => {
     expect(runtime.getWorker("github-sync")?.state).toBe("stopped");
   });
 
+  it("executes sync provider work from integration bindings and persists status for later observers", async () => {
+    const outputPath = path.join(tmpDir, "github-provider-events.ndjson");
+    const pluginPath = writeRecordingSyncPluginModule(tmpDir, "github-recording-plugin.mjs", {
+      providerName: "github",
+      providerVersion: "1.0.0",
+      outputPath,
+    });
+
+    const authorityRuntime = createDaemonRuntime({
+      storagePath: tmpDir,
+      socketPath: path.join(tmpDir, "authority.sock"),
+      syncPluginModulePaths: [pluginPath],
+      syncPluginConfigs: {
+        github: {
+          intervalSeconds: 0.05,
+          settings: {
+            token: "env:GITHUB_TOKEN",
+          },
+        },
+      },
+      enabledWorkerDomains: ["project", "task", "sync"],
+    });
+
+    await authorityRuntime.start();
+
+    const createProjectResponse = await sendRequest(authorityRuntime.config().socketPath, {
+      id: "project-integration-provider-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Provider Project",
+        },
+      },
+    });
+
+    const projectId = (createProjectResponse.result as { id: string }).id;
+
+    await sendRequest(authorityRuntime.config().socketPath, {
+      id: "task-integration-provider-create",
+      method: "task.create",
+      params: {
+        input: {
+          title: "Existing Task",
+          projectId,
+        },
+      },
+    });
+
+    const createIntegrationResponse = await sendRequest(authorityRuntime.config().socketPath, {
+      id: "integration-provider-create",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "github",
+          projectId,
+          targetKind: "repository",
+          targetRef: "owner/repo",
+          strategy: "bidirectional",
+          enabled: true,
+        },
+      },
+    });
+
+    const bindingId = (createIntegrationResponse.result as { id: string }).id;
+
+    await waitForProviderEvent(
+      outputPath,
+      (event) => event.type === "push" && event.bindingId === bindingId,
+    );
+
+    const providerEvents = readProviderEvents(outputPath);
+    expect(providerEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "initialize",
+          settings: {
+            token: "env:GITHUB_TOKEN",
+          },
+        }),
+        expect.objectContaining({
+          type: "pull",
+          bindingId,
+          provider: "github",
+          targetRef: "owner/repo",
+          projectId,
+          strategy: "bidirectional",
+        }),
+        expect.objectContaining({
+          type: "push",
+          bindingId,
+          provider: "github",
+          targetRef: "owner/repo",
+          projectId,
+          strategy: "bidirectional",
+          taskCount: 1,
+        }),
+      ]),
+    );
+
+    const authorityStatusResponse = await sendRequest(authorityRuntime.config().socketPath, {
+      id: "integration-provider-status-authority",
+      method: "integration.status",
+      params: {
+        id: bindingId,
+      },
+    });
+
+    expect(authorityStatusResponse.result).toEqual(
+      expect.objectContaining({
+        bindingId,
+        state: "idle",
+        authorityId: authorityRuntime.config().socketPath,
+        lastAttemptedSyncAt: expect.any(String),
+        lastSuccessfulSyncAt: expect.any(String),
+        lastErrorSummary: null,
+      }),
+    );
+
+    await authorityRuntime.stop();
+
+    const observerRuntime = createDaemonRuntime({
+      storagePath: tmpDir,
+      socketPath: path.join(tmpDir, "observer.sock"),
+    });
+
+    await observerRuntime.start();
+
+    const observerStatusResponse = await sendRequest(observerRuntime.config().socketPath, {
+      id: "integration-provider-status-observer",
+      method: "integration.status",
+      params: {
+        id: bindingId,
+      },
+    });
+
+    expect(observerStatusResponse.result).toEqual(
+      expect.objectContaining({
+        bindingId,
+        state: "idle",
+        authorityId: authorityRuntime.config().socketPath,
+        lastAttemptedSyncAt: expect.any(String),
+        lastSuccessfulSyncAt: expect.any(String),
+      }),
+    );
+
+    await observerRuntime.stop();
+  });
+
   it("loads configured worker plugins and surfaces runtime state via worker.status", async () => {
     const pluginPath = writeValidWorkerPluginModule(tmpDir, "recurring-plugin.mjs", {
       pluginName: "recurring-worker",
@@ -2022,6 +2170,88 @@ function writeValidSyncPluginModule(
   return modulePath;
 }
 
+function writeRecordingSyncPluginModule(
+  directory: string,
+  filename: string,
+  options: {
+    providerName: string;
+    providerVersion: string;
+    outputPath: string;
+  },
+): string {
+  const modulePath = path.join(directory, filename);
+
+  const moduleSource = `import fs from "node:fs";
+
+const outputPath = ${JSON.stringify(options.outputPath)};
+
+function record(event) {
+  fs.appendFileSync(outputPath, JSON.stringify(event) + "\\n", "utf8");
+}
+
+export const syncProvider = {
+  manifest: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    apiVersion: 1,
+  },
+  provider: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    async initialize(config) {
+      record({ type: "initialize", settings: config.settings });
+    },
+    async shutdown() {
+      record({ type: "shutdown" });
+    },
+    async pull(binding, project) {
+      record({
+        type: "pull",
+        bindingId: binding.id,
+        provider: binding.provider,
+        targetRef: binding.targetRef,
+        projectId: project.id,
+        strategy: binding.strategy,
+      });
+      return { tasks: [] };
+    },
+    async push(binding, tasks, project) {
+      record({
+        type: "push",
+        bindingId: binding.id,
+        provider: binding.provider,
+        targetRef: binding.targetRef,
+        projectId: project.id,
+        strategy: binding.strategy,
+        taskCount: tasks.length,
+      });
+    },
+    mapToTask() {
+      return {
+        id: "task-1",
+        title: "Example",
+        status: "active",
+        priority: "medium",
+        projectId: "project-1",
+        labels: [],
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      };
+    },
+    mapFromTask() {
+      return {
+        externalId: "ext-1",
+        title: "Example",
+      };
+    },
+  },
+};`;
+
+  fs.writeFileSync(modulePath, moduleSource, "utf8");
+
+  return modulePath;
+}
+
 function writeValidWorkerPluginModule(
   directory: string,
   filename: string,
@@ -2117,6 +2347,38 @@ function writeRecurringAutomationWorkerPluginModule(
   fs.writeFileSync(modulePath, moduleSource, "utf8");
 
   return modulePath;
+}
+
+function readProviderEvents(outputPath: string): Array<Record<string, unknown>> {
+  if (!fs.existsSync(outputPath)) {
+    return [];
+  }
+
+  return fs
+    .readFileSync(outputPath, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+async function waitForProviderEvent(
+  outputPath: string,
+  predicate: (event: Record<string, unknown>) => boolean,
+  timeoutMs = 2_000,
+): Promise<Record<string, unknown>> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const event = readProviderEvents(outputPath).find(predicate);
+    if (event) {
+      return event;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  throw new Error(`Timed out waiting for provider event in ${outputPath}`);
 }
 
 function writeInvalidSyncPluginModule(directory: string, filename: string): string {
