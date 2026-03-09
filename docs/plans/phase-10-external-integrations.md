@@ -93,6 +93,7 @@ See also:
 
 7. **Core cleanup: remove conflicting external sync control paths**
    - Remove or neutralize project-level external sync behavior that conflicts with integration bindings.
+   - Remove legacy project-surface sync metadata that suggests projects own external sync control.
    - Ensure integration binding becomes the single external sync control plane.
 
 ## Dependencies

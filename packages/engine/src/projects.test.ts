@@ -32,7 +32,9 @@ describe("project namespace", () => {
       expect(result.value.name).toBe("My Project");
       expect(result.value.status).toBe("active");
       expect(result.value.priority).toBe("medium");
-      expect(result.value.syncStrategy).toBe("none");
+      expect(result.value).not.toHaveProperty("syncStrategy");
+      expect(result.value).not.toHaveProperty("systemId");
+      expect(result.value).not.toHaveProperty("externalId");
       expect(result.value.id).toMatch(/^proj-/);
       expect(result.value.createdAt).toBeTruthy();
       expect(result.value.updatedAt).toBeTruthy();

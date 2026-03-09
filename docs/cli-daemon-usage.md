@@ -188,6 +188,7 @@ toduai integration status <binding-id>
 
 Behavior notes:
 - Integration bindings are the generic shared control plane for external integrations.
+- Project commands no longer expose project-level external sync settings; use `toduai integration ...` to manage external sync intent.
 - Provider-specific credential setup stays out of `integration add|update|remove` and remains local to the authority daemon host.
 - `integration list` supports filtering by `--provider`, `--project`, `--enabled`, and `--disabled`.
 - `integration status` shows runtime status for one binding or all bindings.

@@ -22,13 +22,12 @@ toduai project update "My App" --name "My Application"
 
 **Expected:**
 
-```
+```text
 Project updated:
 ID:          proj-XXXXXXXX
 Name:        My Application
 Status:      active
 Priority:    medium
-Sync:        none
 Created:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ```
@@ -156,7 +155,7 @@ toduai project show "Renamed In Electron" --no-color
 
 **Expected:**
 
-```
+```text
 ID:          proj-XXXXXXXX
 Name:        Renamed In Electron
 Status:      done

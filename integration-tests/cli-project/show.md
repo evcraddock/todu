@@ -22,12 +22,11 @@ toduai project show "My App"
 
 **Expected:**
 
-```
+```text
 ID:          proj-XXXXXXXX
 Name:        My App
 Status:      active
 Priority:    high
-Sync:        none
 Created:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Description: Main application
@@ -48,7 +47,7 @@ toduai project show "$PROJECT_ID"
 toduai --format json project show "My App"
 ```
 
-**Expected:** JSON object with all project fields.
+**Expected:** JSON object with `id`, `name`, `status`, `priority`, `description`, `createdAt`, and `updatedAt`.
 
 ## 4. Verify Electron Detail View
 

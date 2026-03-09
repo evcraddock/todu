@@ -26,7 +26,6 @@ function projectDetail(p: Project): string {
     `Name:        ${p.name}`,
     `Status:      ${p.status}`,
     `Priority:    ${p.priority}`,
-    `Sync:        ${p.syncStrategy}`,
     `Created:     ${p.createdAt}`,
     `Updated:     ${p.updatedAt}`,
   ];

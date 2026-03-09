@@ -60,6 +60,9 @@ describe("project CLI commands", () => {
     const created = JSON.parse(createJson);
     expect(created.name).toBe("JSON Project");
     expect(created.id).toMatch(/^proj-/);
+    expect(created).not.toHaveProperty("syncStrategy");
+    expect(created).not.toHaveProperty("systemId");
+    expect(created).not.toHaveProperty("externalId");
 
     // List
     const listOutput = run("project list");
@@ -75,6 +78,7 @@ describe("project CLI commands", () => {
     const showOutput = run(`project show ${created.id}`);
     expect(showOutput).toContain("JSON Project");
     expect(showOutput).toContain(created.id);
+    expect(showOutput).not.toContain("Sync:");
 
     // Show by name
     const showByName = run('project show "Test Project"');

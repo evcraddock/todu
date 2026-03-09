@@ -35,7 +35,6 @@ export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): Pro
         name: input.name.trim(),
         status: "active",
         priority: input.priority ?? "medium",
-        syncStrategy: "none",
         createdAt: now,
         updatedAt: now,
       };
@@ -135,9 +134,6 @@ function cloneProject(p: Project): Project {
     description: p.description,
     status: p.status,
     priority: p.priority,
-    externalId: p.externalId,
-    systemId: p.systemId,
-    syncStrategy: p.syncStrategy,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
