@@ -69,9 +69,11 @@ describe("daemon vs engine parity", () => {
         description: engineCreate.value.description,
         priority: engineCreate.value.priority,
         status: engineCreate.value.status,
-        syncStrategy: engineCreate.value.syncStrategy,
       }),
     );
+    expect(rpcCreate.result).not.toHaveProperty("syncStrategy");
+    expect(rpcCreate.result).not.toHaveProperty("systemId");
+    expect(rpcCreate.result).not.toHaveProperty("externalId");
 
     const engineList = await engine.project.list();
     expect(engineList.ok).toBe(true);

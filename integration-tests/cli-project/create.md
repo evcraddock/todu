@@ -20,18 +20,17 @@ toduai project create --name "My App"
 
 **Expected:**
 
-```
+```text
 Project created:
 ID:          proj-XXXXXXXX
 Name:        My App
 Status:      active
 Priority:    medium
-Sync:        none
 Created:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ```
 
-Defaults: status=active, priority=medium, sync=none.
+Defaults: status=active, priority=medium.
 
 ## 2. Create with All Options (CLI)
 
@@ -41,13 +40,12 @@ toduai project create --name "Backend API" --priority high --description "REST A
 
 **Expected:**
 
-```
+```text
 Project created:
 ID:          proj-XXXXXXXX
 Name:        Backend API
 Status:      active
 Priority:    high
-Sync:        none
 Created:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 Description: REST API service
@@ -59,7 +57,7 @@ Description: REST API service
 toduai --format json project create --name "Frontend"
 ```
 
-**Expected:** JSON with id, name, status, priority, syncStrategy, createdAt, updatedAt.
+**Expected:** JSON with id, name, status, priority, createdAt, and updatedAt.
 
 ```json
 {
@@ -67,7 +65,6 @@ toduai --format json project create --name "Frontend"
   "name": "Frontend",
   "status": "active",
   "priority": "medium",
-  "syncStrategy": "none",
   "createdAt": "YYYY-MM-DDTHH:MM:SS.MMMZ",
   "updatedAt": "YYYY-MM-DDTHH:MM:SS.MMMZ"
 }
@@ -153,7 +150,7 @@ toduai project show "Electron Project" --no-color
 
 **Expected:**
 
-```
+```text
 ID:          proj-XXXXXXXX
 Name:        Electron Project
 Status:      active

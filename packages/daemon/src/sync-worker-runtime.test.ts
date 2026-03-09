@@ -283,7 +283,6 @@ function createProject(): Project {
     name: "Project",
     status: "active",
     priority: "medium",
-    syncStrategy: "none",
     createdAt: now,
     updatedAt: now,
   };

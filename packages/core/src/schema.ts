@@ -21,7 +21,7 @@ import type {
 /**
  * Catalog document (one per todu instance).
  * Contains all small/bounded data: projects, labels, habits, settings,
- * recurring templates, and external system registrations.
+ * recurring templates, and shared integration binding metadata.
  */
 export interface CatalogDocument {
   /** Schema version for migration support */

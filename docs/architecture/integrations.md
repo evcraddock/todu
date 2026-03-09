@@ -298,6 +298,7 @@ As a result:
 - no compatibility layer is required for legacy project/system external sync assumptions
 - implementation may discard existing sample data if needed
 - implementation may introduce a new root catalog/document layout if that is the simplest path to the new model
+- core project surfaces should not expose project-level external sync control fields after the cutover
 
 New external sync work should be designed only against the integration binding model and related per-integration-binding status documents.
 

@@ -136,9 +136,6 @@ export interface Project {
   description?: string;
   status: ProjectStatus;
   priority: TaskPriority;
-  externalId?: string;
-  systemId?: string;
-  syncStrategy: SyncStrategy;
   createdAt: string;
   updatedAt: string;
 }
