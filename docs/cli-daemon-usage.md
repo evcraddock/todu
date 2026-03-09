@@ -169,6 +169,30 @@ Retry policy:
 - A successful cycle resets retry attempt state.
 - Changes require daemon restart to apply.
 
+## Integration management commands
+
+Use the generic integration command group to manage integration bindings through the local daemon:
+
+```bash
+toduai integration list
+toduai integration list --provider github
+toduai integration add --provider github --project Work --target-kind repository --target owner/repo
+toduai integration update <binding-id> --target-kind repository --target owner/renamed-repo
+toduai integration set-strategy <binding-id> --strategy pull
+toduai integration enable <binding-id>
+toduai integration disable <binding-id>
+toduai integration remove <binding-id>
+toduai integration status
+toduai integration status <binding-id>
+```
+
+Behavior notes:
+- Integration bindings are the generic shared control plane for external integrations.
+- Provider-specific credential setup stays out of `integration add|update|remove` and remains local to the authority daemon host.
+- `integration list` supports filtering by `--provider`, `--project`, `--enabled`, and `--disabled`.
+- `integration status` shows runtime status for one binding or all bindings.
+- Projects without integration bindings remain normal todu projects.
+
 ## Recurring miss policy via CLI
 
 Recurring templates support two miss policies:
