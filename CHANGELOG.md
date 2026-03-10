@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-10
+
+Sync-provider push-side comment linking for local-origin note sync.
+
+### Added
+- Sync providers can now return push result comment link updates so notes created locally in todu can be linked to remotely-created comments and continue syncing through the existing pull reconciliation flow
+- The sync runtime now applies returned comment links idempotently using canonical `sync:externalId:<externalCommentId>` tags on local task notes
+- Sync provider API docs now document the push result comment link contract and provider API version 2
+
+### Changed
+- The sync provider API version is now `2`
+- `SyncProvider.push()` now returns `SyncProviderPushResult`, making push-side comment linkage an explicit runtime contract
+
 ## [0.6.0] - 2026-03-10
 
 Sync-provider comment sync support.
