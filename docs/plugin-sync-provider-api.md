@@ -59,11 +59,13 @@ interface SyncProvider {
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: TaskWithDetail[], project: Project): Promise<void>;
+  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: TaskWithDetail, project: Project): ExternalTask;
+  mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
 }
 ```
+
+`TaskPushPayload` extends `TaskWithDetail` with `comments: Note[]`, providing each task's description and attached comments during push.
 
 Expected lifecycle:
 
@@ -72,6 +74,38 @@ Expected lifecycle:
 3. Call `initialize(...)` once before binding-driven sync operations.
 4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy.
 5. Call `shutdown()` during daemon stop/unload.
+
+## Comment Sync Contract
+
+The sync-provider runtime supports comment/note mirroring through pull and push paths.
+
+### Push path
+
+Each `TaskPushPayload` in `push(...)` includes a `comments: Note[]` array containing the task's attached notes (entity type `task`). Providers can use these to detect local comment creates, edits, and deletes by comparing with external state.
+
+### Pull path
+
+`SyncProviderPullResult.comments` accepts `ExternalComment[]`. The runtime reconciles pulled comments with local notes using a snapshot model:
+
+- Comments with an `externalId` not present locally are created as new notes with a `sync:externalId:<value>` tag.
+- Comments matching an existing local note (by external ID tag) are updated if the external `updatedAt` is newer than the local `createdAt` (last-write-wins).
+- Local synced notes whose external IDs are absent from the pull result are deleted.
+
+### ExternalComment
+
+```ts
+interface ExternalComment {
+  externalId: string;
+  externalTaskId: string;
+  body: string;
+  author?: string;
+  createdAt: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+```
+
+The `externalTaskId` must match a todu task ID for the comment to be applied. The `createdAt` timestamp is required; `updatedAt` is used for conflict resolution when present (falls back to `createdAt`).
 
 ## Load-Time Enforcement
 

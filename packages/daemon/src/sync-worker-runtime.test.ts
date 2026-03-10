@@ -1,9 +1,12 @@
 import {
   createIntegrationBindingId,
+  createNoteId,
   createProjectId,
   createTaskId,
+  type ExternalComment,
   type IntegrationBinding,
   type IntegrationBindingStatus,
+  type Note,
   ok,
   type Project,
   type SyncProvider,
@@ -86,7 +89,7 @@ describe("sync-worker-runtime", () => {
     expect(provider.push).toHaveBeenCalledTimes(1);
     expect(provider.push).toHaveBeenCalledWith(
       binding,
-      [{ ...task, description: undefined }],
+      [{ ...task, description: undefined, comments: [] }],
       project,
     );
     expect(todu.integration.updateStatus).toHaveBeenCalledTimes(2);
@@ -251,6 +254,268 @@ describe("sync-worker-runtime", () => {
     expect(computeRetryDelayMs(0, resolved.config)).toBe(12_000);
     expect(computeRetryDelayMs(3, resolved.config)).toBe(12_000);
   });
+
+  it("push includes task comments from note.list in each TaskPushPayload", async () => {
+    const provider = createProvider();
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "push" });
+    const taskNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "a comment",
+      tags: ["sync:externalId:ext-c1"],
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [taskNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.push).toHaveBeenCalledTimes(1);
+    const pushArgs = provider.push.mock.calls[0];
+    const pushedTasks = pushArgs[1];
+    expect(pushedTasks).toHaveLength(1);
+    expect(pushedTasks[0].comments).toEqual([taskNote]);
+
+    handle.stop();
+  });
+
+  it("pull creates new comments as notes when externalId is not present locally", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledComments: ExternalComment[] = [
+      {
+        externalId: "gh-comment-1",
+        externalTaskId: task.id,
+        body: "New comment from GitHub",
+        author: "octocat",
+        createdAt: "2026-03-10T10:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: pulledComments,
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.create).toHaveBeenCalledTimes(1);
+    expect(todu.note.create).toHaveBeenCalledWith({
+      content: "New comment from GitHub",
+      author: "octocat",
+      entityType: "task",
+      entityId: task.id,
+      tags: ["sync:externalId:gh-comment-1"],
+    });
+
+    handle.stop();
+  });
+
+  it("pull updates existing comments when external updatedAt is newer", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const existingNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "old content",
+      tags: ["sync:externalId:gh-comment-1"],
+      createdAt: "2026-03-09T10:00:00Z",
+    });
+    const pulledComments: ExternalComment[] = [
+      {
+        externalId: "gh-comment-1",
+        externalTaskId: task.id,
+        body: "Updated content from GitHub",
+        author: "octocat",
+        createdAt: "2026-03-09T10:00:00Z",
+        updatedAt: "2026-03-10T15:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: pulledComments,
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [existingNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.create).not.toHaveBeenCalled();
+    expect(todu.note.update).toHaveBeenCalledTimes(1);
+    expect(todu.note.update).toHaveBeenCalledWith(existingNote.id, {
+      content: "Updated content from GitHub",
+    });
+
+    handle.stop();
+  });
+
+  it("pull deletes local synced notes absent from pull result", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const orphanedNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "will be deleted",
+      tags: ["sync:externalId:gh-comment-deleted"],
+    });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-other",
+            externalTaskId: task.id,
+            body: "still exists",
+            createdAt: "2026-03-10T10:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [orphanedNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.delete).toHaveBeenCalledTimes(1);
+    expect(todu.note.delete).toHaveBeenCalledWith(orphanedNote.id);
+    // The new comment should be created
+    expect(todu.note.create).toHaveBeenCalledTimes(1);
+
+    handle.stop();
+  });
+
+  it("pull skips update when local note is newer than external comment", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const existingNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "locally edited content",
+      tags: ["sync:externalId:gh-comment-1"],
+      createdAt: "2026-03-10T20:00:00Z",
+    });
+    const pulledComments: ExternalComment[] = [
+      {
+        externalId: "gh-comment-1",
+        externalTaskId: task.id,
+        body: "Older external content",
+        author: "octocat",
+        createdAt: "2026-03-09T10:00:00Z",
+        updatedAt: "2026-03-10T12:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: pulledComments,
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [existingNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.update).not.toHaveBeenCalled();
+    expect(todu.note.create).not.toHaveBeenCalled();
+    expect(todu.note.delete).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
 });
 
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
@@ -328,17 +593,43 @@ function createBinding(
   };
 }
 
+function createNote(overrides: Partial<Note> & { content: string }): Note {
+  const now = new Date(0).toISOString();
+
+  return {
+    id: createNoteId(overrides.id ?? `note-${Math.random().toString(36).slice(2, 8)}`),
+    content: overrides.content,
+    author: overrides.author ?? "user",
+    entityType: overrides.entityType,
+    entityId: overrides.entityId,
+    tags: overrides.tags ?? [],
+    createdAt: overrides.createdAt ?? now,
+  };
+}
+
+interface CreateToduOptions {
+  notes?: Note[];
+}
+
 function createTodu(
   project: Project,
   tasks: Task[],
   bindings: IntegrationBinding[],
+  options: CreateToduOptions = {},
 ): {
   instance: Todu;
   integration: {
     list: ReturnType<typeof vi.fn>;
     updateStatus: ReturnType<typeof vi.fn>;
   };
+  note: {
+    list: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
 } {
+  const notes: Note[] = [...(options.notes ?? [])];
   const statuses = new Map<string, IntegrationBindingStatus>();
   const integrationList = vi.fn(async (filter?: { provider?: string; enabled?: boolean }) => {
     let filtered = bindings;
@@ -404,6 +695,60 @@ function createTodu(
     return ok({ ...task, description: undefined });
   });
 
+  let noteIdCounter = 1;
+  const noteList = vi.fn(
+    async (filter?: { entityType?: string; entityId?: string; tag?: string }) => {
+      let filtered = notes;
+      if (filter?.entityType) {
+        filtered = filtered.filter((n) => n.entityType === filter.entityType);
+      }
+      if (filter?.entityId) {
+        filtered = filtered.filter((n) => n.entityId === filter.entityId);
+      }
+      if (filter?.tag) {
+        const tag = filter.tag;
+        filtered = filtered.filter((n) => n.tags.includes(tag));
+      }
+      return ok(filtered);
+    },
+  );
+
+  const noteCreate = vi.fn(
+    async (input: {
+      content: string;
+      author?: string;
+      entityType?: string;
+      entityId?: string;
+      tags?: string[];
+    }) => {
+      const note: Note = {
+        id: createNoteId(`note-${String(noteIdCounter++).padStart(3, "0")}`),
+        content: input.content,
+        author: input.author ?? "user",
+        entityType: input.entityType as Note["entityType"],
+        entityId: input.entityId,
+        tags: input.tags ?? [],
+        createdAt: new Date(0).toISOString(),
+      };
+      notes.push(note);
+      return ok(note);
+    },
+  );
+
+  const noteUpdate = vi.fn(async (id: string, input: { content?: string; tags?: string[] }) => {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return ok(undefined);
+    if (input.content !== undefined) note.content = input.content;
+    if (input.tags !== undefined) note.tags = input.tags;
+    return ok(note);
+  });
+
+  const noteDelete = vi.fn(async (id: string) => {
+    const index = notes.findIndex((n) => n.id === id);
+    if (index !== -1) notes.splice(index, 1);
+    return ok(undefined);
+  });
+
   return {
     instance: {
       project: {
@@ -417,10 +762,22 @@ function createTodu(
         list: integrationList,
         updateStatus,
       },
+      note: {
+        list: noteList,
+        create: noteCreate,
+        update: noteUpdate,
+        delete: noteDelete,
+      },
     } as unknown as Todu,
     integration: {
       list: integrationList,
       updateStatus,
+    },
+    note: {
+      list: noteList,
+      create: noteCreate,
+      update: noteUpdate,
+      delete: noteDelete,
     },
   };
 }
