@@ -27,7 +27,7 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Host-supported provider API version: `SYNC_PROVIDER_API_VERSION` (currently `1`).
+- Host-supported provider API version: `SYNC_PROVIDER_API_VERSION` (currently `2`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` matches the host-supported API version.
 - Version mismatches must fail at load time.
@@ -59,7 +59,7 @@ interface SyncProvider {
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<void>;
+  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<SyncProviderPushResult>;
   mapToTask(external: ExternalTask, project: Project): Task;
   mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
 }
@@ -82,6 +82,26 @@ The sync-provider runtime supports comment/note mirroring through pull and push 
 ### Push path
 
 Each `TaskPushPayload` in `push(...)` includes a `comments: Note[]` array containing the task's attached notes (entity type `task`). Providers can use these to detect local comment creates, edits, and deletes by comparing with external state.
+
+`push(...)` must return a `SyncProviderPushResult`:
+
+```ts
+interface SyncProviderPushCommentLink {
+  localNoteId: NoteId;
+  externalCommentId: string;
+  externalTaskId: string;
+  sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+interface SyncProviderPushResult {
+  commentLinks: SyncProviderPushCommentLink[];
+}
+```
+
+The runtime applies each returned link idempotently by attaching the canonical `sync:externalId:<externalCommentId>` tag to the referenced local note. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error.
 
 ### Pull path
 

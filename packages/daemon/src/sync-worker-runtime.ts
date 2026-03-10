@@ -4,6 +4,7 @@ import {
   type IntegrationBinding,
   type Note,
   type SyncProvider,
+  type SyncProviderPushCommentLink,
   type TaskPushPayload,
   type ToduError,
 } from "@todu/core";
@@ -14,6 +15,7 @@ import type { WorkerRuntime } from "./workers.js";
 const DEFAULT_SYNC_INTERVAL_SECONDS = 300;
 const DEFAULT_RETRY_INITIAL_SECONDS = 5;
 const DEFAULT_RETRY_MAX_SECONDS = 60;
+const SYNC_EXTERNAL_ID_TAG_PREFIX = "sync:externalId:";
 
 export interface SyncPluginExecutionConfig {
   enabled: boolean;
@@ -257,7 +259,16 @@ export function createSyncPluginWorkerRuntime(
             pushPayloads.push({ ...taskDetail, comments });
           }
 
-          await options.provider.push(binding, pushPayloads, projectResult.value);
+          const pushResult = await options.provider.push(
+            binding,
+            pushPayloads,
+            projectResult.value,
+          );
+          if (!pushResult || !Array.isArray(pushResult.commentLinks)) {
+            throw new Error("sync provider push must return { commentLinks: [] }");
+          }
+
+          await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
         }
 
         await updateBindingStatus(activeTodu, binding, {
@@ -373,6 +384,54 @@ export function createSyncPluginWorkerRuntime(
   };
 }
 
+function createSyncExternalIdTag(externalId: string): string {
+  return `${SYNC_EXTERNAL_ID_TAG_PREFIX}${externalId}`;
+}
+
+function getSyncExternalIdFromNote(note: Note): string | null {
+  const externalIdTag = note.tags.find((tag) => tag.startsWith(SYNC_EXTERNAL_ID_TAG_PREFIX));
+  if (!externalIdTag) {
+    return null;
+  }
+
+  return externalIdTag.slice(SYNC_EXTERNAL_ID_TAG_PREFIX.length);
+}
+
+async function applyPushCommentLinks(
+  todu: Todu,
+  links: SyncProviderPushCommentLink[],
+): Promise<void> {
+  for (const link of links) {
+    const notesResult = await todu.note.list({
+      entityType: "task",
+      entityId: link.externalTaskId,
+    });
+    const notes = notesResult.ok ? notesResult.value : [];
+    const note = notes.find((candidate) => candidate.id === link.localNoteId);
+
+    if (!note) {
+      throw new Error(
+        `push comment link references missing task note: note=${link.localNoteId} task=${link.externalTaskId}`,
+      );
+    }
+
+    const existingExternalId = getSyncExternalIdFromNote(note);
+    if (existingExternalId === link.externalCommentId) {
+      continue;
+    }
+
+    if (existingExternalId && existingExternalId !== link.externalCommentId) {
+      throw new Error(
+        `push comment link conflicts with existing note linkage: note=${link.localNoteId} existing=${existingExternalId} next=${link.externalCommentId}`,
+      );
+    }
+
+    await todu.note.update(note.id, {
+      tags: [...note.tags, createSyncExternalIdTag(link.externalCommentId)],
+    });
+  }
+}
+
 /**
  * Apply comments pulled from an external provider to local todu notes.
  *
@@ -416,9 +475,8 @@ async function applyPulledComments(
     // Build index of local notes by external ID tag
     const localByExternalId = new Map<string, Note>();
     for (const note of localNotes) {
-      const externalIdTag = note.tags.find((t) => t.startsWith("sync:externalId:"));
-      if (externalIdTag) {
-        const externalId = externalIdTag.slice("sync:externalId:".length);
+      const externalId = getSyncExternalIdFromNote(note);
+      if (externalId) {
         localByExternalId.set(externalId, note);
       }
     }
@@ -437,7 +495,7 @@ async function applyPulledComments(
           author: pulled.author ?? "external",
           entityType: "task",
           entityId: taskId,
-          tags: [`sync:externalId:${pulled.externalId}`],
+          tags: [createSyncExternalIdTag(pulled.externalId)],
         });
         stats.created++;
       } else {

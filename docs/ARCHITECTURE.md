@@ -222,7 +222,7 @@ Baseline worker lifecycle states are:
 - Generic worker plugins use `WorkerPluginRegistration` from `@todu/core` and export `workerPlugin`.
 - Sync provider plugins use `SyncProviderRegistration` from `@todu/core` and export `syncProvider`.
 - Plugin load paths validate registrations at load time before worker registration.
-- Compatibility baseline for sync providers is API-version based (current provider API version: `1`).
+- Compatibility baseline for sync providers is API-version based (current provider API version: `2`).
 - Daemon plugin module paths resolve from `TODUAI_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config; config file paths resolve relative to config location.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.

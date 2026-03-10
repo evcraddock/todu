@@ -297,6 +297,242 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
+  it("push applies returned comment links to existing local notes", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "push" });
+    const localNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "local comment",
+      tags: ["local"],
+    });
+    const provider = createProvider({
+      push: vi.fn<SyncProvider["push"]>().mockResolvedValue({
+        commentLinks: [
+          {
+            localNoteId: localNote.id,
+            externalCommentId: "gh-comment-1",
+            externalTaskId: task.id,
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [localNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.update).toHaveBeenCalledTimes(1);
+    expect(todu.note.update).toHaveBeenCalledWith(localNote.id, {
+      tags: ["local", "sync:externalId:gh-comment-1"],
+    });
+
+    handle.stop();
+  });
+
+  it("push applies returned comment links idempotently across cycles", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "push" });
+    const localNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "local comment",
+    });
+    const provider = createProvider({
+      push: vi.fn<SyncProvider["push"]>().mockResolvedValue({
+        commentLinks: [
+          {
+            localNoteId: localNote.id,
+            externalCommentId: "gh-comment-1",
+            externalTaskId: task.id,
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [localNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(provider.push).toHaveBeenCalledTimes(2);
+    expect(todu.note.update).toHaveBeenCalledTimes(1);
+
+    handle.stop();
+  });
+
+  it("linked local-origin comments later update remotely through the same local note", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "bidirectional" });
+    const localNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "local comment",
+    });
+    const provider = createProvider({
+      pull: vi
+        .fn<SyncProvider["pull"]>()
+        .mockResolvedValueOnce({ tasks: [], comments: [] })
+        .mockResolvedValue({
+          tasks: [],
+          comments: [
+            {
+              externalId: "gh-comment-1",
+              externalTaskId: task.id,
+              body: "remote edit",
+              createdAt: "2026-03-10T10:00:00Z",
+              updatedAt: "2026-03-10T11:00:00Z",
+            },
+          ],
+        }),
+      push: vi
+        .fn<SyncProvider["push"]>()
+        .mockResolvedValueOnce({
+          commentLinks: [
+            {
+              localNoteId: localNote.id,
+              externalCommentId: "gh-comment-1",
+              externalTaskId: task.id,
+            },
+          ],
+        })
+        .mockResolvedValue({ commentLinks: [] }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [localNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(todu.note.update).toHaveBeenNthCalledWith(1, localNote.id, {
+      tags: ["sync:externalId:gh-comment-1"],
+    });
+    expect(todu.note.update).toHaveBeenNthCalledWith(2, localNote.id, {
+      content: "remote edit",
+    });
+
+    handle.stop();
+  });
+
+  it("linked local-origin comments later delete remotely through the same local note", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "bidirectional" });
+    const localNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "local comment",
+    });
+    const provider = createProvider({
+      pull: vi
+        .fn<SyncProvider["pull"]>()
+        .mockResolvedValueOnce({ tasks: [], comments: [] })
+        .mockResolvedValue({
+          tasks: [],
+          comments: [
+            {
+              externalId: "gh-comment-other",
+              externalTaskId: task.id,
+              body: "other remote comment",
+              createdAt: "2026-03-10T10:00:00Z",
+            },
+          ],
+        }),
+      push: vi
+        .fn<SyncProvider["push"]>()
+        .mockResolvedValueOnce({
+          commentLinks: [
+            {
+              localNoteId: localNote.id,
+              externalCommentId: "gh-comment-1",
+              externalTaskId: task.id,
+            },
+          ],
+        })
+        .mockResolvedValue({ commentLinks: [] }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [localNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(todu.note.delete).toHaveBeenCalledWith(localNote.id);
+
+    handle.stop();
+  });
+
   it("pull creates new comments as notes when externalId is not present locally", async () => {
     const project = createProject();
     const task = createTask(project.id);
@@ -522,7 +758,7 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     initialize: vi.fn<SyncProvider["initialize"]>().mockResolvedValue(undefined),
     pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({ tasks: [] }),
-    push: vi.fn<SyncProvider["push"]>().mockResolvedValue(undefined),
+    push: vi.fn<SyncProvider["push"]>().mockResolvedValue({ commentLinks: [] }),
     shutdown: vi.fn<SyncProvider["shutdown"]>().mockResolvedValue(undefined),
     mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockImplementation((item) => ({
       id: createTaskId(String(item.externalId)),

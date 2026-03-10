@@ -1,6 +1,7 @@
 import {
   err,
   type IntegrationBinding,
+  type NoteId,
   ok,
   type Project,
   type Result,
@@ -8,7 +9,7 @@ import {
   type TaskPushPayload,
 } from "./types.js";
 
-export const SYNC_PROVIDER_API_VERSION = 1 as const;
+export const SYNC_PROVIDER_API_VERSION = 2 as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
 export type SyncConflictResolutionPolicy = (typeof SYNC_CONFLICT_RESOLUTION_POLICIES)[number];
@@ -52,13 +53,31 @@ export interface SyncProviderPullResult {
   comments?: ExternalComment[];
 }
 
+export interface SyncProviderPushCommentLink {
+  localNoteId: NoteId;
+  externalCommentId: string;
+  externalTaskId: string;
+  sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+export interface SyncProviderPushResult {
+  commentLinks: SyncProviderPushCommentLink[];
+}
+
 export interface SyncProvider {
   readonly name: string;
   readonly version: string;
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<void>;
+  push(
+    binding: IntegrationBinding,
+    tasks: TaskPushPayload[],
+    project: Project,
+  ): Promise<SyncProviderPushResult>;
   mapToTask(external: ExternalTask, project: Project): Task;
   mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
 }
