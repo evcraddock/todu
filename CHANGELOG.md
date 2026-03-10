@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-10
+
+Task assignee support and faster developer workflow.
+
+### Added
+- Task assignee field across core types, engine, and sync-provider contract
+- Sync providers now receive task descriptions during push via `TaskWithDetail`
+- Assignee validation on task create and update
+
+### Changed
+- `SyncProvider.push()` and `mapFromTask()` accept `TaskWithDetail` instead of `Task`
+- Test suite split: unit tests run in ~2s by default, integration tests opt-in via `make test-all`
+- CI runs unit tests only (~30s total pipeline)
+
+### Removed
+- Obsolete habit tests from Electron tools module
+
 ## [0.4.0] - 2026-03-09
 
 This release introduces todu’s first generic external integration control plane. Integration bindings now live in shared core state, can be managed from the CLI through the daemon, and drive provider execution from the authority daemon while exposing synced runtime status to other machines.
