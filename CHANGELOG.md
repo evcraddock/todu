@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-10
+
+Sync-provider comment sync support.
+
+### Added
+- Comment/note sync through the sync-provider runtime — push exposes task comments via `TaskPushPayload`, pull reconciles external comments with local notes using snapshot-based create/update/delete
+- `ExternalComment` pull results are now consumed by the runtime with last-write-wins conflict resolution on comment-level timestamps
+- Plugin sync provider API docs updated with comment sync contract details
+
 ## [0.5.0] - 2026-03-10
 
 Task assignee support and faster developer workflow.
