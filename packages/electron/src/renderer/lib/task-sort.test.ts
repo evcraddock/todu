@@ -10,6 +10,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     priority: "medium",
     projectId: "proj-1" as Task["projectId"],
     labels: [],
+    assignees: [],
     createdAt: "2025-01-01",
     updatedAt: "2025-01-01",
     ...overrides,

@@ -183,6 +183,7 @@ export interface Task {
   priority: TaskPriority;
   projectId: ProjectId;
   labels: string[];
+  assignees: string[];
   dueDate?: string;
   scheduledDate?: string;
   externalId?: string;
@@ -284,6 +285,7 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   description?: string;
   labels?: string[];
+  assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
 }
@@ -294,6 +296,7 @@ export interface UpdateTaskInput {
   priority?: TaskPriority;
   description?: string;
   labels?: string[];
+  assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
 }

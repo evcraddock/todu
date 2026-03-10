@@ -39,7 +39,20 @@ describe("task namespace", () => {
       expect(result.value.priority).toBe("medium");
       expect(result.value.projectId).toBe(projectId);
       expect(result.value.labels).toEqual([]);
+      expect(result.value.assignees).toEqual([]);
       expect(result.value.id).toMatch(/^task-/);
+    });
+
+    it("creates a task with assignees", async () => {
+      const result = await todu.task.create({
+        title: "Assigned task",
+        projectId,
+        assignees: ["alice", "bob"],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.assignees).toEqual(["alice", "bob"]);
     });
 
     it("creates a task with all optional fields", async () => {
@@ -328,6 +341,21 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.labels).toEqual(["bug", "p1"]);
+    });
+
+    it("updates assignees", async () => {
+      const result = await todu.task.update(taskId, { assignees: ["alice", "bob"] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("replaces assignees entirely on update", async () => {
+      await todu.task.update(taskId, { assignees: ["alice", "bob"] });
+      const result = await todu.task.update(taskId, { assignees: ["charlie"] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.assignees).toEqual(["charlie"]);
     });
 
     it("rejects invalid status transition", async () => {

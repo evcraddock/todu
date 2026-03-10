@@ -84,7 +84,11 @@ describe("sync-worker-runtime", () => {
     expect(provider.pull).toHaveBeenCalledTimes(1);
     expect(provider.pull).toHaveBeenCalledWith(binding, project);
     expect(provider.push).toHaveBeenCalledTimes(1);
-    expect(provider.push).toHaveBeenCalledWith(binding, [task], project);
+    expect(provider.push).toHaveBeenCalledWith(
+      binding,
+      [{ ...task, description: undefined }],
+      project,
+    );
     expect(todu.integration.updateStatus).toHaveBeenCalledTimes(2);
     expect(todu.integration.updateStatus).toHaveBeenNthCalledWith(1, binding.id, {
       authorityId: "daemon://authority-1",
@@ -262,6 +266,7 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
       priority: "medium",
       projectId: createProject().id,
       labels: [],
+      assignees: [],
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
     })),
@@ -298,6 +303,7 @@ function createTask(projectId: Project["id"]): Task {
     priority: "medium",
     projectId,
     labels: [],
+    assignees: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -392,6 +398,12 @@ function createTodu(
     },
   );
 
+  const taskGet = vi.fn().mockImplementation(async (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return ok({ id, description: undefined });
+    return ok({ ...task, description: undefined });
+  });
+
   return {
     instance: {
       project: {
@@ -399,6 +411,7 @@ function createTodu(
       },
       task: {
         list: vi.fn().mockResolvedValue(ok(tasks)),
+        get: taskGet,
       },
       integration: {
         list: integrationList,

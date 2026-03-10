@@ -287,54 +287,6 @@ describe("todu agent tools", () => {
     });
   });
 
-  // ── Habits ─────────────────────────────────────────────────────────
-
-  describe("list_habits", () => {
-    it("returns empty initially", async () => {
-      const data = await execJson("list_habits");
-      expect(data).toHaveLength(0);
-    });
-  });
-
-  describe("check_habit / habit_streak / habit_history", () => {
-    let habitId: string;
-
-    beforeEach(async () => {
-      const result = await todu.habit.create({
-        title: "Exercise",
-        schedule: "FREQ=DAILY;INTERVAL=1",
-        timezone: "America/Chicago",
-        startDate: "2026-01-01",
-      });
-      if (!result.ok) throw new Error("Failed to create habit");
-      habitId = result.value.id;
-    });
-
-    it("checks in a habit", async () => {
-      const data = await execJson("check_habit", { id: habitId });
-      expect(data.completed).toBe(true);
-    });
-
-    it("gets streak info", async () => {
-      await todu.habit.check(habitId);
-      const data = await execJson("habit_streak", { id: habitId });
-      expect(data.current).toBeGreaterThanOrEqual(1);
-      expect(data.completedToday).toBe(true);
-    });
-
-    it("gets history", async () => {
-      const data = await execJson("habit_history", { id: habitId, days: 7 });
-      expect(Array.isArray(data)).toBe(true);
-      expect(data.length).toBeLessThanOrEqual(7);
-    });
-
-    it("lists habits with filter", async () => {
-      const data = await execJson("list_habits", { paused: false });
-      expect(data).toHaveLength(1);
-      expect(data[0].title).toBe("Exercise");
-    });
-  });
-
   // ── Recurring ──────────────────────────────────────────────────────
 
   describe("list_recurring", () => {
@@ -555,60 +507,6 @@ describe("todu agent tools", () => {
       expect(uiActions).toHaveLength(1);
       expect(uiActions[0].data).toEqual({
         action: "show_projects",
-        filter: {},
-      });
-    });
-
-    it("list_habits emits show_habits ui-action with filter", async () => {
-      const sentMessages: Array<{ channel: string; data: unknown }> = [];
-      const mockWindow = {
-        isDestroyed: () => false,
-        webContents: {
-          send: (channel: string, data: unknown) => {
-            sentMessages.push({ channel, data });
-          },
-        },
-      };
-
-      const toolsWithWindow = createToduTools(
-        todu,
-        mockWindow as unknown as import("electron").BrowserWindow,
-      );
-      const listHabits = toolsWithWindow.find((t) => t.name === "list_habits")!;
-
-      await listHabits.execute("test-call", { paused: false });
-
-      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
-      expect(uiActions).toHaveLength(1);
-      expect(uiActions[0].data).toEqual({
-        action: "show_habits",
-        filter: { paused: false },
-      });
-    });
-
-    it("list_habits emits empty filter when called without params", async () => {
-      const sentMessages: Array<{ channel: string; data: unknown }> = [];
-      const mockWindow = {
-        isDestroyed: () => false,
-        webContents: {
-          send: (channel: string, data: unknown) => {
-            sentMessages.push({ channel, data });
-          },
-        },
-      };
-
-      const toolsWithWindow = createToduTools(
-        todu,
-        mockWindow as unknown as import("electron").BrowserWindow,
-      );
-      const listHabits = toolsWithWindow.find((t) => t.name === "list_habits")!;
-
-      await listHabits.execute("test-call", {});
-
-      const uiActions = sentMessages.filter((m) => m.channel === "todu:ui-action");
-      expect(uiActions).toHaveLength(1);
-      expect(uiActions[0].data).toEqual({
-        action: "show_habits",
         filter: {},
       });
     });

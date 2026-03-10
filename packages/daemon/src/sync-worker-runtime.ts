@@ -2,6 +2,7 @@ import {
   createProjectId,
   type IntegrationBinding,
   type SyncProvider,
+  type TaskWithDetail,
   type ToduError,
 } from "@todu/core";
 import type { Todu } from "@todu/engine";
@@ -234,7 +235,17 @@ export function createSyncPluginWorkerRuntime(
             throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
           }
 
-          await options.provider.push(binding, tasksResult.value, projectResult.value);
+          const tasksWithDetails: TaskWithDetail[] = [];
+          for (const task of tasksResult.value) {
+            const detailResult = await activeTodu.task.get(task.id);
+            if (detailResult.ok) {
+              tasksWithDetails.push(detailResult.value);
+            } else {
+              tasksWithDetails.push({ ...task, description: undefined });
+            }
+          }
+
+          await options.provider.push(binding, tasksWithDetails, projectResult.value);
         }
 
         await updateBindingStatus(activeTodu, binding, {

@@ -41,7 +41,7 @@ jobs:
       - name: Test
         env:
           TODUAI_RUN_SYNC_SERVER_TESTS: "0"
-        run: make test
+        run: make test-all
 
       - name: Build
         run: make build

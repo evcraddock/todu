@@ -136,6 +136,7 @@ export function createTaskNamespace(
         priority: input.priority ?? "medium",
         projectId: input.projectId,
         labels: input.labels ?? [],
+        assignees: input.assignees ?? [],
         createdAt: now,
         updatedAt: now,
       };
@@ -292,6 +293,10 @@ export function createTaskNamespace(
         if (input.labels !== undefined) {
           // Replace labels array entirely
           task.labels.splice(0, task.labels.length, ...input.labels);
+        }
+        if (input.assignees !== undefined) {
+          // Replace assignees array entirely
+          task.assignees.splice(0, task.assignees.length, ...input.assignees);
         }
         if (input.dueDate !== undefined) task.dueDate = input.dueDate;
         if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
@@ -453,6 +458,7 @@ function cloneTask(t: Task): Task {
     priority: t.priority,
     projectId: t.projectId,
     labels: [...t.labels],
+    assignees: [...t.assignees],
     dueDate: t.dueDate,
     scheduledDate: t.scheduledDate,
     externalId: t.externalId,
