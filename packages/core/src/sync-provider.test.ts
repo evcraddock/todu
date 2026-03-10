@@ -150,7 +150,11 @@ function createValidRegistration(): SyncProviderRegistration {
           tasks: [],
         };
       },
-      async push() {},
+      async push() {
+        return {
+          commentLinks: [],
+        };
+      },
       mapToTask() {
         return {
           id: "task-1" as never,
