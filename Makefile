@@ -27,8 +27,14 @@ help: ## Show this help
 build: node_modules ## Build all packages (core → engine → recurring-worker → daemon → cli)
 	npm run build
 
-test: node_modules ## Run default tests (sync-server integration tests are excluded)
+test: node_modules ## Run unit tests only (fast, no Automerge/storage)
 	npm test
+
+test-all: node_modules ## Run all tests including integration tests
+	npm run test:all
+
+test-integration: node_modules ## Run integration tests only (Automerge/storage)
+	npm run test:integration
 
 test-sync-server-integration: node_modules ## Run sync-server-backed integration tests
 	npm run test:sync-server-integration
@@ -42,9 +48,9 @@ check-ci: node_modules ## Lint + format + typecheck (no auto-fix, CI mode)
 typecheck: node_modules ## Run TypeScript type checking only
 	npm run typecheck
 
-pre-pr: node_modules ## Run pre-PR checks (check + test + build)
+pre-pr: node_modules ## Run pre-PR checks (check + all tests + build)
 	npm run check:ci
-	npm test
+	npm run test:all
 	npm run build
 
 clean: ## Remove build artifacts

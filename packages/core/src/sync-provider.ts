@@ -1,4 +1,12 @@
-import { err, type IntegrationBinding, ok, type Project, type Result, type Task } from "./types.js";
+import {
+  err,
+  type IntegrationBinding,
+  ok,
+  type Project,
+  type Result,
+  type Task,
+  type TaskWithDetail,
+} from "./types.js";
 
 export const SYNC_PROVIDER_API_VERSION = 1 as const;
 
@@ -18,6 +26,7 @@ export interface ExternalTask {
   status?: string;
   priority?: string;
   labels?: string[];
+  assignees?: string[];
   sourceUrl?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -49,9 +58,9 @@ export interface SyncProvider {
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: Task[], project: Project): Promise<void>;
+  push(binding: IntegrationBinding, tasks: TaskWithDetail[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: Task, project: Project): ExternalTask;
+  mapFromTask(task: TaskWithDetail, project: Project): ExternalTask;
 }
 
 export interface SyncProviderRegistration {

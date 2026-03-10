@@ -59,9 +59,9 @@ interface SyncProvider {
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: Task[], project: Project): Promise<void>;
+  push(binding: IntegrationBinding, tasks: TaskWithDetail[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: Task, project: Project): ExternalTask;
+  mapFromTask(task: TaskWithDetail, project: Project): ExternalTask;
 }
 ```
 

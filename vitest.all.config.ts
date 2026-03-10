@@ -8,11 +8,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     include: ["packages/*/src/**/*.test.{ts,tsx}"],
-    exclude: [
-      "**/node_modules/**",
-      "**/dist/**",
-      "**/*.integration.test.{ts,tsx}",
-    ],
   },
   resolve: {
     alias: {

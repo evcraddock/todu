@@ -159,6 +159,7 @@ function createValidRegistration(): SyncProviderRegistration {
           priority: "medium",
           projectId: "project-1" as never,
           labels: [],
+          assignees: [],
           createdAt: new Date(0).toISOString(),
           updatedAt: new Date(0).toISOString(),
         };

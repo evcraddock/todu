@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createIntegrationBindingId, createProjectId } from "./types.js";
 import {
+  MAX_ASSIGNEE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_INTEGRATION_FIELD_LENGTH,
   MAX_LABEL_NAME_LENGTH,
   MAX_NOTE_CONTENT_LENGTH,
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  validateAssignees,
   validateCreateIntegrationBindingInput,
   validateCreateLabelInput,
   validateCreateNoteInput,
@@ -428,10 +430,22 @@ describe("validateCreateTaskInput", () => {
         priority: "high",
         description: "Details here",
         labels: ["bug"],
+        assignees: ["alice"],
         dueDate: "2026-04-01",
         scheduledDate: "2026-03-30",
       }),
     ).toBeNull();
+  });
+
+  it("accepts valid input with assignees", () => {
+    expect(
+      validateCreateTaskInput({ title: "Test", projectId, assignees: ["alice", "bob"] }),
+    ).toBeNull();
+  });
+
+  it("rejects empty assignee string in create", () => {
+    const error = validateCreateTaskInput({ title: "Test", projectId, assignees: [""] });
+    expect(error?.field).toBe("assignees");
   });
 
   it("rejects empty title", () => {
@@ -502,6 +516,42 @@ describe("validateUpdateTaskInput", () => {
 
   it("skips transition check when currentStatus not provided", () => {
     expect(validateUpdateTaskInput({ status: "done" })).toBeNull();
+  });
+
+  it("accepts valid assignees update", () => {
+    expect(validateUpdateTaskInput({ assignees: ["alice", "bob"] })).toBeNull();
+  });
+
+  it("rejects empty assignee string in update", () => {
+    const error = validateUpdateTaskInput({ assignees: [""] });
+    expect(error?.field).toBe("assignees");
+  });
+});
+
+describe("validateAssignees", () => {
+  it("accepts empty array", () => {
+    expect(validateAssignees([])).toBeNull();
+  });
+
+  it("accepts valid assignee names", () => {
+    expect(validateAssignees(["alice", "bob"])).toBeNull();
+  });
+
+  it("rejects empty string assignee", () => {
+    const error = validateAssignees([""]);
+    expect(error?.field).toBe("assignees");
+    expect(error?.message).toContain("non-empty");
+  });
+
+  it("rejects whitespace-only assignee", () => {
+    const error = validateAssignees(["   "]);
+    expect(error?.field).toBe("assignees");
+  });
+
+  it("rejects too-long assignee", () => {
+    const error = validateAssignees(["a".repeat(MAX_ASSIGNEE_LENGTH + 1)]);
+    expect(error?.field).toBe("assignees");
+    expect(error?.message).toContain(`${MAX_ASSIGNEE_LENGTH}`);
   });
 });
 

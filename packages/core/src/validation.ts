@@ -42,6 +42,7 @@ export const MAX_DESCRIPTION_LENGTH = 2000;
 export const MAX_LABEL_NAME_LENGTH = 50;
 export const MAX_NOTE_CONTENT_LENGTH = 5000;
 export const MAX_INTEGRATION_FIELD_LENGTH = 255;
+export const MAX_ASSIGNEE_LENGTH = 100;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
@@ -102,6 +103,21 @@ export function validateIntegrationBindingProjectUniqueness(
     return validationError("projectId", `Project already has an integration binding: ${projectId}`);
   }
 
+  return null;
+}
+
+export function validateAssignees(assignees: string[]): ValidationError | null {
+  for (const assignee of assignees) {
+    if (typeof assignee !== "string" || assignee.trim().length === 0) {
+      return validationError("assignees", "Assignee must be a non-empty string");
+    }
+    if (assignee.trim().length > MAX_ASSIGNEE_LENGTH) {
+      return validationError(
+        "assignees",
+        `Assignee must be ${MAX_ASSIGNEE_LENGTH} characters or less`,
+      );
+    }
+  }
   return null;
 }
 
@@ -320,6 +336,11 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
     return validationError("priority", `Invalid priority: ${input.priority}`);
   }
 
+  if (input.assignees !== undefined) {
+    const assigneesError = validateAssignees(input.assignees);
+    if (assigneesError) return assigneesError;
+  }
+
   if (input.dueDate !== undefined) {
     const dateError = validateISODate("dueDate", input.dueDate);
     if (dateError) return dateError;
@@ -343,6 +364,7 @@ export function validateUpdateTaskInput(
     input.priority === undefined &&
     input.description === undefined &&
     input.labels === undefined &&
+    input.assignees === undefined &&
     input.dueDate === undefined &&
     input.scheduledDate === undefined
   ) {
@@ -373,6 +395,11 @@ export function validateUpdateTaskInput(
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
     return validationError("priority", `Invalid priority: ${input.priority}`);
+  }
+
+  if (input.assignees !== undefined) {
+    const assigneesError = validateAssignees(input.assignees);
+    if (assigneesError) return assigneesError;
   }
 
   if (input.dueDate !== undefined) {

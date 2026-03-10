@@ -2152,6 +2152,7 @@ function writeValidSyncPluginModule(
         priority: "medium",
         projectId: "project-1",
         labels: [],
+        assignees: [],
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
       };
@@ -2234,6 +2235,7 @@ export const syncProvider = {
         priority: "medium",
         projectId: "project-1",
         labels: [],
+        assignees: [],
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
       };
@@ -2407,6 +2409,7 @@ function writeInvalidSyncPluginModule(directory: string, filename: string): stri
         priority: "medium",
         projectId: "project-1",
         labels: [],
+        assignees: [],
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
       };

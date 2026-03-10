@@ -164,7 +164,9 @@ PR Pipeline Status
 | Command | Purpose |
 |---------|---------|
 | `make build` | Build all packages (core → engine → cli) |
-| `make test` | Run default tests (excludes sync-server integration tests) |
+| `make test` | Run unit tests only (fast, no Automerge/storage) |
+| `make test-all` | Run all tests including integration tests |
+| `make test-integration` | Run integration tests only (Automerge/storage) |
 | `make test-sync-server-integration` | Run sync-server-backed integration tests explicitly |
 | `make check` | Lint + format + typecheck |
 | `make pre-pr` | Full pre-PR checks (check + test) |

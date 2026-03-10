@@ -10,7 +10,7 @@ if (!Number.isInteger(runs) || runs <= 0) {
 for (let index = 1; index <= runs; index += 1) {
   console.log(`\n[storage-stability] run ${index}/${runs}`);
 
-  const result = spawnSync("npm", ["run", "test", "--", "packages/engine/src/storage.test.ts"], {
+  const result = spawnSync("npm", ["run", "test:all", "--", "packages/engine/src/storage.integration.test.ts"], {
     stdio: "inherit",
     shell: process.platform === "win32",
     env: process.env,
