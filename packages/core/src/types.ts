@@ -198,6 +198,11 @@ export interface TaskWithDetail extends Task {
   description?: string;
 }
 
+/** Task with description and comments, used as sync-provider push input */
+export interface TaskPushPayload extends TaskWithDetail {
+  comments: Note[];
+}
+
 // ============================================================================
 // Label entity — stored in catalog document
 // ============================================================================

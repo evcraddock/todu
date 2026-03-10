@@ -1,8 +1,10 @@
 import {
   createProjectId,
+  type ExternalComment,
   type IntegrationBinding,
+  type Note,
   type SyncProvider,
-  type TaskWithDetail,
+  type TaskPushPayload,
   type ToduError,
 } from "@todu/core";
 import type { Todu } from "@todu/engine";
@@ -226,7 +228,11 @@ export function createSyncPluginWorkerRuntime(
         await ensureInitialized();
 
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
-          await options.provider.pull(binding, projectResult.value);
+          const pullResult = await options.provider.pull(binding, projectResult.value);
+
+          if (pullResult.comments && pullResult.comments.length > 0) {
+            await applyPulledComments(activeTodu, pullResult.comments);
+          }
         }
 
         if (binding.strategy === "push" || binding.strategy === "bidirectional") {
@@ -235,17 +241,23 @@ export function createSyncPluginWorkerRuntime(
             throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
           }
 
-          const tasksWithDetails: TaskWithDetail[] = [];
+          const pushPayloads: TaskPushPayload[] = [];
           for (const task of tasksResult.value) {
             const detailResult = await activeTodu.task.get(task.id);
-            if (detailResult.ok) {
-              tasksWithDetails.push(detailResult.value);
-            } else {
-              tasksWithDetails.push({ ...task, description: undefined });
-            }
+            const taskDetail = detailResult.ok
+              ? detailResult.value
+              : { ...task, description: undefined };
+
+            const commentsResult = await activeTodu.note.list({
+              entityType: "task",
+              entityId: task.id,
+            });
+            const comments: Note[] = commentsResult.ok ? commentsResult.value : [];
+
+            pushPayloads.push({ ...taskDetail, comments });
           }
 
-          await options.provider.push(binding, tasksWithDetails, projectResult.value);
+          await options.provider.push(binding, pushPayloads, projectResult.value);
         }
 
         await updateBindingStatus(activeTodu, binding, {
@@ -359,6 +371,99 @@ export function createSyncPluginWorkerRuntime(
       };
     },
   };
+}
+
+/**
+ * Apply comments pulled from an external provider to local todu notes.
+ *
+ * Uses a snapshot-based reconciliation model:
+ * - Comments with an `externalId` matching an existing note's content tag are updated (last-write-wins by updatedAt).
+ * - Comments without a local match are created as new notes.
+ * - Local notes with external ID tags that are absent from the pull result are deleted.
+ *
+ * External IDs are tracked via a `sync:externalId:<value>` tag on each note.
+ */
+async function applyPulledComments(
+  todu: Todu,
+  comments: ExternalComment[],
+): Promise<{ created: number; updated: number; deleted: number }> {
+  const stats = { created: 0, updated: 0, deleted: 0 };
+
+  // Group pulled comments by task
+  const commentsByTask = new Map<string, ExternalComment[]>();
+  for (const comment of comments) {
+    const taskId = comment.externalTaskId;
+    const existing = commentsByTask.get(taskId);
+    if (existing) {
+      existing.push(comment);
+    } else {
+      commentsByTask.set(taskId, [comment]);
+    }
+  }
+
+  // Collect all task IDs that have at least one pulled comment
+  const affectedTaskIds = new Set(commentsByTask.keys());
+
+  // For each affected task, reconcile local notes with pulled comments
+  for (const taskId of affectedTaskIds) {
+    const pulledComments = commentsByTask.get(taskId) ?? [];
+    const localNotesResult = await todu.note.list({
+      entityType: "task",
+      entityId: taskId,
+    });
+    const localNotes: Note[] = localNotesResult.ok ? localNotesResult.value : [];
+
+    // Build index of local notes by external ID tag
+    const localByExternalId = new Map<string, Note>();
+    for (const note of localNotes) {
+      const externalIdTag = note.tags.find((t) => t.startsWith("sync:externalId:"));
+      if (externalIdTag) {
+        const externalId = externalIdTag.slice("sync:externalId:".length);
+        localByExternalId.set(externalId, note);
+      }
+    }
+
+    // Build set of pulled external IDs for delete detection
+    const pulledExternalIds = new Set(pulledComments.map((c) => c.externalId));
+
+    // Create or update pulled comments
+    for (const pulled of pulledComments) {
+      const localNote = localByExternalId.get(pulled.externalId);
+
+      if (!localNote) {
+        // Create new note
+        await todu.note.create({
+          content: pulled.body,
+          author: pulled.author ?? "external",
+          entityType: "task",
+          entityId: taskId,
+          tags: [`sync:externalId:${pulled.externalId}`],
+        });
+        stats.created++;
+      } else {
+        // Update if external is newer (last-write-wins by updatedAt)
+        const externalUpdatedAt = pulled.updatedAt ?? pulled.createdAt;
+        const localCreatedAt = localNote.createdAt;
+
+        if (externalUpdatedAt > localCreatedAt) {
+          await todu.note.update(localNote.id, {
+            content: pulled.body,
+          });
+          stats.updated++;
+        }
+      }
+    }
+
+    // Delete local synced notes whose external IDs are absent from pull result
+    for (const [externalId, note] of localByExternalId) {
+      if (!pulledExternalIds.has(externalId)) {
+        await todu.note.delete(note.id);
+        stats.deleted++;
+      }
+    }
+  }
+
+  return stats;
 }
 
 function formatToduError(error: ToduError): string {

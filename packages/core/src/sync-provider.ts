@@ -5,7 +5,7 @@ import {
   type Project,
   type Result,
   type Task,
-  type TaskWithDetail,
+  type TaskPushPayload,
 } from "./types.js";
 
 export const SYNC_PROVIDER_API_VERSION = 1 as const;
@@ -58,9 +58,9 @@ export interface SyncProvider {
   initialize(config: SyncProviderConfig): Promise<void>;
   shutdown(): Promise<void>;
   pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: TaskWithDetail[], project: Project): Promise<void>;
+  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<void>;
   mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: TaskWithDetail, project: Project): ExternalTask;
+  mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
 }
 
 export interface SyncProviderRegistration {
