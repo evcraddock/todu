@@ -1,10 +1,13 @@
 import {
   createProjectId,
   type ExternalComment,
+  type ExternalTask,
   type IntegrationBinding,
   type Note,
+  type Project,
   type SyncProvider,
   type SyncProviderPushCommentLink,
+  type Task,
   type TaskPushPayload,
   type ToduError,
 } from "@todu/core";
@@ -232,6 +235,15 @@ export function createSyncPluginWorkerRuntime(
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
           const pullResult = await options.provider.pull(binding, projectResult.value);
 
+          if (pullResult.tasks.length > 0) {
+            await applyPulledTasks(
+              activeTodu,
+              options.provider,
+              projectResult.value,
+              pullResult.tasks,
+            );
+          }
+
           if (pullResult.comments && pullResult.comments.length > 0) {
             await applyPulledComments(activeTodu, pullResult.comments);
           }
@@ -395,6 +407,161 @@ function getSyncExternalIdFromNote(note: Note): string | null {
   }
 
   return externalIdTag.slice(SYNC_EXTERNAL_ID_TAG_PREFIX.length);
+}
+
+function getPulledTaskTimestamp(task: ExternalTask): string | null {
+  return task.updatedAt ?? task.createdAt ?? null;
+}
+
+function buildPulledTaskCreateInput(
+  mappedTask: Task,
+  project: Project,
+  externalTask: ExternalTask,
+): {
+  title: string;
+  projectId: Project["id"];
+  status: Task["status"];
+  priority: Task["priority"];
+  description?: string;
+  labels: string[];
+  assignees: string[];
+  externalId: string;
+  sourceUrl?: string;
+} {
+  const input: {
+    title: string;
+    projectId: Project["id"];
+    status: Task["status"];
+    priority: Task["priority"];
+    description?: string;
+    labels: string[];
+    assignees: string[];
+    externalId: string;
+    sourceUrl?: string;
+  } = {
+    title: mappedTask.title,
+    projectId: project.id,
+    status: mappedTask.status,
+    priority: mappedTask.priority,
+    labels: mappedTask.labels,
+    assignees: mappedTask.assignees,
+    externalId: mappedTask.externalId ?? externalTask.externalId,
+  };
+
+  if (externalTask.description !== undefined) {
+    input.description = externalTask.description;
+  }
+
+  const sourceUrl = mappedTask.sourceUrl ?? externalTask.sourceUrl;
+  if (sourceUrl !== undefined) {
+    input.sourceUrl = sourceUrl;
+  }
+
+  return input;
+}
+
+function buildPulledTaskUpdateInput(
+  mappedTask: Task,
+  externalTask: ExternalTask,
+): {
+  title: string;
+  status: Task["status"];
+  priority: Task["priority"];
+  description?: string;
+  labels: string[];
+  assignees: string[];
+  externalId: string;
+  sourceUrl?: string;
+} {
+  const input: {
+    title: string;
+    status: Task["status"];
+    priority: Task["priority"];
+    description?: string;
+    labels: string[];
+    assignees: string[];
+    externalId: string;
+    sourceUrl?: string;
+  } = {
+    title: mappedTask.title,
+    status: mappedTask.status,
+    priority: mappedTask.priority,
+    labels: mappedTask.labels,
+    assignees: mappedTask.assignees,
+    externalId: mappedTask.externalId ?? externalTask.externalId,
+  };
+
+  if (externalTask.description !== undefined) {
+    input.description = externalTask.description;
+  }
+
+  const sourceUrl = mappedTask.sourceUrl ?? externalTask.sourceUrl;
+  if (sourceUrl !== undefined) {
+    input.sourceUrl = sourceUrl;
+  }
+
+  return input;
+}
+
+async function applyPulledTasks(
+  todu: Todu,
+  provider: SyncProvider,
+  project: Project,
+  tasks: ExternalTask[],
+): Promise<{ created: number; updated: number; skipped: number }> {
+  const stats = { created: 0, updated: 0, skipped: 0 };
+  const tasksResult = await todu.task.list({ projectId: project.id });
+  if (!tasksResult.ok) {
+    throw new Error(`pulled task list failed: ${formatToduError(tasksResult.error)}`);
+  }
+
+  const localByExternalId = new Map<string, Task>();
+  for (const task of tasksResult.value) {
+    if (task.externalId) {
+      localByExternalId.set(task.externalId, task);
+    }
+  }
+
+  for (const externalTask of tasks) {
+    const mappedTask = provider.mapToTask(externalTask, project);
+    const existingTask = localByExternalId.get(externalTask.externalId);
+    const externalUpdatedAt = getPulledTaskTimestamp(externalTask);
+
+    if (!existingTask) {
+      const createResult = await todu.task.create(
+        buildPulledTaskCreateInput(mappedTask, project, externalTask),
+      );
+      if (!createResult.ok) {
+        throw new Error(
+          `pulled task create failed: externalId=${externalTask.externalId} error=${formatToduError(createResult.error)}`,
+        );
+      }
+
+      localByExternalId.set(externalTask.externalId, createResult.value);
+      stats.created += 1;
+      continue;
+    }
+
+    if (externalUpdatedAt && externalUpdatedAt <= existingTask.updatedAt) {
+      stats.skipped += 1;
+      continue;
+    }
+
+    const updateResult = await todu.task.update(
+      existingTask.id,
+      buildPulledTaskUpdateInput(mappedTask, externalTask),
+    );
+    if (!updateResult.ok) {
+      throw new Error(
+        `pulled task update failed: task=${existingTask.id} externalId=${externalTask.externalId} error=${formatToduError(updateResult.error)}`,
+      );
+    }
+
+    localByExternalId.set(externalTask.externalId, updateResult.value);
+    stats.updated += 1;
+  }
+
+  return stats;
 }
 
 async function applyPushCommentLinks(

@@ -443,6 +443,18 @@ describe("validateCreateTaskInput", () => {
     ).toBeNull();
   });
 
+  it("accepts valid sync linkage fields in create", () => {
+    expect(
+      validateCreateTaskInput({
+        title: "Test",
+        projectId,
+        status: "waiting",
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+      }),
+    ).toBeNull();
+  });
+
   it("rejects empty assignee string in create", () => {
     const error = validateCreateTaskInput({ title: "Test", projectId, assignees: [""] });
     expect(error?.field).toBe("assignees");
@@ -478,6 +490,15 @@ describe("validateCreateTaskInput", () => {
       description: "a".repeat(MAX_DESCRIPTION_LENGTH + 1),
     });
     expect(error?.field).toBe("description");
+  });
+
+  it("rejects blank externalId", () => {
+    const error = validateCreateTaskInput({
+      title: "Test",
+      projectId,
+      externalId: "   ",
+    });
+    expect(error?.field).toBe("externalId");
   });
 });
 
@@ -522,9 +543,23 @@ describe("validateUpdateTaskInput", () => {
     expect(validateUpdateTaskInput({ assignees: ["alice", "bob"] })).toBeNull();
   });
 
+  it("accepts valid sync linkage updates", () => {
+    expect(
+      validateUpdateTaskInput({
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+      }),
+    ).toBeNull();
+  });
+
   it("rejects empty assignee string in update", () => {
     const error = validateUpdateTaskInput({ assignees: [""] });
     expect(error?.field).toBe("assignees");
+  });
+
+  it("rejects blank sourceUrl update", () => {
+    const error = validateUpdateTaskInput({ sourceUrl: "   " });
+    expect(error?.field).toBe("sourceUrl");
   });
 });
 

@@ -287,12 +287,15 @@ export interface UpdateIntegrationBindingStatusInput {
 export interface CreateTaskInput {
   title: string;
   projectId: ProjectId;
+  status?: TaskStatus;
   priority?: TaskPriority;
   description?: string;
   labels?: string[];
   assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
+  externalId?: string;
+  sourceUrl?: string;
 }
 
 export interface UpdateTaskInput {
@@ -304,6 +307,8 @@ export interface UpdateTaskInput {
   assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
+  externalId?: string;
+  sourceUrl?: string;
 }
 
 export interface TaskFilter {

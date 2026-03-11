@@ -75,6 +75,22 @@ describe("task namespace", () => {
       expect(result.value.scheduledDate).toBe("2026-03-30");
     });
 
+    it("creates a task with sync linkage fields", async () => {
+      const result = await todu.task.create({
+        title: "Synced Task",
+        projectId,
+        status: "waiting",
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.status).toBe("waiting");
+      expect(result.value.externalId).toBe("gh-101");
+      expect(result.value.sourceUrl).toBe("https://example.com/issues/101");
+    });
+
     it("trims whitespace from title", async () => {
       const result = await todu.task.create({ title: "  Trimmed  ", projectId });
       expect(result.ok).toBe(true);
@@ -348,6 +364,17 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("updates sync linkage fields", async () => {
+      const result = await todu.task.update(taskId, {
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.externalId).toBe("gh-101");
+      expect(result.value.sourceUrl).toBe("https://example.com/issues/101");
     });
 
     it("replaces assignees entirely on update", async () => {

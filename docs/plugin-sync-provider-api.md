@@ -75,6 +75,17 @@ Expected lifecycle:
 4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy.
 5. Call `shutdown()` during daemon stop/unload.
 
+## Task Pull Contract
+
+`SyncProviderPullResult.tasks` accepts `ExternalTask[]`. The runtime reconciles pulled tasks within the binding's project by `externalId`:
+
+- Each pulled item is mapped through `mapToTask(external, project)`.
+- When no local task with the same `externalId` exists, the runtime creates a new task in the bound project.
+- When a matching local task exists, the runtime updates it only if the external item is newer by `updatedAt` (falling back to `createdAt` when `updatedAt` is absent).
+- Task deletions are not inferred from pull results in the current implementation.
+
+The runtime persists the pulled task's core fields, including mapped status, priority, labels, assignees, `externalId`, and `sourceUrl`. Task descriptions come from `ExternalTask.description`.
+
 ## Comment Sync Contract
 
 The sync-provider runtime supports comment/note mirroring through pull and push paths.
