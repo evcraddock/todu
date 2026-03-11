@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-03-11
+
+Patch release fixing sync-provider pull behavior for external tasks.
+
+### Fixed
+- The daemon sync worker now consumes `pullResult.tasks` from sync providers instead of silently discarding pulled external tasks (#316)
+- Pulled external tasks are now mapped through `provider.mapToTask(...)` and created or updated locally using freshness checks so newer external task state appears in the bound todu project (#316)
+
+### Changed
+- Task create/update inputs now preserve sync linkage fields needed by pulled task reconciliation, including status, external ID, and source URL (#316)
+- Sync provider API docs now describe the pulled-task reconciliation behavior for provider authors (#316)
+
 ## [0.7.0] - 2026-03-10
 
 Sync-provider push-side comment linking for local-origin note sync.
