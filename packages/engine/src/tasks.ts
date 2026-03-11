@@ -53,6 +53,40 @@ export function createTaskNamespace(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
 ): InternalTaskNamespace {
+  function migrateTaskListDoc(handle: DocHandle<TaskListDocument>): void {
+    const doc = handle.doc();
+    if (!doc) return;
+
+    const tasks = doc.tasks ?? [];
+    const needsMigration =
+      doc.detailDocIds === undefined ||
+      doc.detailDocIds === null ||
+      tasks.some((task) => task.labels === undefined || task.labels === null) ||
+      tasks.some((task) => task.assignees === undefined || task.assignees === null);
+
+    if (!needsMigration) return;
+
+    handle.change((d) => {
+      if (d.detailDocIds === undefined || d.detailDocIds === null) {
+        d.detailDocIds = {};
+      }
+      for (const task of d.tasks) {
+        if (task.labels === undefined || task.labels === null) {
+          task.labels = [];
+        }
+        if (task.assignees === undefined || task.assignees === null) {
+          task.assignees = [];
+        }
+      }
+    });
+  }
+
+  async function loadTaskListDoc(docId: string): Promise<DocHandle<TaskListDocument>> {
+    const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+    migrateTaskListDoc(handle);
+    return handle;
+  }
+
   /**
    * Get or create the TaskListDocument for a project.
    * Stores the document ID in catalog.taskListDocIds.
@@ -64,7 +98,7 @@ export function createTaskNamespace(
     const existingDocId = catalogDoc?.taskListDocIds[projectId];
 
     if (existingDocId) {
-      return await repo.find<TaskListDocument>(existingDocId as DocumentId);
+      return await loadTaskListDoc(existingDocId);
     }
 
     // Create new task list document
@@ -98,7 +132,7 @@ export function createTaskNamespace(
     if (!catalogDoc) return { found: false };
 
     for (const docId of Object.values(catalogDoc.taskListDocIds)) {
-      const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+      const handle = await loadTaskListDoc(docId);
       const doc = handle.doc();
       if (!doc) continue;
 
@@ -183,7 +217,7 @@ export function createTaskNamespace(
         : Object.values(catalogDoc.taskListDocIds);
 
       for (const docId of docIds) {
-        const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+        const handle = await loadTaskListDoc(docId);
         const doc = handle.doc();
         if (!doc) continue;
 
@@ -435,7 +469,7 @@ export function createTaskNamespace(
       const matches: Task[] = [];
 
       for (const docId of Object.values(catalogDoc.taskListDocIds)) {
-        const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+        const handle = await loadTaskListDoc(docId);
         const doc = handle.doc();
         if (!doc) continue;
 
@@ -461,8 +495,8 @@ function cloneTask(t: Task): Task {
     status: t.status,
     priority: t.priority,
     projectId: t.projectId,
-    labels: [...t.labels],
-    assignees: [...t.assignees],
+    labels: [...(t.labels ?? [])],
+    assignees: [...(t.assignees ?? [])],
     dueDate: t.dueDate,
     scheduledDate: t.scheduledDate,
     externalId: t.externalId,
