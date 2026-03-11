@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-03-11
+
+Patch release focused on sync correctness, recurring reliability, and legacy task-data compatibility.
+
+### Fixed
+- The daemon sync worker now applies pulled sync-provider tasks correctly so external task updates are created or reconciled locally instead of being dropped (#316)
+- Pushed task link metadata is now written back onto local tasks so externally-created tasks keep their `externalId` and `sourceUrl` mappings for future sync passes (#318)
+- Pulled external comments now resolve to the correct local task IDs during reconciliation, preventing synced comments from attaching to the wrong task or orphan placeholder IDs (#320)
+- Recurring startup no longer hangs on DST-transition schedules, allowing the recurring worker to make forward progress across daylight saving boundary calculations (#324)
+- Legacy task list documents missing `labels` or `assignees` arrays no longer crash task reads, so the Tasks view loads safely for older datasets (#326)
+
+### Changed
+- Added regression coverage for legacy persisted task documents with missing array fields during task-list reads (#326)
+
 ## [0.7.4] - 2026-03-11
 
 Patch release fixing a recurring-worker startup hang caused by DST-transition recurrence calculations.
