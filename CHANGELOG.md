@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-03-11
+
+Patch release restoring observability for direct daemon lifecycle mode.
+
+### Fixed
+- Direct daemon lifecycle mode now preserves detached daemon stdout and stderr in durable log files under `<data_dir>` instead of discarding them when no system service manager is configured (#328)
+
+### Changed
+- Oversized direct-mode daemon log files now rotate on startup, keeping `.1` and `.2` archives for troubleshooting continuity (#328)
+- CLI daemon usage and service operations docs now document the direct-mode log file paths and rotation behavior (#328)
+
 ## [0.7.5] - 2026-03-11
 
 Patch release focused on sync correctness, recurring reliability, and legacy task-data compatibility.
