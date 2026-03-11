@@ -71,6 +71,10 @@ interface DaemonCommandContext {
 }
 
 const DIRECT_PID_FILENAME = "daemon.pid";
+const DIRECT_STDOUT_LOG_FILENAME = "daemon.out.log";
+const DIRECT_STDERR_LOG_FILENAME = "daemon.err.log";
+const DIRECT_LOG_ROTATION_MAX_BYTES = 10 * 1024 * 1024;
+const DIRECT_LOG_ROTATION_KEEP_COUNT = 2;
 const SYSTEMD_SERVICE_NAME = "toduai-daemon";
 const SYSTEMD_SERVICE_PATH = ".config/systemd/user/toduai-daemon.service";
 const LAUNCHD_LABEL = "com.todu.daemon";
@@ -460,6 +464,41 @@ function isLaunchdAlreadyStopped(message: string): boolean {
   return message.includes("No such process") || message.includes("Could not find service");
 }
 
+function resolveDirectLogPaths(storagePath: string): { stdout: string; stderr: string } {
+  return {
+    stdout: path.join(storagePath, DIRECT_STDOUT_LOG_FILENAME),
+    stderr: path.join(storagePath, DIRECT_STDERR_LOG_FILENAME),
+  };
+}
+
+function rotateDirectLogFile(filePath: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return;
+  }
+
+  if (!stat.isFile() || stat.size < DIRECT_LOG_ROTATION_MAX_BYTES) {
+    return;
+  }
+
+  safeUnlink(`${filePath}.${DIRECT_LOG_ROTATION_KEEP_COUNT}`);
+
+  for (let index = DIRECT_LOG_ROTATION_KEEP_COUNT - 1; index >= 1; index -= 1) {
+    const currentArchivePath = `${filePath}.${index}`;
+    const nextArchivePath = `${filePath}.${index + 1}`;
+
+    if (!fs.existsSync(currentArchivePath)) {
+      continue;
+    }
+
+    fs.renameSync(currentArchivePath, nextArchivePath);
+  }
+
+  fs.renameSync(filePath, `${filePath}.1`);
+}
+
 async function executeDirectStart(
   action: DaemonLifecycleAction,
   context: DaemonCommandContext,
@@ -508,16 +547,62 @@ async function executeDirectStart(
 
   fs.mkdirSync(context.storagePath, { recursive: true });
 
-  const daemonProcess = spawn(
-    process.execPath,
-    resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
-    {
-      cwd: process.cwd(),
-      detached: true,
-      stdio: "ignore",
-      env: createDaemonChildEnv(context),
-    },
-  );
+  const directLogPaths = resolveDirectLogPaths(context.storagePath);
+  let stdoutFd: number | null = null;
+  let stderrFd: number | null = null;
+
+  try {
+    rotateDirectLogFile(directLogPaths.stdout);
+    rotateDirectLogFile(directLogPaths.stderr);
+    stdoutFd = fs.openSync(directLogPaths.stdout, "a");
+    stderrFd = fs.openSync(directLogPaths.stderr, "a");
+  } catch (error) {
+    if (stdoutFd !== null) {
+      fs.closeSync(stdoutFd);
+    }
+
+    if (stderrFd !== null) {
+      fs.closeSync(stderrFd);
+    }
+
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "failed to open direct daemon log files",
+      details: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  let daemonProcess: ReturnType<typeof spawn>;
+  try {
+    daemonProcess = spawn(
+      process.execPath,
+      resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
+      {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: ["ignore", stdoutFd, stderrFd],
+        env: createDaemonChildEnv(context),
+      },
+    );
+  } catch (error) {
+    fs.closeSync(stdoutFd);
+    fs.closeSync(stderrFd);
+
+    return {
+      action,
+      ok: false,
+      mode: "direct",
+      delegated: false,
+      message: "failed to spawn daemon process",
+      details: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  fs.closeSync(stdoutFd);
+  fs.closeSync(stderrFd);
 
   const daemonPid = daemonProcess.pid;
   if (!daemonPid) {

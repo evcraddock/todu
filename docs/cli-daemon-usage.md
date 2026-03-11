@@ -26,6 +26,8 @@ Wrapper behavior:
 - **Delegates** to system service managers when configured (`systemd --user` on Linux, `launchd` on macOS).
 - Falls back to **direct managed mode** when no service registration exists.
 - Direct mode tracks a managed PID at `<data_dir>/daemon.pid` and refuses to stop unmanaged daemon processes.
+- Direct mode appends stdout/stderr logs to `<data_dir>/daemon.out.log` and `<data_dir>/daemon.err.log`.
+- On `daemon start`/`daemon restart`, oversized direct log files are rotated to `.1` and `.2` before the new process starts.
 
 Foreground daemon run (manual/interactive) is still available:
 
