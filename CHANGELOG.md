@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-03-11
+
+Patch release fixing a recurring-worker startup hang caused by DST-transition recurrence calculations.
+
+### Fixed
+- The daemon no longer hangs during startup when recurring-worker processes existing local recurring data that crosses daylight saving time boundaries (#324)
+- Recurrence date progression now skips same-local-date results across DST transitions so recurring processing makes forward progress instead of looping on the same day (#324)
+
+### Changed
+- Scheduled-date validation now uses the corrected next-occurrence progression logic so DST-aware recurrence checks stay consistent with recurring processing behavior (#324)
+- Added regression coverage for daily and weekly America/Chicago DST-transition recurrence cases in the engine schedule tests (#324)
+
 ## [0.7.3] - 2026-03-11
 
 Patch release fixing pull-side comment attachment for bidirectional sync and aligning the default local PR gate with the unit-test-only workflow.
