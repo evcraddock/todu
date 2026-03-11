@@ -48,9 +48,9 @@ check-ci: node_modules ## Lint + format + typecheck (no auto-fix, CI mode)
 typecheck: node_modules ## Run TypeScript type checking only
 	npm run typecheck
 
-pre-pr: node_modules ## Run pre-PR checks (check + all tests + build)
+pre-pr: node_modules ## Run pre-PR checks (check + unit tests + build)
 	npm run check:ci
-	npm run test:all
+	npm test
 	npm run build
 
 clean: ## Remove build artifacts

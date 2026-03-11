@@ -169,7 +169,7 @@ PR Pipeline Status
 | `make test-integration` | Run integration tests only (Automerge/storage) |
 | `make test-sync-server-integration` | Run sync-server-backed integration tests explicitly |
 | `make check` | Lint + format + typecheck |
-| `make pre-pr` | Full pre-PR checks (check + test) |
+| `make pre-pr` | Full pre-PR checks (check + unit tests + build) |
 | `npm run test:storage-stability` | Repeat storage teardown tests to detect race leaks |
 | `make run ARGS="..."` | Run CLI |
 

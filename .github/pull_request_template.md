@@ -21,6 +21,6 @@
 
 ## Checklist
 
-- [ ] `./scripts/pre-pr.sh` passes
+- [ ] `make pre-pr` passes
 - [ ] Documentation updated (if needed)
 - [ ] No unrelated changes included
