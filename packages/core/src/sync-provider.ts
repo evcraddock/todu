@@ -6,6 +6,7 @@ import {
   type Project,
   type Result,
   type Task,
+  type TaskId,
   type TaskPushPayload,
 } from "./types.js";
 
@@ -63,8 +64,15 @@ export interface SyncProviderPushCommentLink {
   raw?: unknown;
 }
 
+export interface SyncProviderPushTaskLink {
+  localTaskId: TaskId;
+  externalId: string;
+  sourceUrl?: string;
+}
+
 export interface SyncProviderPushResult {
   commentLinks: SyncProviderPushCommentLink[];
+  taskLinks: SyncProviderPushTaskLink[];
 }
 
 export interface SyncProvider {

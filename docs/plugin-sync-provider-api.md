@@ -107,12 +107,21 @@ interface SyncProviderPushCommentLink {
   raw?: unknown;
 }
 
+interface SyncProviderPushTaskLink {
+  localTaskId: TaskId;
+  externalId: string;
+  sourceUrl?: string;
+}
+
 interface SyncProviderPushResult {
   commentLinks: SyncProviderPushCommentLink[];
+  taskLinks: SyncProviderPushTaskLink[];
 }
 ```
 
-The runtime applies each returned link idempotently by attaching the canonical `sync:externalId:<externalCommentId>` tag to the referenced local note. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error.
+The runtime applies returned `taskLinks` first, writing back task linkage for pushed local tasks so later pull cycles deduplicate by `externalId`. Returning the same task link again is a no-op. Returning a conflicting task link for a task that is already linked to a different external item is treated as a runtime error.
+
+The runtime then applies each returned comment link idempotently by attaching the canonical `sync:externalId:<externalCommentId>` tag to the referenced local note. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error.
 
 ### Pull path
 

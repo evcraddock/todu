@@ -7,6 +7,7 @@ import {
   type Project,
   type SyncProvider,
   type SyncProviderPushCommentLink,
+  type SyncProviderPushTaskLink,
   type Task,
   type TaskPushPayload,
   type ToduError,
@@ -276,10 +277,15 @@ export function createSyncPluginWorkerRuntime(
             pushPayloads,
             projectResult.value,
           );
-          if (!pushResult || !Array.isArray(pushResult.commentLinks)) {
-            throw new Error("sync provider push must return { commentLinks: [] }");
+          if (
+            !pushResult ||
+            !Array.isArray(pushResult.commentLinks) ||
+            !Array.isArray(pushResult.taskLinks)
+          ) {
+            throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
           }
 
+          await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
           await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
         }
 
@@ -407,6 +413,48 @@ function getSyncExternalIdFromNote(note: Note): string | null {
   }
 
   return externalIdTag.slice(SYNC_EXTERNAL_ID_TAG_PREFIX.length);
+}
+
+async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[]): Promise<void> {
+  for (const link of links) {
+    const taskResult = await todu.task.get(link.localTaskId);
+    if (!taskResult.ok) {
+      throw new Error(
+        `push task link references missing local task: task=${link.localTaskId} error=${formatToduError(taskResult.error)}`,
+      );
+    }
+
+    const task = taskResult.value;
+    if (task.externalId && task.externalId !== link.externalId) {
+      throw new Error(
+        `push task link conflicts with existing task linkage: task=${link.localTaskId} existing=${task.externalId} next=${link.externalId}`,
+      );
+    }
+
+    const updateInput: {
+      externalId?: string;
+      sourceUrl?: string;
+    } = {};
+
+    if (!task.externalId) {
+      updateInput.externalId = link.externalId;
+    }
+
+    if (link.sourceUrl !== undefined && task.sourceUrl !== link.sourceUrl) {
+      updateInput.sourceUrl = link.sourceUrl;
+    }
+
+    if (updateInput.externalId === undefined && updateInput.sourceUrl === undefined) {
+      continue;
+    }
+
+    const updateResult = await todu.task.update(task.id, updateInput);
+    if (!updateResult.ok) {
+      throw new Error(
+        `push task link update failed: task=${link.localTaskId} externalId=${link.externalId} error=${formatToduError(updateResult.error)}`,
+      );
+    }
+  }
 }
 
 function getPulledTaskTimestamp(task: ExternalTask): string | null {

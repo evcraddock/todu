@@ -153,6 +153,7 @@ function createValidRegistration(): SyncProviderRegistration {
       async push() {
         return {
           commentLinks: [],
+          taskLinks: [],
         };
       },
       mapToTask() {

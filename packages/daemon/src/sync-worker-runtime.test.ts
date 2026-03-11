@@ -298,6 +298,228 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
+  it("push applies returned task links to existing local tasks", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "push" });
+    const provider = createProvider({
+      push: vi.fn<SyncProvider["push"]>().mockResolvedValue({
+        commentLinks: [],
+        taskLinks: [
+          {
+            localTaskId: task.id,
+            externalId: "gh-101",
+            sourceUrl: "https://example.com/issues/101",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.update).toHaveBeenCalledTimes(1);
+    expect(todu.task.update).toHaveBeenCalledWith(task.id, {
+      externalId: "gh-101",
+      sourceUrl: "https://example.com/issues/101",
+    });
+
+    handle.stop();
+  });
+
+  it("push applies returned task links idempotently across cycles", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "push" });
+    const provider = createProvider({
+      push: vi.fn<SyncProvider["push"]>().mockResolvedValue({
+        commentLinks: [],
+        taskLinks: [
+          {
+            localTaskId: task.id,
+            externalId: "gh-101",
+            sourceUrl: "https://example.com/issues/101",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(provider.push).toHaveBeenCalledTimes(2);
+    expect(todu.task.update).toHaveBeenCalledTimes(1);
+
+    handle.stop();
+  });
+
+  it("push task links prevent duplicate task import on later pull cycles", async () => {
+    const project = createProject();
+    const task = createTask(project.id);
+    const binding = createBinding(project.id, { strategy: "bidirectional" });
+    const provider = createProvider({
+      pull: vi
+        .fn<SyncProvider["pull"]>()
+        .mockResolvedValueOnce({ tasks: [], comments: [] })
+        .mockResolvedValue({
+          tasks: [
+            {
+              externalId: "gh-101",
+              title: task.title,
+              updatedAt: new Date(0).toISOString(),
+            },
+          ],
+          comments: [],
+        }),
+      push: vi
+        .fn<SyncProvider["push"]>()
+        .mockResolvedValueOnce({
+          commentLinks: [],
+          taskLinks: [
+            {
+              localTaskId: task.id,
+              externalId: "gh-101",
+              sourceUrl: "https://example.com/issues/101",
+            },
+          ],
+        })
+        .mockResolvedValue({ commentLinks: [], taskLinks: [] }),
+      mapToTask: vi
+        .fn<SyncProvider["mapToTask"]>()
+        .mockImplementation((external, activeProject) => ({
+          id: task.id,
+          title: external.title,
+          status: "active",
+          priority: "medium",
+          projectId: activeProject.id,
+          labels: [],
+          assignees: [],
+          externalId: external.externalId,
+          sourceUrl: external.sourceUrl,
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        })),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(todu.task.create).not.toHaveBeenCalled();
+    expect(todu.task.update).toHaveBeenCalledTimes(1);
+    expect(todu.task.update).toHaveBeenCalledWith(task.id, {
+      externalId: "gh-101",
+      sourceUrl: "https://example.com/issues/101",
+    });
+
+    handle.stop();
+  });
+
+  it("push task links fail on conflicting existing linkage", async () => {
+    const project = createProject();
+    const task = {
+      ...createTask(project.id),
+      externalId: "gh-existing",
+    };
+    const binding = createBinding(project.id, { strategy: "push" });
+    const provider = createProvider({
+      push: vi.fn<SyncProvider["push"]>().mockResolvedValue({
+        commentLinks: [],
+        taskLinks: [
+          {
+            localTaskId: task.id,
+            externalId: "gh-other",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const statusTransitions = todu.integration.updateStatus.mock.calls
+      .map((call) => call[1]?.state)
+      .filter((value) => value !== undefined);
+
+    expect(statusTransitions).toEqual(["running", "error"]);
+    expect(todu.task.update).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
   it("push applies returned comment links to existing local notes", async () => {
     const project = createProject();
     const task = createTask(project.id);
@@ -317,6 +539,7 @@ describe("sync-worker-runtime", () => {
             externalTaskId: task.id,
           },
         ],
+        taskLinks: [],
       }),
     });
     const todu = createTodu(project, [task], [binding], { notes: [localNote] });
@@ -367,6 +590,7 @@ describe("sync-worker-runtime", () => {
             externalTaskId: task.id,
           },
         ],
+        taskLinks: [],
       }),
     });
     const todu = createTodu(project, [task], [binding], { notes: [localNote] });
@@ -433,8 +657,9 @@ describe("sync-worker-runtime", () => {
               externalTaskId: task.id,
             },
           ],
+          taskLinks: [],
         })
-        .mockResolvedValue({ commentLinks: [] }),
+        .mockResolvedValue({ commentLinks: [], taskLinks: [] }),
     });
     const todu = createTodu(project, [task], [binding], { notes: [localNote] });
 
@@ -503,8 +728,9 @@ describe("sync-worker-runtime", () => {
               externalTaskId: task.id,
             },
           ],
+          taskLinks: [],
         })
-        .mockResolvedValue({ commentLinks: [] }),
+        .mockResolvedValue({ commentLinks: [], taskLinks: [] }),
     });
     const todu = createTodu(project, [task], [binding], { notes: [localNote] });
 
@@ -953,7 +1179,7 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     initialize: vi.fn<SyncProvider["initialize"]>().mockResolvedValue(undefined),
     pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({ tasks: [] }),
-    push: vi.fn<SyncProvider["push"]>().mockResolvedValue({ commentLinks: [] }),
+    push: vi.fn<SyncProvider["push"]>().mockResolvedValue({ commentLinks: [], taskLinks: [] }),
     shutdown: vi.fn<SyncProvider["shutdown"]>().mockResolvedValue(undefined),
     mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockImplementation((item) => ({
       id: createTaskId(String(item.externalId)),
