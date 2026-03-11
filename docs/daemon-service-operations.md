@@ -34,6 +34,9 @@ Direct managed fallback mode:
 
 - starts daemon as a detached local process
 - writes managed PID to `<data_dir>/daemon.pid`
+- appends stdout logs to `<data_dir>/daemon.out.log`
+- appends stderr logs to `<data_dir>/daemon.err.log`
+- rotates oversized direct log files on `start`/`restart`, keeping `.1` and `.2` archives
 - stops only managed direct-mode daemon processes
 - refuses to stop unmanaged daemon processes (safe fallback behavior)
 
@@ -204,3 +207,4 @@ If you set a socket override for the daemon service, CLI invocations must use th
 
 - Run `toduai --format json daemon status` and inspect `reason`/`transport.path`.
 - Check service logs (`journalctl --user -u toduai-daemon -f` or `tail -f` macOS logs).
+- In direct lifecycle mode, inspect `<data_dir>/daemon.out.log` and `<data_dir>/daemon.err.log`.

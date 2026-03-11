@@ -136,13 +136,18 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     expect(afterStop.running).toBe(false);
   });
 
-  it("daemon start/stop/restart commands manage daemon in direct mode", () => {
+  it("daemon start/stop/restart commands manage daemon in direct mode", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-lifecycle-test-"));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
 
     const start = runCli(["daemon", "start"]);
     expect(start.status).toBe(0);
     expect(start.stdout).toContain("Daemon start: started managed daemon process");
+
+    const stdoutLogPath = path.join(tmpDir, "daemon.out.log");
+    const stderrLogPath = path.join(tmpDir, "daemon.err.log");
+    await waitForFileContains(stdoutLogPath, '"message":"daemon process started"', 5000);
+    expect(fs.existsSync(stderrLogPath)).toBe(true);
 
     const statusAfterStart = runCli(["--format", "json", "daemon", "status"]);
     expect(statusAfterStart.status).toBe(0);
@@ -163,6 +168,24 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     const statusAfterStop = runCli(["--format", "json", "daemon", "status"]);
     expect(statusAfterStop.status).toBe(0);
     expect(JSON.parse(statusAfterStop.stdout).running).toBe(false);
+  });
+
+  it("daemon start rotates oversized direct log files on startup", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-log-rotation-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+
+    const stdoutLogPath = path.join(tmpDir, "daemon.out.log");
+    const stderrLogPath = path.join(tmpDir, "daemon.err.log");
+    createLargeLogFile(stdoutLogPath, "old-stdout-log");
+    createLargeLogFile(stderrLogPath, "old-stderr-log");
+
+    const start = runCli(["daemon", "start"]);
+    expect(start.status).toBe(0);
+
+    await waitForFileContains(stdoutLogPath, '"message":"daemon process started"', 5000);
+    expect(fs.readFileSync(`${stdoutLogPath}.1`, "utf8")).toContain("old-stdout-log");
+    expect(fs.readFileSync(`${stderrLogPath}.1`, "utf8")).toContain("old-stderr-log");
+    expect(fs.readFileSync(stdoutLogPath, "utf8")).not.toContain("old-stdout-log");
   });
 
   it("daemon stop fails when daemon is unmanaged in direct mode", async () => {
@@ -262,6 +285,34 @@ async function waitForSocket(socketPath: string, processHandle: ChildProcess, ti
   }
 
   throw new Error(`Timed out waiting for daemon socket: ${socketPath}`);
+}
+
+function createLargeLogFile(filePath: string, marker: string): void {
+  const targetSizeBytes = 11 * 1024 * 1024;
+  const chunk = `${marker}\n`;
+  const repeated = chunk.repeat(Math.ceil(targetSizeBytes / chunk.length));
+  fs.writeFileSync(filePath, repeated, "utf8");
+}
+
+async function waitForFileContains(
+  filePath: string,
+  expected: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (fs.existsSync(filePath)) {
+      const contents = fs.readFileSync(filePath, "utf8");
+      if (contents.includes(expected)) {
+        return;
+      }
+    }
+
+    await sleep(50);
+  }
+
+  throw new Error(`Timed out waiting for log output in ${filePath}`);
 }
 
 async function waitForProcessExit(processHandle: ChildProcess, timeoutMs: number): Promise<void> {
