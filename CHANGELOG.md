@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-03-11
+
+Patch release fixing pull-side comment attachment for bidirectional sync and aligning the default local PR gate with the unit-test-only workflow.
+
+### Fixed
+- Pulled external comments now resolve their `externalTaskId` through local task `externalId` mappings before note reconciliation, so synced comments attach to the correct local task instead of a non-existent external ID placeholder (#320)
+- Pull-side comment sync now skips comments whose parent task has not been imported locally yet, preventing orphaned note writes during partial sync states (#320)
+
+### Changed
+- `make pre-pr` now runs lint/typecheck, unit tests, and build without running integration suites by default (#320)
+- Contributing docs and the PR template now match the updated `make pre-pr` contract (#320)
+
 ## [0.7.2] - 2026-03-11
 
 Patch release fixing bidirectional sync duplication for locally-created tasks that are pushed to external providers.
