@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-03-11
+
+Patch release fixing bidirectional sync duplication for locally-created tasks that are pushed to external providers.
+
+### Fixed
+- Sync providers can now return task linkage data from `push()` so the daemon writes back `externalId` and `sourceUrl` onto local tasks after remote creation (#318)
+- Bidirectional sync no longer re-imports previously pushed local tasks as duplicates on later pull cycles, preventing repeated issue/task fan-out (#318)
+
+### Changed
+- The sync runtime now applies pushed task links before pushed comment links and fails clearly when a provider returns a conflicting task mapping (#318)
+- Sync provider API docs now describe the push-side task link contract for provider authors (#318)
+
 ## [0.7.1] - 2026-03-11
 
 Patch release fixing sync-provider pull behavior for external tasks.
