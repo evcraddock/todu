@@ -1,11 +1,51 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ProjectId, TaskId } from "@todu/core";
+import { Repo } from "@automerge/automerge-repo";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
+import type { CatalogDocument, ProjectId, Task, TaskId, TaskListDocument } from "@todu/core";
 import { createProjectId, createTaskId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
+
+async function removeTaskArrays(
+  storagePath: string,
+  projectId: ProjectId,
+  taskId: TaskId,
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    const taskListDocId = catalogHandle.doc()?.taskListDocIds[projectId];
+    if (!taskListDocId) {
+      throw new Error(`task list not found for project ${projectId}`);
+    }
+
+    const taskListHandle = await repo.find<TaskListDocument>(taskListDocId);
+    await taskListHandle.whenReady();
+    taskListHandle.change((doc) => {
+      const legacyTask = doc.tasks.find((task) => task.id === taskId) as
+        | (Task & { labels?: string[]; assignees?: string[] })
+        | undefined;
+      if (!legacyTask) {
+        throw new Error(`task not found: ${taskId}`);
+      }
+
+      delete legacyTask.labels;
+      delete legacyTask.assignees;
+    });
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
 
 describe("task namespace", () => {
   let tmpDir: string;
@@ -132,6 +172,26 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(2);
+    });
+
+    it("lists legacy tasks missing labels and assignees", async () => {
+      const created = await todu.task.create({ title: "Legacy task", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await removeTaskArrays(tmpDir, projectId, created.value.id);
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.task.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Legacy task");
+      expect(result.value[0].labels).toEqual([]);
+      expect(result.value[0].assignees).toEqual([]);
     });
 
     it("filters by status", async () => {
