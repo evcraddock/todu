@@ -88,18 +88,29 @@ export function nextOccurrence(
   const parsed = parseRule(rule, startDate, timezone);
   if (parsed.error) return null;
 
-  const after = dateStringToUTC(afterDate, timezone);
-  const next = parsed.rrule.after(after);
+  let cursor = dateStringToUTC(afterDate, timezone);
 
-  if (!next) return null;
+  for (let attempts = 0; attempts < 32; attempts += 1) {
+    const next = parsed.rrule.after(cursor);
 
-  // Convert back to date string in the template's timezone
-  const dateStr = utcToDateString(next, timezone);
+    if (!next) return null;
 
-  // Check against end date
-  if (endDate && dateStr > endDate) return null;
+    // Convert back to date string in the template's timezone.
+    // Around DST transitions, the recurrence library can advance to a later
+    // instant that still formats to the same local calendar date.
+    const dateStr = utcToDateString(next, timezone);
+    if (dateStr <= afterDate) {
+      cursor = next;
+      continue;
+    }
 
-  return dateStr;
+    // Check against end date
+    if (endDate && dateStr > endDate) return null;
+
+    return dateStr;
+  }
+
+  return null;
 }
 
 /**
@@ -161,22 +172,13 @@ export function isScheduledDate(
   date: string,
   endDate?: string,
 ): boolean {
-  const parsed = parseRule(rule, startDate, timezone);
-  if (parsed.error) return false;
-
   // Check if date is within bounds
   if (date < startDate) return false;
   if (endDate && date > endDate) return false;
 
-  // Check the day before to see if this date is the next occurrence
+  // Check the day before to see if this date is the next local occurrence.
   const dayBefore = shiftDate(date, -1);
-  const after = dateStringToUTC(dayBefore, timezone);
-  const next = parsed.rrule.after(after);
-
-  if (!next) return false;
-
-  const nextStr = utcToDateString(next, timezone);
-  return nextStr === date;
+  return nextOccurrence(rule, startDate, timezone, dayBefore, endDate) === date;
 }
 
 // ============================================================================

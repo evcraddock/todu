@@ -64,6 +64,21 @@ describe("nextOccurrence", () => {
     expect(next).toBe("2026-02-07");
   });
 
+  it("advances past DST transitions without returning the same local date", () => {
+    const next = nextOccurrence("FREQ=DAILY", "2026-03-03", "America/Chicago", "2026-03-09");
+    expect(next).toBe("2026-03-10");
+  });
+
+  it("advances weekly schedules past DST transitions without returning the same local date", () => {
+    const next = nextOccurrence(
+      "FREQ=WEEKLY;BYDAY=MO",
+      "2026-03-02",
+      "America/Chicago",
+      "2026-03-09",
+    );
+    expect(next).toBe("2026-03-16");
+  });
+
   it("skips weekends for weekday rule", () => {
     // FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR — every weekday
     // Feb 6, 2026 is Friday. Next weekday is Monday Feb 9.
@@ -177,6 +192,10 @@ describe("isScheduledDate", () => {
 
   it("returns false for invalid RRULE", () => {
     expect(isScheduledDate("INVALID", "2026-01-01", "UTC", "2026-02-06")).toBe(false);
+  });
+
+  it("recognizes scheduled dates after DST transitions", () => {
+    expect(isScheduledDate("FREQ=DAILY", "2026-03-03", "America/Chicago", "2026-03-10")).toBe(true);
   });
 
   it("handles interval correctly", () => {
