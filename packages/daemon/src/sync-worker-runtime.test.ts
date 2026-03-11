@@ -624,7 +624,7 @@ describe("sync-worker-runtime", () => {
 
   it("linked local-origin comments later update remotely through the same local note", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "bidirectional" });
     const localNote = createNote({
       entityType: "task",
@@ -640,7 +640,7 @@ describe("sync-worker-runtime", () => {
           comments: [
             {
               externalId: "gh-comment-1",
-              externalTaskId: task.id,
+              externalTaskId: task.externalId!,
               body: "remote edit",
               createdAt: "2026-03-10T10:00:00Z",
               updatedAt: "2026-03-10T11:00:00Z",
@@ -696,7 +696,7 @@ describe("sync-worker-runtime", () => {
 
   it("linked local-origin comments later delete remotely through the same local note", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "bidirectional" });
     const localNote = createNote({
       entityType: "task",
@@ -712,7 +712,7 @@ describe("sync-worker-runtime", () => {
           comments: [
             {
               externalId: "gh-comment-other",
-              externalTaskId: task.id,
+              externalTaskId: task.externalId!,
               body: "other remote comment",
               createdAt: "2026-03-10T10:00:00Z",
             },
@@ -956,12 +956,12 @@ describe("sync-worker-runtime", () => {
 
   it("pull creates new comments as notes when externalId is not present locally", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
     const pulledComments: ExternalComment[] = [
       {
         externalId: "gh-comment-1",
-        externalTaskId: task.id,
+        externalTaskId: task.externalId!,
         body: "New comment from GitHub",
         author: "octocat",
         createdAt: "2026-03-10T10:00:00Z",
@@ -1009,7 +1009,7 @@ describe("sync-worker-runtime", () => {
 
   it("pull updates existing comments when external updatedAt is newer", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
     const existingNote = createNote({
       entityType: "task",
@@ -1021,7 +1021,7 @@ describe("sync-worker-runtime", () => {
     const pulledComments: ExternalComment[] = [
       {
         externalId: "gh-comment-1",
-        externalTaskId: task.id,
+        externalTaskId: task.externalId!,
         body: "Updated content from GitHub",
         author: "octocat",
         createdAt: "2026-03-09T10:00:00Z",
@@ -1067,7 +1067,7 @@ describe("sync-worker-runtime", () => {
 
   it("pull deletes local synced notes absent from pull result", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
     const orphanedNote = createNote({
       entityType: "task",
@@ -1081,7 +1081,7 @@ describe("sync-worker-runtime", () => {
         comments: [
           {
             externalId: "gh-comment-other",
-            externalTaskId: task.id,
+            externalTaskId: task.externalId!,
             body: "still exists",
             createdAt: "2026-03-10T10:00:00Z",
           },
@@ -1120,7 +1120,7 @@ describe("sync-worker-runtime", () => {
 
   it("pull skips update when local note is newer than external comment", async () => {
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
     const existingNote = createNote({
       entityType: "task",
@@ -1132,7 +1132,7 @@ describe("sync-worker-runtime", () => {
     const pulledComments: ExternalComment[] = [
       {
         externalId: "gh-comment-1",
-        externalTaskId: task.id,
+        externalTaskId: task.externalId!,
         body: "Older external content",
         author: "octocat",
         createdAt: "2026-03-09T10:00:00Z",
@@ -1169,6 +1169,54 @@ describe("sync-worker-runtime", () => {
 
     expect(todu.note.update).not.toHaveBeenCalled();
     expect(todu.note.create).not.toHaveBeenCalled();
+    expect(todu.note.delete).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
+  it("pull skips comments whose tasks are not imported locally", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: "gh-task-missing",
+            body: "Skipped because task is not imported",
+            author: "octocat",
+            createdAt: "2026-03-10T10:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.list).not.toHaveBeenCalled();
+    expect(todu.note.create).not.toHaveBeenCalled();
+    expect(todu.note.update).not.toHaveBeenCalled();
     expect(todu.note.delete).not.toHaveBeenCalled();
 
     handle.stop();
@@ -1215,19 +1263,21 @@ function createProject(): Project {
   };
 }
 
-function createTask(projectId: Project["id"]): Task {
+function createTask(projectId: Project["id"], overrides: Partial<Task> = {}): Task {
   const now = new Date(0).toISOString();
 
   return {
-    id: createTaskId("task-1"),
-    title: "Task",
-    status: "active",
-    priority: "medium",
+    id: overrides.id ?? createTaskId("task-1"),
+    title: overrides.title ?? "Task",
+    status: overrides.status ?? "active",
+    priority: overrides.priority ?? "medium",
     projectId,
-    labels: [],
-    assignees: [],
-    createdAt: now,
-    updatedAt: now,
+    labels: overrides.labels ?? [],
+    assignees: overrides.assignees ?? [],
+    externalId: overrides.externalId,
+    sourceUrl: overrides.sourceUrl,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
   };
 }
 

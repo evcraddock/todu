@@ -246,7 +246,7 @@ export function createSyncPluginWorkerRuntime(
           }
 
           if (pullResult.comments && pullResult.comments.length > 0) {
-            await applyPulledComments(activeTodu, pullResult.comments);
+            await applyPulledComments(activeTodu, projectResult.value.id, pullResult.comments);
           }
         }
 
@@ -659,26 +659,43 @@ async function applyPushCommentLinks(
  */
 async function applyPulledComments(
   todu: Todu,
+  projectId: Project["id"],
   comments: ExternalComment[],
 ): Promise<{ created: number; updated: number; deleted: number }> {
   const stats = { created: 0, updated: 0, deleted: 0 };
 
-  // Group pulled comments by task
-  const commentsByTask = new Map<string, ExternalComment[]>();
-  for (const comment of comments) {
-    const taskId = comment.externalTaskId;
-    const existing = commentsByTask.get(taskId);
-    if (existing) {
-      existing.push(comment);
-    } else {
-      commentsByTask.set(taskId, [comment]);
+  const tasksResult = await todu.task.list({ projectId });
+  if (!tasksResult.ok) {
+    throw new Error(`task list failed for pulled comments: ${formatToduError(tasksResult.error)}`);
+  }
+
+  const localTaskIdByExternalId = new Map<string, Task["id"]>();
+  for (const task of tasksResult.value) {
+    if (task.externalId) {
+      localTaskIdByExternalId.set(task.externalId, task.id);
     }
   }
 
-  // Collect all task IDs that have at least one pulled comment
+  // Group pulled comments by local task
+  const commentsByTask = new Map<string, ExternalComment[]>();
+  for (const comment of comments) {
+    const localTaskId = localTaskIdByExternalId.get(comment.externalTaskId);
+    if (!localTaskId) {
+      continue;
+    }
+
+    const existing = commentsByTask.get(localTaskId);
+    if (existing) {
+      existing.push(comment);
+    } else {
+      commentsByTask.set(localTaskId, [comment]);
+    }
+  }
+
+  // Collect all local task IDs that have at least one pulled comment
   const affectedTaskIds = new Set(commentsByTask.keys());
 
-  // For each affected task, reconcile local notes with pulled comments
+  // For each affected local task, reconcile local notes with pulled comments
   for (const taskId of affectedTaskIds) {
     const pulledComments = commentsByTask.get(taskId) ?? [];
     const localNotesResult = await todu.note.list({
