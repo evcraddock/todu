@@ -132,7 +132,7 @@ export function createTaskNamespace(
       const task: Task = {
         id,
         title: input.title.trim(),
-        status: "active",
+        status: input.status ?? "active",
         priority: input.priority ?? "medium",
         projectId: input.projectId,
         labels: input.labels ?? [],
@@ -143,6 +143,8 @@ export function createTaskNamespace(
       // Automerge doesn't allow undefined — only set optional fields if present
       if (input.dueDate !== undefined) task.dueDate = input.dueDate;
       if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
+      if (input.externalId !== undefined) task.externalId = input.externalId.trim();
+      if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
       if (templateId !== undefined) task.templateId = templateId;
 
       // Add to task list document
@@ -300,6 +302,8 @@ export function createTaskNamespace(
         }
         if (input.dueDate !== undefined) task.dueDate = input.dueDate;
         if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
+        if (input.externalId !== undefined) task.externalId = input.externalId.trim();
+        if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
         task.updatedAt = now;
       });
 

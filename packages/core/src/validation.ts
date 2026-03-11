@@ -315,6 +315,17 @@ export function validateTaskTitle(title: string): ValidationError | null {
   return null;
 }
 
+function validateTaskLinkField(
+  field: "externalId" | "sourceUrl",
+  value: string,
+): ValidationError | null {
+  if (value.trim().length === 0) {
+    return validationError(field, `${field} is required`);
+  }
+
+  return null;
+}
+
 export function validateISODate(field: string, value: string): ValidationError | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -330,6 +341,10 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
   if (input.description !== undefined) {
     const descError = validateDescription(input.description);
     if (descError) return descError;
+  }
+
+  if (input.status !== undefined && !isTaskStatus(input.status)) {
+    return validationError("status", `Invalid status: ${input.status}`);
   }
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
@@ -351,6 +366,16 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
     if (dateError) return dateError;
   }
 
+  if (input.externalId !== undefined) {
+    const externalIdError = validateTaskLinkField("externalId", input.externalId);
+    if (externalIdError) return externalIdError;
+  }
+
+  if (input.sourceUrl !== undefined) {
+    const sourceUrlError = validateTaskLinkField("sourceUrl", input.sourceUrl);
+    if (sourceUrlError) return sourceUrlError;
+  }
+
   return null;
 }
 
@@ -366,7 +391,9 @@ export function validateUpdateTaskInput(
     input.labels === undefined &&
     input.assignees === undefined &&
     input.dueDate === undefined &&
-    input.scheduledDate === undefined
+    input.scheduledDate === undefined &&
+    input.externalId === undefined &&
+    input.sourceUrl === undefined
   ) {
     return validationError("input", "At least one field must be provided");
   }
@@ -410,6 +437,16 @@ export function validateUpdateTaskInput(
   if (input.scheduledDate !== undefined) {
     const dateError = validateISODate("scheduledDate", input.scheduledDate);
     if (dateError) return dateError;
+  }
+
+  if (input.externalId !== undefined) {
+    const externalIdError = validateTaskLinkField("externalId", input.externalId);
+    if (externalIdError) return externalIdError;
+  }
+
+  if (input.sourceUrl !== undefined) {
+    const sourceUrlError = validateTaskLinkField("sourceUrl", input.sourceUrl);
+    if (sourceUrlError) return sourceUrlError;
   }
 
   return null;

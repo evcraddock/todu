@@ -4,6 +4,7 @@ import {
   createProjectId,
   createTaskId,
   type ExternalComment,
+  type ExternalTask,
   type IntegrationBinding,
   type IntegrationBindingStatus,
   type Note,
@@ -533,6 +534,200 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
+  it("pull creates new tasks from pulled external tasks", async () => {
+    const project = createProject();
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledTasks: ExternalTask[] = [
+      {
+        externalId: "gh-101",
+        title: "Pulled bug",
+        description: "Imported from GitHub",
+        sourceUrl: "https://example.com/issues/101",
+        updatedAt: "2026-03-10T15:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: pulledTasks,
+      }),
+      mapToTask: vi
+        .fn<SyncProvider["mapToTask"]>()
+        .mockImplementation((external, activeProject) => ({
+          id: createTaskId(`task-${external.externalId}`),
+          title: external.title,
+          status: "waiting",
+          priority: "high",
+          projectId: activeProject.id,
+          labels: ["bug"],
+          assignees: ["octocat"],
+          sourceUrl: external.sourceUrl,
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        })),
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.mapToTask).toHaveBeenCalledTimes(1);
+    expect(provider.mapToTask).toHaveBeenCalledWith(pulledTasks[0], project);
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    expect(todu.task.create).toHaveBeenCalledWith({
+      title: "Pulled bug",
+      projectId: project.id,
+      status: "waiting",
+      priority: "high",
+      description: "Imported from GitHub",
+      labels: ["bug"],
+      assignees: ["octocat"],
+      externalId: "gh-101",
+      sourceUrl: "https://example.com/issues/101",
+    });
+
+    handle.stop();
+  });
+
+  it("pull updates existing tasks when external updatedAt is newer", async () => {
+    const project = createProject();
+    const existingTask = {
+      ...createTask(project.id),
+      externalId: "gh-101",
+      updatedAt: "2026-03-09T10:00:00Z",
+    };
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledTasks: ExternalTask[] = [
+      {
+        externalId: "gh-101",
+        title: "Updated pulled bug",
+        description: "Updated from GitHub",
+        sourceUrl: "https://example.com/issues/101",
+        updatedAt: "2026-03-10T15:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: pulledTasks,
+      }),
+      mapToTask: vi
+        .fn<SyncProvider["mapToTask"]>()
+        .mockImplementation((external, activeProject) => ({
+          id: existingTask.id,
+          title: external.title,
+          status: "inprogress",
+          priority: "high",
+          projectId: activeProject.id,
+          labels: ["bug", "synced"],
+          assignees: ["octocat"],
+          sourceUrl: external.sourceUrl,
+          createdAt: existingTask.createdAt,
+          updatedAt: external.updatedAt ?? existingTask.updatedAt,
+        })),
+    });
+    const todu = createTodu(project, [existingTask], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.update).toHaveBeenCalledTimes(1);
+    expect(todu.task.update).toHaveBeenCalledWith(existingTask.id, {
+      title: "Updated pulled bug",
+      status: "inprogress",
+      priority: "high",
+      description: "Updated from GitHub",
+      labels: ["bug", "synced"],
+      assignees: ["octocat"],
+      externalId: "gh-101",
+      sourceUrl: "https://example.com/issues/101",
+    });
+
+    handle.stop();
+  });
+
+  it("pull skips existing task updates when local task is newer", async () => {
+    const project = createProject();
+    const existingTask = {
+      ...createTask(project.id),
+      externalId: "gh-101",
+      updatedAt: "2026-03-10T20:00:00Z",
+    };
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledTasks: ExternalTask[] = [
+      {
+        externalId: "gh-101",
+        title: "Older pulled bug",
+        description: "Older external state",
+        updatedAt: "2026-03-10T12:00:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: pulledTasks,
+      }),
+    });
+    const todu = createTodu(project, [existingTask], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.mapToTask).toHaveBeenCalledTimes(1);
+    expect(todu.task.update).not.toHaveBeenCalled();
+    expect(todu.task.create).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
   it("pull creates new comments as notes when externalId is not present locally", async () => {
     const project = createProject();
     const task = createTask(project.id);
@@ -763,7 +958,7 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
     mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockImplementation((item) => ({
       id: createTaskId(String(item.externalId)),
       title: item.title,
-      status: "todo",
+      status: "active",
       priority: "medium",
       projectId: createProject().id,
       labels: [],
@@ -800,7 +995,7 @@ function createTask(projectId: Project["id"]): Task {
   return {
     id: createTaskId("task-1"),
     title: "Task",
-    status: "todo",
+    status: "active",
     priority: "medium",
     projectId,
     labels: [],
@@ -849,7 +1044,7 @@ interface CreateToduOptions {
 
 function createTodu(
   project: Project,
-  tasks: Task[],
+  initialTasks: Task[],
   bindings: IntegrationBinding[],
   options: CreateToduOptions = {},
 ): {
@@ -858,6 +1053,12 @@ function createTodu(
     list: ReturnType<typeof vi.fn>;
     updateStatus: ReturnType<typeof vi.fn>;
   };
+  task: {
+    list: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
   note: {
     list: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
@@ -865,6 +1066,7 @@ function createTodu(
     delete: ReturnType<typeof vi.fn>;
   };
 } {
+  const tasks: Task[] = [...initialTasks];
   const notes: Note[] = [...(options.notes ?? [])];
   const statuses = new Map<string, IntegrationBindingStatus>();
   const integrationList = vi.fn(async (filter?: { provider?: string; enabled?: boolean }) => {
@@ -925,11 +1127,79 @@ function createTodu(
     },
   );
 
+  const taskList = vi.fn().mockImplementation(async (filter?: { projectId?: string }) => {
+    if (!filter?.projectId) {
+      return ok([...tasks]);
+    }
+
+    return ok(tasks.filter((task) => task.projectId === filter.projectId));
+  });
+
   const taskGet = vi.fn().mockImplementation(async (id: string) => {
     const task = tasks.find((t) => t.id === id);
     if (!task) return ok({ id, description: undefined });
     return ok({ ...task, description: undefined });
   });
+
+  const taskCreate = vi
+    .fn()
+    .mockImplementation(
+      async (input: {
+        title: string;
+        projectId: string;
+        status?: Task["status"];
+        priority?: Task["priority"];
+        description?: string;
+        labels?: string[];
+        assignees?: string[];
+        externalId?: string;
+        sourceUrl?: string;
+      }) => {
+        const createdTask: Task = {
+          id: createTaskId(`task-created-${tasks.length + 1}`),
+          title: input.title,
+          status: input.status ?? "active",
+          priority: input.priority ?? "medium",
+          projectId: input.projectId as Project["id"],
+          labels: input.labels ?? [],
+          assignees: input.assignees ?? [],
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        };
+        if (input.externalId !== undefined) createdTask.externalId = input.externalId;
+        if (input.sourceUrl !== undefined) createdTask.sourceUrl = input.sourceUrl;
+        tasks.push(createdTask);
+        return ok({ ...createdTask, description: input.description });
+      },
+    );
+
+  const taskUpdate = vi.fn().mockImplementation(
+    async (
+      id: string,
+      input: {
+        title?: string;
+        status?: Task["status"];
+        priority?: Task["priority"];
+        description?: string;
+        labels?: string[];
+        assignees?: string[];
+        externalId?: string;
+        sourceUrl?: string;
+      },
+    ) => {
+      const task = tasks.find((candidate) => candidate.id === id);
+      if (!task) return ok(undefined);
+      if (input.title !== undefined) task.title = input.title;
+      if (input.status !== undefined) task.status = input.status;
+      if (input.priority !== undefined) task.priority = input.priority;
+      if (input.labels !== undefined) task.labels = [...input.labels];
+      if (input.assignees !== undefined) task.assignees = [...input.assignees];
+      if (input.externalId !== undefined) task.externalId = input.externalId;
+      if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl;
+      task.updatedAt = new Date(0).toISOString();
+      return ok({ ...task, description: input.description });
+    },
+  );
 
   let noteIdCounter = 1;
   const noteList = vi.fn(
@@ -991,8 +1261,10 @@ function createTodu(
         get: vi.fn().mockResolvedValue(ok(project)),
       },
       task: {
-        list: vi.fn().mockResolvedValue(ok(tasks)),
+        list: taskList,
         get: taskGet,
+        create: taskCreate,
+        update: taskUpdate,
       },
       integration: {
         list: integrationList,
@@ -1008,6 +1280,12 @@ function createTodu(
     integration: {
       list: integrationList,
       updateStatus,
+    },
+    task: {
+      list: taskList,
+      get: taskGet,
+      create: taskCreate,
+      update: taskUpdate,
     },
     note: {
       list: noteList,
