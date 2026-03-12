@@ -38,9 +38,9 @@ import {
 
 export const MAX_PROJECT_NAME_LENGTH = 100;
 export const MAX_TASK_TITLE_LENGTH = 200;
-export const MAX_DESCRIPTION_LENGTH = 2000;
+export const MAX_DESCRIPTION_LENGTH = 10000;
 export const MAX_LABEL_NAME_LENGTH = 50;
-export const MAX_NOTE_CONTENT_LENGTH = 5000;
+export const MAX_NOTE_CONTENT_LENGTH = 10000;
 export const MAX_INTEGRATION_FIELD_LENGTH = 255;
 export const MAX_ASSIGNEE_LENGTH = 100;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
