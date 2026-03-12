@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-03-11
+
+Raises validation limits for task descriptions and note content.
+
+### Fixed
+- Task descriptions and note content now accept up to 10,000 characters, up from 2,000 and 5,000 respectively (#330)
+
 ## [0.7.6] - 2026-03-11
 
 Patch release restoring observability for direct daemon lifecycle mode.
