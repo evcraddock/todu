@@ -14,6 +14,7 @@ import {
   type HabitStreak,
   notFound,
   ok,
+  type ProjectId,
   type Result,
   type UpdateHabitInput,
   validateCreateHabitInput,
@@ -73,10 +74,16 @@ export function createHabitNamespace(
     return handle;
   }
 
+  function projectExists(projectId: ProjectId): boolean {
+    const doc = catalog.doc();
+    return doc?.projects.some((project) => project.id === projectId) ?? false;
+  }
+
   return {
     async create(input: CreateHabitInput): Promise<Result<Habit>> {
       const validationErr = validateCreateHabitInput(input);
       if (validationErr) return err(validationErr);
+      if (!projectExists(input.projectId)) return err(notFound("project", input.projectId));
 
       const id = generateHabitId();
       const now = new Date().toISOString();
@@ -96,6 +103,7 @@ export function createHabitNamespace(
         id,
         title: input.title.trim(),
         description: input.description,
+        projectId: input.projectId,
         schedule: input.schedule,
         timezone: input.timezone,
         startDate: input.startDate,
@@ -129,6 +137,9 @@ export function createHabitNamespace(
 
       if (filter?.paused !== undefined) {
         habits = habits.filter((h) => h.paused === filter.paused);
+      }
+      if (filter?.projectId !== undefined) {
+        habits = habits.filter((h) => h.projectId === filter.projectId);
       }
       if (filter?.search) {
         const lowerQuery = filter.search.toLowerCase();

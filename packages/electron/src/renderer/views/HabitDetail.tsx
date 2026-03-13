@@ -12,6 +12,7 @@ import {
   useHabitHistory,
   useHabitStreak,
   usePauseHabit,
+  useProjects,
   useResumeHabit,
   useUncheckHabit,
   useUpdateHabit,
@@ -146,6 +147,7 @@ export function HabitDetail({
   onBack: () => void;
 }): ReactNode {
   const { data: habit, isLoading, isError, error } = useHabitDetail(habitId);
+  const { data: projects } = useProjects();
   const updateHabit = useUpdateHabit();
   const deleteHabit = useDeleteHabit();
   const pauseHabit = usePauseHabit();
@@ -190,6 +192,8 @@ export function HabitDetail({
       </div>
     );
   }
+
+  const projectName = projects?.find((project) => project.id === habit.projectId)?.name ?? "—";
 
   const handleTitleSave = () => {
     setEditingTitle(false);
@@ -314,6 +318,10 @@ export function HabitDetail({
       </div>
 
       <div className="detail-meta-row">
+        <div className="detail-meta-cell">
+          <span className="detail-meta-label">Project</span>
+          <span>{projectName}</span>
+        </div>
         <div className="detail-meta-cell">
           <span className="detail-meta-label">Start</span>
           <span>{habit.startDate}</span>

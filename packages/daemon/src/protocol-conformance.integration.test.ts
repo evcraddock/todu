@@ -275,6 +275,7 @@ describe("daemon protocol conformance suite", () => {
         params: {
           input: {
             title: "Stretch",
+            projectId,
             schedule: "FREQ=DAILY",
             timezone: "America/Chicago",
             startDate: "2026-02-01",
@@ -285,6 +286,7 @@ describe("daemon protocol conformance suite", () => {
       expect(habitResponse.id).toBe("habit-create-conformance");
       expect(habitResponse.result).toMatchObject({
         title: "Stretch",
+        projectId,
       });
 
       const syncStatus = await sendRequest(runtime.config().socketPath, {

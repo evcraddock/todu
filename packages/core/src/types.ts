@@ -455,6 +455,7 @@ export interface Habit {
   id: HabitId;
   title: string;
   description?: string;
+  projectId: ProjectId;
   schedule: string;
   timezone: string;
   startDate: string;
@@ -471,6 +472,7 @@ export interface Habit {
 
 export interface CreateHabitInput {
   title: string;
+  projectId: ProjectId;
   schedule: string;
   timezone: string;
   startDate: string;
@@ -488,6 +490,7 @@ export interface UpdateHabitInput {
 
 export interface HabitFilter {
   paused?: boolean;
+  projectId?: ProjectId;
   search?: string;
   checkedToday?: boolean;
 }

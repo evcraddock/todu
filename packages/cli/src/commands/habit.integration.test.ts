@@ -44,31 +44,40 @@ describe("habit CLI commands", { timeout: 30000 }, () => {
   }
 
   it("habit create → list → show → check → streak → uncheck → history → update → pause → resume → delete flow", () => {
+    const project = JSON.parse(run('project create --name "Habits" --format json'));
+
     // Create
     const createOutput = run(
-      'habit create --title "Meditate" --schedule "FREQ=DAILY" --timezone UTC --start-date 2026-02-01 --format json',
+      `habit create --title "Meditate" --project ${project.id} --schedule "FREQ=DAILY" --timezone UTC --start-date 2026-02-01 --format json`,
     );
     const created = JSON.parse(createOutput);
     expect(created.id).toMatch(/^hab-/);
     expect(created.title).toBe("Meditate");
+    expect(created.projectId).toBe(project.id);
     expect(created.schedule).toBe("FREQ=DAILY");
     expect(created.paused).toBe(false);
 
     // List
     const listOutput = run("habit list");
     expect(listOutput).toContain("Meditate");
+    expect(listOutput).toContain("Habits");
     expect(listOutput).toContain("Daily");
 
     const listJson = JSON.parse(run("habit list --format json"));
     expect(listJson).toHaveLength(1);
 
+    const projectListJson = JSON.parse(run(`habit list --project ${project.id} --format json`));
+    expect(projectListJson).toHaveLength(1);
+
     // Show
     const showOutput = run(`habit show ${created.id}`);
     expect(showOutput).toContain("Meditate");
+    expect(showOutput).toContain("Project:     Habits");
     expect(showOutput).toContain("FREQ=DAILY");
 
     // Show JSON includes streak
     const showJson = JSON.parse(run(`habit show ${created.id} --format json`));
+    expect(showJson.projectId).toBe(project.id);
     expect(showJson.streak).toBeDefined();
     expect(showJson.streak.current).toBe(0);
 

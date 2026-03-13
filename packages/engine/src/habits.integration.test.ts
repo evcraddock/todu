@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { HabitId } from "@todu/core";
+import type { HabitId, ProjectId } from "@todu/core";
+import { createProjectId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 import { clearProcessors } from "./scheduling.js";
@@ -10,11 +11,15 @@ import type { Todu } from "./todu.js";
 describe("habits", () => {
   let todu: Todu;
   let tmpDir: string;
+  let projectId: ProjectId;
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-habits-"));
     clearProcessors();
     todu = await createTodu({ storagePath: tmpDir });
+    const project = await todu.project.create({ name: "Habits Project" });
+    if (!project.ok) throw new Error("project create failed");
+    projectId = project.value.id;
   });
 
   afterEach(async () => {
@@ -26,6 +31,7 @@ describe("habits", () => {
   describe("CRUD", () => {
     it("creates a habit", async () => {
       const result = await todu.habit.create({
+        projectId,
         title: "Meditate",
         schedule: "FREQ=DAILY",
         timezone: "America/Chicago",
@@ -45,6 +51,7 @@ describe("habits", () => {
 
     it("creates a habit with optional fields", async () => {
       const result = await todu.habit.create({
+        projectId,
         title: "Exercise",
         schedule: "FREQ=WEEKLY;BYDAY=MO,WE,FR",
         timezone: "UTC",
@@ -62,6 +69,7 @@ describe("habits", () => {
 
     it("rejects invalid RRULE", async () => {
       const result = await todu.habit.create({
+        projectId,
         title: "Bad rule",
         schedule: "FREQ=HOURLY",
         timezone: "UTC",
@@ -73,6 +81,7 @@ describe("habits", () => {
 
     it("rejects invalid timezone", async () => {
       const result = await todu.habit.create({
+        projectId,
         title: "Bad tz",
         schedule: "FREQ=DAILY",
         timezone: "Fake/Zone",
@@ -84,6 +93,7 @@ describe("habits", () => {
 
     it("rejects endDate before startDate", async () => {
       const result = await todu.habit.create({
+        projectId,
         title: "Bad dates",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -96,12 +106,14 @@ describe("habits", () => {
 
     it("lists habits", async () => {
       await todu.habit.create({
+        projectId,
         title: "A",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
         startDate: "2026-02-01",
       });
       await todu.habit.create({
+        projectId,
         title: "B",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -113,14 +125,70 @@ describe("habits", () => {
       if (result.ok) expect(result.value).toHaveLength(2);
     });
 
+    it("stores the habit projectId", async () => {
+      const result = await todu.habit.create({
+        projectId,
+        title: "Project habit",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.projectId).toBe(projectId);
+    });
+
+    it("rejects nonexistent projectId", async () => {
+      const result = await todu.habit.create({
+        projectId: createProjectId("proj-missing"),
+        title: "Missing project",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+    });
+
+    it("filters by projectId", async () => {
+      const otherProject = await todu.project.create({ name: "Other Habits Project" });
+      if (!otherProject.ok) throw new Error("project create failed");
+
+      await todu.habit.create({
+        projectId,
+        title: "Primary project habit",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      await todu.habit.create({
+        projectId: otherProject.value.id,
+        title: "Other project habit",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+
+      const result = await todu.habit.list({ projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Primary project habit");
+    });
+
     it("filters by paused status", async () => {
       const _createA = await todu.habit.create({
+        projectId,
         title: "Active",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
         startDate: "2026-02-01",
       });
       const createB = await todu.habit.create({
+        projectId,
         title: "Paused",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -138,12 +206,14 @@ describe("habits", () => {
 
     it("filters by checkedToday", async () => {
       const createA = await todu.habit.create({
+        projectId,
         title: "Checked Habit",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
         startDate: "2026-02-01",
       });
       await todu.habit.create({
+        projectId,
         title: "Unchecked Habit",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -168,12 +238,14 @@ describe("habits", () => {
 
     it("filters by search", async () => {
       await todu.habit.create({
+        projectId,
         title: "Morning Meditation",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
         startDate: "2026-02-01",
       });
       await todu.habit.create({
+        projectId,
         title: "Evening Jog",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -190,6 +262,7 @@ describe("habits", () => {
 
     it("gets a habit by ID", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Get me",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -211,6 +284,7 @@ describe("habits", () => {
 
     it("updates a habit", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Original",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -233,6 +307,7 @@ describe("habits", () => {
 
     it("deletes a habit", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Delete me",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -251,6 +326,7 @@ describe("habits", () => {
 
     it("pauses and resumes", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Pausable",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -272,6 +348,7 @@ describe("habits", () => {
   describe("check/uncheck", () => {
     it("checks in for today", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -290,6 +367,7 @@ describe("habits", () => {
 
     it("check is idempotent", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -309,6 +387,7 @@ describe("habits", () => {
 
     it("uncheck removes today's entry", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -329,6 +408,7 @@ describe("habits", () => {
 
     it("uncheck is idempotent", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -345,6 +425,7 @@ describe("habits", () => {
   describe("streak", () => {
     it("returns zero streak with no check-ins", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -365,6 +446,7 @@ describe("habits", () => {
 
     it("counts today's check-in in streak", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -388,6 +470,7 @@ describe("habits", () => {
   describe("history", () => {
     it("returns history with today", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -410,6 +493,7 @@ describe("habits", () => {
 
     it("shows incomplete days as not completed", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Daily",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -432,6 +516,7 @@ describe("habits", () => {
     it("only includes scheduled dates", async () => {
       // Weekday-only habit
       const create = await todu.habit.create({
+        projectId,
         title: "Weekday",
         schedule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
         timezone: "UTC",
@@ -453,6 +538,7 @@ describe("habits", () => {
   describe("processTemplates", () => {
     it("paused habits are not processed", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Paused",
         schedule: "FREQ=DAILY",
         timezone: "UTC",
@@ -476,6 +562,7 @@ describe("habits", () => {
   describe("HabitLogDocument lifecycle", () => {
     it("log is created on habit creation and cleaned up on deletion", async () => {
       const create = await todu.habit.create({
+        projectId,
         title: "Lifecycle",
         schedule: "FREQ=DAILY",
         timezone: "UTC",

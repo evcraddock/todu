@@ -668,6 +668,10 @@ export function validateCreateHabitInput(input: CreateHabitInput): ValidationErr
   const titleError = validateHabitTitle(input.title);
   if (titleError) return titleError;
 
+  if (!input.projectId) {
+    return validationError("projectId", "Project ID is required");
+  }
+
   const ruleError = validateRRule(input.schedule);
   if (ruleError) return ruleError;
 

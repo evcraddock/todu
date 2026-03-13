@@ -7,25 +7,28 @@ import { formatJSON, formatTable } from "../format.js";
 const HABIT_COLUMNS = [
   { key: "id", label: "ID" },
   { key: "title", label: "Title" },
+  { key: "project", label: "Project" },
   { key: "schedule", label: "Schedule" },
   { key: "nextDue", label: "Next Due" },
   { key: "status", label: "Status" },
 ];
 
-function habitToRow(h: Habit): Record<string, string> {
+function habitToRow(h: Habit, projectName?: string): Record<string, string> {
   return {
     id: h.id,
     title: h.title,
+    project: projectName ?? h.projectId,
     schedule: describeSchedule(h.schedule),
     nextDue: h.nextDue,
     status: h.paused ? "paused" : "active",
   };
 }
 
-function habitDetail(h: Habit): string {
+function habitDetail(h: Habit, projectName?: string): string {
   const lines = [
     `ID:          ${h.id}`,
     `Title:       ${h.title}`,
+    `Project:     ${projectName ?? h.projectId}`,
     `Schedule:    ${h.schedule}`,
     `             (${describeSchedule(h.schedule)})`,
     `Timezone:    ${h.timezone}`,
@@ -70,6 +73,46 @@ async function resolveHabit(
   return { ok: false, message: `Habit not found: ${ref}` };
 }
 
+async function getProjectName(invokeDaemon: CliDaemonInvoker, projectId: string): Promise<string> {
+  const result = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+  if (!result.ok) {
+    return projectId;
+  }
+
+  const project = result.value.find((p) => p.id === projectId);
+  return project?.name ?? projectId;
+}
+
+async function resolveProjectId(
+  invokeDaemon: CliDaemonInvoker,
+  ref: string,
+): Promise<{ ok: true; value: string } | { ok: false; message: string }> {
+  const byId = await invokeDaemon<{ id: string }>("project.get", { id: ref });
+  if (byId.ok) {
+    return { ok: true, value: byId.value.id };
+  }
+
+  if (byId.error.code !== "NOT_FOUND") {
+    return { ok: false, message: formatDaemonCommandError(byId.error) };
+  }
+
+  const result = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+  if (!result.ok) {
+    return { ok: false, message: formatDaemonCommandError(result.error) };
+  }
+
+  const byName = result.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
+  if (byName.length === 1) {
+    return { ok: true, value: byName[0].id };
+  }
+
+  if (byName.length > 1) {
+    return { ok: false, message: `Multiple projects match "${ref}". Use the project ID.` };
+  }
+
+  return { ok: false, message: `Project not found: ${ref}` };
+}
+
 export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const habit = program.command("habit").description("Manage habits");
 
@@ -77,15 +120,24 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
     .command("create")
     .description("Create a habit")
     .requiredOption("--title <title>", "habit title")
+    .requiredOption("--project <project>", "project name or ID")
     .requiredOption("--schedule <rrule>", "RRULE recurrence pattern")
     .requiredOption("--timezone <tz>", "IANA timezone")
     .requiredOption("--start-date <date>", "start date (YYYY-MM-DD)")
     .option("--end-date <date>", "end date (YYYY-MM-DD)")
     .option("--description <text>", "habit description")
     .action(async (opts) => {
+      const projectRes = await resolveProjectId(invokeDaemon, opts.project);
+      if (!projectRes.ok) {
+        console.error(projectRes.message);
+        process.exitCode = 1;
+        return;
+      }
+
       const result = await invokeDaemon<Habit>("habit.create", {
         input: {
           title: opts.title,
+          projectId: projectRes.value,
           schedule: opts.schedule,
           timezone: opts.timezone,
           startDate: opts.startDate,
@@ -104,8 +156,9 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
       if (format === "json") {
         console.log(formatJSON(result.value));
       } else {
+        const projectName = await getProjectName(invokeDaemon, result.value.projectId);
         console.log(`Created habit: ${result.value.id}`);
-        console.log(habitDetail(result.value));
+        console.log(habitDetail(result.value, projectName));
       }
     });
 
@@ -114,10 +167,23 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
     .description("List habits")
     .option("--active", "show only active habits")
     .option("--paused", "show only paused habits")
+    .option("--project <project>", "filter by project")
     .action(async (opts) => {
+      let projectId: string | undefined;
+      if (opts.project) {
+        const projectRes = await resolveProjectId(invokeDaemon, opts.project);
+        if (!projectRes.ok) {
+          console.error(projectRes.message);
+          process.exitCode = 1;
+          return;
+        }
+        projectId = projectRes.value;
+      }
+
       const filter: Record<string, unknown> = {};
       if (opts.active) filter.paused = false;
       if (opts.paused) filter.paused = true;
+      if (projectId) filter.projectId = projectId;
 
       const result = await invokeDaemon<Habit[]>("habit.list", { filter });
       if (!result.ok) {
@@ -132,9 +198,17 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
+      const projects = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+      const projectNames: Record<string, string> = {};
+      if (projects.ok) {
+        for (const project of projects.value) {
+          projectNames[project.id] = project.name;
+        }
+      }
+
       const rows: Record<string, string>[] = [];
       for (const h of result.value) {
-        const row = habitToRow(h);
+        const row = habitToRow(h, projectNames[h.projectId]);
         const streak = await invokeDaemon<HabitStreak>("habit.streak", { id: h.id });
         if (streak.ok) {
           row.streak = streak.value.current > 0 ? `🔥 ${streak.value.current}` : "0";
@@ -174,7 +248,8 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
-      console.log(habitDetail(resolved.value));
+      const projectName = await getProjectName(invokeDaemon, resolved.value.projectId);
+      console.log(habitDetail(resolved.value, projectName));
 
       const streak = await invokeDaemon<HabitStreak>("habit.streak", {
         id: resolved.value.id,

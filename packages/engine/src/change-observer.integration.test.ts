@@ -86,9 +86,13 @@ describe("change notifications", () => {
   });
 
   it("habit check-in triggers onChange (separate HabitLogDocument)", async () => {
+    const projectResult = await todu.project.create({ name: "habit project" });
+    if (!projectResult.ok) throw new Error("project create failed");
+
     const today = new Date().toISOString().slice(0, 10);
     const habitResult = await todu.habit.create({
       title: "exercise",
+      projectId: projectResult.value.id,
       schedule: "FREQ=DAILY",
       timezone: "America/Chicago",
       startDate: today,
