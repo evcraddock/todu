@@ -1,6 +1,12 @@
 import type { HabitFilter, HabitId } from "@todu/core/browser";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useCheckHabit, useHabitList, useHabitStreak, useUncheckHabit } from "../hooks/useTodu.js";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCheckHabit,
+  useHabitList,
+  useHabitStreak,
+  useProjects,
+  useUncheckHabit,
+} from "../hooks/useTodu.js";
 import { describeSchedule } from "../lib/describe-schedule.js";
 
 // ============================================================================
@@ -61,6 +67,7 @@ export function HabitList({
   externalFilter?: HabitFilter | null;
 }): ReactNode {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
+  const [filterProject, setFilterProject] = useState("");
   const [filterChecked, setFilterChecked] = useState<"all" | "done" | "pending">("all");
   const [searchText, setSearchText] = useState("");
   const appliedExternalRef = useRef<HabitFilter | null | undefined>(undefined);
@@ -72,6 +79,7 @@ export function HabitList({
       if (externalFilter.paused === true) setFilterStatus("paused");
       else if (externalFilter.paused === false) setFilterStatus("active");
       else setFilterStatus("all");
+      setFilterProject((externalFilter.projectId as string) ?? "");
       if (externalFilter.checkedToday === true) setFilterChecked("done");
       else if (externalFilter.checkedToday === false) setFilterChecked("pending");
       else setFilterChecked("all");
@@ -82,12 +90,21 @@ export function HabitList({
   const filter: HabitFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
     ...(filterStatus === "paused" ? { paused: true } : {}),
+    ...(filterProject ? { projectId: filterProject as HabitFilter["projectId"] } : {}),
     ...(filterChecked === "done" ? { checkedToday: true } : {}),
     ...(filterChecked === "pending" ? { checkedToday: false } : {}),
     ...(searchText ? { search: searchText } : {}),
   };
 
   const { data: habits, isLoading, isError, error } = useHabitList(filter);
+  const { data: projects } = useProjects();
+  const projectMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const project of projects ?? []) {
+      map.set(project.id, project.name);
+    }
+    return map;
+  }, [projects]);
 
   if (isLoading) {
     return (
@@ -143,6 +160,18 @@ export function HabitList({
           </select>
           <select
             className="filter-select"
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+          >
+            <option value="">All projects</option>
+            {projects?.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="filter-select"
             value={filterChecked}
             onChange={(e) => setFilterChecked(e.target.value as "all" | "done" | "pending")}
           >
@@ -162,6 +191,7 @@ export function HabitList({
           <thead>
             <tr>
               <th>Title</th>
+              <th>Project</th>
               <th>Schedule</th>
               <th>Streak</th>
               <th>Today</th>
@@ -180,6 +210,7 @@ export function HabitList({
                 }}
               >
                 <td className="cell-name">{habit.title}</td>
+                <td className="cell-project">{projectMap.get(habit.projectId) ?? "—"}</td>
                 <td className="cell-schedule">{describeSchedule(habit.schedule)}</td>
                 <td>
                   <StreakCell habitId={habit.id} />

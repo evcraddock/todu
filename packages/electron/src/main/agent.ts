@@ -148,7 +148,7 @@ ${JSON.stringify({ id: p.id, name: p.name, status: p.status, priority: p.priorit
       if (!result.ok) return undefined;
       const h = result.value;
       return `\`\`\`json
-${JSON.stringify({ id: h.id, title: h.title, paused: h.paused, schedule: h.schedule, description: h.description }, null, 2)}
+${JSON.stringify({ id: h.id, title: h.title, paused: h.paused, schedule: h.schedule, projectId: h.projectId, description: h.description }, null, 2)}
 \`\`\``;
     }
     case "recurring": {

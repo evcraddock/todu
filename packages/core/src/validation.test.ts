@@ -9,6 +9,7 @@ import {
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
   validateAssignees,
+  validateCreateHabitInput,
   validateCreateIntegrationBindingInput,
   validateCreateLabelInput,
   validateCreateNoteInput,
@@ -24,6 +25,7 @@ import {
   validateNoteContent,
   validateProjectName,
   validateTaskTitle,
+  validateUpdateHabitInput,
   validateUpdateIntegrationBindingInput,
   validateUpdateIntegrationBindingStatusInput,
   validateUpdateLabelInput,
@@ -639,6 +641,45 @@ describe("validateUpdateRecurringInput", () => {
   it("rejects invalid recurring missPolicy updates", () => {
     const error = validateUpdateRecurringInput({ missPolicy: "skip" as "accumulate" });
     expect(error?.field).toBe("missPolicy");
+  });
+});
+
+describe("validateCreateHabitInput", () => {
+  const projectId = createProjectId("proj-habit");
+
+  it("accepts valid input", () => {
+    expect(
+      validateCreateHabitInput({
+        title: "Meditate",
+        projectId,
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-03-01",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects missing projectId", () => {
+    const error = validateCreateHabitInput({
+      title: "Meditate",
+      projectId: "" as never,
+      schedule: "FREQ=DAILY",
+      timezone: "UTC",
+      startDate: "2026-03-01",
+    });
+
+    expect(error?.field).toBe("projectId");
+  });
+});
+
+describe("validateUpdateHabitInput", () => {
+  it("accepts valid title-only updates", () => {
+    expect(validateUpdateHabitInput({ title: "Meditate daily" })).toBeNull();
+  });
+
+  it("rejects empty input", () => {
+    const error = validateUpdateHabitInput({});
+    expect(error?.field).toBe("input");
   });
 });
 

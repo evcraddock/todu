@@ -1,17 +1,21 @@
+import type { ProjectId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
-import { useCreateHabit } from "../hooks/useTodu.js";
+import { useCreateHabit, useProjects } from "../hooks/useTodu.js";
 
 export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNode {
+  const { data: projects } = useProjects();
   const createHabit = useCreateHabit();
 
   const [title, setTitle] = useState("");
+  const [projectId, setProjectId] = useState("");
   const [schedule, setSchedule] = useState("FREQ=DAILY");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState("");
   const [error, setError] = useState("");
 
+  const effectiveProjectId = projectId || projects?.[0]?.id || "";
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const handleSubmit = () => {
@@ -23,10 +27,15 @@ export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNo
       setError("Schedule is required");
       return;
     }
+    if (!effectiveProjectId) {
+      setError("Select a project");
+      return;
+    }
     setError("");
     createHabit.mutate(
       {
         title: title.trim(),
+        projectId: effectiveProjectId as ProjectId,
         schedule,
         timezone,
         startDate,
@@ -69,6 +78,24 @@ export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNo
             placeholder="Habit name"
             autoFocus
           />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="habit-project">
+            Project *
+          </label>
+          <select
+            id="habit-project"
+            className="input"
+            value={effectiveProjectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
+            {projects?.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="form-field">

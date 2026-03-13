@@ -191,6 +191,7 @@ const ListHabitsParams = Type.Object({
   paused: Type.Optional(
     Type.Boolean({ description: "Filter by paused state (true = paused, false = active)" }),
   ),
+  projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
   checkedToday: Type.Optional(
     Type.Boolean({
       description:
@@ -399,7 +400,7 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     {
       name: "list_habits",
       description:
-        "List habits with optional filtering by paused state or title search. Use filter parameters so the UI updates to show matching habits.",
+        "List habits with optional filtering by paused state, project, or title search. Use filter parameters so the UI updates to show matching habits.",
       label: "List Habits",
       parameters: ListHabitsParams,
       execute: async (_toolCallId, params) => {

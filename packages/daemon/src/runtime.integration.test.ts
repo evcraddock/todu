@@ -816,12 +816,24 @@ describe("createDaemonRuntime", () => {
 
     await runtime.start();
 
+    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-project-create-1",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Habits",
+        },
+      },
+    });
+    const projectId = (createProjectResponse.result as { id: string }).id;
+
     const createHabitResponse = await sendRequest(runtime.config().socketPath, {
       id: "habit-create-1",
       method: "habit.create",
       params: {
         input: {
           title: "Meditate",
+          projectId,
           schedule: "FREQ=DAILY",
           timezone: "America/Chicago",
           startDate: "2026-02-01",
@@ -1845,12 +1857,24 @@ describe("createDaemonRuntime", () => {
       },
     });
 
+    const habitProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "habit-project-validation-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Habit Validation",
+        },
+      },
+    });
+    const habitProjectId = (habitProjectResponse.result as { id: string }).id;
+
     const habitValidationResponse = await sendRequest(runtime.config().socketPath, {
       id: "habit-create-validation",
       method: "habit.create",
       params: {
         input: {
           title: "Bad Habit",
+          projectId: habitProjectId,
           schedule: "FREQ=HOURLY",
           timezone: "UTC",
           startDate: "2026-02-01",
