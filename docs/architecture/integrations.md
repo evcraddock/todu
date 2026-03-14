@@ -61,6 +61,7 @@ Each integration binding represents the user's intended relationship between one
 | `targetRef` | string | Normalized external target identity such as `owner/repo` | Provider interprets the value according to `provider` + `targetKind` |
 | `strategy` | enum | Desired sync behavior for this binding | Initial values: `bidirectional`, `pull`, `push`, `none` |
 | `enabled` | boolean | Desired execution state | `false` keeps binding visible but inactive |
+| `options` | object | Optional provider-specific desired-state options | Plain JSON object only; not for secrets or runtime internals |
 | `createdAt` | timestamp | Audit field | Core-owned |
 | `updatedAt` | timestamp | Audit field | Core-owned |
 
@@ -77,7 +78,7 @@ To keep the first version simple and avoid overlapping control planes:
 
 ### What stays out of the core integration binding
 
-Do not add provider-specific blobs or generic key/value bags for plugin internals.
+Provider-specific desired-state options may live in `binding.options`, but only as plain JSON configuration needed to express shared user intent. Do not use `binding.options` for plugin internals.
 
 The following remain outside synced core entities:
 

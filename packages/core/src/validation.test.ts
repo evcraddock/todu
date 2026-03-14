@@ -242,6 +242,32 @@ describe("validateCreateIntegrationBindingInput", () => {
     expect(error?.field).toBe("strategy");
   });
 
+  it("accepts object options", () => {
+    expect(
+      validateCreateIntegrationBindingInput({
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        options: {
+          importClosedOnBootstrap: true,
+          labels: ["bug"],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects non-object options", () => {
+    const error = validateCreateIntegrationBindingInput({
+      provider: "github",
+      projectId,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      options: ["bad"] as unknown as Record<string, unknown>,
+    });
+    expect(error?.field).toBe("options");
+  });
+
   it("rejects a duplicate project binding", () => {
     const error = validateCreateIntegrationBindingInput(
       {
@@ -310,6 +336,23 @@ describe("validateUpdateIntegrationBindingInput", () => {
   it("rejects invalid strategy", () => {
     const error = validateUpdateIntegrationBindingInput({ strategy: "sync" as "push" });
     expect(error?.field).toBe("strategy");
+  });
+
+  it("accepts object options update", () => {
+    expect(
+      validateUpdateIntegrationBindingInput({
+        options: {
+          importClosedOnBootstrap: true,
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects non-object options update", () => {
+    const error = validateUpdateIntegrationBindingInput({
+      options: null as unknown as Record<string, unknown>,
+    });
+    expect(error?.field).toBe("options");
   });
 
   it("rejects moving to a project that already has a binding", () => {

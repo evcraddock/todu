@@ -115,6 +115,51 @@ describe("sync-worker-runtime", () => {
     expect(provider.shutdown).toHaveBeenCalledTimes(1);
   });
 
+  it("passes binding options through to providers on the first sync cycle", async () => {
+    const provider = createProvider();
+    const project = createProject();
+    const binding = createBinding(project.id, {
+      options: {
+        importClosedOnBootstrap: true,
+      },
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.pull).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: binding.id,
+        options: {
+          importClosedOnBootstrap: true,
+        },
+      }),
+      project,
+    );
+
+    handle.stop();
+    await vi.advanceTimersByTimeAsync(10_000);
+  });
+
   it("retries failed cycles with exponential backoff and writes error status", async () => {
     const provider = createProvider({
       pull: vi
@@ -1411,6 +1456,7 @@ function createBinding(
     targetRef: overrides.targetRef ?? "owner/repo",
     strategy: overrides.strategy ?? "bidirectional",
     enabled: overrides.enabled ?? true,
+    options: overrides.options,
     createdAt: now,
     updatedAt: now,
   };

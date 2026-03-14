@@ -62,6 +62,10 @@ function integrationDetail(binding: IntegrationBinding, projectName?: string): s
     `Updated:     ${binding.updatedAt}`,
   ];
 
+  if (binding.options !== undefined) {
+    lines.push(`Options:     ${JSON.stringify(binding.options)}`);
+  }
+
   return lines.join("\n");
 }
 
@@ -97,6 +101,10 @@ function integrationStatusDetail(item: IntegrationBindingWithStatus, projectName
     `Last Error:          ${item.status.lastErrorSummary ?? "-"}`,
     `Updated:             ${item.status.updatedAt}`,
   ];
+
+  if (item.binding.options !== undefined) {
+    lines.push(`Options:             ${JSON.stringify(item.binding.options)}`);
+  }
 
   return lines.join("\n");
 }
@@ -198,6 +206,56 @@ async function listIntegrationBindingsWithStatus(
   };
 }
 
+function parseIntegrationOptionsJson(
+  value: string | undefined,
+): { ok: true; value: Record<string, unknown> | undefined } | { ok: false; message: string } {
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === 0) {
+    return {
+      ok: false,
+      message: "integration options JSON cannot be empty",
+    };
+  }
+
+  let parsedValue: unknown;
+  try {
+    parsedValue = JSON.parse(trimmedValue);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `invalid options JSON: ${stringifyUnknownError(error)}`,
+    };
+  }
+
+  if (!isRecord(parsedValue)) {
+    return {
+      ok: false,
+      message: "integration options must be a JSON object",
+    };
+  }
+
+  return {
+    ok: true,
+    value: parsedValue,
+  };
+}
+
+function stringifyUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function registerIntegrationCommands(
   program: Command,
   invokeDaemon: CliDaemonInvoker,
@@ -269,6 +327,7 @@ export function registerIntegrationCommands(
     .requiredOption("--target-kind <kind>", "target kind")
     .requiredOption("--target <target>", "target reference")
     .option("--strategy <strategy>", "sync strategy (bidirectional, pull, push, none)")
+    .option("--options <json>", "provider-specific desired-state options as JSON object")
     .option("--disabled", "create the integration binding disabled")
     .action(async (opts) => {
       const project = await resolveProjectId(invokeDaemon, opts.project);
@@ -284,6 +343,13 @@ export function registerIntegrationCommands(
         return;
       }
 
+      const parsedOptions = parseIntegrationOptionsJson(opts.options);
+      if (!parsedOptions.ok) {
+        console.error(`Error: ${parsedOptions.message}`);
+        process.exitCode = 1;
+        return;
+      }
+
       const result = await invokeDaemon<IntegrationBinding>("integration.create", {
         input: {
           provider: opts.provider,
@@ -292,6 +358,7 @@ export function registerIntegrationCommands(
           targetRef: opts.target,
           strategy: opts.strategy,
           enabled: opts.disabled ? false : undefined,
+          options: parsedOptions.value,
         },
       });
 
@@ -317,6 +384,7 @@ export function registerIntegrationCommands(
     .option("--project <project>", "new project (ID or name)")
     .option("--target-kind <kind>", "new target kind")
     .option("--target <target>", "new target reference")
+    .option("--options <json>", "replace provider-specific desired-state options with JSON object")
     .action(async (id, opts) => {
       let projectId: string | undefined;
       let projectName: string | undefined;
@@ -333,11 +401,19 @@ export function registerIntegrationCommands(
         projectName = project.name;
       }
 
+      const parsedOptions = parseIntegrationOptionsJson(opts.options);
+      if (!parsedOptions.ok) {
+        console.error(`Error: ${parsedOptions.message}`);
+        process.exitCode = 1;
+        return;
+      }
+
       const input: Record<string, unknown> = {};
       if (opts.provider) input.provider = opts.provider;
       if (projectId) input.projectId = projectId;
       if (opts.targetKind) input.targetKind = opts.targetKind;
       if (opts.target) input.targetRef = opts.target;
+      if (parsedOptions.value !== undefined) input.options = parsedOptions.value;
 
       if (Object.keys(input).length === 0) {
         console.error("Error: at least one update field is required");

@@ -158,6 +158,7 @@ export interface IntegrationBinding {
   targetRef: string;
   strategy: SyncStrategy;
   enabled: boolean;
+  options?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +260,7 @@ export interface CreateIntegrationBindingInput {
   targetRef: string;
   strategy?: SyncStrategy;
   enabled?: boolean;
+  options?: Record<string, unknown>;
 }
 
 export interface UpdateIntegrationBindingInput {
@@ -268,6 +270,7 @@ export interface UpdateIntegrationBindingInput {
   targetRef?: string;
   strategy?: SyncStrategy;
   enabled?: boolean;
+  options?: Record<string, unknown>;
 }
 
 export interface IntegrationBindingFilter {
