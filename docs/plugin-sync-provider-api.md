@@ -86,6 +86,14 @@ Expected lifecycle:
 
 The runtime persists the pulled task's core fields, including mapped status, priority, labels, assignees, `externalId`, and `sourceUrl`. Task descriptions come from `ExternalTask.description`.
 
+Imported timestamp semantics:
+
+- Newly created local tasks preserve external `createdAt` when provided.
+- Newly created local tasks preserve external `updatedAt` when provided.
+- If only one external task timestamp is provided, the runtime uses that timestamp for both local `createdAt` and `updatedAt` so imported history remains deterministic.
+- For later pull updates of already-linked tasks, local `createdAt` remains unchanged and local `updatedAt` follows the imported external timestamp used for the update decision.
+- Invalid external task timestamps fail the pull safely instead of being written into local task state.
+
 ## Comment Sync Contract
 
 The sync-provider runtime supports comment/note mirroring through pull and push paths.

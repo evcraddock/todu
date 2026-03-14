@@ -131,6 +131,33 @@ describe("task namespace", () => {
       expect(result.value.sourceUrl).toBe("https://example.com/issues/101");
     });
 
+    it("creates a task with imported timestamps", async () => {
+      const result = await todu.task.create({
+        title: "Imported task",
+        projectId,
+        createdAt: "2021-04-17T14:30:00Z",
+        updatedAt: "2021-04-18T09:15:00Z",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.createdAt).toBe("2021-04-17T14:30:00.000Z");
+      expect(result.value.updatedAt).toBe("2021-04-18T09:15:00.000Z");
+    });
+
+    it("falls back imported updatedAt to createdAt on create", async () => {
+      const result = await todu.task.create({
+        title: "Imported task",
+        projectId,
+        createdAt: "2021-04-17T14:30:00Z",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.createdAt).toBe("2021-04-17T14:30:00.000Z");
+      expect(result.value.updatedAt).toBe("2021-04-17T14:30:00.000Z");
+    });
+
     it("trims whitespace from title", async () => {
       const result = await todu.task.create({ title: "  Trimmed  ", projectId });
       expect(result.ok).toBe(true);
@@ -435,6 +462,26 @@ describe("task namespace", () => {
       if (!result.ok) return;
       expect(result.value.externalId).toBe("gh-101");
       expect(result.value.sourceUrl).toBe("https://example.com/issues/101");
+    });
+
+    it("updates imported updatedAt without changing createdAt", async () => {
+      const imported = await todu.task.create({
+        title: "Imported task",
+        projectId,
+        createdAt: "2021-04-17T14:30:00Z",
+        updatedAt: "2021-04-18T09:15:00Z",
+      });
+      if (!imported.ok) throw new Error("create failed");
+
+      const result = await todu.task.update(imported.value.id, {
+        title: "Updated import",
+        updatedAt: "2021-05-01T12:00:00Z",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.title).toBe("Updated import");
+      expect(result.value.createdAt).toBe("2021-04-17T14:30:00.000Z");
+      expect(result.value.updatedAt).toBe("2021-05-01T12:00:00.000Z");
     });
 
     it("replaces assignees entirely on update", async () => {

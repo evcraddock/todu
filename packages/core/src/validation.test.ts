@@ -457,6 +457,35 @@ describe("validateCreateTaskInput", () => {
     ).toBeNull();
   });
 
+  it("accepts imported timestamps in create", () => {
+    expect(
+      validateCreateTaskInput({
+        title: "Imported task",
+        projectId,
+        createdAt: "2021-04-17T14:30:00Z",
+        updatedAt: "2021-04-18T09:15:00Z",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid createdAt in create", () => {
+    const error = validateCreateTaskInput({
+      title: "Imported task",
+      projectId,
+      createdAt: "not-a-date",
+    });
+    expect(error?.field).toBe("createdAt");
+  });
+
+  it("rejects invalid updatedAt in create", () => {
+    const error = validateCreateTaskInput({
+      title: "Imported task",
+      projectId,
+      updatedAt: "not-a-date",
+    });
+    expect(error?.field).toBe("updatedAt");
+  });
+
   it("rejects empty assignee string in create", () => {
     const error = validateCreateTaskInput({ title: "Test", projectId, assignees: [""] });
     expect(error?.field).toBe("assignees");
@@ -552,6 +581,15 @@ describe("validateUpdateTaskInput", () => {
         sourceUrl: "https://example.com/issues/101",
       }),
     ).toBeNull();
+  });
+
+  it("accepts imported updatedAt in update", () => {
+    expect(validateUpdateTaskInput({ updatedAt: "2021-04-18T09:15:00Z" })).toBeNull();
+  });
+
+  it("rejects invalid updatedAt in update", () => {
+    const error = validateUpdateTaskInput({ updatedAt: "not-a-date" });
+    expect(error?.field).toBe("updatedAt");
   });
 
   it("rejects empty assignee string in update", () => {

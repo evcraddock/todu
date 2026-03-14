@@ -161,6 +161,16 @@ export function createTaskNamespace(
       if (!project) return err(notFound("project", input.projectId));
 
       const now = new Date().toISOString();
+      const createdAt = input.createdAt
+        ? normalizeTaskTimestamp(input.createdAt)
+        : input.updatedAt
+          ? normalizeTaskTimestamp(input.updatedAt)
+          : now;
+      const updatedAt = input.updatedAt
+        ? normalizeTaskTimestamp(input.updatedAt)
+        : input.createdAt
+          ? normalizeTaskTimestamp(input.createdAt)
+          : now;
       const id = overrideTaskId ?? createTaskId(`task-${crypto.randomUUID().slice(0, 8)}`);
 
       const task: Task = {
@@ -171,8 +181,8 @@ export function createTaskNamespace(
         projectId: input.projectId,
         labels: input.labels ?? [],
         assignees: input.assignees ?? [],
-        createdAt: now,
-        updatedAt: now,
+        createdAt,
+        updatedAt,
       };
       // Automerge doesn't allow undefined — only set optional fields if present
       if (input.dueDate !== undefined) task.dueDate = input.dueDate;
@@ -318,7 +328,9 @@ export function createTaskNamespace(
       const validationErr = validateUpdateTaskInput(input, result.task.status);
       if (validationErr) return err(validationErr);
 
-      const now = new Date().toISOString();
+      const updatedAt = input.updatedAt
+        ? normalizeTaskTimestamp(input.updatedAt)
+        : new Date().toISOString();
 
       // Update metadata in task list document
       result.listHandle.change((doc) => {
@@ -338,7 +350,7 @@ export function createTaskNamespace(
         if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
         if (input.externalId !== undefined) task.externalId = input.externalId.trim();
         if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
-        task.updatedAt = now;
+        task.updatedAt = updatedAt;
       });
 
       // Update description in detail document if changed
@@ -538,4 +550,8 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
     }
   }
   return result as Partial<T>;
+}
+
+function normalizeTaskTimestamp(value: string): string {
+  return new Date(value).toISOString();
 }

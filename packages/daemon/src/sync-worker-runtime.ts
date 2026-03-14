@@ -457,14 +457,47 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
   }
 }
 
-function getPulledTaskTimestamp(task: ExternalTask): string | null {
-  return task.updatedAt ?? task.createdAt ?? null;
+function normalizePulledTaskTimestamp(
+  task: ExternalTask,
+  field: "createdAt" | "updatedAt",
+): string | null {
+  const value = task[field];
+  if (value === undefined) {
+    return null;
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new Error(
+      `pulled task has invalid ${field}: externalId=${task.externalId} value=${value}`,
+    );
+  }
+
+  return timestamp.toISOString();
+}
+
+function getPulledTaskTimestamps(task: ExternalTask): {
+  createdAt?: string;
+  updatedAt?: string;
+  comparisonTimestamp: string | null;
+} {
+  const createdAt = normalizePulledTaskTimestamp(task, "createdAt");
+  const updatedAt = normalizePulledTaskTimestamp(task, "updatedAt");
+  const effectiveCreatedAt = createdAt ?? updatedAt ?? undefined;
+  const effectiveUpdatedAt = updatedAt ?? createdAt ?? undefined;
+
+  return {
+    createdAt: effectiveCreatedAt,
+    updatedAt: effectiveUpdatedAt,
+    comparisonTimestamp: effectiveUpdatedAt ?? null,
+  };
 }
 
 function buildPulledTaskCreateInput(
   mappedTask: Task,
   project: Project,
   externalTask: ExternalTask,
+  timestamps: { createdAt?: string; updatedAt?: string },
 ): {
   title: string;
   projectId: Project["id"];
@@ -475,6 +508,8 @@ function buildPulledTaskCreateInput(
   assignees: string[];
   externalId: string;
   sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
 } {
   const input: {
     title: string;
@@ -486,6 +521,8 @@ function buildPulledTaskCreateInput(
     assignees: string[];
     externalId: string;
     sourceUrl?: string;
+    createdAt?: string;
+    updatedAt?: string;
   } = {
     title: mappedTask.title,
     projectId: project.id,
@@ -505,12 +542,21 @@ function buildPulledTaskCreateInput(
     input.sourceUrl = sourceUrl;
   }
 
+  if (timestamps.createdAt !== undefined) {
+    input.createdAt = timestamps.createdAt;
+  }
+
+  if (timestamps.updatedAt !== undefined) {
+    input.updatedAt = timestamps.updatedAt;
+  }
+
   return input;
 }
 
 function buildPulledTaskUpdateInput(
   mappedTask: Task,
   externalTask: ExternalTask,
+  timestamps: { updatedAt?: string },
 ): {
   title: string;
   status: Task["status"];
@@ -520,6 +566,7 @@ function buildPulledTaskUpdateInput(
   assignees: string[];
   externalId: string;
   sourceUrl?: string;
+  updatedAt?: string;
 } {
   const input: {
     title: string;
@@ -530,6 +577,7 @@ function buildPulledTaskUpdateInput(
     assignees: string[];
     externalId: string;
     sourceUrl?: string;
+    updatedAt?: string;
   } = {
     title: mappedTask.title,
     status: mappedTask.status,
@@ -546,6 +594,10 @@ function buildPulledTaskUpdateInput(
   const sourceUrl = mappedTask.sourceUrl ?? externalTask.sourceUrl;
   if (sourceUrl !== undefined) {
     input.sourceUrl = sourceUrl;
+  }
+
+  if (timestamps.updatedAt !== undefined) {
+    input.updatedAt = timestamps.updatedAt;
   }
 
   return input;
@@ -573,11 +625,12 @@ async function applyPulledTasks(
   for (const externalTask of tasks) {
     const mappedTask = provider.mapToTask(externalTask, project);
     const existingTask = localByExternalId.get(externalTask.externalId);
-    const externalUpdatedAt = getPulledTaskTimestamp(externalTask);
+    const pulledTimestamps = getPulledTaskTimestamps(externalTask);
+    const externalUpdatedAt = pulledTimestamps.comparisonTimestamp;
 
     if (!existingTask) {
       const createResult = await todu.task.create(
-        buildPulledTaskCreateInput(mappedTask, project, externalTask),
+        buildPulledTaskCreateInput(mappedTask, project, externalTask, pulledTimestamps),
       );
       if (!createResult.ok) {
         throw new Error(
@@ -597,7 +650,7 @@ async function applyPulledTasks(
 
     const updateResult = await todu.task.update(
       existingTask.id,
-      buildPulledTaskUpdateInput(mappedTask, externalTask),
+      buildPulledTaskUpdateInput(mappedTask, externalTask, pulledTimestamps),
     );
     if (!updateResult.ok) {
       throw new Error(

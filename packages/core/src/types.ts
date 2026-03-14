@@ -296,6 +296,8 @@ export interface CreateTaskInput {
   scheduledDate?: string;
   externalId?: string;
   sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UpdateTaskInput {
@@ -309,6 +311,7 @@ export interface UpdateTaskInput {
   scheduledDate?: string;
   externalId?: string;
   sourceUrl?: string;
+  updatedAt?: string;
 }
 
 export interface TaskFilter {
