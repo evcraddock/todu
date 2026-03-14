@@ -179,7 +179,9 @@ Use the generic integration command group to manage integration bindings through
 toduai integration list
 toduai integration list --provider github
 toduai integration add --provider github --project Work --target-kind repository --target owner/repo
+toduai integration add --provider forgejo --project Work --target-kind repository --target owner/repo --options '{"importClosedOnBootstrap":true}'
 toduai integration update <binding-id> --target-kind repository --target owner/renamed-repo
+toduai integration update <binding-id> --options '{"importClosedOnBootstrap":false}'
 toduai integration set-strategy <binding-id> --strategy pull
 toduai integration enable <binding-id>
 toduai integration disable <binding-id>
@@ -192,6 +194,8 @@ Behavior notes:
 - Integration bindings are the generic shared control plane for external integrations.
 - Project commands no longer expose project-level external sync settings; use `toduai integration ...` to manage external sync intent.
 - Provider-specific credential setup stays out of `integration add|update|remove` and remains local to the authority daemon host.
+- `integration add` and `integration update` accept `--options <json>` for provider-specific desired-state binding options.
+- Binding `options` are shared user intent only; do not store secrets, tokens, cursors, retry state, or diagnostics there.
 - `integration list` supports filtering by `--provider`, `--project`, `--enabled`, and `--disabled`.
 - `integration status` shows runtime status for one binding or all bindings.
 - Projects without integration bindings remain normal todu projects.

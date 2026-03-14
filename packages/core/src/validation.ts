@@ -90,6 +90,27 @@ export function validateIntegrationBindingField(
   return null;
 }
 
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function validateIntegrationBindingOptions(options: unknown): ValidationError | null {
+  if (options === undefined) {
+    return null;
+  }
+
+  if (!isPlainJsonObject(options)) {
+    return validationError("options", "options must be a JSON object");
+  }
+
+  return null;
+}
+
 export function validateIntegrationBindingProjectUniqueness(
   projectId: string,
   bindings: IntegrationBinding[],
@@ -190,6 +211,9 @@ export function validateCreateIntegrationBindingInput(
     return validationError("strategy", `Invalid sync strategy: ${input.strategy}`);
   }
 
+  const optionsError = validateIntegrationBindingOptions(input.options);
+  if (optionsError) return optionsError;
+
   return validateIntegrationBindingProjectUniqueness(input.projectId, bindings);
 }
 
@@ -208,7 +232,8 @@ export function validateUpdateIntegrationBindingInput(
     input.targetKind === undefined &&
     input.targetRef === undefined &&
     input.strategy === undefined &&
-    input.enabled === undefined
+    input.enabled === undefined &&
+    input.options === undefined
   ) {
     return validationError("input", "At least one field must be provided");
   }
@@ -231,6 +256,9 @@ export function validateUpdateIntegrationBindingInput(
   if (input.strategy !== undefined && !isSyncStrategy(input.strategy)) {
     return validationError("strategy", `Invalid sync strategy: ${input.strategy}`);
   }
+
+  const optionsError = validateIntegrationBindingOptions(input.options);
+  if (optionsError) return optionsError;
 
   if (input.projectId !== undefined) {
     return validateIntegrationBindingProjectUniqueness(

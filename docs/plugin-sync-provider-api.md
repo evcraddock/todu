@@ -199,9 +199,9 @@ Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginNa
 - `enabled`: optional execution toggle for the local provider worker.
 - `settings`: provider-specific object passed to `initialize(...)`.
 
-Binding desired state is no longer configured through local plugin config. The daemon host now enumerates shared integration bindings from core state, filters by provider name and `enabled` state, and executes provider work according to each binding's `strategy`, `projectId`, `targetKind`, and `targetRef`.
+Binding desired state is no longer configured through local plugin config. The daemon host now enumerates shared integration bindings from core state, filters by provider name and `enabled` state, and executes provider work according to each binding's `strategy`, `projectId`, `targetKind`, `targetRef`, and optional `options` object.
 
-Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, retry tuning, and other host-local runtime settings.
+Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, retry tuning, and other host-local runtime settings. `binding.options` is for provider-specific desired-state configuration only and must not be used for secrets or runtime internals.
 
 Retry policy:
 

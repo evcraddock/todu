@@ -25,7 +25,12 @@ import {
 import type { IntegrationNamespace } from "./todu.js";
 
 function cloneIntegrationBinding(binding: IntegrationBinding): IntegrationBinding {
-  return { ...binding };
+  return {
+    ...binding,
+    ...(binding.options !== undefined
+      ? { options: JSON.parse(JSON.stringify(binding.options)) as Record<string, unknown> }
+      : {}),
+  };
 }
 
 function cloneIntegrationBindingStatus(
@@ -165,6 +170,9 @@ export function createIntegrationNamespace(
         targetRef: input.targetRef.trim(),
         strategy: input.strategy ?? "bidirectional",
         enabled: input.enabled ?? true,
+        ...(input.options !== undefined
+          ? { options: JSON.parse(JSON.stringify(input.options)) as Record<string, unknown> }
+          : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -226,6 +234,9 @@ export function createIntegrationNamespace(
         if (input.targetRef !== undefined) binding.targetRef = input.targetRef.trim();
         if (input.strategy !== undefined) binding.strategy = input.strategy;
         if (input.enabled !== undefined) binding.enabled = input.enabled;
+        if (input.options !== undefined) {
+          binding.options = JSON.parse(JSON.stringify(input.options)) as Record<string, unknown>;
+        }
         binding.updatedAt = now;
       });
 
