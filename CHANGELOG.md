@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-03-14
+
+This patch release closes a CLI gap so habit comments can be managed from the terminal as well as from the Electron app.
+
+### Fixed
+- `toduai note add` and `toduai note list` now support `--habit <id>`, making it possible to add and view habit-attached comments from the CLI using the same underlying capability already available in Electron (#343)
+
 ## [0.9.0] - 2026-03-14
 
 This release expands the shared integration model so each binding can carry provider-specific desired-state options from creation time through the first sync cycle.
