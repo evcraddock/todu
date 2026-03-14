@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-03-14
+
+This release expands the shared integration model so each binding can carry provider-specific desired-state options from creation time through the first sync cycle.
+
+### Added
+- Integration bindings now support an optional per-binding `options` object in shared core state, allowing provider-specific desired-state settings such as bootstrap behavior to be configured at bind time instead of only through local plugin config (#342)
+
+### Changed
+- The CLI now supports `toduai integration add --options <json>` and `toduai integration update --options <json>`, and detailed integration output shows configured binding options (#342)
+- Plugin/provider docs and integration architecture docs now define binding `options` as shared desired-state only, while keeping secrets and runtime internals local to the authority daemon host (#342)
+
 ## [0.8.0] - 2026-03-14
 
 This release expands import fidelity and project context across todu. Habits are now project-scoped, the Electron app shows its version in Settings, journal imports can preserve historical dates from the CLI, and synced issue imports now keep source-system task timestamps.
