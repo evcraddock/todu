@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-14
+
+This release expands import fidelity and project context across todu. Habits are now project-scoped, the Electron app shows its version in Settings, journal imports can preserve historical dates from the CLI, and synced issue imports now keep source-system task timestamps.
+
+### Added
+- Habits now belong to projects across the core model, engine, daemon, CLI, and Electron app, making project ownership explicit for habit tracking (#336)
+- The Electron Settings view now shows the running app version so users can verify which build is installed (#338)
+- `toduai note add` now supports `--created-at` for importing backdated journal entries from existing notes or scripts (#339)
+
+### Changed
+- Sync-provider pull now preserves imported task timestamps so newly imported tasks keep external history and existing linked tasks retain stable `createdAt` values across later sync updates (#340)
+
+### Fixed
+- Backdated journal imports now store entries in the correct historical journal buckets instead of using import-time dates (#339)
+- Imported synced tasks now preserve external `createdAt` and `updatedAt` values, with deterministic fallback when only one timestamp is available (#340)
+
 ## [0.7.7] - 2026-03-11
 
 Raises validation limits for task descriptions and note content.
