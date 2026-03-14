@@ -210,6 +210,10 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("todu:settings:providers", () => {
     return listProviders();
   });
+
+  ipcMain.handle("todu:settings:version", () => {
+    return app.getVersion();
+  });
 }
 
 export function unregisterSettingsIpc(): void {
@@ -219,4 +223,5 @@ export function unregisterSettingsIpc(): void {
   ipcMain.removeHandler("todu:settings:remove-api-key");
   ipcMain.removeHandler("todu:settings:stored-providers");
   ipcMain.removeHandler("todu:settings:providers");
+  ipcMain.removeHandler("todu:settings:version");
 }

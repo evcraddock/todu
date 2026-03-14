@@ -25,6 +25,7 @@ export function SettingsView({
   const [storedKeys, setStoredKeys] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   // API key input state — one per provider
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
@@ -78,6 +79,17 @@ export function SettingsView({
       })
       .catch(() => {
         // Sync data unavailable — the Sync section simply won't render
+      });
+  }, []);
+
+  // Load app version separately so a metadata lookup failure does not
+  // affect the rest of the settings page.
+  useEffect(() => {
+    window.todu.settings
+      .version()
+      .then(setAppVersion)
+      .catch(() => {
+        // Version unavailable — show fallback text in the App section
       });
   }, []);
 
@@ -625,6 +637,24 @@ export function SettingsView({
             </div>
           </div>
         ))}
+      </div>
+
+      {/* ── App ─────────────────────────────────────────────────────── */}
+      <div className="settings-section">
+        <h3 className="section-title">App</h3>
+        <div className="settings-key-row">
+          <div className="settings-key-header">
+            <span className="settings-key-label">Version</span>
+            <span
+              className={`settings-key-status ${appVersion ? "settings-key-stored" : "settings-key-missing"}`}
+            >
+              {appVersion ? `v${appVersion}` : "Unavailable"}
+            </span>
+          </div>
+          <p className="settings-hint">
+            Use this version when checking release notes or reporting app issues.
+          </p>
+        </div>
       </div>
     </div>
   );
