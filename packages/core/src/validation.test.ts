@@ -813,6 +813,23 @@ describe("validateCreateNoteInput", () => {
     expect(validateCreateNoteInput({ content: "Thought", tags: ["idea", "design"] })).toBeNull();
   });
 
+  it("accepts note with createdAt", () => {
+    expect(
+      validateCreateNoteInput({
+        content: "Imported journal entry",
+        createdAt: "2021-04-17T14:30:00Z",
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid createdAt", () => {
+    const error = validateCreateNoteInput({
+      content: "Imported journal entry",
+      createdAt: "not-a-date",
+    });
+    expect(error?.field).toBe("createdAt");
+  });
+
   it("rejects empty content", () => {
     const error = validateCreateNoteInput({ content: "" });
     expect(error?.field).toBe("content");

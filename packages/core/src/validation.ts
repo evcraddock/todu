@@ -531,6 +531,11 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
     return validationError("entityType", `Invalid entity type: ${input.entityType}`);
   }
 
+  if (input.createdAt !== undefined) {
+    const createdAtError = validateISODate("createdAt", input.createdAt);
+    if (createdAtError) return createdAtError;
+  }
+
   // If entityType is set, entityId must also be set (and vice versa)
   if (input.entityType !== undefined && !input.entityId) {
     return validationError("entityId", "Entity ID is required when entity type is specified");

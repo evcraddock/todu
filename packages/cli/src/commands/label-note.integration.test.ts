@@ -137,6 +137,25 @@ describe("label + note CLI commands", () => {
       expect(JSON.parse(afterDelete)).toHaveLength(2);
     });
 
+    it("creates a backdated journal entry with --created-at", () => {
+      const createdJson = run(
+        '--format json note add "Imported entry" --created-at "2021-04-17T14:30:00Z"',
+      );
+      const created = JSON.parse(createdJson);
+      expect(created.createdAt).toBe("2021-04-17T14:30:00.000Z");
+
+      const listJson = run("--format json note list");
+      const notes = JSON.parse(listJson);
+      expect(notes).toHaveLength(1);
+      expect(notes[0].createdAt).toBe("2021-04-17T14:30:00.000Z");
+    });
+
+    it("fails clearly for invalid --created-at", () => {
+      const output = run('note add "Imported entry" --created-at "not-a-date"', true);
+      expect(output).toContain("Invalid date");
+      expect(output).toContain("not-a-date");
+    });
+
     it("shows 'No notes.' when empty", () => {
       const output = run("note list");
       expect(output).toBe("No notes.");

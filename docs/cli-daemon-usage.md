@@ -243,6 +243,32 @@ toduai --format json recurring show <template-id>
 
 Text output includes a `Miss Policy` field/column. JSON output includes `missPolicy`, and older templates without a stored field are displayed as `accumulate` for backward compatibility.
 
+## Import backdated journal entries via CLI
+
+Use `toduai note add` with `--created-at` to import historical journal entries without editing the datastore directly.
+
+Create a backdated journal entry from an existing note:
+
+```bash
+toduai note add "Imported journal entry" \
+  --created-at 2021-04-17T14:30:00Z \
+  --tag imported \
+  --tag journal
+```
+
+For scripted imports, emit one command per entry with the original timestamp:
+
+```bash
+toduai note add "Started new role today" --created-at 2019-06-03T09:00:00Z
+toduai note add "Moved apartments" --created-at 2020-08-29T18:45:00Z
+```
+
+Behavior notes:
+- `--created-at` accepts an ISO-8601 date or datetime string.
+- Stored journal timestamps are normalized to ISO datetime form.
+- Standalone journal notes are bucketed by the provided historical month, not by import time.
+- Invalid `--created-at` input fails with a validation error.
+
 ## Validate connectivity
 
 ```bash

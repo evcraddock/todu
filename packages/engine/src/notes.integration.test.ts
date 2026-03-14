@@ -115,6 +115,27 @@ describe("note namespace", () => {
       expect(result.value.author).toBe("agent");
     });
 
+    it("creates a journal note with an explicit historical timestamp", async () => {
+      const result = await todu.note.create({
+        content: "Imported from old journal",
+        createdAt: "2021-04-17T14:30:00Z",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.createdAt).toBe("2021-04-17T14:30:00.000Z");
+    });
+
+    it("rejects invalid createdAt input", async () => {
+      const result = await todu.note.create({
+        content: "Imported from old journal",
+        createdAt: "not-a-date",
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+      expect(result.error.field).toBe("createdAt");
+    });
+
     it("rejects empty content", async () => {
       const result = await todu.note.create({ content: "" });
       expect(result.ok).toBe(false);
@@ -342,7 +363,10 @@ describe("note namespace", () => {
       const task = await todu.task.create({ title: "Task for notes", projectId });
       if (!task.ok) throw new Error("create failed");
 
-      const journalNote = await todu.note.create({ content: "Journal" });
+      const journalNote = await todu.note.create({
+        content: "Journal",
+        createdAt: "2021-04-17T14:30:00Z",
+      });
       const taskNote = await todu.note.create({
         content: "Task attached",
         entityType: "task",
@@ -365,6 +389,7 @@ describe("note namespace", () => {
       );
       expect(catalogDoc.noteBucketByNoteId[journalNote.value.id]).toBe(journalBucket);
       expect(catalogDoc.noteBucketByNoteId[taskNote.value.id]).toBe(taskBucket);
+      expect(journalBucket).toBe("journal:2021-04");
     });
 
     it("migrates legacy notesDocId data into partition buckets", async () => {

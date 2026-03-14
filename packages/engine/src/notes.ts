@@ -281,7 +281,9 @@ export function createNoteNamespace(
         }
       }
 
-      const now = new Date().toISOString();
+      const createdAt = input.createdAt
+        ? new Date(input.createdAt).toISOString()
+        : new Date().toISOString();
       const id = createNoteId(`note-${crypto.randomUUID().slice(0, 8)}`);
 
       const note: Note = {
@@ -289,7 +291,7 @@ export function createNoteNamespace(
         content: input.content.trim(),
         author: input.author ?? "user",
         tags: input.tags ?? [],
-        createdAt: now,
+        createdAt,
       };
       if (input.entityType !== undefined) note.entityType = input.entityType;
       if (input.entityId !== undefined) note.entityId = input.entityId;
