@@ -147,6 +147,7 @@ export interface ToduSettingsApi {
   removeApiKey(provider: string): Promise<void>;
   storedProviders(): Promise<Record<string, boolean>>;
   providers(): Promise<ProviderInfo[]>;
+  version(): Promise<string>;
 }
 
 export type RemoteSyncState = "disconnected" | "connected" | "syncing";

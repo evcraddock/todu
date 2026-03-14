@@ -105,6 +105,7 @@ const api = {
       ipcRenderer.invoke("todu:settings:remove-api-key", provider),
     storedProviders: () => ipcRenderer.invoke("todu:settings:stored-providers"),
     providers: () => ipcRenderer.invoke("todu:settings:providers"),
+    version: () => ipcRenderer.invoke("todu:settings:version"),
   },
 
   // ── Sync ─────────────────────────────────────────────────────────
