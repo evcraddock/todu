@@ -376,6 +376,16 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
     if (sourceUrlError) return sourceUrlError;
   }
 
+  if (input.createdAt !== undefined) {
+    const createdAtError = validateISODate("createdAt", input.createdAt);
+    if (createdAtError) return createdAtError;
+  }
+
+  if (input.updatedAt !== undefined) {
+    const updatedAtError = validateISODate("updatedAt", input.updatedAt);
+    if (updatedAtError) return updatedAtError;
+  }
+
   return null;
 }
 
@@ -393,7 +403,8 @@ export function validateUpdateTaskInput(
     input.dueDate === undefined &&
     input.scheduledDate === undefined &&
     input.externalId === undefined &&
-    input.sourceUrl === undefined
+    input.sourceUrl === undefined &&
+    input.updatedAt === undefined
   ) {
     return validationError("input", "At least one field must be provided");
   }
@@ -447,6 +458,11 @@ export function validateUpdateTaskInput(
   if (input.sourceUrl !== undefined) {
     const sourceUrlError = validateTaskLinkField("sourceUrl", input.sourceUrl);
     if (sourceUrlError) return sourceUrlError;
+  }
+
+  if (input.updatedAt !== undefined) {
+    const updatedAtError = validateISODate("updatedAt", input.updatedAt);
+    if (updatedAtError) return updatedAtError;
   }
 
   return null;

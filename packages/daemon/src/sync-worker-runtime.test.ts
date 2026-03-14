@@ -769,6 +769,7 @@ describe("sync-worker-runtime", () => {
         title: "Pulled bug",
         description: "Imported from GitHub",
         sourceUrl: "https://example.com/issues/101",
+        createdAt: "2021-04-17T14:30:00Z",
         updatedAt: "2026-03-10T15:00:00Z",
       },
     ];
@@ -826,6 +827,8 @@ describe("sync-worker-runtime", () => {
       assignees: ["octocat"],
       externalId: "gh-101",
       sourceUrl: "https://example.com/issues/101",
+      createdAt: "2021-04-17T14:30:00.000Z",
+      updatedAt: "2026-03-10T15:00:00.000Z",
     });
 
     handle.stop();
@@ -836,6 +839,7 @@ describe("sync-worker-runtime", () => {
     const existingTask = {
       ...createTask(project.id),
       externalId: "gh-101",
+      createdAt: "2021-04-17T14:30:00Z",
       updatedAt: "2026-03-09T10:00:00Z",
     };
     const binding = createBinding(project.id, { strategy: "pull" });
@@ -899,6 +903,75 @@ describe("sync-worker-runtime", () => {
       assignees: ["octocat"],
       externalId: "gh-101",
       sourceUrl: "https://example.com/issues/101",
+      updatedAt: "2026-03-10T15:00:00.000Z",
+    });
+
+    handle.stop();
+  });
+
+  it("pull falls back imported updatedAt to createdAt when missing", async () => {
+    const project = createProject();
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledTasks: ExternalTask[] = [
+      {
+        externalId: "gh-101",
+        title: "Pulled bug",
+        description: "Imported from GitHub",
+        createdAt: "2021-04-17T14:30:00Z",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: pulledTasks,
+      }),
+      mapToTask: vi
+        .fn<SyncProvider["mapToTask"]>()
+        .mockImplementation((external, activeProject) => ({
+          id: createTaskId(`task-${external.externalId}`),
+          title: external.title,
+          status: "waiting",
+          priority: "high",
+          projectId: activeProject.id,
+          labels: ["bug"],
+          assignees: ["octocat"],
+          sourceUrl: external.sourceUrl,
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        })),
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.create).toHaveBeenCalledWith({
+      title: "Pulled bug",
+      projectId: project.id,
+      status: "waiting",
+      priority: "high",
+      description: "Imported from GitHub",
+      labels: ["bug"],
+      assignees: ["octocat"],
+      externalId: "gh-101",
+      createdAt: "2021-04-17T14:30:00.000Z",
+      updatedAt: "2021-04-17T14:30:00.000Z",
     });
 
     handle.stop();
@@ -950,6 +1023,49 @@ describe("sync-worker-runtime", () => {
     expect(provider.mapToTask).toHaveBeenCalledTimes(1);
     expect(todu.task.update).not.toHaveBeenCalled();
     expect(todu.task.create).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
+  it("pull fails safely when a pulled task timestamp is invalid", async () => {
+    const project = createProject();
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const pulledTasks: ExternalTask[] = [
+      {
+        externalId: "gh-101",
+        title: "Pulled bug",
+        createdAt: "not-a-date",
+      },
+    ];
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: pulledTasks,
+      }),
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.create).not.toHaveBeenCalled();
+    expect(todu.task.update).not.toHaveBeenCalled();
 
     handle.stop();
   });
@@ -1430,6 +1546,8 @@ function createTodu(
         assignees?: string[];
         externalId?: string;
         sourceUrl?: string;
+        createdAt?: string;
+        updatedAt?: string;
       }) => {
         const createdTask: Task = {
           id: createTaskId(`task-created-${tasks.length + 1}`),
@@ -1439,8 +1557,8 @@ function createTodu(
           projectId: input.projectId as Project["id"],
           labels: input.labels ?? [],
           assignees: input.assignees ?? [],
-          createdAt: new Date(0).toISOString(),
-          updatedAt: new Date(0).toISOString(),
+          createdAt: input.createdAt ?? new Date(0).toISOString(),
+          updatedAt: input.updatedAt ?? input.createdAt ?? new Date(0).toISOString(),
         };
         if (input.externalId !== undefined) createdTask.externalId = input.externalId;
         if (input.sourceUrl !== undefined) createdTask.sourceUrl = input.sourceUrl;
@@ -1461,6 +1579,7 @@ function createTodu(
         assignees?: string[];
         externalId?: string;
         sourceUrl?: string;
+        updatedAt?: string;
       },
     ) => {
       const task = tasks.find((candidate) => candidate.id === id);
@@ -1472,7 +1591,7 @@ function createTodu(
       if (input.assignees !== undefined) task.assignees = [...input.assignees];
       if (input.externalId !== undefined) task.externalId = input.externalId;
       if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl;
-      task.updatedAt = new Date(0).toISOString();
+      task.updatedAt = input.updatedAt ?? new Date(0).toISOString();
       return ok({ ...task, description: input.description });
     },
   );
