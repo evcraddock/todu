@@ -350,6 +350,7 @@ export interface CreateNoteInput {
   entityType?: NoteEntityType;
   entityId?: string;
   tags?: string[];
+  createdAt?: string;
 }
 
 export interface UpdateNoteInput {

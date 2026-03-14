@@ -73,6 +73,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--project <ref>", "attach to a project")
     .option("--tag <tags...>", "tags")
     .option("--author <author>", "author (default: user)")
+    .option("--created-at <iso>", "ISO timestamp for importing/backdating a journal entry")
     .action(async (content, opts) => {
       let entityType: NoteEntityType | undefined;
       let entityId: string | undefined;
@@ -99,6 +100,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
           entityId,
           tags: opts.tag,
           author: opts.author,
+          createdAt: opts.createdAt,
         },
       });
 
