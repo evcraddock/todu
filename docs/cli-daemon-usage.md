@@ -267,11 +267,19 @@ toduai note add "Started new role today" --created-at 2019-06-03T09:00:00Z
 toduai note add "Moved apartments" --created-at 2020-08-29T18:45:00Z
 ```
 
+Attach a comment to a habit from the CLI:
+
+```bash
+toduai note add "Floss method: Water Pick" --habit hab-123
+toduai --format json note list --habit hab-123
+```
+
 Behavior notes:
 - `--created-at` accepts an ISO-8601 date or datetime string.
 - Stored journal timestamps are normalized to ISO datetime form.
 - Standalone journal notes are bucketed by the provided historical month, not by import time.
 - Invalid `--created-at` input fails with a validation error.
+- `--habit <id>` attaches a note to a habit or filters notes for a habit.
 
 ## Validate connectivity
 

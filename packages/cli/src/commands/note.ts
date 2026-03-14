@@ -71,6 +71,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .description("Add a note (standalone journal entry, or attached to an entity)")
     .option("--task <id>", "attach to a task")
     .option("--project <ref>", "attach to a project")
+    .option("--habit <id>", "attach to a habit")
     .option("--tag <tags...>", "tags")
     .option("--author <author>", "author (default: user)")
     .option("--created-at <iso>", "ISO timestamp for importing/backdating a journal entry")
@@ -91,6 +92,9 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
 
         entityType = "project";
         entityId = project.value;
+      } else if (opts.habit) {
+        entityType = "habit";
+        entityId = opts.habit;
       }
 
       const result = await invokeDaemon<Note>("note.create", {
@@ -124,6 +128,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .description("List notes")
     .option("--task <id>", "filter by task")
     .option("--project <ref>", "filter by project")
+    .option("--habit <id>", "filter by habit")
     .option("--tag <tag>", "filter by tag")
     .option("--author <author>", "filter by author")
     .action(async (opts) => {
@@ -143,6 +148,9 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
 
         entityType = "project";
         entityId = project.value;
+      } else if (opts.habit) {
+        entityType = "habit";
+        entityId = opts.habit;
       }
 
       const result = await invokeDaemon<Note[]>("note.list", {
