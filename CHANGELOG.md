@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-03-17
+
+Patch release preventing sync cycle aborts on oversized external content.
+
+### Fixed
+
+- Sync cycles no longer abort when an external issue description or comment body exceeds 10,000 characters — oversized content is now truncated to the limit with a `... [truncated]` suffix and the rest of the cycle continues normally (#346)
+
 ## [0.9.1] - 2026-03-14
 
 This patch release closes a CLI gap so habit comments can be managed from the terminal as well as from the Electron app.
