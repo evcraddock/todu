@@ -50,7 +50,7 @@ Project context:
 ## Local (per machine)
 
 - `todu daemon` is the local state owner/coordinator.
-- `toduai` CLI and Electron connect to daemon via local transport.
+- `todu` CLI and Electron connect to daemon via local transport.
 
 ```
 CLI  ──┐

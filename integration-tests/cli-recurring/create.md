@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,16 +11,16 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-toduai project create --name "Infra"
+todu project create --name "App"
+todu project create --name "Infra"
 ```
 
 ## 1. Create Daily Template (CLI)
 
 ```bash
-toduai recurring create --title "Daily standup" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
+todu recurring create --title "Daily standup" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:**
@@ -44,8 +44,8 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 2. Create Weekly Template with All Options (CLI)
 
 ```bash
-toduai label create --name meetings --color "#3b82f6"
-toduai recurring create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" \
+todu label create --name meetings --color "#3b82f6"
+todu recurring create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" \
   --project "App" --timezone "$TZ" --start-date "$TODAY" \
   --priority high --description "End of week reflection" --label meetings
 ```
@@ -55,7 +55,7 @@ toduai recurring create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR
 ## 3. Create with JSON Output (CLI)
 
 ```bash
-toduai --format json recurring create --title "Monthly report" --schedule "FREQ=MONTHLY;BYMONTHDAY=1" \
+todu --format json recurring create --title "Monthly report" --schedule "FREQ=MONTHLY;BYMONTHDAY=1" \
   --project "Infra" --timezone "$TZ" --start-date "$TODAY" --priority low
 ```
 
@@ -64,7 +64,7 @@ toduai --format json recurring create --title "Monthly report" --schedule "FREQ=
 ## 4. Verify CLI List
 
 ```bash
-toduai recurring list --no-color
+todu recurring list --no-color
 ```
 
 **Expected:** All 3 templates shown with Title, Schedule, Project, Priority, Next Due, Status.
@@ -125,7 +125,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 7. Verify CLI Sees Electron-Created Template
 
 ```bash
-toduai recurring list --no-color
+todu recurring list --no-color
 ```
 
 **Expected:** Four templates shown, including "Electron Template".
@@ -134,5 +134,5 @@ toduai recurring list --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

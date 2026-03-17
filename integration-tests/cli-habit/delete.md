@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,20 +11,20 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-HABIT1=$(toduai --format json habit create --title "Delete me" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
+HABIT1=$(todu --format json habit create --title "Delete me" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
 HABIT1_ID=$(echo "$HABIT1" | jq -r .id)
-HABIT2=$(toduai --format json habit create --title "Keep me" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
+HABIT2=$(todu --format json habit create --title "Keep me" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
 HABIT2_ID=$(echo "$HABIT2" | jq -r .id)
-HABIT3=$(toduai --format json habit create --title "Electron delete" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
+HABIT3=$(todu --format json habit create --title "Electron delete" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
 HABIT3_ID=$(echo "$HABIT3" | jq -r .id)
 ```
 
 ## 1. Delete Habit (CLI)
 
 ```bash
-toduai habit delete "$HABIT1_ID"
+todu habit delete "$HABIT1_ID"
 ```
 
 **Expected:** `Deleted habit: hab-XXXXXXXX`
@@ -32,7 +32,7 @@ toduai habit delete "$HABIT1_ID"
 ## 2. Verify Deleted (CLI)
 
 ```bash
-toduai habit show "$HABIT1_ID"
+todu habit show "$HABIT1_ID"
 ```
 
 **Expected:** Error — habit not found.
@@ -40,7 +40,7 @@ toduai habit show "$HABIT1_ID"
 ## 3. Verify Not in List (CLI)
 
 ```bash
-toduai habit list --no-color
+todu habit list --no-color
 ```
 
 **Expected:** Only "Keep me" and "Electron delete" shown.
@@ -79,13 +79,13 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 6. Verify CLI Sees Electron Deletion
 
 ```bash
-toduai habit list --no-color
+todu habit list --no-color
 ```
 
 **Expected:** Only "Keep me" shown.
 
 ```bash
-toduai habit show "$HABIT3_ID"
+todu habit show "$HABIT3_ID"
 ```
 
 **Expected:** Error — habit not found.
@@ -94,5 +94,5 @@ toduai habit show "$HABIT3_ID"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

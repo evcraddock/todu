@@ -5,23 +5,23 @@ Notes attached to tasks or projects.
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App"
-TASK=$(toduai --format json task create --title "Fix bug" --project "My App")
+todu project create --name "My App"
+TASK=$(todu --format json task create --title "Fix bug" --project "My App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## 1. Note Attached to Task (CLI)
 
 ```bash
-toduai note add "Found the root cause — null pointer in auth module" --task "$TASK_ID"
+todu note add "Found the root cause — null pointer in auth module" --task "$TASK_ID"
 ```
 
 **Expected:**
@@ -39,7 +39,7 @@ Found the root cause — null pointer in auth module
 ## 2. Note Attached to Project by Name (CLI)
 
 ```bash
-toduai note add "Architecture decision: use Automerge for sync" --project "My App"
+todu note add "Architecture decision: use Automerge for sync" --project "My App"
 ```
 
 **Expected:**
@@ -57,7 +57,7 @@ Architecture decision: use Automerge for sync
 ## 3. Attached Note with Tags (CLI)
 
 ```bash
-toduai note add "Blocked on API key" --task "$TASK_ID" --tag blocker
+todu note add "Blocked on API key" --task "$TASK_ID" --tag blocker
 ```
 
 **Expected:** Shows entity and tags.
@@ -65,7 +65,7 @@ toduai note add "Blocked on API key" --task "$TASK_ID" --tag blocker
 ## 4. Verify Task Notes (CLI)
 
 ```bash
-toduai note list --task "$TASK_ID" --no-color
+todu note list --task "$TASK_ID" --no-color
 ```
 
 **Expected:** Shows 2 notes attached to the task.
@@ -73,7 +73,7 @@ toduai note list --task "$TASK_ID" --no-color
 ## 5. Verify Project Notes (CLI)
 
 ```bash
-toduai note list --project "My App" --no-color
+todu note list --project "My App" --no-color
 ```
 
 **Expected:** Shows 1 note attached to the project.
@@ -159,5 +159,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".detail-title"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

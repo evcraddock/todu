@@ -3,21 +3,21 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App"
+todu project create --name "My App"
 ```
 
 ## 1. Create with Required Fields (CLI)
 
 ```bash
-toduai task create --title "Fix login bug" --project "My App"
+todu task create --title "Fix login bug" --project "My App"
 ```
 
 **Expected:**
@@ -39,8 +39,8 @@ Defaults: status=active, priority=medium.
 ## 2. Create with All Options (CLI)
 
 ```bash
-toduai label create --name bug --color "#ff0000"
-toduai task create --title "Fix crash" --project "My App" --priority high \
+todu label create --name bug --color "#ff0000"
+todu task create --title "Fix crash" --project "My App" --priority high \
   --description "App crashes on startup" --label bug --due "2026-03-01" --scheduled "2026-02-15"
 ```
 
@@ -49,7 +49,7 @@ toduai task create --title "Fix crash" --project "My App" --priority high \
 ## 3. Create with JSON Output (CLI)
 
 ```bash
-toduai --format json task create --title "Add tests" --project "My App" --priority low
+todu --format json task create --title "Add tests" --project "My App" --priority low
 ```
 
 **Expected:** JSON object with id, title, status, priority, projectId, labels, timestamps.
@@ -57,7 +57,7 @@ toduai --format json task create --title "Add tests" --project "My App" --priori
 ## 4. Verify CLI List
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** All three tasks shown in table format.
@@ -120,13 +120,13 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-create-el
 ## 7. Verify CLI Sees Electron-Created Task
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** Four tasks shown, including "Electron Task".
 
 ```bash
-toduai task search "Electron Task" --no-color
+todu task search "Electron Task" --no-color
 ```
 
 **Expected:** Shows "Electron Task" with status=active, priority=medium.
@@ -135,5 +135,5 @@ toduai task search "Electron Task" --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

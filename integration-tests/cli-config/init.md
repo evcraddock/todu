@@ -10,23 +10,23 @@ cd "$WORK_DIR"
 ## 1. Initialize Dev Config
 
 ```bash
-toduai config init
+todu config init
 ```
 
 **Expected:**
 
 ```
-Created: /path/to/.toduai/config.yaml
-Created: /path/to/.toduai/.gitignore
+Created: /path/to/.todu/config.yaml
+Created: /path/to/.todu/.gitignore
 
 Usage:
-  toduai --config /path/to/.toduai/config.yaml task list
+  todu --config /path/to/.todu/config.yaml task list
 ```
 
 ## 2. Verify Files Created
 
 ```bash
-cat .toduai/config.yaml
+cat .todu/config.yaml
 ```
 
 **Expected:**
@@ -36,26 +36,26 @@ data_dir: ./data
 ```
 
 ```bash
-cat .toduai/.gitignore
+cat .todu/.gitignore
 ```
 
 **Expected:**
 
 ```
-# Ignore toduai data
+# Ignore todu data
 data/
 ```
 
 ## 3. Init is Idempotent
 
 ```bash
-toduai config init
+todu config init
 ```
 
 **Expected:**
 
 ```
-Config already exists: /path/to/.toduai/config.yaml
+Config already exists: /path/to/.todu/config.yaml
 ```
 
 Exit code: 0 (not an error).

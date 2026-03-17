@@ -5,16 +5,16 @@ Verify renderer-level keyboard shortcuts work.
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-toduai task create --title "Test task" --project "App"
+todu project create --name "App"
+todu task create --title "Test task" --project "App"
 ```
 
 ## 1. Ctrl+K Focuses Search (Tasks View)
@@ -93,5 +93,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

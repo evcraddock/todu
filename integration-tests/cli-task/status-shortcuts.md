@@ -3,23 +3,23 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App"
-TASK=$(toduai --format json task create --title "Do the thing" --project "My App")
+todu project create --name "My App"
+TASK=$(todu --format json task create --title "Do the thing" --project "My App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## 1. Start a Task (CLI)
 
 ```bash
-toduai task start "$TASK_ID"
+todu task start "$TASK_ID"
 ```
 
 **Expected:**
@@ -35,7 +35,7 @@ Status:      inprogress
 ## 2. Complete a Task (CLI)
 
 ```bash
-toduai task done "$TASK_ID"
+todu task done "$TASK_ID"
 ```
 
 **Expected:** Status changes to `done`.
@@ -43,8 +43,8 @@ toduai task done "$TASK_ID"
 ## 3. Reopen and Cancel (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --status active
-toduai task cancel "$TASK_ID"
+todu task update "$TASK_ID" --status active
+todu task cancel "$TASK_ID"
 ```
 
 **Expected:** Status changes to `canceled`.
@@ -52,9 +52,9 @@ toduai task cancel "$TASK_ID"
 ## 4. Invalid Transitions (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --status active
-toduai task done "$TASK_ID"
-toduai task start "$TASK_ID"
+todu task update "$TASK_ID" --status active
+todu task done "$TASK_ID"
+todu task start "$TASK_ID"
 ```
 
 **Expected:** Last command should fail — done → inprogress is not valid. Must reopen to active first.
@@ -93,7 +93,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-status-st
 
 ```bash
 # Verify CLI sees the change
-toduai task show "$TASK_ID" --no-color | grep "Status"
+todu task show "$TASK_ID" --no-color | grep "Status"
 ```
 
 **Expected:** `Status: inprogress`
@@ -108,7 +108,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-status-do
 **Expected:** Status changes to done. "Reopen" shortcut visible.
 
 ```bash
-toduai task show "$TASK_ID" --no-color | grep "Status"
+todu task show "$TASK_ID" --no-color | grep "Status"
 ```
 
 **Expected:** `Status: done`
@@ -117,5 +117,5 @@ toduai task show "$TASK_ID" --no-color | grep "Status"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

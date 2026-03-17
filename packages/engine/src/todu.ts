@@ -79,7 +79,7 @@ export interface ToduConfig {
   /**
    * Remote multi-device sync configuration.
    * When provided, connects a second WebSocketClientAdapter to the remote server.
-   * Used by Electron and toduai serve.
+   * Used by Electron and daemon-backed CLI clients.
    *
    * IMPORTANT: Never use wss://sync.todu.sh in development or tests.
    * Use ws://localhost:3030 via `make dev`.

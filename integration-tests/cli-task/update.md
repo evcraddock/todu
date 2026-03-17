@@ -3,24 +3,24 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App"
-toduai label create --name bug --color "#ff0000"
-TASK=$(toduai --format json task create --title "Fix bug" --project "My App")
+todu project create --name "My App"
+todu label create --name bug --color "#ff0000"
+TASK=$(todu --format json task create --title "Fix bug" --project "My App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## 1. Update Title (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --title "Fix critical bug"
+todu task update "$TASK_ID" --title "Fix critical bug"
 ```
 
 **Expected:** Shows title changed to "Fix critical bug".
@@ -28,7 +28,7 @@ toduai task update "$TASK_ID" --title "Fix critical bug"
 ## 2. Update Priority (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --priority high
+todu task update "$TASK_ID" --priority high
 ```
 
 **Expected:** Shows priority changed to `high`.
@@ -36,7 +36,7 @@ toduai task update "$TASK_ID" --priority high
 ## 3. Update Status (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --status inprogress
+todu task update "$TASK_ID" --status inprogress
 ```
 
 **Expected:** Shows status changed to `inprogress`.
@@ -44,7 +44,7 @@ toduai task update "$TASK_ID" --status inprogress
 ## 4. Add Label (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --label bug
+todu task update "$TASK_ID" --label bug
 ```
 
 **Expected:** Shows labels include `bug`.
@@ -52,7 +52,7 @@ toduai task update "$TASK_ID" --label bug
 ## 5. Add Due Date (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --due "2026-03-15"
+todu task update "$TASK_ID" --due "2026-03-15"
 ```
 
 **Expected:** Shows `Due: 2026-03-15`.
@@ -60,7 +60,7 @@ toduai task update "$TASK_ID" --due "2026-03-15"
 ## 6. Update Multiple Fields (CLI)
 
 ```bash
-toduai task update "$TASK_ID" --title "Ship fix" --priority low
+todu task update "$TASK_ID" --title "Ship fix" --priority low
 ```
 
 **Expected:** Both title and priority updated.
@@ -68,7 +68,7 @@ toduai task update "$TASK_ID" --title "Ship fix" --priority low
 ## 7. Verify Final State (CLI)
 
 ```bash
-toduai task show "$TASK_ID"
+todu task show "$TASK_ID"
 ```
 
 **Expected:** Shows all accumulated changes: title=Ship fix, priority=low, status=inprogress, label=bug, due=2026-03-15.
@@ -151,7 +151,7 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 
 ```bash
 # Verify CLI sees priority change
-toduai task show "$TASK_ID" --no-color | grep "Priority"
+todu task show "$TASK_ID" --no-color | grep "Priority"
 ```
 
 **Expected:** `Priority: high`
@@ -159,7 +159,7 @@ toduai task show "$TASK_ID" --no-color | grep "Priority"
 ### 9d. Verify CLI Sees Electron Changes
 
 ```bash
-toduai task show "$TASK_ID" --no-color
+todu task show "$TASK_ID" --no-color
 ```
 
 **Expected:** title="Renamed In Electron", description="Description added from Electron".
@@ -168,5 +168,5 @@ toduai task show "$TASK_ID" --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

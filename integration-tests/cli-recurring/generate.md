@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,10 +11,10 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-REC=$(toduai --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
+todu project create --name "App"
+REC=$(todu --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
   --project "App" --timezone "$TZ" --start-date "$TODAY" --priority high)
 REC_ID=$(echo "$REC" | jq -r .id)
 ```
@@ -22,7 +22,7 @@ REC_ID=$(echo "$REC" | jq -r .id)
 ## 1. View Upcoming Occurrences (CLI)
 
 ```bash
-toduai recurring upcoming --template "$REC_ID" --days 7 --no-color
+todu recurring upcoming --template "$REC_ID" --days 7 --no-color
 ```
 
 **Expected:** List of ~7 dates showing upcoming occurrences.
@@ -30,8 +30,8 @@ toduai recurring upcoming --template "$REC_ID" --days 7 --no-color
 ## 2. Generate Task for Specific Date (CLI)
 
 ```bash
-NEXT_DATE=$(toduai --format json recurring upcoming --template "$REC_ID" --days 7 | jq -r '.[0].date')
-toduai recurring generate "$REC_ID" "$NEXT_DATE" --no-color
+NEXT_DATE=$(todu --format json recurring upcoming --template "$REC_ID" --days 7 | jq -r '.[0].date')
+todu recurring generate "$REC_ID" "$NEXT_DATE" --no-color
 ```
 
 **Expected:** `Generated task: sched-XXXXXXXXXXXX (Daily standup on YYYY-MM-DD)`
@@ -39,7 +39,7 @@ toduai recurring generate "$REC_ID" "$NEXT_DATE" --no-color
 ## 3. Verify Generated Task Appears in Task List (CLI)
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** Shows "Daily standup" as an active task in project "App" with priority=high.
@@ -80,7 +80,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-recurring-gene
 ## 6. Verify CLI Sees Electron-Generated Task
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** Two "Daily standup" tasks — one generated via CLI, one via Electron.
@@ -89,5 +89,5 @@ toduai task list --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

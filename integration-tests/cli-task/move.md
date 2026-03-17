@@ -3,24 +3,24 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "Source"
-toduai project create --name "Destination"
-TASK=$(toduai --format json task create --title "Movable task" --project "Source")
+todu project create --name "Source"
+todu project create --name "Destination"
+TASK=$(todu --format json task create --title "Movable task" --project "Source")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## 1. Move to Another Project (CLI)
 
 ```bash
-toduai task move "$TASK_ID" "Destination"
+todu task move "$TASK_ID" "Destination"
 ```
 
 **Expected:**
@@ -37,7 +37,7 @@ Project:     Destination
 ## 2. Verify Source is Empty (CLI)
 
 ```bash
-toduai --format json task list --project "Source"
+todu --format json task list --project "Source"
 ```
 
 **Expected:** Empty array `[]`.
@@ -45,7 +45,7 @@ toduai --format json task list --project "Source"
 ## 3. Verify Task is in Destination (CLI)
 
 ```bash
-toduai --format json task list --project "Destination"
+todu --format json task list --project "Destination"
 ```
 
 **Expected:** Array with one task.
@@ -108,7 +108,7 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 
 ```bash
 # Verify CLI sees the move
-toduai task show "$TASK_ID" --no-color | grep "Project"
+todu task show "$TASK_ID" --no-color | grep "Project"
 ```
 
 **Expected:** `Project: Source`
@@ -117,5 +117,5 @@ toduai task show "$TASK_ID" --no-color | grep "Project"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

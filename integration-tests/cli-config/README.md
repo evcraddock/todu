@@ -1,6 +1,6 @@
 # CLI Config Integration Tests
 
-Tests for `toduai config` commands with Electron app verification.
+Tests for `todu config` commands with Electron app verification.
 
 ## Setup
 

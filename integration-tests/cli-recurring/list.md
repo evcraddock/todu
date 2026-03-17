@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,26 +11,26 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-toduai project create --name "Infra"
+todu project create --name "App"
+todu project create --name "Infra"
 
-REC1=$(toduai --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY")
+REC1=$(todu --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY")
 REC1_ID=$(echo "$REC1" | jq -r .id)
-REC2=$(toduai --format json recurring create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" --project "App" --timezone "$TZ" --start-date "$TODAY" --priority high)
+REC2=$(todu --format json recurring create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" --project "App" --timezone "$TZ" --start-date "$TODAY" --priority high)
 REC2_ID=$(echo "$REC2" | jq -r .id)
-REC3=$(toduai --format json recurring create --title "Server backup" --schedule "FREQ=DAILY" --project "Infra" --timezone "$TZ" --start-date "$TODAY")
+REC3=$(todu --format json recurring create --title "Server backup" --schedule "FREQ=DAILY" --project "Infra" --timezone "$TZ" --start-date "$TODAY")
 REC3_ID=$(echo "$REC3" | jq -r .id)
 
 # Pause one
-toduai recurring pause "$REC3_ID"
+todu recurring pause "$REC3_ID"
 ```
 
 ## 1. List All (CLI)
 
 ```bash
-toduai recurring list --no-color
+todu recurring list --no-color
 ```
 
 **Expected:** All 3 templates shown. "Server backup" shows as paused.
@@ -38,7 +38,7 @@ toduai recurring list --no-color
 ## 2. List Active Only (CLI)
 
 ```bash
-toduai recurring list --active --no-color
+todu recurring list --active --no-color
 ```
 
 **Expected:** Only "Daily standup" and "Weekly review".
@@ -46,7 +46,7 @@ toduai recurring list --active --no-color
 ## 3. List Paused Only (CLI)
 
 ```bash
-toduai recurring list --paused --no-color
+todu recurring list --paused --no-color
 ```
 
 **Expected:** Only "Server backup".
@@ -54,13 +54,13 @@ toduai recurring list --paused --no-color
 ## 4. Filter by Project (CLI)
 
 ```bash
-toduai recurring list --project "App" --no-color
+todu recurring list --project "App" --no-color
 ```
 
 **Expected:** Only "Daily standup" and "Weekly review".
 
 ```bash
-toduai recurring list --project "Infra" --no-color
+todu recurring list --project "Infra" --no-color
 ```
 
 **Expected:** Only "Server backup".
@@ -148,5 +148,5 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

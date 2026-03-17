@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,10 +11,10 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-REC=$(toduai --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
+todu project create --name "App"
+REC=$(todu --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
   --project "App" --timezone "$TZ" --start-date "$TODAY")
 REC_ID=$(echo "$REC" | jq -r .id)
 ```
@@ -22,7 +22,7 @@ REC_ID=$(echo "$REC" | jq -r .id)
 ## 1. Pause Template (CLI)
 
 ```bash
-toduai recurring pause "$REC_ID"
+todu recurring pause "$REC_ID"
 ```
 
 **Expected:** `Paused recurring template: rec-XXXXXXXX`
@@ -30,7 +30,7 @@ toduai recurring pause "$REC_ID"
 ## 2. Verify Paused (CLI)
 
 ```bash
-toduai recurring show "$REC_ID" | grep "Status"
+todu recurring show "$REC_ID" | grep "Status"
 ```
 
 **Expected:** `Status: paused`
@@ -38,7 +38,7 @@ toduai recurring show "$REC_ID" | grep "Status"
 ## 3. Resume Template (CLI)
 
 ```bash
-toduai recurring resume "$REC_ID"
+todu recurring resume "$REC_ID"
 ```
 
 **Expected:** `Resumed recurring template: rec-XXXXXXXX`
@@ -46,7 +46,7 @@ toduai recurring resume "$REC_ID"
 ## 4. Verify Resumed (CLI)
 
 ```bash
-toduai recurring show "$REC_ID" | grep "Status"
+todu recurring show "$REC_ID" | grep "Status"
 ```
 
 **Expected:** `Status: active`
@@ -77,7 +77,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-recurring-paus
 ## 7. Verify CLI Sees Electron Pause
 
 ```bash
-toduai recurring show "$REC_ID" | grep "Status"
+todu recurring show "$REC_ID" | grep "Status"
 ```
 
 **Expected:** `Status: paused`
@@ -94,7 +94,7 @@ NODE_PATH=$NODE_PATH node $INTERACT wait "text=⏸ Pause" --timeout 5000
 ## 9. Verify CLI Sees Electron Resume
 
 ```bash
-toduai recurring show "$REC_ID" | grep "Status"
+todu recurring show "$REC_ID" | grep "Status"
 ```
 
 **Expected:** `Status: active`
@@ -103,5 +103,5 @@ toduai recurring show "$REC_ID" | grep "Status"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

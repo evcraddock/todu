@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,13 +11,13 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Show Nonexistent Template (CLI)
 
 ```bash
-toduai recurring show "rec-nonexistent"
+todu recurring show "rec-nonexistent"
 ```
 
 **Expected:** Error — template not found.
@@ -25,7 +25,7 @@ toduai recurring show "rec-nonexistent"
 ## 2. Update Nonexistent Template (CLI)
 
 ```bash
-toduai recurring update "rec-nonexistent" --title "New"
+todu recurring update "rec-nonexistent" --title "New"
 ```
 
 **Expected:** Error — template not found.
@@ -33,7 +33,7 @@ toduai recurring update "rec-nonexistent" --title "New"
 ## 3. Delete Nonexistent Template (CLI)
 
 ```bash
-toduai recurring delete "rec-nonexistent"
+todu recurring delete "rec-nonexistent"
 ```
 
 **Expected:** Error — template not found.
@@ -41,7 +41,7 @@ toduai recurring delete "rec-nonexistent"
 ## 4. Pause Nonexistent Template (CLI)
 
 ```bash
-toduai recurring pause "rec-nonexistent"
+todu recurring pause "rec-nonexistent"
 ```
 
 **Expected:** Error — template not found.
@@ -49,7 +49,7 @@ toduai recurring pause "rec-nonexistent"
 ## 5. Generate for Nonexistent Template (CLI)
 
 ```bash
-toduai recurring generate "rec-nonexistent" "$TODAY"
+todu recurring generate "rec-nonexistent" "$TODAY"
 ```
 
 **Expected:** Error — template not found.
@@ -57,20 +57,20 @@ toduai recurring generate "rec-nonexistent" "$TODAY"
 ## 6. Create Without Required Fields (CLI)
 
 ```bash
-toduai project create --name "App"
-toduai recurring create --title "No schedule" --project "App" --timezone "$TZ" --start-date "$TODAY"
+todu project create --name "App"
+todu recurring create --title "No schedule" --project "App" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** Error — schedule is required.
 
 ```bash
-toduai recurring create --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
+todu recurring create --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** Error — title is required.
 
 ```bash
-toduai recurring create --title "No project" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
+todu recurring create --title "No project" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** Error — project is required.
@@ -78,7 +78,7 @@ toduai recurring create --title "No project" --schedule "FREQ=DAILY" --timezone 
 ## 7. Create with Nonexistent Project (CLI)
 
 ```bash
-toduai recurring create --title "Test" --schedule "FREQ=DAILY" --project "Nope" --timezone "$TZ" --start-date "$TODAY"
+todu recurring create --title "Test" --schedule "FREQ=DAILY" --project "Nope" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** `Project not found: Nope`
@@ -131,5 +131,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

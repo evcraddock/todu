@@ -3,21 +3,21 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai label create --name bug --color "#ff0000"
+todu label create --name bug --color "#ff0000"
 ```
 
 ## 1. Update Name (CLI)
 
 ```bash
-toduai label update bug --name defect
+todu label update bug --name defect
 ```
 
 **Expected:**
@@ -33,7 +33,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 2. Update Color (CLI)
 
 ```bash
-toduai label update defect --color "#cc0000"
+todu label update defect --color "#cc0000"
 ```
 
 **Expected:** Color changed to `#cc0000`.
@@ -41,7 +41,7 @@ toduai label update defect --color "#cc0000"
 ## 3. Update Both (CLI)
 
 ```bash
-toduai label update defect --name critical --color "#990000"
+todu label update defect --name critical --color "#990000"
 ```
 
 **Expected:** Both name and color updated.
@@ -49,8 +49,8 @@ toduai label update defect --name critical --color "#990000"
 ## 4. Update by ID (CLI)
 
 ```bash
-LABEL_ID=$(toduai --format json label list | jq -r '.[0].id')
-toduai label update "$LABEL_ID" --name urgent
+LABEL_ID=$(todu --format json label list | jq -r '.[0].id')
+todu label update "$LABEL_ID" --name urgent
 ```
 
 **Expected:** Name changed to "urgent".
@@ -58,7 +58,7 @@ toduai label update "$LABEL_ID" --name urgent
 ## 5. Verify Final State (CLI)
 
 ```bash
-toduai label list --no-color
+todu label list --no-color
 ```
 
 **Expected:** Shows "urgent" with color `#990000`.
@@ -121,7 +121,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 8. Verify CLI Sees Electron Changes
 
 ```bash
-toduai label list --no-color
+todu label list --no-color
 ```
 
 **Expected:** Shows "renamed-in-electron" with green color (#22c55e).
@@ -130,5 +130,5 @@ toduai label list --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

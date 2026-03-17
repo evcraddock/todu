@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
-const RUN_SYNC_SERVER_TESTS = process.env.TODUAI_RUN_SYNC_SERVER_TESTS === "1";
+const RUN_SYNC_SERVER_TESTS =
+  (process.env.TODU_RUN_SYNC_SERVER_TESTS ?? process.env.TODUAI_RUN_SYNC_SERVER_TESTS) === "1";
 
 // Unique port per test — avoids OS TIME_WAIT reuse issues when tests
 // run back-to-back. Base port chosen to avoid conflicts with other test files

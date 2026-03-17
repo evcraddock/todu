@@ -43,7 +43,7 @@ Foreground daemon run (manual/interactive) is still available:
 todu daemon run
 ```
 
-You can also run the daemon binary directly:
+You can also run the daemon binary directly (current compatibility name):
 
 ```bash
 toduai-daemon

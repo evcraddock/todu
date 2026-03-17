@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,16 +11,16 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-HABIT=$(toduai --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
+HABIT=$(todu --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
 HABIT_ID=$(echo "$HABIT" | jq -r .id)
 ```
 
 ## 1. Check In for Today (CLI)
 
 ```bash
-toduai habit check "$HABIT_ID"
+todu habit check "$HABIT_ID"
 ```
 
 **Expected:** Check-in confirmed for today's date.
@@ -28,7 +28,7 @@ toduai habit check "$HABIT_ID"
 ## 2. Verify Streak Updated (CLI)
 
 ```bash
-toduai habit streak "$HABIT_ID"
+todu habit streak "$HABIT_ID"
 ```
 
 **Expected:** Current streak = 1, total check-ins = 1.
@@ -50,7 +50,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-habit-check-li
 ## 4. Uncheck Today (CLI)
 
 ```bash
-toduai habit uncheck "$HABIT_ID"
+todu habit uncheck "$HABIT_ID"
 ```
 
 **Expected:** Today's check-in removed.
@@ -58,7 +58,7 @@ toduai habit uncheck "$HABIT_ID"
 ## 5. Verify Streak Reset (CLI)
 
 ```bash
-toduai habit streak "$HABIT_ID"
+todu habit streak "$HABIT_ID"
 ```
 
 **Expected:** Current streak = 0, total check-ins = 0.
@@ -80,7 +80,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-habit-check-to
 ## 7. Verify CLI Sees Electron Check-In
 
 ```bash
-toduai habit streak "$HABIT_ID"
+todu habit streak "$HABIT_ID"
 ```
 
 **Expected:** Current streak = 1, total check-ins = 1.
@@ -110,7 +110,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-habit-check-de
 ## 10. Verify CLI Sees Detail Check-In
 
 ```bash
-toduai habit streak "$HABIT_ID"
+todu habit streak "$HABIT_ID"
 ```
 
 **Expected:** Current streak = 1, total check-ins = 1.
@@ -119,5 +119,5 @@ toduai habit streak "$HABIT_ID"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,16 +11,16 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-HABIT=$(toduai --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY" --description "30 min run before work")
+HABIT=$(todu --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY" --description "30 min run before work")
 HABIT_ID=$(echo "$HABIT" | jq -r .id)
 ```
 
 ## 1. Show Habit (CLI)
 
 ```bash
-toduai habit show "$HABIT_ID"
+todu habit show "$HABIT_ID"
 ```
 
 **Expected:**
@@ -42,7 +42,7 @@ Description:
 ## 2. Show Streak (CLI)
 
 ```bash
-toduai habit streak "$HABIT_ID"
+todu habit streak "$HABIT_ID"
 ```
 
 **Expected:** Streak stats including current streak, longest streak, total check-ins.
@@ -50,7 +50,7 @@ toduai habit streak "$HABIT_ID"
 ## 3. Show History (CLI)
 
 ```bash
-toduai habit history "$HABIT_ID" --days 7
+todu habit history "$HABIT_ID" --days 7
 ```
 
 **Expected:** History for last 7 days showing scheduled dates and completion status.
@@ -95,5 +95,5 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.history-da
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

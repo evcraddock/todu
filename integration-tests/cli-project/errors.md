@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Create Without Name (CLI)
 
 ```bash
-toduai project create
+todu project create
 ```
 
 **Expected:** Error about missing required `--name` option. Exit code: 1.
@@ -23,7 +23,7 @@ toduai project create
 ## 2. Show Nonexistent Project (CLI)
 
 ```bash
-toduai project show "Nonexistent"
+todu project show "Nonexistent"
 ```
 
 **Expected:**
@@ -37,7 +37,7 @@ Exit code: 1.
 ## 3. Update Nonexistent Project (CLI)
 
 ```bash
-toduai project update "Nonexistent" --name "Foo"
+todu project update "Nonexistent" --name "Foo"
 ```
 
 **Expected:**
@@ -49,7 +49,7 @@ Project not found: Nonexistent
 ## 4. Delete Nonexistent Project (CLI)
 
 ```bash
-toduai project delete "Nonexistent"
+todu project delete "Nonexistent"
 ```
 
 **Expected:**
@@ -120,5 +120,5 @@ NODE_PATH=$NODE_PATH node $INTERACT press "Escape"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

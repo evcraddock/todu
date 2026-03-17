@@ -31,7 +31,7 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
     try {
       const result = execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODUAI_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -42,7 +42,7 @@ describe("recurring CLI commands", { timeout: 30000 }, () => {
         return (error.stderr || error.stdout || "").toString();
       }
       throw new Error(
-        `Command failed: toduai ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
+        `Command failed: todu ${args}\nstdout: ${error.stdout}\nstderr: ${error.stderr}`,
       );
     }
   }

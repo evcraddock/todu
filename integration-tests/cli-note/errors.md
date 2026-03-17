@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Add Note to Nonexistent Task (CLI)
 
 ```bash
-toduai note add "Orphan note" --task "task-nonexistent"
+todu note add "Orphan note" --task "task-nonexistent"
 ```
 
 **Expected:**
@@ -29,7 +29,7 @@ Exit code: 1
 ## 2. Add Note to Nonexistent Project (CLI)
 
 ```bash
-toduai note add "Orphan note" --project "Nonexistent"
+todu note add "Orphan note" --project "Nonexistent"
 ```
 
 **Expected:** `Project not found: Nonexistent`
@@ -37,7 +37,7 @@ toduai note add "Orphan note" --project "Nonexistent"
 ## 3. List Notes for Nonexistent Project (CLI)
 
 ```bash
-toduai note list --project "Nonexistent"
+todu note list --project "Nonexistent"
 ```
 
 **Expected:** `Project not found: Nonexistent`
@@ -45,7 +45,7 @@ toduai note list --project "Nonexistent"
 ## 4. Delete Nonexistent Note (CLI)
 
 ```bash
-toduai note delete "note-nonexistent"
+todu note delete "note-nonexistent"
 ```
 
 **Expected:** `Error: note not found: note-nonexistent`
@@ -106,5 +106,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

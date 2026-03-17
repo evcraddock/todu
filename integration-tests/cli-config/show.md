@@ -3,15 +3,15 @@
 ## 1. Default Config — No File
 
 ```bash
-toduai config show
+todu config show
 ```
 
 **Expected:**
 
 ```
-Config file:  /home/<user>/.config/toduai/config.yaml
+Config file:  /home/<user>/.config/todu/config.yaml
               (default, not found)
-Data dir:     /home/<user>/.config/toduai/data
+Data dir:     /home/<user>/.config/todu/data
               (default)
 ```
 
@@ -20,38 +20,38 @@ Data dir:     /home/<user>/.config/toduai/data
 ```bash
 WORK_DIR=$(mktemp -d)
 cd "$WORK_DIR"
-toduai config init
-toduai --config .toduai/config.yaml config show
+todu config init
+todu --config .todu/config.yaml config show
 ```
 
 **Expected:**
 
 ```
-Config file:  /path/to/.toduai/config.yaml
+Config file:  /path/to/.todu/config.yaml
               (--config flag)
-Data dir:     /path/to/.toduai/data
-              (config file (/path/to/.toduai/config.yaml))
+Data dir:     /path/to/.todu/data
+              (config file (/path/to/.todu/config.yaml))
 ```
 
-## 3. With TODUAI_DATA_DIR Override
+## 3. With TODU_DATA_DIR Override
 
 ```bash
-TODUAI_DATA_DIR=/tmp/override-data toduai config show
+TODU_DATA_DIR=/tmp/override-data todu config show
 ```
 
 **Expected:**
 
 ```
-Config file:  /home/<user>/.config/toduai/config.yaml
+Config file:  /home/<user>/.config/todu/config.yaml
               (default, not found)
 Data dir:     /tmp/override-data
-              (TODUAI_DATA_DIR env var)
+              (TODU_DATA_DIR env var)
 ```
 
 ## 4. JSON Output
 
 ```bash
-toduai --format json config show
+todu --format json config show
 ```
 
 **Expected:** JSON object with configPath, configSource, configExists, dataDir, dataDirSource fields.

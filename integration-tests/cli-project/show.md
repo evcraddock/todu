@@ -3,21 +3,21 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App" --priority high --description "Main application"
+todu project create --name "My App" --priority high --description "Main application"
 ```
 
 ## 1. Show by Name (CLI)
 
 ```bash
-toduai project show "My App"
+todu project show "My App"
 ```
 
 **Expected:**
@@ -35,8 +35,8 @@ Description: Main application
 ## 2. Show by ID (CLI)
 
 ```bash
-PROJECT_ID=$(toduai --format json project list | jq -r '.[0].id')
-toduai project show "$PROJECT_ID"
+PROJECT_ID=$(todu --format json project list | jq -r '.[0].id')
+todu project show "$PROJECT_ID"
 ```
 
 **Expected:** Same output as above.
@@ -44,7 +44,7 @@ toduai project show "$PROJECT_ID"
 ## 3. Show as JSON (CLI)
 
 ```bash
-toduai --format json project show "My App"
+todu --format json project show "My App"
 ```
 
 **Expected:** JSON object with `id`, `name`, `status`, `priority`, `description`, `createdAt`, and `updatedAt`.
@@ -68,5 +68,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```
