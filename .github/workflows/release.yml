@@ -97,17 +97,17 @@ jobs:
         run: |
           npm run build
           mkdir -p dist/cli
-          bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/toduai-cli-linux-x64
-          bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-linux-arm64
+          bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
+          bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
           # Also build native binary for electron bundling
-          bun build --compile packages/cli/src/index.ts --outfile dist/cli/toduai
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
 
       - name: Smoke test standalone CLI binary (linux x64)
         run: |
-          dist/cli/toduai-cli-linux-x64 --version
-          dist/cli/toduai-cli-linux-x64 --help > /dev/null
+          dist/cli/todu-cli-linux-x64 --version
+          dist/cli/todu-cli-linux-x64 --help > /dev/null
 
-          if strings dist/cli/toduai-cli-linux-x64 | grep -F "/node_modules/@automerge/automerge/dist/mjs/wasm_bindgen_output/nodejs/automerge_wasm_bg.wasm" > /dev/null; then
+          if strings dist/cli/todu-cli-linux-x64 | grep -F "/node_modules/@automerge/automerge/dist/mjs/wasm_bindgen_output/nodejs/automerge_wasm_bg.wasm" > /dev/null; then
             echo "::error::Standalone CLI contains nodejs Automerge wasm file path reference"
             exit 1
           fi
@@ -122,8 +122,8 @@ jobs:
         with:
           name: cli-linux
           path: |
-            dist/cli/toduai-cli-linux-x64
-            dist/cli/toduai-cli-linux-arm64
+            dist/cli/todu-cli-linux-x64
+            dist/cli/todu-cli-linux-arm64
 
       - name: Upload Electron installers
         uses: actions/upload-artifact@v4
@@ -157,10 +157,10 @@ jobs:
         run: |
           npm run build
           mkdir -p dist/cli
-          bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-darwin-x64
-          bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-darwin-arm64
+          bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
+          bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
           # Native binary for electron bundling
-          bun build --compile packages/cli/src/index.ts --outfile dist/cli/toduai
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
 
       - name: Build Electron (macOS)
         run: |
@@ -172,8 +172,8 @@ jobs:
         with:
           name: cli-macos
           path: |
-            dist/cli/toduai-cli-darwin-x64
-            dist/cli/toduai-cli-darwin-arm64
+            dist/cli/todu-cli-darwin-x64
+            dist/cli/todu-cli-darwin-arm64
 
       - name: Upload Electron installers
         uses: actions/upload-artifact@v4
@@ -205,8 +205,9 @@ jobs:
         run: |
           npm run build
           mkdir -p dist/cli
-          bun build --compile packages/cli/src/index.ts --outfile dist/cli/toduai-cli-windows-x64.exe
-          cp dist/cli/toduai-cli-windows-x64.exe dist/cli/toduai.exe
+          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
+          cp dist/cli/todu-cli-windows-x64.exe dist/cli/todu
+          cp dist/cli/todu-cli-windows-x64.exe dist/cli/todu.exe
         shell: bash
 
       - name: Build Electron (Windows)
@@ -219,7 +220,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cli-windows
-          path: dist/cli/toduai-cli-windows-x64.exe
+          path: dist/cli/todu-cli-windows-x64.exe
 
       - name: Upload Electron installer
         uses: actions/upload-artifact@v4
@@ -272,11 +273,11 @@ jobs:
           mkdir -p release-assets
 
           # CLI binaries
-          cp artifacts/cli-linux/toduai-cli-linux-x64 release-assets/
-          cp artifacts/cli-linux/toduai-cli-linux-arm64 release-assets/
-          cp artifacts/cli-macos/toduai-cli-darwin-x64 release-assets/
-          cp artifacts/cli-macos/toduai-cli-darwin-arm64 release-assets/
-          cp artifacts/cli-windows/toduai-cli-windows-x64.exe release-assets/
+          cp artifacts/cli-linux/todu-cli-linux-x64 release-assets/
+          cp artifacts/cli-linux/todu-cli-linux-arm64 release-assets/
+          cp artifacts/cli-macos/todu-cli-darwin-x64 release-assets/
+          cp artifacts/cli-macos/todu-cli-darwin-arm64 release-assets/
+          cp artifacts/cli-windows/todu-cli-windows-x64.exe release-assets/
 
           # Electron installers
           cp artifacts/electron-linux/*.AppImage release-assets/ 2>/dev/null || true
@@ -297,7 +298,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.validate.outputs.version }}
-          name: toduai v${{ needs.validate.outputs.version }}
+          name: todu v${{ needs.validate.outputs.version }}
           body_path: release-notes.md
           prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
           files: release-assets/*

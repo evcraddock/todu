@@ -2,7 +2,7 @@
 
 This is the recommended way to run `toduai-daemon` continuously.
 
-`toduai` CLI commands are daemon-backed, so running the daemon as a user service avoids manual restarts after reboot/login.
+`todu` CLI commands are daemon-backed, so running the daemon as a user service avoids manual restarts after reboot/login.
 
 ## Recommendation
 
@@ -12,13 +12,13 @@ This is the recommended way to run `toduai-daemon` continuously.
 After setup, verify with:
 
 ```bash
-toduai daemon status
-toduai --format json daemon status
+todu daemon status
+todu --format json daemon status
 ```
 
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 
-`toduai daemon start`, `toduai daemon stop`, and `toduai daemon restart` follow this deterministic order:
+`todu daemon start`, `todu daemon stop`, and `todu daemon restart` follow this deterministic order:
 
 1. If `TODUAI_DAEMON_LIFECYCLE_MODE` is set to one of
    - `systemd-user`
@@ -205,6 +205,6 @@ If you set a socket override for the daemon service, CLI invocations must use th
 
 ### Daemon starts but CLI still fails
 
-- Run `toduai --format json daemon status` and inspect `reason`/`transport.path`.
+- Run `todu --format json daemon status` and inspect `reason`/`transport.path`.
 - Check service logs (`journalctl --user -u toduai-daemon -f` or `tail -f` macOS logs).
 - In direct lifecycle mode, inspect `<data_dir>/daemon.out.log` and `<data_dir>/daemon.err.log`.

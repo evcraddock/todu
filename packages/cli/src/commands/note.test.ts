@@ -33,7 +33,7 @@ describe("note commands", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const program = new Command();
-    program.name("toduai").option("--format <type>", "output format (text or json)", "text");
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
     registerNoteCommands(program, invokeDaemon);
 
     await program.parseAsync(
@@ -82,7 +82,7 @@ describe("note commands", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const program = new Command();
-    program.name("toduai").option("--format <type>", "output format (text or json)", "text");
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
     registerNoteCommands(program, invokeDaemon);
 
     await program.parseAsync(["--format", "json", "note", "list", "--habit", "hab-123"], {

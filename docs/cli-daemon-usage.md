@@ -1,8 +1,8 @@
 # CLI Daemon Usage Notes
 
-`toduai` now runs in daemon-first mode for task/project/label/note/recurring/habit/sync command groups.
+`todu` now runs in daemon-first mode for task/project/label/note/recurring/habit/sync command groups.
 
-The legacy `toduai serve` path has been removed.
+The legacy `todu serve` path has been removed.
 
 For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
@@ -16,9 +16,9 @@ Recommended for persistent operation:
 CLI wrappers are available:
 
 ```bash
-toduai daemon start
-toduai daemon stop
-toduai daemon restart
+todu daemon start
+todu daemon stop
+todu daemon restart
 ```
 
 Wrapper behavior:
@@ -32,7 +32,7 @@ Wrapper behavior:
 Foreground daemon run (manual/interactive) is still available:
 
 ```bash
-toduai daemon run
+todu daemon run
 ```
 
 You can also run the daemon binary directly:
@@ -60,7 +60,7 @@ Examples:
 
 ```bash
 TODUAI_LOG_LEVEL=debug make dev
-TODUAI_LOG_LEVEL=warn toduai daemon run
+TODUAI_LOG_LEVEL=warn todu daemon run
 ```
 
 `debug` adds RPC operation context (method, request id, param keys, outcome, duration) to help trace CRUD flows.
@@ -128,12 +128,12 @@ Notes:
 Use CLI plugin commands to manage configured sync plugin modules:
 
 ```bash
-toduai plugin install <module-path-or-package>
-toduai plugin list
-toduai plugin remove <plugin-name-or-module-path>
-toduai plugin config <plugin-name-or-module-path>
-toduai plugin config <plugin-name-or-module-path> --set '{"key":"value"}'
-toduai plugin config <plugin-name-or-module-path> --clear
+todu plugin install <module-path-or-package>
+todu plugin list
+todu plugin remove <plugin-name-or-module-path>
+todu plugin config <plugin-name-or-module-path>
+todu plugin config <plugin-name-or-module-path> --set '{"key":"value"}'
+todu plugin config <plugin-name-or-module-path> --clear
 ```
 
 Behavior notes:
@@ -146,14 +146,14 @@ Behavior notes:
 Recurring worker standalone plugin example (no daemon/core dependency wiring required):
 
 ```bash
-toduai plugin install ./packages/recurring-worker/dist/index.js
-toduai plugin config recurring-worker --set '{"intervalSeconds":30}'
+todu plugin install ./packages/recurring-worker/dist/index.js
+todu plugin config recurring-worker --set '{"intervalSeconds":30}'
 ```
 
 Per-plugin sync scheduler fields are configured through `plugin config --set`:
 
 ```bash
-toduai plugin config github --set '{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}'
+todu plugin config github --set '{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}'
 ```
 
 Supported scheduler fields:
@@ -176,23 +176,23 @@ Retry policy:
 Use the generic integration command group to manage integration bindings through the local daemon:
 
 ```bash
-toduai integration list
-toduai integration list --provider github
-toduai integration add --provider github --project Work --target-kind repository --target owner/repo
-toduai integration add --provider forgejo --project Work --target-kind repository --target owner/repo --options '{"importClosedOnBootstrap":true}'
-toduai integration update <binding-id> --target-kind repository --target owner/renamed-repo
-toduai integration update <binding-id> --options '{"importClosedOnBootstrap":false}'
-toduai integration set-strategy <binding-id> --strategy pull
-toduai integration enable <binding-id>
-toduai integration disable <binding-id>
-toduai integration remove <binding-id>
-toduai integration status
-toduai integration status <binding-id>
+todu integration list
+todu integration list --provider github
+todu integration add --provider github --project Work --target-kind repository --target owner/repo
+todu integration add --provider forgejo --project Work --target-kind repository --target owner/repo --options '{"importClosedOnBootstrap":true}'
+todu integration update <binding-id> --target-kind repository --target owner/renamed-repo
+todu integration update <binding-id> --options '{"importClosedOnBootstrap":false}'
+todu integration set-strategy <binding-id> --strategy pull
+todu integration enable <binding-id>
+todu integration disable <binding-id>
+todu integration remove <binding-id>
+todu integration status
+todu integration status <binding-id>
 ```
 
 Behavior notes:
 - Integration bindings are the generic shared control plane for external integrations.
-- Project commands no longer expose project-level external sync settings; use `toduai integration ...` to manage external sync intent.
+- Project commands no longer expose project-level external sync settings; use `todu integration ...` to manage external sync intent.
 - Provider-specific credential setup stays out of `integration add|update|remove` and remains local to the authority daemon host.
 - `integration add` and `integration update` accept `--options <json>` for provider-specific desired-state binding options.
 - Binding `options` are shared user intent only; do not store secrets, tokens, cursors, retry state, or diagnostics there.
@@ -210,7 +210,7 @@ Recurring templates support two miss policies:
 Create a recurring template with the default policy:
 
 ```bash
-toduai recurring create \
+todu recurring create \
   --title "Pay rent" \
   --schedule "FREQ=MONTHLY;BYMONTHDAY=1" \
   --project Home \
@@ -221,7 +221,7 @@ toduai recurring create \
 Create a recurring template that rolls forward instead of accumulating backlog:
 
 ```bash
-toduai recurring create \
+todu recurring create \
   --title "Water plants" \
   --schedule "FREQ=WEEKLY" \
   --project Home \
@@ -233,28 +233,28 @@ toduai recurring create \
 Update an existing template to change the policy:
 
 ```bash
-toduai recurring update <template-id> --miss-policy accumulate
-toduai recurring update <template-id> --miss-policy rollForward
+todu recurring update <template-id> --miss-policy accumulate
+todu recurring update <template-id> --miss-policy rollForward
 ```
 
 Inspect the current policy in text or JSON output:
 
 ```bash
-toduai recurring show <template-id>
-toduai recurring list
-toduai --format json recurring show <template-id>
+todu recurring show <template-id>
+todu recurring list
+todu --format json recurring show <template-id>
 ```
 
 Text output includes a `Miss Policy` field/column. JSON output includes `missPolicy`, and older templates without a stored field are displayed as `accumulate` for backward compatibility.
 
 ## Import backdated journal entries via CLI
 
-Use `toduai note add` with `--created-at` to import historical journal entries without editing the datastore directly.
+Use `todu note add` with `--created-at` to import historical journal entries without editing the datastore directly.
 
 Create a backdated journal entry from an existing note:
 
 ```bash
-toduai note add "Imported journal entry" \
+todu note add "Imported journal entry" \
   --created-at 2021-04-17T14:30:00Z \
   --tag imported \
   --tag journal
@@ -263,15 +263,15 @@ toduai note add "Imported journal entry" \
 For scripted imports, emit one command per entry with the original timestamp:
 
 ```bash
-toduai note add "Started new role today" --created-at 2019-06-03T09:00:00Z
-toduai note add "Moved apartments" --created-at 2020-08-29T18:45:00Z
+todu note add "Started new role today" --created-at 2019-06-03T09:00:00Z
+todu note add "Moved apartments" --created-at 2020-08-29T18:45:00Z
 ```
 
 Attach a comment to a habit from the CLI:
 
 ```bash
-toduai note add "Floss method: Water Pick" --habit hab-123
-toduai --format json note list --habit hab-123
+todu note add "Floss method: Water Pick" --habit hab-123
+todu --format json note list --habit hab-123
 ```
 
 Behavior notes:
@@ -284,8 +284,8 @@ Behavior notes:
 ## Validate connectivity
 
 ```bash
-toduai daemon status
-toduai --format json daemon status
+todu daemon status
+todu --format json daemon status
 ```
 
 If the daemon is healthy, status reports `running: true` and includes daemon health details.
@@ -295,9 +295,9 @@ If the daemon is healthy, status reports `running: true` and includes daemon hea
 Use daemon-owned join flows from CLI:
 
 ```bash
-toduai sync join <catalogId> --check
-toduai sync join <catalogId>
-toduai sync join <catalogId> --yes
+todu sync join <catalogId> --check
+todu sync join <catalogId>
+todu sync join <catalogId> --yes
 ```
 
 Behavior:
