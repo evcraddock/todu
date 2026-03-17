@@ -32,7 +32,7 @@ describe("config CLI commands", () => {
   }
 
   it("config init creates config and gitignore", { timeout: 30000 }, () => {
-    run("config init");
+    const output = run("config init");
 
     const configPath = path.join(tmpDir, ".toduai", "config.yaml");
     const gitignorePath = path.join(tmpDir, ".toduai", ".gitignore");
@@ -44,7 +44,10 @@ describe("config CLI commands", () => {
     expect(configContent).toContain("data_dir");
 
     const gitignoreContent = fs.readFileSync(gitignorePath, "utf-8");
+    expect(gitignoreContent).toContain("# Ignore todu data");
     expect(gitignoreContent).toContain("data/");
+
+    expect(output).toContain(`todu --config ${configPath} task list`);
   });
 
   it("config show displays resolved config", { timeout: 30000 }, () => {

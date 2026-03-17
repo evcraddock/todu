@@ -62,16 +62,16 @@ clean: ## Remove build artifacts
 
 build-cli-binary: check-bun build ## Build standalone CLI binary for current platform
 	@mkdir -p dist/cli
-	bun build --compile packages/cli/src/index.ts --outfile dist/cli/toduai
-	@echo "Built: dist/cli/toduai ($$(ls -lh dist/cli/toduai | awk '{print $$5}'))"
+	bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+	@echo "Built: dist/cli/todu ($$(ls -lh dist/cli/todu | awk '{print $$5}'))"
 
 build-cli-binaries: check-bun build ## Build standalone CLI binaries for all platforms
 	@mkdir -p dist/cli
-	bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/toduai-cli-linux-x64
-	bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-linux-arm64
-	bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-darwin-x64
-	bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/toduai-cli-darwin-arm64
-	bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/toduai-cli-windows-x64.exe
+	bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
+	bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
+	bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
+	bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
+	bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
 	@echo "Built all CLI binaries:"
 	@ls -lh dist/cli/
 
@@ -172,7 +172,7 @@ dist-mac: build build-electron ## Build macOS installer (.dmg)
 dist-win: build build-electron ## Build Windows installer (.exe)
 	npm run --workspace=packages/electron dist:win
 
-install: ## Install toduai (detects OS: Linux = AppImage, macOS = .dmg)
+install: ## Install todu (detects OS: Linux = AppImage, macOS = .dmg)
 	@case "$$(uname -s)" in \
 	  Linux)  bash scripts/install-linux.sh ;; \
 	  Darwin) bash scripts/install-mac.sh ;; \

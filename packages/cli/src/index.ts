@@ -24,7 +24,7 @@ installTimeoutNegativeWarningFilter();
 const program = new Command();
 
 program
-  .name("toduai")
+  .name("todu")
   .description("Local-first task management")
   .version(VERSION)
   .option("--format <type>", "output format (text or json)", "text")
