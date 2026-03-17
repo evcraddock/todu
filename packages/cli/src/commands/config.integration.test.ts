@@ -28,9 +28,7 @@ describe("config CLI commands", () => {
       env: {
         ...process.env,
         TODU_DATA_DIR: "",
-        TODUAI_DATA_DIR: "",
         TODU_CONFIG: "",
-        TODUAI_CONFIG: "",
         TODUAI_NO_SYNC: "1",
       },
       encoding: "utf-8",

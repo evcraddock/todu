@@ -1,6 +1,6 @@
 # Daemon Service Operations (Linux + macOS)
 
-This is the recommended way to run `toduai-daemon` continuously.
+This is the recommended way to run the local todu daemon continuously.
 
 `todu` CLI commands are daemon-backed, so running the daemon as a user service avoids manual restarts after reboot/login.
 
@@ -22,6 +22,7 @@ todu --format json daemon status
 - Existing `~/.config/toduai` state is migrated automatically to `~/.config/todu` when the new default path is absent.
 - Absolute legacy config values under `~/.config/toduai/...` are normalized to `todu` paths when config is loaded.
 - `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
+- The current compatibility daemon binary/service name remains `toduai-daemon` during the transition.
 
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 

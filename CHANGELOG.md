@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The project now ships under the `todu` name by default. The primary CLI/app branding, release artifacts, installers, and documentation now use `todu`, while compatibility aliases such as `toduai` and `toduai-daemon` remain temporarily supported where needed for upgrades.
+
+## Rename note
+
+- Historical changelog entries may still reference `toduai` commands or artifact names because they describe behavior as it shipped at the time.
+- Current releases should prefer `todu` by default, with compatibility aliases called out only where they still matter for transition or upgrade behavior.
+
 ## [0.9.3] - 2026-03-17
 
 Patch release eliminating a startup performance regression introduced by the engine prefetch.

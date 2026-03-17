@@ -90,7 +90,7 @@ jobs:
 
       - name: Check (lint + test)
         env:
-          TODUAI_RUN_SYNC_SERVER_TESTS: "0"
+          TODU_RUN_SYNC_SERVER_TESTS: "0"
         run: make check-ci && make test
 
       - name: Build CLI binaries (linux)

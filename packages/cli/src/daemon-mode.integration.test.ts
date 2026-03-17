@@ -39,7 +39,7 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
     const tmpDir = mkTmpDir(tmpDirs);
 
     const result = await runCli(["sync", "status"], {
-      TODUAI_DATA_DIR: tmpDir,
+      TODU_DATA_DIR: tmpDir,
       TODUAI_NO_SYNC: "1",
     });
 
@@ -65,8 +65,8 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
 
     try {
       const result = await runCli(["sync", "status"], {
-        TODUAI_DATA_DIR: tmpDir,
-        TODUAI_DAEMON_SOCKET: socketPath,
+        TODU_DATA_DIR: tmpDir,
+        TODU_DAEMON_SOCKET: socketPath,
         TODUAI_NO_SYNC: "1",
       });
 
@@ -99,8 +99,8 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
 
     try {
       const result = await runCli(["sync", "status"], {
-        TODUAI_DATA_DIR: tmpDir,
-        TODUAI_DAEMON_SOCKET: socketPath,
+        TODU_DATA_DIR: tmpDir,
+        TODU_DAEMON_SOCKET: socketPath,
         TODUAI_NO_SYNC: "1",
       });
 

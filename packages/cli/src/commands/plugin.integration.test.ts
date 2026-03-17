@@ -36,7 +36,7 @@ describe("plugin CLI commands", () => {
     try {
       const result = execSync(`node ${cliPath} --config ${configPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODUAI_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
         encoding: "utf-8",
         timeout: 15000,
       });
