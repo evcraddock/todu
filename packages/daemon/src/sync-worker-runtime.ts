@@ -3,6 +3,8 @@ import {
   type ExternalComment,
   type ExternalTask,
   type IntegrationBinding,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_NOTE_CONTENT_LENGTH,
   type Note,
   type Project,
   type SyncProvider,
@@ -20,6 +22,12 @@ const DEFAULT_SYNC_INTERVAL_SECONDS = 300;
 const DEFAULT_RETRY_INITIAL_SECONDS = 5;
 const DEFAULT_RETRY_MAX_SECONDS = 60;
 const SYNC_EXTERNAL_ID_TAG_PREFIX = "sync:externalId:";
+const TRUNCATION_SUFFIX = "... [truncated]";
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return value.slice(0, maxLength - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX;
+}
 
 export interface SyncPluginExecutionConfig {
   enabled: boolean;
@@ -534,7 +542,7 @@ function buildPulledTaskCreateInput(
   };
 
   if (externalTask.description !== undefined) {
-    input.description = externalTask.description;
+    input.description = truncate(externalTask.description, MAX_DESCRIPTION_LENGTH);
   }
 
   const sourceUrl = mappedTask.sourceUrl ?? externalTask.sourceUrl;
@@ -588,7 +596,7 @@ function buildPulledTaskUpdateInput(
   };
 
   if (externalTask.description !== undefined) {
-    input.description = externalTask.description;
+    input.description = truncate(externalTask.description, MAX_DESCRIPTION_LENGTH);
   }
 
   const sourceUrl = mappedTask.sourceUrl ?? externalTask.sourceUrl;
@@ -776,7 +784,7 @@ async function applyPulledComments(
       if (!localNote) {
         // Create new note
         await todu.note.create({
-          content: pulled.body,
+          content: truncate(pulled.body, MAX_NOTE_CONTENT_LENGTH),
           author: pulled.author ?? "external",
           entityType: "task",
           entityId: taskId,
@@ -790,7 +798,7 @@ async function applyPulledComments(
 
         if (externalUpdatedAt > localCreatedAt) {
           await todu.note.update(localNote.id, {
-            content: pulled.body,
+            content: truncate(pulled.body, MAX_NOTE_CONTENT_LENGTH),
           });
           stats.updated++;
         }

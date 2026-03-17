@@ -1382,6 +1382,251 @@ describe("sync-worker-runtime", () => {
 
     handle.stop();
   });
+
+  it("pull truncates task description that exceeds MAX_DESCRIPTION_LENGTH", async () => {
+    const project = createProject();
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const overLimitDescription = "x".repeat(10001);
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [
+          {
+            externalId: "gh-task-1",
+            title: "Task with long description",
+            description: overLimitDescription,
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    const createdDescription = todu.task.create.mock.calls[0][0].description as string;
+    expect(createdDescription.length).toBe(10000);
+    expect(createdDescription.endsWith("... [truncated]")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("pull does not truncate task description within MAX_DESCRIPTION_LENGTH", async () => {
+    const project = createProject();
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const atLimitDescription = "x".repeat(10000);
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [
+          {
+            externalId: "gh-task-1",
+            title: "Task with at-limit description",
+            description: atLimitDescription,
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    const createdDescription = todu.task.create.mock.calls[0][0].description as string;
+    expect(createdDescription).toBe(atLimitDescription);
+
+    handle.stop();
+  });
+
+  it("pull truncates note body that exceeds MAX_NOTE_CONTENT_LENGTH when creating", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const overLimitBody = "y".repeat(10001);
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: overLimitBody,
+            author: "octocat",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.create).toHaveBeenCalledTimes(1);
+    const createdContent = todu.note.create.mock.calls[0][0].content as string;
+    expect(createdContent.length).toBe(10000);
+    expect(createdContent.endsWith("... [truncated]")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("pull truncates note body that exceeds MAX_NOTE_CONTENT_LENGTH when updating", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const existingNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "old content",
+      tags: ["sync:externalId:gh-comment-1"],
+      createdAt: "2026-01-01T00:00:00Z",
+    });
+    const overLimitBody = "y".repeat(10001);
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: overLimitBody,
+            author: "octocat",
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-02T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [existingNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.update).toHaveBeenCalledTimes(1);
+    const updatedContent = todu.note.update.mock.calls[0][1].content as string;
+    expect(updatedContent.length).toBe(10000);
+    expect(updatedContent.endsWith("... [truncated]")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("pull does not truncate note body within MAX_NOTE_CONTENT_LENGTH", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const atLimitBody = "y".repeat(10000);
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: atLimitBody,
+            author: "octocat",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.create).toHaveBeenCalledTimes(1);
+    const createdContent = todu.note.create.mock.calls[0][0].content as string;
+    expect(createdContent).toBe(atLimitBody);
+
+    handle.stop();
+  });
 });
 
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
