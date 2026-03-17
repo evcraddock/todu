@@ -7,14 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- The project now ships under the `todu` name by default. The primary CLI/app branding, release artifacts, installers, and documentation now use `todu`, while compatibility aliases such as `toduai` and `toduai-daemon` remain temporarily supported where needed for upgrades.
-
 ## Rename note
 
 - Historical changelog entries may still reference `toduai` commands or artifact names because they describe behavior as it shipped at the time.
 - Current releases should prefer `todu` by default, with compatibility aliases called out only where they still matter for transition or upgrade behavior.
+
+## [0.10.0] - 2026-03-17
+
+This release completes the `toduai` -> `todu` transition for the primary user experience. The CLI, app branding, runtime defaults, release assets, and docs now present `todu` as the canonical name, while temporary compatibility aliases remain in place where needed for upgrades.
+
+### Changed
+
+- The primary CLI and Electron app branding now use `todu` by default, with compatibility aliases such as `toduai` retained where needed during the transition (#353)
+- Default config, data, and runtime paths now prefer `~/.config/todu` and `.todu`, with automatic migration from legacy `toduai` locations and normalization of embedded legacy paths (#354)
+- Release tooling, installer/dev helpers, canonical docs, and integration-test fixtures now default to `todu` / `TODU_*` so shipped artifacts and examples no longer encode stale `toduai` branding assumptions (#355)
 
 ## [0.9.3] - 2026-03-17
 
