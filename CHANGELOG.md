@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-03-17
+
+Patch release eliminating a startup performance regression introduced by the engine prefetch.
+
+### Fixed
+
+- Daemon startup no longer eagerly prefetches all sub-documents at init time — with large journal histories this was saturating the storage layer and pushing startup past the 10s health check timeout, causing `toduai daemon start/restart` to always report failure (#348)
+
 ## [0.9.2] - 2026-03-17
 
 Patch release preventing sync cycle aborts on oversized external content.
