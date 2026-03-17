@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { ToduFileConfig } from "@todu/core";
 import {
+  normalizeConfigPaths,
   type RemoteSyncConfig,
   resolveConfigPath,
   resolveDataDir,
@@ -33,7 +34,7 @@ export function loadElectronConfig(): ElectronConfig {
   let fileConfig: ToduFileConfig = {};
   try {
     const content = fs.readFileSync(configPath, "utf-8");
-    fileConfig = (parse(content) as ToduFileConfig) ?? {};
+    fileConfig = normalizeConfigPaths((parse(content) as ToduFileConfig) ?? {}, configPath);
   } catch {
     // Config file not found or unreadable — use defaults
   }

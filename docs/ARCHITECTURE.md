@@ -223,7 +223,7 @@ Baseline worker lifecycle states are:
 - Sync provider plugins use `SyncProviderRegistration` from `@todu/core` and export `syncProvider`.
 - Plugin load paths validate registrations at load time before worker registration.
 - Compatibility baseline for sync providers is API-version based (current provider API version: `2`).
-- Daemon plugin module paths resolve from `TODUAI_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config; config file paths resolve relative to config location.
+- Daemon plugin module paths resolve from `TODU_DAEMON_PLUGIN_PATHS` first, then legacy `TODUAI_DAEMON_PLUGIN_PATHS`, then `daemon.plugins.paths` in config; config file paths resolve relative to config location.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.
 - External sync uses a small synced core integration binding model consumed by sync provider plugins, and integration bindings are the sole core control plane for that work. Provider runtime internals remain local to the authority daemon host. See `docs/architecture/integrations.md`.
@@ -256,7 +256,7 @@ Baseline worker lifecycle states are:
 
 - Assignment configured via local config file/env vars.
 - Config file model uses `daemon.workers.assigned` (list of worker types).
-- Environment override uses `TODUAI_DAEMON_ASSIGNED_WORKERS` (comma-separated worker types) and takes precedence over file assignment.
+- Environment override uses `TODU_DAEMON_ASSIGNED_WORKERS` (comma-separated worker types), then legacy `TODUAI_DAEMON_ASSIGNED_WORKERS`, and takes precedence over file assignment.
 - Empty assignment is allowed and means no local workers are assigned.
 - Duplicate assignment entries are tolerated and logged for observability; first occurrence wins.
 - No lease system initially.

@@ -146,10 +146,15 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     socketPath: resolvedSocketPath,
     socketMode: config.socketMode ?? 0o600,
     daemonVersion:
-      config.daemonVersion ?? process.env.TODUAI_DAEMON_VERSION ?? DEFAULT_DAEMON_VERSION,
+      config.daemonVersion ??
+      process.env.TODU_DAEMON_VERSION ??
+      process.env.TODUAI_DAEMON_VERSION ??
+      DEFAULT_DAEMON_VERSION,
     requestTimeoutMs:
       config.requestTimeoutMs ??
-      parsePositiveInteger(process.env.TODUAI_DAEMON_REQUEST_TIMEOUT_MS) ??
+      parsePositiveInteger(
+        process.env.TODU_DAEMON_REQUEST_TIMEOUT_MS ?? process.env.TODUAI_DAEMON_REQUEST_TIMEOUT_MS,
+      ) ??
       DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
     logLevel: resolvedLogLevel,
     enabledWorkerDomains: resolvedEnabledWorkerDomains,

@@ -1,16 +1,18 @@
 import { resolveRemoteSyncConfig } from "@todu/core";
 import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
-import {
-  parseDaemonPluginConfigFromEnv,
-  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
-} from "./plugin-config.js";
-import { parseDaemonPluginPathsFromEnv, TODUAI_DAEMON_PLUGIN_PATHS_ENV } from "./plugin-paths.js";
+import { parseDaemonPluginConfigFromEnv, TODU_DAEMON_PLUGIN_CONFIG_ENV } from "./plugin-config.js";
+import { parseDaemonPluginPathsFromEnv, TODU_DAEMON_PLUGIN_PATHS_ENV } from "./plugin-paths.js";
 import { startDaemonProcess } from "./process.js";
 import { type DaemonRole, isDaemonRole } from "./runtime.js";
 import {
   parseAssignedWorkerTypesFromEnv,
-  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+  TODU_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "./worker-assignment.js";
+
+const TODU_DAEMON_ROLE_ENV = "TODU_DAEMON_ROLE";
+const TODUAI_DAEMON_ROLE_ENV = "TODUAI_DAEMON_ROLE";
+const TODU_DAEMON_SOCKET_ENV = "TODU_DAEMON_SOCKET";
+const TODUAI_DAEMON_SOCKET_ENV = "TODUAI_DAEMON_SOCKET";
 
 function parseDaemonRole(value: string | undefined): DaemonRole {
   if (!value) {
@@ -18,7 +20,9 @@ function parseDaemonRole(value: string | undefined): DaemonRole {
   }
 
   if (!isDaemonRole(value)) {
-    throw new Error(`Invalid TODUAI_DAEMON_ROLE: ${value}. Expected: node or authority`);
+    throw new Error(
+      `Invalid ${TODU_DAEMON_ROLE_ENV}/${TODUAI_DAEMON_ROLE_ENV} value: ${value}. Expected: node or authority`,
+    );
   }
 
   return value;
@@ -31,8 +35,11 @@ export async function runDaemonEntrypoint(): Promise<void> {
     level: daemonLogLevel,
   });
 
-  const daemonRole = parseDaemonRole(process.env.TODUAI_DAEMON_ROLE);
-  const daemonSocketPath = process.env.TODUAI_DAEMON_SOCKET;
+  const daemonRole = parseDaemonRole(
+    process.env[TODU_DAEMON_ROLE_ENV] ?? process.env[TODUAI_DAEMON_ROLE_ENV],
+  );
+  const daemonSocketPath =
+    process.env[TODU_DAEMON_SOCKET_ENV] ?? process.env[TODUAI_DAEMON_SOCKET_ENV];
   const remoteSync = resolveRemoteSyncConfig({});
   const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);
   const pluginPathsConfig = parseDaemonPluginPathsFromEnv(process.env);
@@ -40,42 +47,42 @@ export async function runDaemonEntrypoint(): Promise<void> {
 
   if (assignmentConfig.duplicateWorkerTypes.length > 0) {
     logger.warn("duplicate daemon worker assignment entries detected", {
-      envVar: TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+      envVar: TODU_DAEMON_ASSIGNED_WORKERS_ENV,
       duplicateWorkerTypes: assignmentConfig.duplicateWorkerTypes,
     });
   }
 
   if (assignmentConfig.ignoredEntries.length > 0) {
     logger.warn("ignored empty daemon worker assignment entries", {
-      envVar: TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+      envVar: TODU_DAEMON_ASSIGNED_WORKERS_ENV,
       ignoredEntryCount: assignmentConfig.ignoredEntries.length,
     });
   }
 
   if (pluginPathsConfig.duplicateModulePaths.length > 0) {
     logger.warn("duplicate daemon plugin path entries detected", {
-      envVar: TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+      envVar: TODU_DAEMON_PLUGIN_PATHS_ENV,
       duplicateModulePaths: pluginPathsConfig.duplicateModulePaths,
     });
   }
 
   if (pluginPathsConfig.ignoredEntries.length > 0) {
     logger.warn("ignored empty daemon plugin path entries", {
-      envVar: TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+      envVar: TODU_DAEMON_PLUGIN_PATHS_ENV,
       ignoredEntryCount: pluginPathsConfig.ignoredEntries.length,
     });
   }
 
   if (pluginConfig.parseError) {
     logger.warn("daemon plugin config parse failed", {
-      envVar: TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+      envVar: TODU_DAEMON_PLUGIN_CONFIG_ENV,
       error: pluginConfig.parseError,
     });
   }
 
   if (pluginConfig.ignoredEntries.length > 0) {
     logger.warn("ignored invalid daemon plugin config entries", {
-      envVar: TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+      envVar: TODU_DAEMON_PLUGIN_CONFIG_ENV,
       ignoredEntryCount: pluginConfig.ignoredEntries.length,
       ignoredEntries: pluginConfig.ignoredEntries,
     });

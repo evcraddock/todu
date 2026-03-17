@@ -58,12 +58,14 @@ validateWorkerPluginRegistration(workerPlugin)
 
 Plugin module paths resolve in this order:
 
-1. `TODUAI_DAEMON_PLUGIN_PATHS` env var
-2. `daemon.plugins.paths` in config file
+1. `TODU_DAEMON_PLUGIN_PATHS` env var
+2. legacy `TODUAI_DAEMON_PLUGIN_PATHS` env var
+3. `daemon.plugins.paths` in config file
 
 Plugin settings resolve in this order:
 
-1. `TODUAI_DAEMON_PLUGIN_CONFIG` env var
-2. `daemon.plugins.config` in config file
+1. `TODU_DAEMON_PLUGIN_CONFIG` env var
+2. legacy `TODUAI_DAEMON_PLUGIN_CONFIG` env var
+3. `daemon.plugins.config` in config file
 
 Both changes apply on daemon restart.

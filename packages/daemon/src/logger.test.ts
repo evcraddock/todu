@@ -3,6 +3,8 @@ import {
   createDaemonLogger,
   resolveDaemonLogLevel,
   resolveDaemonLogLevelFromEnv,
+  TODU_LOG_LEVEL_ENV,
+  TODUAI_LOG_LEVEL_ENV,
 } from "./logger.js";
 
 describe("daemon logger", () => {
@@ -10,14 +12,27 @@ describe("daemon logger", () => {
     expect(resolveDaemonLogLevelFromEnv({})).toBe("info");
   });
 
-  it("parses TODUAI_LOG_LEVEL values case-insensitively", () => {
+  it("prefers TODU_LOG_LEVEL over legacy TODUAI_LOG_LEVEL", () => {
+    expect(
+      resolveDaemonLogLevelFromEnv({
+        [TODU_LOG_LEVEL_ENV]: "warn",
+        [TODUAI_LOG_LEVEL_ENV]: "debug",
+      }),
+    ).toBe("warn");
+  });
+
+  it("falls back to legacy TODUAI_LOG_LEVEL", () => {
+    expect(resolveDaemonLogLevelFromEnv({ [TODUAI_LOG_LEVEL_ENV]: "debug" })).toBe("debug");
+  });
+
+  it("parses log level values case-insensitively", () => {
     expect(resolveDaemonLogLevel("DEBUG")).toBe("debug");
     expect(resolveDaemonLogLevel("Info")).toBe("info");
     expect(resolveDaemonLogLevel("warning")).toBe("warn");
     expect(resolveDaemonLogLevel("error")).toBe("error");
   });
 
-  it("falls back to info for invalid TODUAI_LOG_LEVEL values", () => {
+  it("falls back to info for invalid log level values", () => {
     expect(resolveDaemonLogLevel("verbose")).toBe("info");
   });
 

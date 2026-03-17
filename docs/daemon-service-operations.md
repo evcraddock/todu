@@ -16,11 +16,18 @@ todu daemon status
 todu --format json daemon status
 ```
 
+## Config/data migration defaults
+
+- Default home config path is now `~/.config/todu/config.yaml`.
+- Existing `~/.config/toduai` state is migrated automatically to `~/.config/todu` when the new default path is absent.
+- Absolute legacy config values under `~/.config/toduai/...` are normalized to `todu` paths when config is loaded.
+- `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
+
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 
 `todu daemon start`, `todu daemon stop`, and `todu daemon restart` follow this deterministic order:
 
-1. If `TODUAI_DAEMON_LIFECYCLE_MODE` is set to one of
+1. If `TODU_DAEMON_LIFECYCLE_MODE` is set to one of
    - `systemd-user`
    - `launchd`
    - `direct`
@@ -43,13 +50,15 @@ Direct managed fallback mode:
 To force a specific behavior (for scripting/testing):
 
 ```bash
-export TODUAI_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
+export TODU_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
 ```
 
-Daemon logging level is controlled with `TODUAI_LOG_LEVEL`:
+Legacy fallback: `TODUAI_DAEMON_LIFECYCLE_MODE`.
+
+Daemon logging level is controlled with `TODU_LOG_LEVEL`:
 
 ```bash
-export TODUAI_LOG_LEVEL=debug  # error | warn | info | debug
+export TODU_LOG_LEVEL=debug  # error | warn | info | debug
 ```
 
 ---
@@ -67,7 +76,7 @@ After=network.target
 
 [Service]
 Type=simple
-Environment=TODUAI_DATA_DIR=%h/.local/share/todu
+Environment=TODU_DATA_DIR=%h/.local/share/todu
 ExecStart=/usr/bin/env toduai-daemon
 Restart=on-failure
 RestartSec=2
@@ -124,7 +133,7 @@ cat > ~/Library/LaunchAgents/com.todu.daemon.plist <<EOF
 
     <key>EnvironmentVariables</key>
     <dict>
-      <key>TODUAI_DATA_DIR</key>
+      <key>TODU_DATA_DIR</key>
       <string>${HOME}/.local/share/todu</string>
     </dict>
 
@@ -167,31 +176,39 @@ tail -f ~/Library/Logs/toduai-daemon.out.log ~/Library/Logs/toduai-daemon.err.lo
 - Worker assignment env override (comma-separated worker types):
 
 ```bash
-export TODUAI_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
+export TODU_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 ```
+
+Legacy fallback: `TODUAI_DAEMON_ASSIGNED_WORKERS`.
 
 - Sync plugin module paths can be defined in config file under `daemon.plugins.paths`.
 - Sync plugin module path env override (comma-separated module paths):
 
 ```bash
-export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
+export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
 ```
+
+Legacy fallback: `TODUAI_DAEMON_PLUGIN_PATHS`.
 
 - Plugin path resolution order is env first, then config file.
 - Config file plugin paths resolve relative to the config file directory.
 - Plugin path/config changes apply on daemon restart.
 - Plugins can export `workerPlugin` (generic worker plugin) or `syncProvider` (sync provider plugin).
-- Sync plugin scheduler config can be overridden via `TODUAI_DAEMON_PLUGIN_CONFIG` (JSON object keyed by plugin name).
+- Sync plugin scheduler config can be overridden via `TODU_DAEMON_PLUGIN_CONFIG` (JSON object keyed by plugin name).
 
 ```bash
-export TODUAI_DAEMON_PLUGIN_CONFIG='{"github":{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}}'
+export TODU_DAEMON_PLUGIN_CONFIG='{"github":{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}}'
 ```
+
+Legacy fallback: `TODUAI_DAEMON_PLUGIN_CONFIG`.
 
 - Optional socket override:
 
 ```bash
-export TODUAI_DAEMON_SOCKET=/custom/path/daemon.sock
+export TODU_DAEMON_SOCKET=/custom/path/daemon.sock
 ```
+
+Legacy fallback: `TODUAI_DAEMON_SOCKET`.
 
 If you set a socket override for the daemon service, CLI invocations must use the same override.
 
@@ -200,7 +217,8 @@ If you set a socket override for the daemon service, CLI invocations must use th
 ### CLI says daemon unavailable
 
 - Confirm service status (`systemctl --user status ...` or `launchctl print ...`).
-- Confirm `TODUAI_DATA_DIR` is what you expect.
+- Confirm `TODU_DATA_DIR` is what you expect.
+- Legacy fallback is `TODUAI_DATA_DIR`.
 - Confirm socket path matches CLI expectations.
 
 ### Daemon starts but CLI still fails

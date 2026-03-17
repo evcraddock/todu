@@ -28,6 +28,9 @@ interface DaemonLogEntry {
   context?: Record<string, unknown>;
 }
 
+export const TODU_LOG_LEVEL_ENV = "TODU_LOG_LEVEL";
+export const TODUAI_LOG_LEVEL_ENV = "TODUAI_LOG_LEVEL";
+
 const DEFAULT_DAEMON_LOG_LEVEL: DaemonLogLevel = "info";
 
 export function createDaemonLogger(options: CreateDaemonLoggerOptions = {}): DaemonLogger {
@@ -100,7 +103,7 @@ export function resolveDaemonLogLevelFromEnv(
   env: NodeJS.ProcessEnv,
   fallback: DaemonLogLevel = DEFAULT_DAEMON_LOG_LEVEL,
 ): DaemonLogLevel {
-  return resolveDaemonLogLevel(env.TODUAI_LOG_LEVEL, fallback);
+  return resolveDaemonLogLevel(env[TODU_LOG_LEVEL_ENV] ?? env[TODUAI_LOG_LEVEL_ENV], fallback);
 }
 
 export function resolveDaemonLogLevel(
