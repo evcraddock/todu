@@ -1,5 +1,4 @@
 import {
-  type DocumentId,
   type PeerCandidatePayload,
   type PeerDisconnectedPayload,
   Repo,
@@ -128,36 +127,6 @@ export async function createTodu(
     await processTemplates(storage.catalog, {
       excludeTypes: config.startupTemplateProcessing.excludeTypes,
     });
-  }
-
-  // Prefetch all sub-documents referenced in the catalog so the relay
-  // syncs them before the UI renders. Without this, notes and habit logs
-  // only arrive when a view explicitly requests them — too late for the
-  // first render on a freshly joined device.
-  const catalogDoc = storage.catalog.doc();
-  if (catalogDoc) {
-    const docIds: string[] = [
-      ...Object.values(catalogDoc.taskListDocIds ?? {}),
-      ...Object.values(catalogDoc.habitLogDocIds ?? {}),
-      ...Object.values(catalogDoc.notesBucketDocIds ?? {}),
-      ...Object.values(catalogDoc.integrationStatusDocIds ?? {}),
-    ];
-    if (catalogDoc.notesDocId) docIds.push(catalogDoc.notesDocId);
-    if (catalogDoc.integrationRegistryDocId) docIds.push(catalogDoc.integrationRegistryDocId);
-    if (docIds.length > 0) {
-      const settled = await Promise.allSettled(
-        docIds.map((id) =>
-          storage.repo.find(id as DocumentId, {
-            signal: AbortSignal.timeout(10_000),
-          }),
-        ),
-      );
-      const ok = settled.filter((r) => r.status === "fulfilled").length;
-      const failed = settled.length - ok;
-      if (failed > 0) {
-        console.warn(`[engine] prefetch: ${ok} ok, ${failed} failed`);
-      }
-    }
   }
 
   // Determine local sync mode
