@@ -1,3 +1,4 @@
+export const TODU_DAEMON_ASSIGNED_WORKERS_ENV = "TODU_DAEMON_ASSIGNED_WORKERS";
 export const TODUAI_DAEMON_ASSIGNED_WORKERS_ENV = "TODUAI_DAEMON_ASSIGNED_WORKERS";
 
 export interface ParsedWorkerAssignmentEnv {
@@ -9,7 +10,8 @@ export interface ParsedWorkerAssignmentEnv {
 export function parseAssignedWorkerTypesFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ParsedWorkerAssignmentEnv {
-  const rawAssignments = env[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV];
+  const rawAssignments =
+    env[TODU_DAEMON_ASSIGNED_WORKERS_ENV] ?? env[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV];
   if (rawAssignments === undefined) {
     return {
       assignedWorkerTypes: undefined,

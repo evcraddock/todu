@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   parseDaemonPluginConfigFromEnv,
+  TODU_DAEMON_PLUGIN_CONFIG_ENV,
   TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
 } from "./plugin-config.js";
 
 describe("parseDaemonPluginConfigFromEnv", () => {
-  it("returns undefined when env var is not set", () => {
+  it("returns undefined when env vars are not set", () => {
     const parsed = parseDaemonPluginConfigFromEnv({});
 
     expect(parsed).toEqual({
@@ -14,7 +15,23 @@ describe("parseDaemonPluginConfigFromEnv", () => {
     });
   });
 
-  it("parses plugin config object from JSON", () => {
+  it("prefers TODU_DAEMON_PLUGIN_CONFIG over the legacy env var", () => {
+    const parsed = parseDaemonPluginConfigFromEnv({
+      [TODU_DAEMON_PLUGIN_CONFIG_ENV]: '{"github":{"projectId":"proj-current"}}',
+      [TODUAI_DAEMON_PLUGIN_CONFIG_ENV]: '{"github":{"projectId":"proj-legacy"}}',
+    });
+
+    expect(parsed).toEqual({
+      pluginConfigs: {
+        github: {
+          projectId: "proj-current",
+        },
+      },
+      ignoredEntries: [],
+    });
+  });
+
+  it("falls back to the legacy env var", () => {
     const parsed = parseDaemonPluginConfigFromEnv({
       [TODUAI_DAEMON_PLUGIN_CONFIG_ENV]:
         '{"github":{"projectId":"proj-1","intervalSeconds":60},"forgejo":{"enabled":false}}',
@@ -36,7 +53,7 @@ describe("parseDaemonPluginConfigFromEnv", () => {
 
   it("reports invalid JSON as parse error", () => {
     const parsed = parseDaemonPluginConfigFromEnv({
-      [TODUAI_DAEMON_PLUGIN_CONFIG_ENV]: "{bad",
+      [TODU_DAEMON_PLUGIN_CONFIG_ENV]: "{bad",
     });
 
     expect(parsed.pluginConfigs).toEqual({});
@@ -45,7 +62,7 @@ describe("parseDaemonPluginConfigFromEnv", () => {
 
   it("ignores non-object plugin entries", () => {
     const parsed = parseDaemonPluginConfigFromEnv({
-      [TODUAI_DAEMON_PLUGIN_CONFIG_ENV]: '{"github":true,"ok":{"enabled":true}}',
+      [TODU_DAEMON_PLUGIN_CONFIG_ENV]: '{"github":true,"ok":{"enabled":true}}',
     });
 
     expect(parsed).toEqual({
@@ -60,7 +77,7 @@ describe("parseDaemonPluginConfigFromEnv", () => {
 
   it("supports explicit empty plugin config object", () => {
     const parsed = parseDaemonPluginConfigFromEnv({
-      [TODUAI_DAEMON_PLUGIN_CONFIG_ENV]: "",
+      [TODU_DAEMON_PLUGIN_CONFIG_ENV]: "",
     });
 
     expect(parsed).toEqual({

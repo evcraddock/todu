@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ToduFileConfig } from "@todu/core";
 
+export const TODU_DAEMON_PLUGIN_PATHS_ENV = "TODU_DAEMON_PLUGIN_PATHS";
 export const TODUAI_DAEMON_PLUGIN_PATHS_ENV = "TODUAI_DAEMON_PLUGIN_PATHS";
 
 export interface ResolvedDaemonPluginPaths {
@@ -13,7 +14,7 @@ export function resolveDaemonPluginPaths(
   config: ToduFileConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedDaemonPluginPaths {
-  const envValue = env[TODUAI_DAEMON_PLUGIN_PATHS_ENV];
+  const envValue = env[TODU_DAEMON_PLUGIN_PATHS_ENV] ?? env[TODUAI_DAEMON_PLUGIN_PATHS_ENV];
   if (envValue !== undefined) {
     return {
       value: envValue,

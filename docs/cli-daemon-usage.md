@@ -6,6 +6,14 @@ The legacy `todu serve` path has been removed.
 
 For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
+## Config/data migration defaults
+
+- Default home config path is now `~/.config/todu/config.yaml`.
+- Existing `~/.config/toduai` state is migrated automatically to `~/.config/todu` when the new default path is absent.
+- `todu config init` now creates `.todu/config.yaml` by default and migrates a sibling `.toduai/` directory when present.
+- Absolute legacy config values under `~/.config/toduai/...` or `.toduai/...` are normalized to `todu` paths when config is loaded.
+- `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
+
 ## Start/stop/restart the local daemon
 
 Recommended for persistent operation:
@@ -49,7 +57,7 @@ npm run --workspace=packages/daemon dev
 
 ## Daemon log levels
 
-Set daemon log level via `TODUAI_LOG_LEVEL`:
+Set daemon log level via `TODU_LOG_LEVEL` (legacy `TODUAI_LOG_LEVEL` is still accepted during the transition):
 
 - `error`
 - `warn`
@@ -59,8 +67,8 @@ Set daemon log level via `TODUAI_LOG_LEVEL`:
 Examples:
 
 ```bash
-TODUAI_LOG_LEVEL=debug make dev
-TODUAI_LOG_LEVEL=warn todu daemon run
+TODU_LOG_LEVEL=debug make dev
+TODU_LOG_LEVEL=warn todu daemon run
 ```
 
 `debug` adds RPC operation context (method, request id, param keys, outcome, duration) to help trace CRUD flows.
@@ -73,7 +81,8 @@ By default, CLI connects to:
 
 Override with:
 
-- `TODUAI_DAEMON_SOCKET=/path/to/daemon.sock`
+- `TODU_DAEMON_SOCKET=/path/to/daemon.sock`
+- legacy fallback: `TODUAI_DAEMON_SOCKET=/path/to/daemon.sock`
 
 ## Worker assignment configuration
 
@@ -90,12 +99,13 @@ daemon:
 Override with env var (comma-separated):
 
 ```bash
-export TODUAI_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
+export TODU_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 ```
 
 Notes:
 - Env var overrides config file assignment.
-- Empty assignment (`TODUAI_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
+- Legacy fallback: `TODUAI_DAEMON_ASSIGNED_WORKERS`.
+- Empty assignment (`TODU_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 
 ## Sync plugin module configuration
@@ -113,13 +123,14 @@ daemon:
 Override with env var (comma-separated module paths):
 
 ```bash
-export TODUAI_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
+export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
 ```
 
 Notes:
 - Env var overrides config file plugin paths.
+- Legacy fallback: `TODUAI_DAEMON_PLUGIN_PATHS`.
 - Config file plugin paths are resolved relative to the config file directory.
-- Empty plugin path list (`TODUAI_DAEMON_PLUGIN_PATHS=""`) disables plugin loading.
+- Empty plugin path list (`TODU_DAEMON_PLUGIN_PATHS=""`) disables plugin loading.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 - Changes require daemon restart to apply.
 

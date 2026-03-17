@@ -14,7 +14,7 @@ export async function startDaemonForTests(
   const socketPath = path.join(storagePath, "daemon.sock");
   const daemonProcess = spawn("node", [daemonEntrypoint], {
     cwd: rootDir,
-    env: { ...process.env, TODUAI_DATA_DIR: storagePath },
+    env: { ...process.env, TODU_DATA_DIR: storagePath },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

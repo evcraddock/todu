@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { resolveDaemonPluginPaths, TODUAI_DAEMON_PLUGIN_PATHS_ENV } from "./daemon-plugin-paths.js";
+import {
+  resolveDaemonPluginPaths,
+  TODU_DAEMON_PLUGIN_PATHS_ENV,
+  TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+} from "./daemon-plugin-paths.js";
 
 describe("resolveDaemonPluginPaths", () => {
-  it("prefers env override over config file plugin paths", () => {
+  it("prefers TODU_DAEMON_PLUGIN_PATHS over legacy env var and config file plugin paths", () => {
     const resolved = resolveDaemonPluginPaths(
       "/tmp/config.yaml",
       {
@@ -13,19 +17,41 @@ describe("resolveDaemonPluginPaths", () => {
         },
       },
       {
-        [TODUAI_DAEMON_PLUGIN_PATHS_ENV]: "/opt/plugins/github.js",
+        [TODU_DAEMON_PLUGIN_PATHS_ENV]: "/opt/plugins/current-github.js",
+        [TODUAI_DAEMON_PLUGIN_PATHS_ENV]: "/opt/plugins/legacy-github.js",
       },
     );
 
     expect(resolved).toEqual({
-      value: "/opt/plugins/github.js",
+      value: "/opt/plugins/current-github.js",
+      source: "env",
+    });
+  });
+
+  it("falls back to legacy env override over config file plugin paths", () => {
+    const resolved = resolveDaemonPluginPaths(
+      "/tmp/config.yaml",
+      {
+        daemon: {
+          plugins: {
+            paths: ["./plugins/github.js"],
+          },
+        },
+      },
+      {
+        [TODUAI_DAEMON_PLUGIN_PATHS_ENV]: "/opt/plugins/legacy-github.js",
+      },
+    );
+
+    expect(resolved).toEqual({
+      value: "/opt/plugins/legacy-github.js",
       source: "env",
     });
   });
 
   it("resolves config file plugin paths relative to config location", () => {
     const resolved = resolveDaemonPluginPaths(
-      "/workspace/.toduai/config.yaml",
+      "/workspace/.todu/config.yaml",
       {
         daemon: {
           plugins: {
@@ -37,14 +63,14 @@ describe("resolveDaemonPluginPaths", () => {
     );
 
     expect(resolved).toEqual({
-      value: "/workspace/.toduai/plugins/github.js,/workspace/shared/forgejo.js",
+      value: "/workspace/.todu/plugins/github.js,/workspace/shared/forgejo.js",
       source: "file",
     });
   });
 
   it("keeps explicit empty plugin path list from config", () => {
     const resolved = resolveDaemonPluginPaths(
-      "/workspace/.toduai/config.yaml",
+      "/workspace/.todu/config.yaml",
       {
         daemon: {
           plugins: {
@@ -63,7 +89,7 @@ describe("resolveDaemonPluginPaths", () => {
 
   it("ignores empty plugin path entries from config file", () => {
     const resolved = resolveDaemonPluginPaths(
-      "/workspace/.toduai/config.yaml",
+      "/workspace/.todu/config.yaml",
       {
         daemon: {
           plugins: {
@@ -75,7 +101,7 @@ describe("resolveDaemonPluginPaths", () => {
     );
 
     expect(resolved).toEqual({
-      value: "/workspace/.toduai/plugins/github.js",
+      value: "/workspace/.todu/plugins/github.js",
       source: "file",
     });
   });

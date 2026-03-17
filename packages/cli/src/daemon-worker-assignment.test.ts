@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveDaemonAssignedWorkers,
+  TODU_DAEMON_ASSIGNED_WORKERS_ENV,
   TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "./daemon-worker-assignment.js";
 
 describe("resolveDaemonAssignedWorkers", () => {
-  it("prefers env override over config file assignments", () => {
+  it("prefers TODU_DAEMON_ASSIGNED_WORKERS over legacy env var and config file assignments", () => {
     const resolved = resolveDaemonAssignedWorkers(
       {
         daemon: {
@@ -15,12 +16,33 @@ describe("resolveDaemonAssignedWorkers", () => {
         },
       },
       {
-        [TODUAI_DAEMON_ASSIGNED_WORKERS_ENV]: "habit,task",
+        [TODU_DAEMON_ASSIGNED_WORKERS_ENV]: "habit,task",
+        [TODUAI_DAEMON_ASSIGNED_WORKERS_ENV]: "legacy,task",
       },
     );
 
     expect(resolved).toEqual({
       value: "habit,task",
+      source: "env",
+    });
+  });
+
+  it("falls back to legacy env override", () => {
+    const resolved = resolveDaemonAssignedWorkers(
+      {
+        daemon: {
+          workers: {
+            assigned: ["recurring", "sync"],
+          },
+        },
+      },
+      {
+        [TODUAI_DAEMON_ASSIGNED_WORKERS_ENV]: "legacy,task",
+      },
+    );
+
+    expect(resolved).toEqual({
+      value: "legacy,task",
       source: "env",
     });
   });

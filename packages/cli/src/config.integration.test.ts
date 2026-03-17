@@ -13,18 +13,17 @@ import {
 describe("config", () => {
   let tmpDir: string;
   const origEnv: Record<string, string | undefined> = {};
+  const configEnvKeys = ["TODU_CONFIG", "TODUAI_CONFIG", "TODU_DATA_DIR", "TODUAI_DATA_DIR"];
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-config-test-"));
-    // Save and clear env vars
-    for (const key of ["TODUAI_CONFIG", "TODUAI_DATA_DIR"]) {
+    for (const key of configEnvKeys) {
       origEnv[key] = process.env[key];
       delete process.env[key];
     }
   });
 
   afterEach(() => {
-    // Restore env vars
     for (const [key, value] of Object.entries(origEnv)) {
       if (value === undefined) {
         delete process.env[key];
@@ -41,18 +40,24 @@ describe("config", () => {
       expect(result).toBe("/custom/config.yaml");
     });
 
-    it("uses TODUAI_CONFIG env var", () => {
-      process.env.TODUAI_CONFIG = "/env/config.yaml";
+    it("uses TODU_CONFIG env var", () => {
+      process.env.TODU_CONFIG = "/env/config.yaml";
       expect(getConfigPath()).toBe("/env/config.yaml");
     });
 
-    it("falls back to default", () => {
-      const result = getConfigPath();
-      expect(result).toContain(".config/toduai/config.yaml");
+    it("falls back to legacy TODUAI_CONFIG env var", () => {
+      process.env.TODUAI_CONFIG = "/env/legacy-config.yaml";
+      expect(getConfigPath()).toBe("/env/legacy-config.yaml");
     });
 
-    it("override beats env var", () => {
-      process.env.TODUAI_CONFIG = "/env/config.yaml";
+    it("falls back to new default path", () => {
+      const result = getConfigPath();
+      expect(result).toContain(".config/todu/config.yaml");
+    });
+
+    it("override beats env vars", () => {
+      process.env.TODU_CONFIG = "/env/config.yaml";
+      process.env.TODUAI_CONFIG = "/env/legacy-config.yaml";
       expect(getConfigPath("/override/config.yaml")).toBe("/override/config.yaml");
     });
   });
@@ -82,6 +87,20 @@ describe("config", () => {
       fs.writeFileSync(configPath, "data_dir: [invalid: yaml: {{{\n");
       expect(() => loadConfig(configPath)).toThrow();
     });
+
+    it("normalizes embedded absolute legacy paths for .todu configs", () => {
+      const configDir = path.join(tmpDir, ".todu");
+      const configPath = path.join(configDir, "config.yaml");
+      fs.mkdirSync(configDir, { recursive: true });
+      fs.writeFileSync(
+        configPath,
+        `data_dir: ${JSON.stringify(path.join(tmpDir, ".toduai", "data"))}\n`,
+        "utf-8",
+      );
+
+      const config = loadConfig(configPath);
+      expect(config.data_dir).toBe(path.join(tmpDir, ".todu", "data"));
+    });
   });
 
   describe("saveConfig", () => {
@@ -101,11 +120,19 @@ describe("config", () => {
   });
 
   describe("resolveDataDir", () => {
-    it("uses TODUAI_DATA_DIR env var first", () => {
-      process.env.TODUAI_DATA_DIR = "/env/data";
+    it("uses TODU_DATA_DIR env var first", () => {
+      process.env.TODU_DATA_DIR = "/env/data";
+      process.env.TODUAI_DATA_DIR = "/env/legacy-data";
       const configPath = path.join(tmpDir, "config.yaml");
       const result = resolveDataDir(configPath, { data_dir: "./other" });
       expect(result).toBe("/env/data");
+    });
+
+    it("falls back to legacy TODUAI_DATA_DIR env var", () => {
+      process.env.TODUAI_DATA_DIR = "/env/legacy-data";
+      const configPath = path.join(tmpDir, "config.yaml");
+      const result = resolveDataDir(configPath, { data_dir: "./other" });
+      expect(result).toBe("/env/legacy-data");
     });
 
     it("resolves data_dir relative to config file", () => {
@@ -120,10 +147,10 @@ describe("config", () => {
       expect(result).toBe("/absolute/path");
     });
 
-    it("falls back to default when no config", () => {
+    it("falls back to new default when no config", () => {
       const configPath = path.join(tmpDir, "config.yaml");
       const result = resolveDataDir(configPath, {});
-      expect(result).toContain(".config/toduai/data");
+      expect(result).toContain(".config/todu/data");
     });
   });
 
@@ -138,11 +165,18 @@ describe("config", () => {
       expect(sources.dataDir).toBe(path.join(tmpDir, "mydata"));
     });
 
-    it("reports TODUAI_DATA_DIR as source when set", () => {
-      process.env.TODUAI_DATA_DIR = "/override/data";
+    it("reports TODU_DATA_DIR as source when set", () => {
+      process.env.TODU_DATA_DIR = "/override/data";
       const sources = resolveConfigSources();
-      expect(sources.dataDirSource).toBe("TODUAI_DATA_DIR env var");
+      expect(sources.dataDirSource).toBe("TODU_DATA_DIR env var");
       expect(sources.dataDir).toBe("/override/data");
+    });
+
+    it("reports legacy TODUAI_DATA_DIR as source when set", () => {
+      process.env.TODUAI_DATA_DIR = "/override/legacy-data";
+      const sources = resolveConfigSources();
+      expect(sources.dataDirSource).toBe("TODUAI_DATA_DIR env var (legacy)");
+      expect(sources.dataDir).toBe("/override/legacy-data");
     });
 
     it("reports default when nothing configured", () => {

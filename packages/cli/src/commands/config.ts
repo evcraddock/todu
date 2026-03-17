@@ -4,6 +4,9 @@ import type { Command } from "commander";
 import { getConfigPath, loadConfig, resolveConfigSources, saveConfig } from "../config.js";
 import { formatJSON } from "../format.js";
 
+const DEFAULT_LOCAL_CONFIG_DIR = ".todu";
+const LEGACY_LOCAL_CONFIG_DIR = ".toduai";
+
 export function registerConfigCommands(program: Command): void {
   const config = program.command("config").description("Manage configuration");
 
@@ -41,13 +44,23 @@ export function registerConfigCommands(program: Command): void {
   config
     .command("init")
     .description("Create a config file for local development")
-    .option("--dir <path>", "directory to create config in", ".toduai")
+    .option("--dir <path>", "directory to create config in", DEFAULT_LOCAL_CONFIG_DIR)
     .action((opts) => {
       const dir = path.resolve(opts.dir);
       const configPath = path.join(dir, "config.yaml");
 
       if (fs.existsSync(configPath)) {
         console.log(`Config already exists: ${configPath}`);
+        return;
+      }
+
+      const migratedFromLegacy = maybeMigrateLegacyProjectConfigDir(dir, opts.dir);
+      if (migratedFromLegacy !== null) {
+        console.log(`Migrated: ${migratedFromLegacy} -> ${dir}`);
+        console.log(`Config available: ${configPath}`);
+        console.log("");
+        console.log("Usage:");
+        console.log(`  todu --config ${configPath} task list`);
         return;
       }
 
@@ -67,4 +80,21 @@ export function registerConfigCommands(program: Command): void {
       console.log("Usage:");
       console.log(`  todu --config ${configPath} task list`);
     });
+}
+
+function maybeMigrateLegacyProjectConfigDir(
+  currentDir: string,
+  requestedDir: string | undefined,
+): string | null {
+  if (requestedDir !== DEFAULT_LOCAL_CONFIG_DIR) {
+    return null;
+  }
+
+  const legacyDir = path.join(path.dirname(currentDir), LEGACY_LOCAL_CONFIG_DIR);
+  if (fs.existsSync(currentDir) || !fs.existsSync(legacyDir)) {
+    return null;
+  }
+
+  fs.renameSync(legacyDir, currentDir);
+  return legacyDir;
 }

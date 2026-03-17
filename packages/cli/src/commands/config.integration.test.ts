@@ -25,17 +25,24 @@ describe("config CLI commands", () => {
   function run(args: string): string {
     return execSync(`node ${cliPath} ${args}`, {
       cwd: tmpDir,
-      env: { ...process.env, TODUAI_DATA_DIR: "", TODUAI_CONFIG: "", TODUAI_NO_SYNC: "1" },
+      env: {
+        ...process.env,
+        TODU_DATA_DIR: "",
+        TODUAI_DATA_DIR: "",
+        TODU_CONFIG: "",
+        TODUAI_CONFIG: "",
+        TODUAI_NO_SYNC: "1",
+      },
       encoding: "utf-8",
       timeout: 15000,
     }).trim();
   }
 
-  it("config init creates config and gitignore", { timeout: 30000 }, () => {
+  it("config init creates config and gitignore in .todu", { timeout: 30000 }, () => {
     const output = run("config init");
 
-    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
-    const gitignorePath = path.join(tmpDir, ".toduai", ".gitignore");
+    const configPath = path.join(tmpDir, ".todu", "config.yaml");
+    const gitignorePath = path.join(tmpDir, ".todu", ".gitignore");
 
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.existsSync(gitignorePath)).toBe(true);
@@ -50,9 +57,29 @@ describe("config CLI commands", () => {
     expect(output).toContain(`todu --config ${configPath} task list`);
   });
 
+  it(
+    "config init migrates legacy .toduai directory when .todu is absent",
+    { timeout: 30000 },
+    () => {
+      const legacyDir = path.join(tmpDir, ".toduai");
+      const legacyConfigPath = path.join(legacyDir, "config.yaml");
+      fs.mkdirSync(legacyDir, { recursive: true });
+      fs.writeFileSync(legacyConfigPath, "data_dir: ./data\n", "utf-8");
+
+      const output = run("config init");
+
+      const newDir = path.join(tmpDir, ".todu");
+      const newConfigPath = path.join(newDir, "config.yaml");
+      expect(fs.existsSync(newConfigPath)).toBe(true);
+      expect(fs.existsSync(legacyDir)).toBe(false);
+      expect(output).toContain(`Migrated: ${legacyDir} -> ${newDir}`);
+      expect(output).toContain(`todu --config ${newConfigPath} task list`);
+    },
+  );
+
   it("config show displays resolved config", { timeout: 30000 }, () => {
     run("config init");
-    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
+    const configPath = path.join(tmpDir, ".todu", "config.yaml");
 
     const output = run(`--config ${configPath} config show`);
     expect(output).toContain("Config file:");
@@ -62,12 +89,11 @@ describe("config CLI commands", () => {
 
   it("--config flag routes data to config data_dir", { timeout: 30000 }, async () => {
     run("config init");
-    const configPath = path.join(tmpDir, ".toduai", "config.yaml");
-    const dataDir = path.join(tmpDir, ".toduai", "data");
+    const configPath = path.join(tmpDir, ".todu", "config.yaml");
+    const dataDir = path.join(tmpDir, ".todu", "data");
 
     const daemon = await startDaemonForTests(rootDir, dataDir);
     try {
-      // Create a project using the dev config
       run(`--config ${configPath} project create --name "Dev Project"`);
       const output = run(`--config ${configPath} --format json project list`);
       const projects = JSON.parse(output);
@@ -77,7 +103,6 @@ describe("config CLI commands", () => {
       await daemon.stop("test-cleanup");
     }
 
-    // Data should be in .toduai/data/
     expect(fs.existsSync(dataDir)).toBe(true);
   });
 });

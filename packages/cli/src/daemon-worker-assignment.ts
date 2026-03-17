@@ -1,5 +1,6 @@
 import type { ToduFileConfig } from "@todu/core";
 
+export const TODU_DAEMON_ASSIGNED_WORKERS_ENV = "TODU_DAEMON_ASSIGNED_WORKERS";
 export const TODUAI_DAEMON_ASSIGNED_WORKERS_ENV = "TODUAI_DAEMON_ASSIGNED_WORKERS";
 
 export interface ResolvedDaemonAssignedWorkers {
@@ -11,7 +12,7 @@ export function resolveDaemonAssignedWorkers(
   config: ToduFileConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedDaemonAssignedWorkers {
-  const envValue = env[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV];
+  const envValue = env[TODU_DAEMON_ASSIGNED_WORKERS_ENV] ?? env[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV];
   if (envValue !== undefined) {
     return {
       value: envValue,

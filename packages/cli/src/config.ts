@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ToduFileConfig } from "@todu/core";
+import { normalizeConfigPaths, type ToduFileConfig } from "@todu/core";
 import { parse, stringify } from "yaml";
 
 // ============================================================================
@@ -30,7 +30,8 @@ export function loadConfig(configPath: string): ToduFileConfig {
     return {}; // File not found — that's fine
   }
   // Let YAML parse errors surface
-  return (parse(content) as ToduFileConfig) ?? {};
+  const parsed = (parse(content) as ToduFileConfig) ?? {};
+  return normalizeConfigPaths(parsed, configPath);
 }
 
 /**

@@ -76,7 +76,7 @@ function stringDetail(details: Record<string, unknown> | undefined, key: string)
 }
 
 export function resolveDaemonSocketPath(storagePath: string): string {
-  const socketOverride = process.env.TODUAI_DAEMON_SOCKET;
+  const socketOverride = process.env.TODU_DAEMON_SOCKET ?? process.env.TODUAI_DAEMON_SOCKET;
   if (socketOverride && socketOverride.trim().length > 0) {
     return path.resolve(socketOverride);
   }

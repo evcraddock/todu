@@ -52,9 +52,9 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       cwd: rootDir,
       env: {
         ...process.env,
-        TODUAI_DATA_DIR: tmpDir,
+        TODU_DATA_DIR: tmpDir,
         TODUAI_NO_SYNC: "1",
-        TODUAI_DAEMON_LIFECYCLE_MODE: "direct",
+        TODU_DAEMON_LIFECYCLE_MODE: "direct",
         HOME: homeDir,
         ...(options.env ?? {}),
       },
@@ -111,7 +111,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       cwd: rootDir,
       env: {
         ...process.env,
-        TODUAI_DATA_DIR: tmpDir,
+        TODU_DATA_DIR: tmpDir,
         TODUAI_NO_SYNC: "1",
         HOME: homeDir,
       },
@@ -195,7 +195,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
 
     const stop = runCli(["daemon", "stop"], {
       env: {
-        TODUAI_DAEMON_LIFECYCLE_MODE: "direct",
+        TODU_DAEMON_LIFECYCLE_MODE: "direct",
       },
     });
 
@@ -209,14 +209,16 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
 
     const result = runCli(["--format", "json", "daemon", "start"], {
       env: {
-        TODUAI_DAEMON_LIFECYCLE_MODE: "invalid-mode",
+        TODU_DAEMON_LIFECYCLE_MODE: "invalid-mode",
       },
     });
 
     expect(result.status).toBe(1);
     const json = JSON.parse(result.stdout);
     expect(json.ok).toBe(false);
-    expect(json.message).toContain("Invalid TODUAI_DAEMON_LIFECYCLE_MODE value");
+    expect(json.message).toContain(
+      "Invalid TODU_DAEMON_LIFECYCLE_MODE/TODUAI_DAEMON_LIFECYCLE_MODE value",
+    );
   });
 
   it("serve command is removed", () => {
