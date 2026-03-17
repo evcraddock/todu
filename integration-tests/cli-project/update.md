@@ -3,21 +3,21 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App" --priority medium
+todu project create --name "My App" --priority medium
 ```
 
 ## 1. Update Name (CLI)
 
 ```bash
-toduai project update "My App" --name "My Application"
+todu project update "My App" --name "My Application"
 ```
 
 **Expected:**
@@ -35,7 +35,7 @@ Updated:     YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 2. Update Priority (CLI)
 
 ```bash
-toduai project update "My Application" --priority high
+todu project update "My Application" --priority high
 ```
 
 **Expected:** Shows priority changed to `high`.
@@ -43,7 +43,7 @@ toduai project update "My Application" --priority high
 ## 3. Update Status (CLI)
 
 ```bash
-toduai project update "My Application" --status done
+todu project update "My Application" --status done
 ```
 
 **Expected:** Shows status changed to `done`.
@@ -51,7 +51,7 @@ toduai project update "My Application" --status done
 ## 4. Update Multiple Fields (CLI)
 
 ```bash
-toduai project update "My Application" --name "Legacy App" --priority low
+todu project update "My Application" --name "Legacy App" --priority low
 ```
 
 **Expected:** Both name and priority updated.
@@ -59,7 +59,7 @@ toduai project update "My Application" --name "Legacy App" --priority low
 ## 5. Verify Final State (CLI)
 
 ```bash
-toduai project show "Legacy App"
+todu project show "Legacy App"
 ```
 
 **Expected:** name=Legacy App, status=done, priority=low.
@@ -150,7 +150,7 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "document.querySelectorAll('.inline-sel
 ### 7d. Verify CLI Sees All Electron Changes
 
 ```bash
-toduai project show "Renamed In Electron" --no-color
+todu project show "Renamed In Electron" --no-color
 ```
 
 **Expected:**
@@ -170,5 +170,5 @@ If the name shows garbled text or the description is truncated, this indicates i
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

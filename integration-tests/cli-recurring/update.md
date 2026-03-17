@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,11 +11,11 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-toduai project create --name "Infra"
-REC=$(toduai --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
+todu project create --name "App"
+todu project create --name "Infra"
+REC=$(todu --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
   --project "App" --timezone "$TZ" --start-date "$TODAY")
 REC_ID=$(echo "$REC" | jq -r .id)
 ```
@@ -23,7 +23,7 @@ REC_ID=$(echo "$REC" | jq -r .id)
 ## 1. Update Title (CLI)
 
 ```bash
-toduai recurring update "$REC_ID" --title "Morning sync"
+todu recurring update "$REC_ID" --title "Morning sync"
 ```
 
 **Expected:** Title changed to "Morning sync".
@@ -31,7 +31,7 @@ toduai recurring update "$REC_ID" --title "Morning sync"
 ## 2. Update Schedule (CLI)
 
 ```bash
-toduai recurring update "$REC_ID" --schedule "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+todu recurring update "$REC_ID" --schedule "FREQ=WEEKLY;BYDAY=MO,WE,FR"
 ```
 
 **Expected:** Schedule changed.
@@ -39,7 +39,7 @@ toduai recurring update "$REC_ID" --schedule "FREQ=WEEKLY;BYDAY=MO,WE,FR"
 ## 3. Update Priority (CLI)
 
 ```bash
-toduai recurring update "$REC_ID" --priority high
+todu recurring update "$REC_ID" --priority high
 ```
 
 **Expected:** Priority changed to high.
@@ -47,7 +47,7 @@ toduai recurring update "$REC_ID" --priority high
 ## 4. Update Description (CLI)
 
 ```bash
-toduai recurring update "$REC_ID" --description "3x per week standup"
+todu recurring update "$REC_ID" --description "3x per week standup"
 ```
 
 **Expected:** Description updated.
@@ -55,7 +55,7 @@ toduai recurring update "$REC_ID" --description "3x per week standup"
 ## 5. Move to Different Project (CLI)
 
 ```bash
-toduai recurring update "$REC_ID" --project "Infra"
+todu recurring update "$REC_ID" --project "Infra"
 ```
 
 **Expected:** Project changed to Infra.
@@ -63,7 +63,7 @@ toduai recurring update "$REC_ID" --project "Infra"
 ## 6. Verify Final State (CLI)
 
 ```bash
-toduai recurring show "$REC_ID"
+todu recurring show "$REC_ID"
 ```
 
 **Expected:** Title=Morning sync, Schedule=FREQ=WEEKLY;BYDAY=MO,WE,FR, Priority=high, Project=Infra, Description=3x per week standup.
@@ -130,7 +130,7 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 ## 11. Verify CLI Sees Electron Changes
 
 ```bash
-toduai recurring show "$REC_ID"
+todu recurring show "$REC_ID"
 ```
 
 **Expected:** Title="Renamed In Electron", Priority=low, Project=App.
@@ -139,5 +139,5 @@ toduai recurring show "$REC_ID"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

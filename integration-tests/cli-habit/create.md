@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,13 +11,13 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Create Daily Habit (CLI)
 
 ```bash
-toduai habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
+todu habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:**
@@ -36,7 +36,7 @@ Created:   YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 2. Create Weekly Habit (CLI)
 
 ```bash
-toduai habit create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" --timezone "$TZ" --start-date "$TODAY" --description "End of week reflection"
+todu habit create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" --timezone "$TZ" --start-date "$TODAY" --description "End of week reflection"
 ```
 
 **Expected:** Habit created with weekly Friday schedule and description.
@@ -44,7 +44,7 @@ toduai habit create --title "Weekly review" --schedule "FREQ=WEEKLY;BYDAY=FR" --
 ## 3. Create with Custom Start Date (CLI)
 
 ```bash
-toduai habit create --title "Read 30 mins" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "2026-01-01"
+todu habit create --title "Read 30 mins" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "2026-01-01"
 ```
 
 **Expected:** Start date shows 2026-01-01.
@@ -52,7 +52,7 @@ toduai habit create --title "Read 30 mins" --schedule "FREQ=DAILY" --timezone "$
 ## 4. Create with JSON Output (CLI)
 
 ```bash
-toduai --format json habit create --title "Meditate" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
+todu --format json habit create --title "Meditate" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** JSON object with id, title, schedule, timezone, startDate, createdAt.
@@ -60,7 +60,7 @@ toduai --format json habit create --title "Meditate" --schedule "FREQ=DAILY" --t
 ## 5. Verify CLI List
 
 ```bash
-toduai habit list --no-color
+todu habit list --no-color
 ```
 
 **Expected:** All 4 habits shown.
@@ -122,7 +122,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 8. Verify CLI Sees Electron-Created Habit
 
 ```bash
-toduai habit list --no-color
+todu habit list --no-color
 ```
 
 **Expected:** Five habits shown, including "Electron Habit".
@@ -131,5 +131,5 @@ toduai habit list --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

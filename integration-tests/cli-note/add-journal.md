@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Simple Journal Entry (CLI)
 
 ```bash
-toduai note add "Today I shipped the login feature"
+todu note add "Today I shipped the login feature"
 ```
 
 **Expected:**
@@ -32,7 +32,7 @@ Today I shipped the login feature
 ## 2. Journal Entry with Tags (CLI)
 
 ```bash
-toduai note add "Sprint retrospective went well" --tag retro --tag weekly
+todu note add "Sprint retrospective went well" --tag retro --tag weekly
 ```
 
 **Expected:**
@@ -50,7 +50,7 @@ Sprint retrospective went well
 ## 3. Journal Entry with Author (CLI)
 
 ```bash
-toduai note add "Reviewed the PR" --author "agent"
+todu note add "Reviewed the PR" --author "agent"
 ```
 
 **Expected:**
@@ -67,7 +67,7 @@ Reviewed the PR
 ## 4. Journal Entry with JSON Output (CLI)
 
 ```bash
-toduai --format json note add "Quick thought"
+todu --format json note add "Quick thought"
 ```
 
 **Expected:** JSON object with id, content, author, tags, createdAt.
@@ -75,7 +75,7 @@ toduai --format json note add "Quick thought"
 ## 5. Verify CLI List
 
 ```bash
-toduai note list --no-color
+todu note list --no-color
 ```
 
 **Expected:** All 4 notes listed.
@@ -140,13 +140,13 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 8. Verify CLI Sees Electron-Created Note
 
 ```bash
-toduai note list --no-color
+todu note list --no-color
 ```
 
 **Expected:** Five notes shown, including "Created from Electron UI".
 
 ```bash
-toduai note list --tag electron --no-color
+todu note list --tag electron --no-color
 ```
 
 **Expected:** Only "Created from Electron UI".
@@ -155,5 +155,5 @@ toduai note list --tag electron --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

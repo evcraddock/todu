@@ -11,18 +11,18 @@ PROJECT_ROOT=$(pwd)
 
 WORK_DIR=$(mktemp -d)
 cd "$WORK_DIR"
-toduai config init
-CONFIG="$WORK_DIR/.toduai/config.yaml"
+todu config init
+CONFIG="$WORK_DIR/.todu/config.yaml"
 ```
 
 ## 1. Create Data via Dev Config (CLI)
 
 ```bash
-toduai --config "$CONFIG" project create --name "Dev App"
-toduai --config "$CONFIG" task create --title "Setup build" --project "Dev App"
-toduai --config "$CONFIG" task create --title "Write tests" --project "Dev App"
-toduai --config "$CONFIG" label create --name bug --color "#ff0000"
-toduai --config "$CONFIG" task list --no-color
+todu --config "$CONFIG" project create --name "Dev App"
+todu --config "$CONFIG" task create --title "Setup build" --project "Dev App"
+todu --config "$CONFIG" task create --title "Write tests" --project "Dev App"
+todu --config "$CONFIG" label create --name bug --color "#ff0000"
+todu --config "$CONFIG" task list --no-color
 ```
 
 **Expected:** Both tasks shown in table format.
@@ -30,7 +30,7 @@ toduai --config "$CONFIG" task list --no-color
 ## 2. Verify Data Isolation
 
 ```bash
-ls "$WORK_DIR/.toduai/data/todu-catalog.id"
+ls "$WORK_DIR/.todu/data/todu-catalog.id"
 ```
 
 **Expected:** File exists in the dev config's data dir.
@@ -38,18 +38,18 @@ ls "$WORK_DIR/.toduai/data/todu-catalog.id"
 ## 3. JSON Config Show
 
 ```bash
-toduai --config "$CONFIG" --format json config show
+todu --config "$CONFIG" --format json config show
 ```
 
 **Expected:**
 
 ```json
 {
-  "configPath": "/path/to/.toduai/config.yaml",
+  "configPath": "/path/to/.todu/config.yaml",
   "configSource": "--config flag",
   "configExists": true,
-  "dataDir": "/path/to/.toduai/data",
-  "dataDirSource": "config file (/path/to/.toduai/config.yaml)"
+  "dataDir": "/path/to/.todu/data",
+  "dataDirSource": "config file (/path/to/.todu/config.yaml)"
 }
 ```
 
@@ -58,10 +58,10 @@ toduai --config "$CONFIG" --format json config show
 Point Electron at the same data dir the CLI used.
 
 ```bash
-DATA_DIR="$WORK_DIR/.toduai/data"
+DATA_DIR="$WORK_DIR/.todu/data"
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path "$PROJECT_ROOT/packages/electron/dist/main/index.js" \
-  --env "TODUAI_DATA_DIR=$DATA_DIR"
+  --env "TODU_DATA_DIR=$DATA_DIR"
 ```
 
 ## 5. Verify Electron Loaded CLI Data
@@ -108,25 +108,25 @@ NODE_PATH=$NODE_PATH node $INTERACT wait ".data-table" --timeout 5000
 ```
 
 ```bash
-toduai --config "$CONFIG" project list --no-color
+todu --config "$CONFIG" project list --no-color
 ```
 
 **Expected:** Both "Dev App" and "Electron Project" shown.
 
-## 7. TODUAI_DATA_DIR Overrides Config File
+## 7. TODU_DATA_DIR Overrides Config File
 
-Verify that TODUAI_DATA_DIR takes precedence over config file's data_dir.
+Verify that TODU_DATA_DIR takes precedence over config file's data_dir.
 
 ```bash
 OVERRIDE_DIR=$(mktemp -d)
-TODUAI_DATA_DIR="$OVERRIDE_DIR" toduai --config "$CONFIG" config show | grep "Data dir" -A1
+TODU_DATA_DIR="$OVERRIDE_DIR" todu --config "$CONFIG" config show | grep "Data dir" -A1
 ```
 
 **Expected:**
 
 ```
 Data dir:     /tmp/tmpXXXXXX
-              (TODUAI_DATA_DIR env var)
+              (TODU_DATA_DIR env var)
 ```
 
 The env var overrides the config file's `data_dir: ./data`.

@@ -3,25 +3,25 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-TASK1=$(toduai --format json task create --title "Delete me" --project "App")
+todu project create --name "App"
+TASK1=$(todu --format json task create --title "Delete me" --project "App")
 TASK1_ID=$(echo "$TASK1" | jq -r .id)
-TASK2=$(toduai --format json task create --title "Keep me" --project "App")
+TASK2=$(todu --format json task create --title "Keep me" --project "App")
 TASK2_ID=$(echo "$TASK2" | jq -r .id)
 ```
 
 ## 1. Delete Task (CLI)
 
 ```bash
-toduai task delete "$TASK1_ID"
+todu task delete "$TASK1_ID"
 ```
 
 **Expected:**
@@ -33,7 +33,7 @@ Deleted task: task-XXXXXXXX
 ## 2. Verify Deleted (CLI)
 
 ```bash
-toduai task show "$TASK1_ID"
+todu task show "$TASK1_ID"
 ```
 
 **Expected:** `Error: task not found: task-XXXXXXXX`
@@ -41,7 +41,7 @@ toduai task show "$TASK1_ID"
 ## 3. Verify Not in List (CLI)
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** Only "Keep me" shown.
@@ -83,13 +83,13 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-delete-em
 ## 6. Verify CLI Sees Electron Deletion
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** `No results.` or empty table.
 
 ```bash
-toduai task show "$TASK2_ID"
+todu task show "$TASK2_ID"
 ```
 
 **Expected:** `Error: task not found: task-XXXXXXXX`
@@ -98,5 +98,5 @@ toduai task show "$TASK2_ID"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

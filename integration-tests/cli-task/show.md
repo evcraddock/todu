@@ -3,23 +3,23 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "My App"
-TASK=$(toduai --format json task create --title "Fix login" --project "My App" --priority high --description "Users can't log in with SSO")
+todu project create --name "My App"
+TASK=$(todu --format json task create --title "Fix login" --project "My App" --priority high --description "Users can't log in with SSO")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 ```
 
 ## 1. Show Task (CLI)
 
 ```bash
-toduai task show "$TASK_ID"
+todu task show "$TASK_ID"
 ```
 
 **Expected:**
@@ -41,7 +41,7 @@ Users can't log in with SSO
 ## 2. Show as JSON (CLI)
 
 ```bash
-toduai --format json task show "$TASK_ID"
+todu --format json task show "$TASK_ID"
 ```
 
 **Expected:** JSON object including `description` field.
@@ -68,5 +68,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

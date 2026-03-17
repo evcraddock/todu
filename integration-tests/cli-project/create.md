@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Create with Name Only (CLI)
 
 ```bash
-toduai project create --name "My App"
+todu project create --name "My App"
 ```
 
 **Expected:**
@@ -35,7 +35,7 @@ Defaults: status=active, priority=medium.
 ## 2. Create with All Options (CLI)
 
 ```bash
-toduai project create --name "Backend API" --priority high --description "REST API service"
+todu project create --name "Backend API" --priority high --description "REST API service"
 ```
 
 **Expected:**
@@ -54,7 +54,7 @@ Description: REST API service
 ## 3. Create with JSON Output (CLI)
 
 ```bash
-toduai --format json project create --name "Frontend"
+todu --format json project create --name "Frontend"
 ```
 
 **Expected:** JSON with id, name, status, priority, createdAt, and updatedAt.
@@ -73,7 +73,7 @@ toduai --format json project create --name "Frontend"
 ## 4. Verify CLI List
 
 ```bash
-toduai project list --no-color
+todu project list --no-color
 ```
 
 **Expected:** All three projects shown in table format.
@@ -139,13 +139,13 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-create
 ## 7. Verify CLI Sees Electron-Created Project
 
 ```bash
-toduai project list --no-color
+todu project list --no-color
 ```
 
 **Expected:** Four projects shown, including "Electron Project".
 
 ```bash
-toduai project show "Electron Project" --no-color
+todu project show "Electron Project" --no-color
 ```
 
 **Expected:**
@@ -165,5 +165,5 @@ Verify the description field is present — this confirms Electron correctly pas
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

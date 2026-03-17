@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,10 +11,10 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-REC=$(toduai --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
+todu project create --name "App"
+REC=$(todu --format json recurring create --title "Daily standup" --schedule "FREQ=DAILY" \
   --project "App" --timezone "$TZ" --start-date "$TODAY" --description "Morning sync meeting")
 REC_ID=$(echo "$REC" | jq -r .id)
 ```
@@ -22,7 +22,7 @@ REC_ID=$(echo "$REC" | jq -r .id)
 ## 1. Show Template (CLI)
 
 ```bash
-toduai recurring show "$REC_ID"
+todu recurring show "$REC_ID"
 ```
 
 **Expected:**
@@ -48,7 +48,7 @@ Morning sync meeting
 ## 2. Show Upcoming Occurrences (CLI)
 
 ```bash
-toduai recurring upcoming --template "$REC_ID" --days 7
+todu recurring upcoming --template "$REC_ID" --days 7
 ```
 
 **Expected:** List of dates for the next 7 days (daily schedule = ~7 entries).
@@ -93,5 +93,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table-compact"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

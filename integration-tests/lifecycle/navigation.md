@@ -5,7 +5,7 @@ Verify sidebar navigation between all views.
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -13,15 +13,15 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
 # Create some data so views aren't empty
-toduai project create --name "App"
-toduai task create --title "Test task" --project "App"
-toduai label create --name bug --color "#ff0000"
-toduai note add "Test note"
-toduai habit create --title "Test habit" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
-toduai recurring create --title "Test recurring" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
+todu project create --name "App"
+todu task create --title "Test task" --project "App"
+todu label create --name bug --color "#ff0000"
+todu note add "Test note"
+todu habit create --title "Test habit" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
+todu recurring create --title "Test recurring" --schedule "FREQ=DAILY" --project "App" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 ## 1. Navigate to Tasks
@@ -125,5 +125,5 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-lifecycle-nav-
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

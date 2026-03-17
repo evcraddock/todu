@@ -3,17 +3,17 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "Delete Me"
-toduai project create --name "Keep Me"
-toduai project create --name "Also Delete"
+todu project create --name "Delete Me"
+todu project create --name "Keep Me"
+todu project create --name "Also Delete"
 ```
 
 ## 1. Verify Initial State in Electron
@@ -29,7 +29,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ## 2. Delete by Name (CLI)
 
 ```bash
-toduai project delete "Delete Me"
+todu project delete "Delete Me"
 ```
 
 **Expected:**
@@ -41,7 +41,7 @@ Deleted project: Delete Me (proj-XXXXXXXX)
 ## 3. Verify CLI List After Delete
 
 ```bash
-toduai project list --no-color
+todu project list --no-color
 ```
 
 **Expected:** Only "Keep Me" and "Also Delete" shown.
@@ -63,8 +63,8 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-delete
 ## 5. Delete by ID (CLI)
 
 ```bash
-PROJECT_ID=$(toduai --format json project show "Also Delete" | jq -r '.id')
-toduai project delete "$PROJECT_ID"
+PROJECT_ID=$(todu --format json project show "Also Delete" | jq -r '.id')
+todu project delete "$PROJECT_ID"
 ```
 
 **Expected:**
@@ -76,7 +76,7 @@ Deleted project: Also Delete (proj-XXXXXXXX)
 ## 6. Verify Only One Project Remains
 
 ```bash
-toduai project list --no-color
+todu project list --no-color
 ```
 
 **Expected:** Only "Keep Me" shown.
@@ -92,8 +92,8 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".content-area"
 ## 7. Delete Last Project, Verify Empty State
 
 ```bash
-toduai project delete "Keep Me"
-toduai project list --no-color
+todu project delete "Keep Me"
+todu project list --no-color
 ```
 
 **Expected:**
@@ -115,5 +115,5 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-project-delete
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

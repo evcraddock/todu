@@ -1,6 +1,6 @@
 # Integration Tests
 
-Prompt-based integration test scripts for the toduai CLI and Electron app. Designed for LLM agents to execute step-by-step, verifying both CLI behavior and CLI↔Electron sync.
+Prompt-based integration test scripts for the todu CLI and Electron app. Designed for LLM agents to execute step-by-step, verifying both CLI behavior and CLI↔Electron sync.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Prompt-based integration test scripts for the toduai CLI and Electron app. Desig
 
 3. Verify CLI works:
    ```bash
-   toduai --version
+   todu --version
    ```
 
 4. Ensure the `electron-testing` skill is available (scripts in `~/.pi/agent/skills/electron-testing/`).
@@ -29,19 +29,19 @@ Each test uses a temporary data directory shared between CLI and Electron. The s
 ### Standard Setup (CLI + Electron)
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 
 # Launch Electron against the same data dir
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ### Standard Teardown
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```
 
 ### Electron Interaction
@@ -70,9 +70,9 @@ NODE_PATH=$NODE_PATH node $INTERACT discover
 If you only need to test CLI behavior (no Electron), use the simpler setup:
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 # ... run CLI commands ...
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```
 
 ## Test Index

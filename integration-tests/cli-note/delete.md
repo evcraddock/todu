@@ -3,26 +3,26 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-NOTE1=$(toduai --format json note add "Delete me")
+NOTE1=$(todu --format json note add "Delete me")
 NOTE1_ID=$(echo "$NOTE1" | jq -r .id)
-NOTE2=$(toduai --format json note add "Keep me")
+NOTE2=$(todu --format json note add "Keep me")
 NOTE2_ID=$(echo "$NOTE2" | jq -r .id)
-NOTE3=$(toduai --format json note add "Electron delete target")
+NOTE3=$(todu --format json note add "Electron delete target")
 NOTE3_ID=$(echo "$NOTE3" | jq -r .id)
 ```
 
 ## 1. Delete Note (CLI)
 
 ```bash
-toduai note delete "$NOTE1_ID"
+todu note delete "$NOTE1_ID"
 ```
 
 **Expected:**
@@ -34,7 +34,7 @@ Deleted note: note-XXXXXXXX
 ## 2. Verify Deleted (CLI)
 
 ```bash
-toduai note list --no-color
+todu note list --no-color
 ```
 
 **Expected:** Only "Keep me" and "Electron delete target" shown.
@@ -77,7 +77,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 5. Verify CLI Sees Electron Deletion
 
 ```bash
-toduai note list --no-color
+todu note list --no-color
 ```
 
 **Expected:** Only "Keep me" shown.
@@ -85,7 +85,7 @@ toduai note list --no-color
 ## 6. Delete Last Note — Empty State
 
 ```bash
-toduai note delete "$NOTE2_ID"
+todu note delete "$NOTE2_ID"
 NODE_PATH=$NODE_PATH node $INTERACT click "text=Notes"
 NODE_PATH=$NODE_PATH node $INTERACT wait ".empty-state" --timeout 5000
 NODE_PATH=$NODE_PATH node $INTERACT text --selector ".empty-state"
@@ -97,5 +97,5 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".empty-state"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

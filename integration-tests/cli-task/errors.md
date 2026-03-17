@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Create Task in Nonexistent Project (CLI)
 
 ```bash
-toduai task create --title "Test" --project "Nope"
+todu task create --title "Test" --project "Nope"
 ```
 
 **Expected:** `Project not found: Nope`. Exit code: 1.
@@ -23,7 +23,7 @@ toduai task create --title "Test" --project "Nope"
 ## 2. Show Nonexistent Task (CLI)
 
 ```bash
-toduai task show "task-nonexistent"
+todu task show "task-nonexistent"
 ```
 
 **Expected:** `Error: task not found: task-nonexistent`
@@ -31,7 +31,7 @@ toduai task show "task-nonexistent"
 ## 3. Update Nonexistent Task (CLI)
 
 ```bash
-toduai task update "task-nonexistent" --title "New"
+todu task update "task-nonexistent" --title "New"
 ```
 
 **Expected:** `Error: task not found: task-nonexistent`
@@ -39,7 +39,7 @@ toduai task update "task-nonexistent" --title "New"
 ## 4. Delete Nonexistent Task (CLI)
 
 ```bash
-toduai task delete "task-nonexistent"
+todu task delete "task-nonexistent"
 ```
 
 **Expected:** `Error: task not found: task-nonexistent`
@@ -47,9 +47,9 @@ toduai task delete "task-nonexistent"
 ## 5. Invalid Status (CLI)
 
 ```bash
-toduai project create --name "App"
-toduai task create --title "Test" --project "App"
-toduai task list --status "invalid"
+todu project create --name "App"
+todu task create --title "Test" --project "App"
+todu task list --status "invalid"
 ```
 
 **Expected:** `Error: invalid status: invalid`
@@ -57,7 +57,7 @@ toduai task list --status "invalid"
 ## 6. Invalid Priority (CLI)
 
 ```bash
-toduai task list --priority "invalid"
+todu task list --priority "invalid"
 ```
 
 **Expected:** `Error: invalid priority: invalid`
@@ -65,7 +65,7 @@ toduai task list --priority "invalid"
 ## 7. Invalid Sort Field (CLI)
 
 ```bash
-toduai task list --sort "invalid"
+todu task list --sort "invalid"
 ```
 
 **Expected:** `Error: invalid sort field: invalid`
@@ -73,9 +73,9 @@ toduai task list --sort "invalid"
 ## 8. Move to Nonexistent Project (CLI)
 
 ```bash
-TASK=$(toduai --format json task create --title "Stuck" --project "App")
+TASK=$(todu --format json task create --title "Stuck" --project "App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
-toduai task move "$TASK_ID" "Nowhere"
+todu task move "$TASK_ID" "Nowhere"
 ```
 
 **Expected:** `Project not found: Nowhere`
@@ -129,5 +129,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

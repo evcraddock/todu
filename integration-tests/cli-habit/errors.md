@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,13 +11,13 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Show Nonexistent Habit (CLI)
 
 ```bash
-toduai habit show "habit-nonexistent"
+todu habit show "habit-nonexistent"
 ```
 
 **Expected:** Error — habit not found.
@@ -25,7 +25,7 @@ toduai habit show "habit-nonexistent"
 ## 2. Update Nonexistent Habit (CLI)
 
 ```bash
-toduai habit update "habit-nonexistent" --title "New"
+todu habit update "habit-nonexistent" --title "New"
 ```
 
 **Expected:** Error — habit not found.
@@ -33,7 +33,7 @@ toduai habit update "habit-nonexistent" --title "New"
 ## 3. Delete Nonexistent Habit (CLI)
 
 ```bash
-toduai habit delete "habit-nonexistent"
+todu habit delete "habit-nonexistent"
 ```
 
 **Expected:** Error — habit not found.
@@ -41,7 +41,7 @@ toduai habit delete "habit-nonexistent"
 ## 4. Check Nonexistent Habit (CLI)
 
 ```bash
-toduai habit check "habit-nonexistent"
+todu habit check "habit-nonexistent"
 ```
 
 **Expected:** Error — habit not found.
@@ -49,7 +49,7 @@ toduai habit check "habit-nonexistent"
 ## 5. Pause Nonexistent Habit (CLI)
 
 ```bash
-toduai habit pause "habit-nonexistent"
+todu habit pause "habit-nonexistent"
 ```
 
 **Expected:** Error — habit not found.
@@ -57,13 +57,13 @@ toduai habit pause "habit-nonexistent"
 ## 6. Create Without Required Fields (CLI)
 
 ```bash
-toduai habit create --title "No schedule" --timezone "$TZ" --start-date "$TODAY"
+todu habit create --title "No schedule" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** Error — schedule is required.
 
 ```bash
-toduai habit create --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
+todu habit create --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY"
 ```
 
 **Expected:** Error — title is required.
@@ -116,5 +116,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

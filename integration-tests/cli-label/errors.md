@@ -3,20 +3,20 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Duplicate Name (CLI)
 
 ```bash
-toduai label create --name bug
-toduai label create --name bug
+todu label create --name bug
+todu label create --name bug
 ```
 
 **Expected:**
@@ -30,7 +30,7 @@ Exit code: 1
 ## 2. Invalid Color — Not Hex (CLI)
 
 ```bash
-toduai label create --name test --color "red"
+todu label create --name test --color "red"
 ```
 
 **Expected:**
@@ -42,7 +42,7 @@ Error: color: Invalid hex color: red (expected #RRGGBB)
 ## 3. Invalid Color — Wrong Format (CLI)
 
 ```bash
-toduai label create --name test --color "#gg0000"
+todu label create --name test --color "#gg0000"
 ```
 
 **Expected:**
@@ -54,7 +54,7 @@ Error: color: Invalid hex color: #gg0000 (expected #RRGGBB)
 ## 4. Update Nonexistent Label (CLI)
 
 ```bash
-toduai label update "nonexistent" --name "foo"
+todu label update "nonexistent" --name "foo"
 ```
 
 **Expected:** `Label not found: nonexistent`
@@ -62,7 +62,7 @@ toduai label update "nonexistent" --name "foo"
 ## 5. Delete Nonexistent Label (CLI)
 
 ```bash
-toduai label delete "nonexistent"
+todu label delete "nonexistent"
 ```
 
 **Expected:** `Label not found: nonexistent`
@@ -70,8 +70,8 @@ toduai label delete "nonexistent"
 ## 6. Update to Duplicate Name (CLI)
 
 ```bash
-toduai label create --name feature
-toduai label update feature --name bug
+todu label create --name feature
+todu label update feature --name bug
 ```
 
 **Expected:**
@@ -137,5 +137,5 @@ NODE_PATH=$NODE_PATH node $INTERACT click ".dialog-actions .btn-secondary"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

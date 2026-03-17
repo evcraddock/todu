@@ -3,31 +3,31 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
-toduai project create --name "Infra"
-TASK=$(toduai --format json task create --title "Fix bug" --project "App")
+todu project create --name "App"
+todu project create --name "Infra"
+TASK=$(todu --format json task create --title "Fix bug" --project "App")
 TASK_ID=$(echo "$TASK" | jq -r .id)
 
 # Create varied notes
-toduai note add "Journal entry" --tag daily
-toduai note add "Task progress" --task "$TASK_ID" --tag update
-toduai note add "Project decision" --project "App" --tag decision
-toduai note add "Agent review" --author agent --tag review
-toduai note add "Infra note" --project "Infra"
+todu note add "Journal entry" --tag daily
+todu note add "Task progress" --task "$TASK_ID" --tag update
+todu note add "Project decision" --project "App" --tag decision
+todu note add "Agent review" --author agent --tag review
+todu note add "Infra note" --project "Infra"
 ```
 
 ## 1. List All (CLI)
 
 ```bash
-toduai note list --no-color
+todu note list --no-color
 ```
 
 **Expected:** All 5 notes shown.
@@ -35,7 +35,7 @@ toduai note list --no-color
 ## 2. Filter by Task (CLI)
 
 ```bash
-toduai note list --task "$TASK_ID" --no-color
+todu note list --task "$TASK_ID" --no-color
 ```
 
 **Expected:** Only "Task progress".
@@ -43,7 +43,7 @@ toduai note list --task "$TASK_ID" --no-color
 ## 3. Filter by Project (CLI)
 
 ```bash
-toduai note list --project "App" --no-color
+todu note list --project "App" --no-color
 ```
 
 **Expected:** Only "Project decision".
@@ -51,7 +51,7 @@ toduai note list --project "App" --no-color
 ## 4. Filter by Tag (CLI)
 
 ```bash
-toduai note list --tag daily --no-color
+todu note list --tag daily --no-color
 ```
 
 **Expected:** Only "Journal entry".
@@ -59,7 +59,7 @@ toduai note list --tag daily --no-color
 ## 5. Filter by Author (CLI)
 
 ```bash
-toduai note list --author agent --no-color
+todu note list --author agent --no-color
 ```
 
 **Expected:** Only "Agent review".
@@ -67,7 +67,7 @@ toduai note list --author agent --no-color
 ## 6. List as JSON (CLI)
 
 ```bash
-toduai --format json note list
+todu --format json note list
 ```
 
 **Expected:** JSON array of all note objects.
@@ -75,7 +75,7 @@ toduai --format json note list
 ## 7. Empty Results (CLI)
 
 ```bash
-toduai note list --tag nonexistent --no-color
+todu note list --tag nonexistent --no-color
 ```
 
 **Expected:** `No results.`
@@ -162,5 +162,5 @@ NODE_PATH=$NODE_PATH node $INTERACT eval "
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

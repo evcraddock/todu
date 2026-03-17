@@ -3,19 +3,19 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 ```
 
 ## 1. Create with Name Only (CLI)
 
 ```bash
-toduai label create --name bug
+todu label create --name bug
 ```
 
 **Expected:**
@@ -30,7 +30,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 2. Create with Color (CLI)
 
 ```bash
-toduai label create --name urgent --color "#ff0000"
+todu label create --name urgent --color "#ff0000"
 ```
 
 **Expected:**
@@ -46,7 +46,7 @@ Created: YYYY-MM-DDTHH:MM:SS.MMMZ
 ## 3. Create with JSON Output (CLI)
 
 ```bash
-toduai --format json label create --name feature --color "#00ff00"
+todu --format json label create --name feature --color "#00ff00"
 ```
 
 **Expected:** JSON object with id, name, color, createdAt.
@@ -54,7 +54,7 @@ toduai --format json label create --name feature --color "#00ff00"
 ## 4. Verify CLI List
 
 ```bash
-toduai label list --no-color
+todu label list --no-color
 ```
 
 **Expected:** All three labels shown (bug, urgent, feature).
@@ -113,7 +113,7 @@ NODE_PATH=$NODE_PATH node $INTERACT text --selector ".data-table"
 ## 7. Verify CLI Sees Electron-Created Label
 
 ```bash
-toduai label list --no-color
+todu label list --no-color
 ```
 
 **Expected:** Four labels shown, including "docs".
@@ -122,5 +122,5 @@ toduai label list --no-color
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

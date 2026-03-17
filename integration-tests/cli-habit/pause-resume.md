@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 TZ=$(cat /etc/timezone 2>/dev/null || echo "America/Chicago")
@@ -11,16 +11,16 @@ TODAY=$(date +%Y-%m-%d)
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-HABIT=$(toduai --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
+HABIT=$(todu --format json habit create --title "Morning run" --schedule "FREQ=DAILY" --timezone "$TZ" --start-date "$TODAY")
 HABIT_ID=$(echo "$HABIT" | jq -r .id)
 ```
 
 ## 1. Pause Habit (CLI)
 
 ```bash
-toduai habit pause "$HABIT_ID"
+todu habit pause "$HABIT_ID"
 ```
 
 **Expected:** Habit paused confirmation.
@@ -28,7 +28,7 @@ toduai habit pause "$HABIT_ID"
 ## 2. Verify Paused (CLI)
 
 ```bash
-toduai habit show "$HABIT_ID" | grep "Status"
+todu habit show "$HABIT_ID" | grep "Status"
 ```
 
 **Expected:** `Status: paused`
@@ -36,7 +36,7 @@ toduai habit show "$HABIT_ID" | grep "Status"
 ## 3. Resume Habit (CLI)
 
 ```bash
-toduai habit resume "$HABIT_ID"
+todu habit resume "$HABIT_ID"
 ```
 
 **Expected:** Habit resumed confirmation.
@@ -44,7 +44,7 @@ toduai habit resume "$HABIT_ID"
 ## 4. Verify Resumed (CLI)
 
 ```bash
-toduai habit show "$HABIT_ID" | grep "Status"
+todu habit show "$HABIT_ID" | grep "Status"
 ```
 
 **Expected:** `Status: active`
@@ -77,7 +77,7 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-habit-pause-af
 ## 7. Verify CLI Sees Electron Pause
 
 ```bash
-toduai habit show "$HABIT_ID" | grep "Status"
+todu habit show "$HABIT_ID" | grep "Status"
 ```
 
 **Expected:** `Status: paused`
@@ -94,7 +94,7 @@ NODE_PATH=$NODE_PATH node $INTERACT wait "text=⏸ Pause" --timeout 5000
 ## 9. Verify CLI Sees Electron Resume
 
 ```bash
-toduai habit show "$HABIT_ID" | grep "Status"
+todu habit show "$HABIT_ID" | grep "Status"
 ```
 
 **Expected:** `Status: active`
@@ -103,5 +103,5 @@ toduai habit show "$HABIT_ID" | grep "Status"
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```

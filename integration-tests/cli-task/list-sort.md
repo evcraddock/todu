@@ -3,25 +3,25 @@
 ## Setup
 
 ```bash
-export TODUAI_DATA_DIR=$(mktemp -d)
+export TODU_DATA_DIR=$(mktemp -d)
 export NODE_PATH=$(find ~/.npm/_npx -path "*/node_modules/playwright" -type d 2>/dev/null | head -1 | xargs dirname)
 export INTERACT=~/.pi/agent/skills/electron-testing/scripts/interact.js
 
 ~/.pi/agent/skills/electron-testing/scripts/launch.sh \
   --app-path ./packages/electron/dist/main/index.js \
-  --env "TODUAI_DATA_DIR=$TODUAI_DATA_DIR"
+  --env "TODU_DATA_DIR=$TODU_DATA_DIR"
 
-toduai project create --name "App"
+todu project create --name "App"
 
-toduai task create --title "Charlie" --project "App" --priority low --due "2026-06-01"
-toduai task create --title "Alpha" --project "App" --priority high --due "2026-01-01"
-toduai task create --title "Bravo" --project "App" --priority medium
+todu task create --title "Charlie" --project "App" --priority low --due "2026-06-01"
+todu task create --title "Alpha" --project "App" --priority high --due "2026-01-01"
+todu task create --title "Bravo" --project "App" --priority medium
 ```
 
 ## 1. Default Sort — Priority Desc (CLI)
 
 ```bash
-toduai task list --no-color
+todu task list --no-color
 ```
 
 **Expected:** Alpha (high), Bravo (medium), Charlie (low).
@@ -29,7 +29,7 @@ toduai task list --no-color
 ## 2. Sort by Title Ascending (CLI)
 
 ```bash
-toduai task list --sort title --asc --no-color
+todu task list --sort title --asc --no-color
 ```
 
 **Expected:** Alpha, Bravo, Charlie.
@@ -37,7 +37,7 @@ toduai task list --sort title --asc --no-color
 ## 3. Sort by Title Descending (CLI)
 
 ```bash
-toduai task list --sort title --no-color
+todu task list --sort title --no-color
 ```
 
 **Expected:** Charlie, Bravo, Alpha.
@@ -45,7 +45,7 @@ toduai task list --sort title --no-color
 ## 4. Sort by Due Date Ascending (CLI)
 
 ```bash
-toduai task list --sort dueDate --asc --no-color
+todu task list --sort dueDate --asc --no-color
 ```
 
 **Expected:** Alpha (2026-01-01), Charlie (2026-06-01), Bravo (no due — last).
@@ -53,7 +53,7 @@ toduai task list --sort dueDate --asc --no-color
 ## 5. Sort by Due Date Descending (CLI)
 
 ```bash
-toduai task list --sort dueDate --no-color
+todu task list --sort dueDate --no-color
 ```
 
 **Expected:** Charlie (2026-06-01), Alpha (2026-01-01), Bravo (no due — last).
@@ -63,7 +63,7 @@ Tasks without a due date always sort last regardless of direction.
 ## 6. Sort by Priority Ascending (CLI)
 
 ```bash
-toduai task list --sort priority --asc --no-color
+todu task list --sort priority --asc --no-color
 ```
 
 **Expected:** Charlie (low), Bravo (medium), Alpha (high).
@@ -104,5 +104,5 @@ NODE_PATH=$NODE_PATH node $INTERACT screenshot --output /tmp/test-task-sort-prio
 
 ```bash
 ~/.pi/agent/skills/electron-testing/scripts/stop.sh
-rm -rf "$TODUAI_DATA_DIR"
+rm -rf "$TODU_DATA_DIR"
 ```
