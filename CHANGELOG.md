@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-22
+
+This release adds a native journal-only note filter so standalone journal entries can be listed directly from the CLI without mixing in task, project, or habit notes.
+
+### Added
+- `todu note list` now supports `--journal` for listing only standalone journal entries (#360)
+
+### Changed
+- Note filtering now supports a journal-only mode across the shared filter model, engine, CLI, and Electron tool surface (#360)
+
+### Fixed
+- Journal-only note queries now target only `journal:*` buckets when possible instead of reading attached-note buckets unnecessarily (#360)
+- Journal-only filtering now composes correctly with created-at date range filters (#360)
+
 ## [0.11.0] - 2026-03-22
 
 This release adds first-class created-at date range filtering for notes, making it easier to query journal entries and note history without scanning unrelated journal buckets.
