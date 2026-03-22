@@ -371,6 +371,7 @@ export interface NoteFilter {
   author?: string;
   createdFrom?: string;
   createdTo?: string;
+  journal?: boolean;
 }
 
 // ============================================================================

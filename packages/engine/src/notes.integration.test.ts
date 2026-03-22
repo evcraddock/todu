@@ -288,7 +288,24 @@ describe("note namespace", () => {
       expect(result.error.field).toBe("createdFrom");
     });
 
-    it("narrows journal bucket reads for global date range queries", async () => {
+    it("lists only standalone journal notes when requested", async () => {
+      const task = await todu.task.create({ title: "Task note", projectId });
+      if (!task.ok) throw new Error("create failed");
+
+      await todu.note.create({ content: "Journal entry" });
+      await todu.note.create({
+        content: "Task attached",
+        entityType: "task",
+        entityId: task.value.id,
+      });
+
+      const result = await todu.note.list({ journal: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.map((note) => note.content)).toEqual(["Journal entry"]);
+    });
+
+    it("narrows journal bucket reads for journal-only date range queries", async () => {
       const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
       const previousDiagnostics = process.env.TODU_NOTES_DIAGNOSTICS;
       process.env.TODU_NOTES_DIAGNOSTICS = "1";
@@ -307,13 +324,14 @@ describe("note namespace", () => {
           createdAt: "2026-03-20T09:00:00Z",
         });
 
-        const result = await todu.note.list({ createdFrom: "2026-03-01", createdTo: "2026-03-31" });
+        const result = await todu.note.list({
+          journal: true,
+          createdFrom: "2026-03-01",
+          createdTo: "2026-03-31",
+        });
         expect(result.ok).toBe(true);
         if (!result.ok) return;
-        expect(result.value.map((note) => note.content)).toEqual([
-          "March task note",
-          "March journal",
-        ]);
+        expect(result.value.map((note) => note.content)).toEqual(["March journal"]);
 
         const listDiagnostic = infoSpy.mock.calls
           .map((call) => call[0])
@@ -322,7 +340,8 @@ describe("note namespace", () => {
               typeof entry === "string" && entry.startsWith("[notes] list "),
           );
         expect(listDiagnostic).toBeDefined();
-        expect(listDiagnostic).toContain('"bucketCount":2');
+        expect(listDiagnostic).toContain('"bucketCount":1');
+        expect(listDiagnostic).toContain('"journal":true');
       } finally {
         if (previousDiagnostics === undefined) {
           delete process.env.TODU_NOTES_DIAGNOSTICS;

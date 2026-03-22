@@ -630,6 +630,10 @@ export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
     return validationError("entityType", `Invalid entity type: ${filter.entityType}`);
   }
 
+  if (filter.journal && (filter.entityType !== undefined || filter.entityId !== undefined)) {
+    return validationError("journal", "journal filter cannot be combined with entity filters");
+  }
+
   if (filter.createdFrom !== undefined) {
     const createdFromError = validateNoteFilterDate("createdFrom", filter.createdFrom);
     if (createdFromError) return createdFromError;
