@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-22
+
+This release adds first-class created-at date range filtering for notes, making it easier to query journal entries and note history without scanning unrelated journal buckets.
+
+### Added
+- `todu note list` now supports `--from` and `--to` date range filters for note created-at searches (#358)
+
+### Changed
+- Note filtering now supports created-at range bounds across the shared filter model, engine, CLI, and Electron tools surface (#358)
+
+### Fixed
+- Global date range note queries now narrow journal bucket reads to matching months before applying note-level filtering, avoiding unrelated journal bucket scans when possible (#358)
+- Invalid note date range input now fails with clear validation errors, including inverted ranges and malformed dates (#358)
+
 ## Rename note
 
 - Historical changelog entries may still reference `toduai` commands or artifact names because they describe behavior as it shipped at the time.

@@ -1,6 +1,6 @@
 {
   "name": "@todu/electron",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "todu desktop app — local-first task management",
   "author": {
     "name": "evcraddock",
