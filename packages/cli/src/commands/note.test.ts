@@ -95,6 +95,8 @@ describe("note commands", () => {
         entityId: "hab-123",
         tag: undefined,
         author: undefined,
+        createdFrom: undefined,
+        createdTo: undefined,
       },
     });
     expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toMatchObject([
@@ -103,5 +105,43 @@ describe("note commands", () => {
         entityId: "hab-123",
       },
     ]);
+  });
+
+  it("passes date range filtering through on note list", async () => {
+    const invokeDaemonMock = vi.fn(async (method: string) => {
+      if (method === "note.list") {
+        return {
+          ok: true,
+          value: [],
+        };
+      }
+
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const invokeDaemon = invokeDaemonMock as unknown as CliDaemonInvoker;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const program = new Command();
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
+    registerNoteCommands(program, invokeDaemon);
+
+    await program.parseAsync(
+      ["--format", "json", "note", "list", "--from", "2026-03-01", "--to", "2026-03-31"],
+      {
+        from: "user",
+      },
+    );
+
+    expect(invokeDaemonMock).toHaveBeenCalledWith("note.list", {
+      filter: {
+        entityType: undefined,
+        entityId: undefined,
+        tag: undefined,
+        author: undefined,
+        createdFrom: "2026-03-01",
+        createdTo: "2026-03-31",
+      },
+    });
+    expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
   });
 });

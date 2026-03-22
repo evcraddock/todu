@@ -12,7 +12,7 @@ import {
   type Note,
   type ProjectId,
 } from "@todu/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
 
@@ -245,6 +245,92 @@ describe("note namespace", () => {
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
       expect(result.value[0].content).toBe("Agent note");
+    });
+
+    it("filters by created-at date range and composes with tag filters", async () => {
+      await todu.note.create({
+        content: "February journal",
+        tags: ["journal"],
+        createdAt: "2026-02-20T12:00:00Z",
+      });
+      await todu.note.create({
+        content: "March journal",
+        tags: ["journal"],
+        createdAt: "2026-03-12T08:30:00Z",
+      });
+      await todu.note.create({
+        content: "March work log",
+        tags: ["work"],
+        createdAt: "2026-03-18T18:45:00Z",
+      });
+      await todu.note.create({
+        content: "April journal",
+        tags: ["journal"],
+        createdAt: "2026-04-01T09:00:00Z",
+      });
+
+      const result = await todu.note.list({
+        tag: "journal",
+        createdFrom: "2026-03-01",
+        createdTo: "2026-03-31",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.map((note) => note.content)).toEqual(["March journal"]);
+    });
+
+    it("rejects invalid date range filters", async () => {
+      const result = await todu.note.list({ createdFrom: "not-a-date" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+      if (result.error.type !== "validation") return;
+      expect(result.error.field).toBe("createdFrom");
+    });
+
+    it("narrows journal bucket reads for global date range queries", async () => {
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const previousDiagnostics = process.env.TODU_NOTES_DIAGNOSTICS;
+      process.env.TODU_NOTES_DIAGNOSTICS = "1";
+
+      try {
+        const task = await todu.task.create({ title: "Task note", projectId });
+        if (!task.ok) throw new Error("create failed");
+
+        await todu.note.create({ content: "January journal", createdAt: "2026-01-15T12:00:00Z" });
+        await todu.note.create({ content: "March journal", createdAt: "2026-03-15T12:00:00Z" });
+        await todu.note.create({ content: "April journal", createdAt: "2026-04-15T12:00:00Z" });
+        await todu.note.create({
+          content: "March task note",
+          entityType: "task",
+          entityId: task.value.id,
+          createdAt: "2026-03-20T09:00:00Z",
+        });
+
+        const result = await todu.note.list({ createdFrom: "2026-03-01", createdTo: "2026-03-31" });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.map((note) => note.content)).toEqual([
+          "March task note",
+          "March journal",
+        ]);
+
+        const listDiagnostic = infoSpy.mock.calls
+          .map((call) => call[0])
+          .find(
+            (entry): entry is string =>
+              typeof entry === "string" && entry.startsWith("[notes] list "),
+          );
+        expect(listDiagnostic).toBeDefined();
+        expect(listDiagnostic).toContain('"bucketCount":2');
+      } finally {
+        if (previousDiagnostics === undefined) {
+          delete process.env.TODU_NOTES_DIAGNOSTICS;
+        } else {
+          process.env.TODU_NOTES_DIAGNOSTICS = previousDiagnostics;
+        }
+        infoSpy.mockRestore();
+      }
     });
   });
 

@@ -9,6 +9,7 @@ import type {
   CreateTaskInput,
   IntegrationBinding,
   IntegrationBindingId,
+  NoteFilter,
   TaskStatus,
   UpdateHabitInput,
   UpdateIntegrationBindingInput,
@@ -595,6 +596,56 @@ export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError
   if (input.content !== undefined) {
     const contentError = validateNoteContent(input.content);
     if (contentError) return contentError;
+  }
+
+  return null;
+}
+
+function validateNoteFilterDate(
+  field: "createdFrom" | "createdTo",
+  value: string,
+): ValidationError | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return validateDateString(field, value);
+  }
+
+  return validateISODate(field, value);
+}
+
+function normalizeNoteFilterDate(field: "createdFrom" | "createdTo", value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const time =
+      field === "createdFrom"
+        ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+        : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+    return new Date(time).toISOString();
+  }
+
+  return new Date(value).toISOString();
+}
+
+export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
+  if (filter.entityType !== undefined && !isNoteEntityType(filter.entityType)) {
+    return validationError("entityType", `Invalid entity type: ${filter.entityType}`);
+  }
+
+  if (filter.createdFrom !== undefined) {
+    const createdFromError = validateNoteFilterDate("createdFrom", filter.createdFrom);
+    if (createdFromError) return createdFromError;
+  }
+
+  if (filter.createdTo !== undefined) {
+    const createdToError = validateNoteFilterDate("createdTo", filter.createdTo);
+    if (createdToError) return createdToError;
+  }
+
+  if (filter.createdFrom !== undefined && filter.createdTo !== undefined) {
+    const createdFrom = normalizeNoteFilterDate("createdFrom", filter.createdFrom);
+    const createdTo = normalizeNoteFilterDate("createdTo", filter.createdTo);
+    if (createdFrom > createdTo) {
+      return validationError("createdTo", "createdTo must be on or after createdFrom");
+    }
   }
 
   return null;

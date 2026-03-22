@@ -23,6 +23,7 @@ import {
   validateLabelColor,
   validateLabelName,
   validateNoteContent,
+  validateNoteFilter,
   validateProjectName,
   validateTaskTitle,
   validateUpdateHabitInput,
@@ -961,5 +962,36 @@ describe("validateUpdateNoteInput", () => {
   it("rejects content exceeding max length", () => {
     const error = validateUpdateNoteInput({ content: "x".repeat(MAX_NOTE_CONTENT_LENGTH + 1) });
     expect(error?.field).toBe("content");
+  });
+});
+
+describe("validateNoteFilter", () => {
+  it("accepts ISO datetime bounds", () => {
+    expect(
+      validateNoteFilter({
+        createdFrom: "2026-03-01T00:00:00Z",
+        createdTo: "2026-03-31T23:59:59Z",
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts YYYY-MM-DD bounds", () => {
+    expect(validateNoteFilter({ createdFrom: "2026-03-01", createdTo: "2026-03-31" })).toBeNull();
+  });
+
+  it("rejects invalid createdFrom", () => {
+    const error = validateNoteFilter({ createdFrom: "not-a-date" });
+    expect(error?.field).toBe("createdFrom");
+  });
+
+  it("rejects invalid createdTo", () => {
+    const error = validateNoteFilter({ createdTo: "2026-02-30" });
+    expect(error?.field).toBe("createdTo");
+  });
+
+  it("rejects inverted date ranges", () => {
+    const error = validateNoteFilter({ createdFrom: "2026-04-01", createdTo: "2026-03-31" });
+    expect(error?.field).toBe("createdTo");
+    expect(error?.message).toContain("on or after");
   });
 });
