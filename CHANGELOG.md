@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-03-22
+
+This release adds created-at date range filtering to task listing, making task history queries line up with the date-range behavior already available for notes.
+
+### Added
+- `todu task list` now supports `--from` and `--to` for filtering tasks by created-at date range (#362)
+
+### Changed
+- Task filtering now supports created-at range bounds across the shared filter model, engine, and CLI surface (#362)
+
+### Fixed
+- Task date range validation now matches note date-range behavior for accepted formats, inclusive date-only bounds, and inverted-range errors (#362)
+
 ## [0.12.0] - 2026-03-22
 
 This release adds a native journal-only note filter so standalone journal entries can be listed directly from the CLI without mixing in task, project, or habit notes.
