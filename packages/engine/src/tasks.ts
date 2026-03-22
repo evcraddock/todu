@@ -21,6 +21,7 @@ import {
   type TaskWithDetail,
   type UpdateTaskInput,
   validateCreateTaskInput,
+  validateTaskFilter,
   validateUpdateTaskInput,
   validationError,
 } from "@todu/core";
@@ -53,6 +54,33 @@ export function createTaskNamespace(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
 ): InternalTaskNamespace {
+  function normalizeRangeBoundary(value: string, bound: "start" | "end"): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split("-").map(Number);
+      const time =
+        bound === "start"
+          ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+          : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+      return new Date(time).toISOString();
+    }
+
+    return new Date(value).toISOString();
+  }
+
+  function normalizeTaskFilter(filter?: TaskFilter): TaskFilter | undefined {
+    if (!filter) return undefined;
+
+    const normalized: TaskFilter = { ...filter };
+    if (filter.createdFrom !== undefined) {
+      normalized.createdFrom = normalizeRangeBoundary(filter.createdFrom, "start");
+    }
+    if (filter.createdTo !== undefined) {
+      normalized.createdTo = normalizeRangeBoundary(filter.createdTo, "end");
+    }
+
+    return normalized;
+  }
+
   function migrateTaskListDoc(handle: DocHandle<TaskListDocument>): void {
     const doc = handle.doc();
     if (!doc) return;
@@ -216,14 +244,18 @@ export function createTaskNamespace(
     },
 
     async list(filter?: TaskFilter, sort?: TaskSortOptions): Promise<Result<Task[]>> {
+      const validationErr = filter ? validateTaskFilter(filter) : null;
+      if (validationErr) return err(validationErr);
+
       const catalogDoc = catalog.doc();
       if (!catalogDoc) return ok([]);
 
+      const normalizedFilter = normalizeTaskFilter(filter);
       const allTasks: Task[] = [];
 
       // If filtering by project, only load that project's task list
-      const docIds = filter?.projectId
-        ? [catalogDoc.taskListDocIds[filter.projectId]].filter(Boolean)
+      const docIds = normalizedFilter?.projectId
+        ? [catalogDoc.taskListDocIds[normalizedFilter.projectId]].filter(Boolean)
         : Object.values(catalogDoc.taskListDocIds);
 
       for (const docId of docIds) {
@@ -238,25 +270,36 @@ export function createTaskNamespace(
 
       // Apply filters
       let filtered = allTasks;
-      if (filter?.status) {
-        const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
+      if (normalizedFilter?.status) {
+        const statuses = Array.isArray(normalizedFilter.status)
+          ? normalizedFilter.status
+          : [normalizedFilter.status];
         filtered = filtered.filter((t) => statuses.includes(t.status));
       }
-      if (filter?.priority) {
-        filtered = filtered.filter((t) => t.priority === filter.priority);
+      if (normalizedFilter?.priority) {
+        filtered = filtered.filter((t) => t.priority === normalizedFilter.priority);
       }
-      if (filter?.label) {
-        filtered = filtered.filter((t) => t.labels.includes(filter.label!));
+      if (normalizedFilter?.label) {
+        const label = normalizedFilter.label;
+        filtered = filtered.filter((t) => t.labels.includes(label));
       }
-      if (filter?.dueBefore) {
+      if (normalizedFilter?.createdFrom) {
+        filtered = filtered.filter((t) => t.createdAt >= normalizedFilter.createdFrom!);
+      }
+      if (normalizedFilter?.createdTo) {
+        filtered = filtered.filter((t) => t.createdAt <= normalizedFilter.createdTo!);
+      }
+      if (normalizedFilter?.dueBefore) {
         filtered = filtered.filter(
-          (t) => t.dueDate !== undefined && t.dueDate <= filter.dueBefore!,
+          (t) => t.dueDate !== undefined && t.dueDate <= normalizedFilter.dueBefore!,
         );
       }
-      if (filter?.dueAfter) {
-        filtered = filtered.filter((t) => t.dueDate !== undefined && t.dueDate >= filter.dueAfter!);
+      if (normalizedFilter?.dueAfter) {
+        filtered = filtered.filter(
+          (t) => t.dueDate !== undefined && t.dueDate >= normalizedFilter.dueAfter!,
+        );
       }
-      if (filter?.overdue) {
+      if (normalizedFilter?.overdue) {
         const today = new Date().toISOString().slice(0, 10);
         filtered = filtered.filter(
           (t) =>
@@ -266,7 +309,7 @@ export function createTaskNamespace(
             t.status !== "canceled",
         );
       }
-      if (filter?.today) {
+      if (normalizedFilter?.today) {
         const today = new Date().toISOString().slice(0, 10);
         filtered = filtered.filter(
           (t) => t.dueDate?.startsWith(today) || t.scheduledDate?.startsWith(today),

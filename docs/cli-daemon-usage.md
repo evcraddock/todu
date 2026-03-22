@@ -302,6 +302,18 @@ Behavior notes:
 - Invalid note date input fails with a validation error.
 - `--habit <id>` attaches a note to a habit or filters notes for a habit.
 
+Filter tasks by created-at date range:
+
+```bash
+todu --format json task list --from 2026-03-01 --to 2026-03-31
+todu --format json task list --project proj-123 --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+```
+
+Task date-range behavior notes:
+- `task list --from/--to` uses created-at timestamps, not due dates.
+- `task list --from/--to` accepts either `YYYY-MM-DD` or ISO-8601 date/datetime strings.
+- Invalid task date input fails with a validation error.
+
 ## Validate connectivity
 
 ```bash

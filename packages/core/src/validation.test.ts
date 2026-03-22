@@ -25,6 +25,7 @@ import {
   validateNoteContent,
   validateNoteFilter,
   validateProjectName,
+  validateTaskFilter,
   validateTaskTitle,
   validateUpdateHabitInput,
   validateUpdateIntegrationBindingInput,
@@ -962,6 +963,37 @@ describe("validateUpdateNoteInput", () => {
   it("rejects content exceeding max length", () => {
     const error = validateUpdateNoteInput({ content: "x".repeat(MAX_NOTE_CONTENT_LENGTH + 1) });
     expect(error?.field).toBe("content");
+  });
+});
+
+describe("validateTaskFilter", () => {
+  it("accepts ISO datetime bounds", () => {
+    expect(
+      validateTaskFilter({
+        createdFrom: "2026-03-01T00:00:00Z",
+        createdTo: "2026-03-31T23:59:59Z",
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts YYYY-MM-DD bounds", () => {
+    expect(validateTaskFilter({ createdFrom: "2026-03-01", createdTo: "2026-03-31" })).toBeNull();
+  });
+
+  it("rejects invalid createdFrom", () => {
+    const error = validateTaskFilter({ createdFrom: "not-a-date" });
+    expect(error?.field).toBe("createdFrom");
+  });
+
+  it("rejects invalid createdTo", () => {
+    const error = validateTaskFilter({ createdTo: "2026-02-30" });
+    expect(error?.field).toBe("createdTo");
+  });
+
+  it("rejects inverted date ranges", () => {
+    const error = validateTaskFilter({ createdFrom: "2026-04-01", createdTo: "2026-03-31" });
+    expect(error?.field).toBe("createdTo");
+    expect(error?.message).toContain("on or after");
   });
 });
 

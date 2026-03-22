@@ -270,6 +270,46 @@ describe("task namespace", () => {
       expect(result.value[0].title).toBe("Bug");
     });
 
+    it("filters by created-at date range", async () => {
+      await todu.task.create({
+        title: "February task",
+        projectId,
+        createdAt: "2026-02-20T12:00:00Z",
+      });
+      await todu.task.create({
+        title: "March task",
+        projectId,
+        createdAt: "2026-03-12T08:30:00Z",
+      });
+      await todu.task.create({
+        title: "Late March task",
+        projectId,
+        createdAt: "2026-03-28T18:45:00Z",
+      });
+      await todu.task.create({
+        title: "April task",
+        projectId,
+        createdAt: "2026-04-01T09:00:00Z",
+      });
+
+      const result = await todu.task.list({
+        createdFrom: "2026-03-01",
+        createdTo: "2026-03-31",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.map((task) => task.title)).toEqual(["Late March task", "March task"]);
+    });
+
+    it("rejects invalid created-at date range filters", async () => {
+      const result = await todu.task.list({ createdFrom: "not-a-date" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+      if (result.error.type !== "validation") return;
+      expect(result.error.field).toBe("createdFrom");
+    });
+
     it("sorts by priority desc then createdAt desc", async () => {
       await todu.task.create({ title: "Low", projectId, priority: "low" });
       await todu.task.create({ title: "High", projectId, priority: "high" });

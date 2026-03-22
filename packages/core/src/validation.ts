@@ -10,6 +10,7 @@ import type {
   IntegrationBinding,
   IntegrationBindingId,
   NoteFilter,
+  TaskFilter,
   TaskStatus,
   UpdateHabitInput,
   UpdateIntegrationBindingInput,
@@ -601,7 +602,7 @@ export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError
   return null;
 }
 
-function validateNoteFilterDate(
+function validateCreatedRangeDate(
   field: "createdFrom" | "createdTo",
   value: string,
 ): ValidationError | null {
@@ -612,7 +613,7 @@ function validateNoteFilterDate(
   return validateISODate(field, value);
 }
 
-function normalizeNoteFilterDate(field: "createdFrom" | "createdTo", value: string): string {
+function normalizeCreatedRangeDate(field: "createdFrom" | "createdTo", value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [year, month, day] = value.split("-").map(Number);
     const time =
@@ -625,6 +626,28 @@ function normalizeNoteFilterDate(field: "createdFrom" | "createdTo", value: stri
   return new Date(value).toISOString();
 }
 
+export function validateTaskFilter(filter: TaskFilter): ValidationError | null {
+  if (filter.createdFrom !== undefined) {
+    const createdFromError = validateCreatedRangeDate("createdFrom", filter.createdFrom);
+    if (createdFromError) return createdFromError;
+  }
+
+  if (filter.createdTo !== undefined) {
+    const createdToError = validateCreatedRangeDate("createdTo", filter.createdTo);
+    if (createdToError) return createdToError;
+  }
+
+  if (filter.createdFrom !== undefined && filter.createdTo !== undefined) {
+    const createdFrom = normalizeCreatedRangeDate("createdFrom", filter.createdFrom);
+    const createdTo = normalizeCreatedRangeDate("createdTo", filter.createdTo);
+    if (createdFrom > createdTo) {
+      return validationError("createdTo", "createdTo must be on or after createdFrom");
+    }
+  }
+
+  return null;
+}
+
 export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
   if (filter.entityType !== undefined && !isNoteEntityType(filter.entityType)) {
     return validationError("entityType", `Invalid entity type: ${filter.entityType}`);
@@ -635,18 +658,18 @@ export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
   }
 
   if (filter.createdFrom !== undefined) {
-    const createdFromError = validateNoteFilterDate("createdFrom", filter.createdFrom);
+    const createdFromError = validateCreatedRangeDate("createdFrom", filter.createdFrom);
     if (createdFromError) return createdFromError;
   }
 
   if (filter.createdTo !== undefined) {
-    const createdToError = validateNoteFilterDate("createdTo", filter.createdTo);
+    const createdToError = validateCreatedRangeDate("createdTo", filter.createdTo);
     if (createdToError) return createdToError;
   }
 
   if (filter.createdFrom !== undefined && filter.createdTo !== undefined) {
-    const createdFrom = normalizeNoteFilterDate("createdFrom", filter.createdFrom);
-    const createdTo = normalizeNoteFilterDate("createdTo", filter.createdTo);
+    const createdFrom = normalizeCreatedRangeDate("createdFrom", filter.createdFrom);
+    const createdTo = normalizeCreatedRangeDate("createdTo", filter.createdTo);
     if (createdFrom > createdTo) {
       return validationError("createdTo", "createdTo must be on or after createdFrom");
     }
