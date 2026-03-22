@@ -131,6 +131,8 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--habit <id>", "filter by habit")
     .option("--tag <tag>", "filter by tag")
     .option("--author <author>", "filter by author")
+    .option("--from <date>", "filter by created-at start (YYYY-MM-DD or ISO-8601)")
+    .option("--to <date>", "filter by created-at end (YYYY-MM-DD or ISO-8601)")
     .action(async (opts) => {
       let entityType: NoteEntityType | undefined;
       let entityId: string | undefined;
@@ -159,6 +161,8 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
           entityId,
           tag: opts.tag,
           author: opts.author,
+          createdFrom: opts.from,
+          createdTo: opts.to,
         },
       });
 

@@ -246,6 +246,12 @@ const ListNotesParams = Type.Object({
   entityId: Type.Optional(Type.String({ description: "Filter by entity ID" })),
   tag: Type.Optional(Type.String({ description: "Filter by tag" })),
   author: Type.Optional(Type.String({ description: "Filter by author" })),
+  createdFrom: Type.Optional(
+    Type.String({ description: "Filter by created-at start (YYYY-MM-DD or ISO-8601)" }),
+  ),
+  createdTo: Type.Optional(
+    Type.String({ description: "Filter by created-at end (YYYY-MM-DD or ISO-8601)" }),
+  ),
 });
 
 // ============================================================================
@@ -482,7 +488,8 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     },
     {
       name: "list_notes",
-      description: "List notes, optionally filtered by entity, tag, or author.",
+      description:
+        "List notes, optionally filtered by entity, tag, author, or created-at date range.",
       label: "List Notes",
       parameters: ListNotesParams,
       execute: async (_toolCallId, params) => {

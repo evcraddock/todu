@@ -369,6 +369,8 @@ export interface NoteFilter {
   entityId?: string;
   tag?: string;
   author?: string;
+  createdFrom?: string;
+  createdTo?: string;
 }
 
 // ============================================================================

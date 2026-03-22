@@ -156,6 +156,27 @@ describe("label + note CLI commands", () => {
       expect(output).toContain("not-a-date");
     });
 
+    it("filters notes by created-at date range", () => {
+      run(
+        '--format json note add "February note" --created-at "2026-02-10T08:00:00Z" --tag journal',
+      );
+      run('--format json note add "March note" --created-at "2026-03-12T09:30:00Z" --tag journal');
+      run('--format json note add "April note" --created-at "2026-04-02T14:00:00Z" --tag journal');
+
+      const listJson = run(
+        '--format json note list --from "2026-03-01" --to "2026-03-31" --tag journal',
+      );
+      const notes = JSON.parse(listJson);
+      expect(notes).toHaveLength(1);
+      expect(notes[0].content).toBe("March note");
+    });
+
+    it("fails clearly for invalid note list date filters", () => {
+      const output = run('note list --from "not-a-date"', true);
+      expect(output).toContain("Invalid date");
+      expect(output).toContain("not-a-date");
+    });
+
     it("shows 'No notes.' when empty", () => {
       const output = run("note list");
       expect(output).toBe("No notes.");

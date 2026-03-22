@@ -16,6 +16,7 @@ import {
   type TaskListDocument,
   type UpdateNoteInput,
   validateCreateNoteInput,
+  validateNoteFilter,
   validateUpdateNoteInput,
 } from "@todu/core";
 import type { NoteNamespace } from "./todu.js";
@@ -60,6 +61,47 @@ export function createNoteNamespace(
       return `entity:${filter.entityType}:${filter.entityId}`;
     }
     return null;
+  }
+
+  function normalizeRangeBoundary(value: string, bound: "start" | "end"): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split("-").map(Number);
+      const time =
+        bound === "start"
+          ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+          : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+      return new Date(time).toISOString();
+    }
+
+    return new Date(value).toISOString();
+  }
+
+  function normalizeNoteFilter(filter?: NoteFilter): NoteFilter | undefined {
+    if (!filter) return undefined;
+
+    const normalized: NoteFilter = { ...filter };
+    if (filter.createdFrom !== undefined) {
+      normalized.createdFrom = normalizeRangeBoundary(filter.createdFrom, "start");
+    }
+    if (filter.createdTo !== undefined) {
+      normalized.createdTo = normalizeRangeBoundary(filter.createdTo, "end");
+    }
+
+    return normalized;
+  }
+
+  function journalBucketMatchesCreatedRange(bucketKey: string, filter?: NoteFilter): boolean {
+    if (!bucketKey.startsWith("journal:")) return true;
+    if (!filter?.createdFrom && !filter?.createdTo) return true;
+
+    const month = bucketKey.slice("journal:".length);
+    if (filter.createdFrom && month < filter.createdFrom.slice(0, 7)) {
+      return false;
+    }
+    if (filter.createdTo && month > filter.createdTo.slice(0, 7)) {
+      return false;
+    }
+    return true;
   }
 
   async function getBucketHandle(bucketKey: string): Promise<DocHandle<NotesDocument> | null> {
@@ -239,6 +281,12 @@ export function createNoteNamespace(
       return allBucketKeys.filter((bucketKey) => bucketKey.startsWith(prefix));
     }
 
+    if (filter.createdFrom || filter.createdTo) {
+      return allBucketKeys.filter((bucketKey) =>
+        journalBucketMatchesCreatedRange(bucketKey, filter),
+      );
+    }
+
     return allBucketKeys;
   }
 
@@ -316,9 +364,13 @@ export function createNoteNamespace(
     },
 
     async list(filter?: NoteFilter): Promise<Result<Note[]>> {
+      const validationErr = filter ? validateNoteFilter(filter) : null;
+      if (validationErr) return err(validationErr);
+
       await ensurePartitionModelReady();
 
-      const bucketKeys = listBucketKeys(filter);
+      const normalizedFilter = normalizeNoteFilter(filter);
+      const bucketKeys = listBucketKeys(normalizedFilter);
       if (bucketKeys.length === 0) return ok([]);
 
       const allNotes: Note[] = [];
@@ -334,19 +386,25 @@ export function createNoteNamespace(
       let notes = allNotes;
 
       // Apply filters
-      if (filter?.entityType) {
-        notes = notes.filter((n) => n.entityType === filter.entityType);
+      if (normalizedFilter?.entityType) {
+        notes = notes.filter((n) => n.entityType === normalizedFilter.entityType);
       }
-      if (filter?.entityId) {
-        notes = notes.filter((n) => n.entityId === filter.entityId);
+      if (normalizedFilter?.entityId) {
+        notes = notes.filter((n) => n.entityId === normalizedFilter.entityId);
       }
-      if (filter?.tag) {
-        const tag = filter.tag;
+      if (normalizedFilter?.tag) {
+        const tag = normalizedFilter.tag;
         notes = notes.filter((n) => n.tags.includes(tag));
       }
-      if (filter?.author) {
-        const author = filter.author;
+      if (normalizedFilter?.author) {
+        const author = normalizedFilter.author;
         notes = notes.filter((n) => n.author === author);
+      }
+      if (normalizedFilter?.createdFrom) {
+        notes = notes.filter((n) => n.createdAt >= normalizedFilter.createdFrom!);
+      }
+      if (normalizedFilter?.createdTo) {
+        notes = notes.filter((n) => n.createdAt <= normalizedFilter.createdTo!);
       }
 
       // Sort by createdAt desc (newest first)
@@ -355,8 +413,8 @@ export function createNoteNamespace(
       emitDiagnostic("list", {
         bucketCount: bucketKeys.length,
         resultCount: notes.length,
-        entityType: filter?.entityType,
-        hasEntityId: filter?.entityId !== undefined,
+        entityType: normalizedFilter?.entityType,
+        hasEntityId: normalizedFilter?.entityId !== undefined,
       });
 
       return ok(notes);

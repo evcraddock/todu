@@ -285,11 +285,19 @@ todu note add "Floss method: Water Pick" --habit hab-123
 todu --format json note list --habit hab-123
 ```
 
+Filter notes by created-at date range:
+
+```bash
+todu --format json note list --from 2026-03-01 --to 2026-03-31
+todu --format json note list --tag journal --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
+```
+
 Behavior notes:
 - `--created-at` accepts an ISO-8601 date or datetime string.
+- `note list --from/--to` accepts either `YYYY-MM-DD` or ISO-8601 date/datetime strings.
 - Stored journal timestamps are normalized to ISO datetime form.
 - Standalone journal notes are bucketed by the provided historical month, not by import time.
-- Invalid `--created-at` input fails with a validation error.
+- Invalid note date input fails with a validation error.
 - `--habit <id>` attaches a note to a habit or filters notes for a habit.
 
 ## Validate connectivity
