@@ -168,6 +168,25 @@ describe("task CLI commands", () => {
     expect(sortedParsed[1].title).toBe("Bravo");
   });
 
+  it("filters tasks by created-at date range", { timeout: 30000 }, async () => {
+    run('project create --name "Date Filter"');
+    run('--format json task create --title "Earlier task" --project "Date Filter"');
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const from = new Date().toISOString();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    run('--format json task create --title "March task" --project "Date Filter"');
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const to = new Date().toISOString();
+
+    const marchOnly = run(`--format json task list --from "${from}" --to "${to}"`);
+    const parsed = JSON.parse(marchOnly);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].title).toBe("March task");
+  });
+
   it("handles errors gracefully", () => {
     // Show nonexistent task
     const showErr = run("task show task-nonexistent", true);

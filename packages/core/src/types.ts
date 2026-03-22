@@ -322,6 +322,8 @@ export interface TaskFilter {
   priority?: TaskPriority;
   projectId?: ProjectId;
   label?: string;
+  createdFrom?: string;
+  createdTo?: string;
   dueBefore?: string;
   dueAfter?: string;
   overdue?: boolean;
