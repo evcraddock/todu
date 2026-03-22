@@ -246,6 +246,7 @@ const ListNotesParams = Type.Object({
   entityId: Type.Optional(Type.String({ description: "Filter by entity ID" })),
   tag: Type.Optional(Type.String({ description: "Filter by tag" })),
   author: Type.Optional(Type.String({ description: "Filter by author" })),
+  journal: Type.Optional(Type.Boolean({ description: "Filter to standalone journal notes only" })),
   createdFrom: Type.Optional(
     Type.String({ description: "Filter by created-at start (YYYY-MM-DD or ISO-8601)" }),
   ),

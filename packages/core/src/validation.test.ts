@@ -994,4 +994,9 @@ describe("validateNoteFilter", () => {
     expect(error?.field).toBe("createdTo");
     expect(error?.message).toContain("on or after");
   });
+
+  it("rejects journal combined with entity filters", () => {
+    const error = validateNoteFilter({ journal: true, entityType: "task", entityId: "task-123" });
+    expect(error?.field).toBe("journal");
+  });
 });

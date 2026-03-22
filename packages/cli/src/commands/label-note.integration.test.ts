@@ -171,6 +171,28 @@ describe("label + note CLI commands", () => {
       expect(notes[0].content).toBe("March note");
     });
 
+    it("lists only standalone journal entries with --journal", () => {
+      const projJson = run('--format json project create --name "Journal Filter Project"');
+      const proj = JSON.parse(projJson);
+      const taskJson = run(
+        `--format json task create --title "Attached note task" --project "${proj.id}"`,
+      );
+      const task = JSON.parse(taskJson);
+
+      run('--format json note add "Standalone journal" --created-at "2026-03-12T09:30:00Z"');
+      run(
+        `--format json note add "Task note" --task "${task.id}" --created-at "2026-03-12T10:00:00Z"`,
+      );
+
+      const listJson = run(
+        '--format json note list --journal --from "2026-03-01" --to "2026-03-31"',
+      );
+      const notes = JSON.parse(listJson);
+      expect(notes).toHaveLength(1);
+      expect(notes[0].content).toBe("Standalone journal");
+      expect(notes[0].entityType).toBeUndefined();
+    });
+
     it("fails clearly for invalid note list date filters", () => {
       const output = run('note list --from "not-a-date"', true);
       expect(output).toContain("Invalid date");

@@ -90,8 +90,12 @@ export function createNoteNamespace(
     return normalized;
   }
 
+  function isJournalBucketKey(bucketKey: string): boolean {
+    return bucketKey.startsWith("journal:");
+  }
+
   function journalBucketMatchesCreatedRange(bucketKey: string, filter?: NoteFilter): boolean {
-    if (!bucketKey.startsWith("journal:")) return true;
+    if (!isJournalBucketKey(bucketKey)) return true;
     if (!filter?.createdFrom && !filter?.createdTo) return true;
 
     const month = bucketKey.slice("journal:".length);
@@ -281,6 +285,13 @@ export function createNoteNamespace(
       return allBucketKeys.filter((bucketKey) => bucketKey.startsWith(prefix));
     }
 
+    if (filter.journal) {
+      return allBucketKeys.filter(
+        (bucketKey) =>
+          isJournalBucketKey(bucketKey) && journalBucketMatchesCreatedRange(bucketKey, filter),
+      );
+    }
+
     if (filter.createdFrom || filter.createdTo) {
       return allBucketKeys.filter((bucketKey) =>
         journalBucketMatchesCreatedRange(bucketKey, filter),
@@ -400,6 +411,9 @@ export function createNoteNamespace(
         const author = normalizedFilter.author;
         notes = notes.filter((n) => n.author === author);
       }
+      if (normalizedFilter?.journal) {
+        notes = notes.filter((n) => n.entityType === undefined && n.entityId === undefined);
+      }
       if (normalizedFilter?.createdFrom) {
         notes = notes.filter((n) => n.createdAt >= normalizedFilter.createdFrom!);
       }
@@ -415,6 +429,7 @@ export function createNoteNamespace(
         resultCount: notes.length,
         entityType: normalizedFilter?.entityType,
         hasEntityId: normalizedFilter?.entityId !== undefined,
+        journal: normalizedFilter?.journal === true,
       });
 
       return ok(notes);
