@@ -1,13 +1,15 @@
 import type { Note } from "@todu/core/browser";
 import { describe, expect, it } from "vitest";
 import {
-  formatDayHeader,
-  formatMonthLabel,
-  groupByDay,
-  monthRangeFilter,
-  shiftMonth,
-  startOfMonth,
-} from "./JournalList.js";
+  currentWeekStart,
+  formatJournalDayLabel,
+  formatJournalEntryTime,
+  formatWeekLabel,
+  groupJournalNotesByDay,
+  shiftWeek,
+  weekRangeFilter,
+  zonedDayKey,
+} from "../lib/journal-time.js";
 
 function makeNote(overrides: Partial<Note> = {}): Note {
   return {
@@ -20,79 +22,52 @@ function makeNote(overrides: Partial<Note> = {}): Note {
   };
 }
 
-describe("groupByDay", () => {
-  it("groups notes by date portion of createdAt", () => {
+describe("journal time helpers", () => {
+  it("groups notes by local day in the configured timezone", () => {
     const notes: Note[] = [
-      makeNote({ id: "note-1" as Note["id"], createdAt: "2026-02-13T10:00:00Z" }),
-      makeNote({ id: "note-2" as Note["id"], createdAt: "2026-02-13T14:00:00Z" }),
-      makeNote({ id: "note-3" as Note["id"], createdAt: "2026-02-12T09:00:00Z" }),
+      makeNote({ id: "note-1" as Note["id"], createdAt: "2026-02-13T07:30:00Z" }),
+      makeNote({ id: "note-2" as Note["id"], createdAt: "2026-02-13T17:00:00Z" }),
     ];
 
-    const groups = groupByDay(notes);
+    const groups = groupJournalNotesByDay(notes, "America/Los_Angeles");
     expect(groups.size).toBe(2);
-    expect(groups.get("2026-02-13")?.length).toBe(2);
     expect(groups.get("2026-02-12")?.length).toBe(1);
+    expect(groups.get("2026-02-13")?.length).toBe(1);
   });
 
-  it("returns empty map for no notes", () => {
-    const groups = groupByDay([]);
-    expect(groups.size).toBe(0);
+  it("formats times in 12-hour clock with AM/PM", () => {
+    expect(formatJournalEntryTime("2026-02-13T17:05:00Z", "America/New_York")).toBe("12:05 PM");
   });
 
-  it("puts each note in exactly one group", () => {
-    const notes: Note[] = [
-      makeNote({ id: "note-1" as Note["id"], createdAt: "2026-01-01T00:00:00Z" }),
-      makeNote({ id: "note-2" as Note["id"], createdAt: "2026-01-02T00:00:00Z" }),
-      makeNote({ id: "note-3" as Note["id"], createdAt: "2026-01-03T00:00:00Z" }),
-    ];
-
-    const groups = groupByDay(notes);
-    expect(groups.size).toBe(3);
-
-    let totalNotes = 0;
-    for (const dayNotes of groups.values()) {
-      totalNotes += dayNotes.length;
-    }
-    expect(totalNotes).toBe(3);
-  });
-});
-
-describe("formatDayHeader", () => {
-  it("formats a date string as a readable day header", () => {
-    const result = formatDayHeader("2026-02-13");
-    // Should contain the month and day at minimum
-    expect(result).toContain("February");
-    expect(result).toContain("13");
-    expect(result).toContain("2026");
+  it("formats a local day label in the configured timezone", () => {
+    expect(formatJournalDayLabel("2026-02-13", "America/New_York")).toContain("Friday");
+    expect(formatJournalDayLabel("2026-02-13", "America/New_York")).toContain("February");
   });
 
-  it("includes the weekday", () => {
-    // 2026-02-13 is a Friday
-    const result = formatDayHeader("2026-02-13");
-    expect(result).toContain("Friday");
-  });
-});
-
-describe("journal month helpers", () => {
-  it("normalizes a date to the start of its UTC month", () => {
-    const result = startOfMonth(new Date("2026-03-15T18:45:00Z"));
-    expect(result.toISOString()).toBe("2026-03-01T00:00:00.000Z");
+  it("derives the local day key using the configured timezone", () => {
+    expect(zonedDayKey("2026-02-13T07:30:00Z", "America/Los_Angeles")).toBe("2026-02-12");
   });
 
-  it("shifts months in UTC without drifting the day", () => {
-    const result = shiftMonth(new Date("2026-03-01T00:00:00.000Z"), -1);
-    expect(result.toISOString()).toBe("2026-02-01T00:00:00.000Z");
+  it("starts on the current local week", () => {
+    expect(currentWeekStart("America/New_York", new Date("2026-03-27T12:00:00Z"))).toBe(
+      "2026-03-22",
+    );
   });
 
-  it("builds a month-scoped journal filter", () => {
-    expect(monthRangeFilter(new Date("2026-02-13T10:00:00Z"))).toEqual({
+  it("shifts week anchors by 7 days", () => {
+    expect(shiftWeek("2026-03-22", -1)).toBe("2026-03-15");
+    expect(shiftWeek("2026-03-22", 1)).toBe("2026-03-29");
+  });
+
+  it("builds a week-scoped journal filter with timezone-aware UTC boundaries", () => {
+    expect(weekRangeFilter("2026-03-22", "America/New_York")).toEqual({
       journal: true,
-      createdFrom: "2026-02-01",
-      createdTo: "2026-02-28",
+      createdFrom: "2026-03-22T04:00:00.000Z",
+      createdTo: "2026-03-29T03:59:59.999Z",
     });
   });
 
-  it("formats a readable month label", () => {
-    expect(formatMonthLabel(new Date("2026-02-01T00:00:00.000Z"))).toBe("February 2026");
+  it("formats a readable week label", () => {
+    expect(formatWeekLabel("2026-03-22", "America/New_York")).toBe("Mar 22 – Mar 28, 2026");
   });
 });

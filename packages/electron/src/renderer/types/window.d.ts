@@ -132,6 +132,7 @@ export interface ToduAgentApi {
 export interface AgentSettings {
   provider: string;
   modelId: string;
+  timezone: string;
 }
 
 export interface ProviderInfo {

@@ -1,22 +1,18 @@
 import type { Note } from "@todu/core/browser";
 import type { ReactNode } from "react";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
+import { formatJournalEntryDate, formatJournalEntryTime } from "../lib/journal-time.js";
 
 interface JournalDetailProps {
   note: Note;
+  timezone: string;
   onBack: () => void;
   onEdit: (note: Note) => void;
 }
 
-export function JournalDetail({ note, onBack, onEdit }: JournalDetailProps): ReactNode {
-  const dateLabel = new Date(note.createdAt).toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const timeLabel = note.createdAt.slice(11, 16);
+export function JournalDetail({ note, timezone, onBack, onEdit }: JournalDetailProps): ReactNode {
+  const dateLabel = formatJournalEntryDate(note.createdAt, timezone);
+  const timeLabel = formatJournalEntryTime(note.createdAt, timezone);
 
   return (
     <div className="journal-detail">

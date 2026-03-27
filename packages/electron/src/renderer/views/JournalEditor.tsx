@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { useCreateNote, useUpdateNote } from "../hooks/useTodu.js";
+import { formatJournalEntryDate } from "../lib/journal-time.js";
 
 // ============================================================================
 // Types
@@ -11,6 +12,7 @@ import { useCreateNote, useUpdateNote } from "../hooks/useTodu.js";
 interface JournalEditorProps {
   /** Existing note to edit, or undefined for a new entry */
   note?: Note;
+  timezone: string;
   /** Called when the user saves or cancels */
   onClose: () => void;
 }
@@ -19,7 +21,7 @@ interface JournalEditorProps {
 // JournalEditor — full-screen writing view
 // ============================================================================
 
-export function JournalEditor({ note, onClose }: JournalEditorProps): ReactNode {
+export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): ReactNode {
   const [content, setContent] = useState(note?.content ?? "");
   const [tagsInput, setTagsInput] = useState(note?.tags.join(", ") ?? "");
   const [error, setError] = useState("");
@@ -77,19 +79,7 @@ export function JournalEditor({ note, onClose }: JournalEditorProps): ReactNode 
     }
   };
 
-  const dateLabel = note
-    ? new Date(note.createdAt).toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : new Date().toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+  const dateLabel = formatJournalEntryDate(note?.createdAt ?? new Date().toISOString(), timezone);
 
   return (
     <div className="journal-editor">

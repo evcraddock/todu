@@ -1,83 +1,41 @@
-import type { Note, NoteFilter } from "@todu/core/browser";
-import { type ReactNode, useMemo, useState } from "react";
+import type { Note } from "@todu/core/browser";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useNotes } from "../hooks/useTodu.js";
+import {
+  currentWeekStart,
+  formatJournalDayLabel,
+  formatJournalEntryTime,
+  formatWeekLabel,
+  groupJournalNotesByDay,
+  shiftWeek,
+  weekRangeFilter,
+} from "../lib/journal-time.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface JournalListProps {
+  timezone: string;
   onCreateEntry: () => void;
   onViewEntry: (note: Note) => void;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Group notes by date (YYYY-MM-DD) */
-export function groupByDay(notes: Note[]): Map<string, Note[]> {
-  const groups = new Map<string, Note[]>();
-  for (const note of notes) {
-    const day = note.createdAt.slice(0, 10);
-    const existing = groups.get(day);
-    if (existing) {
-      existing.push(note);
-    } else {
-      groups.set(day, [note]);
-    }
-  }
-  return groups;
-}
-
-/** Format a date string as a human-readable day header */
-export function formatDayHeader(dateStr: string): string {
-  const date = new Date(`${dateStr}T00:00:00`);
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-export function startOfMonth(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-}
-
-export function shiftMonth(date: Date, delta: number): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1));
-}
-
-export function formatMonthLabel(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-}
-
-export function monthRangeFilter(date: Date): NoteFilter {
-  const monthStart = startOfMonth(date);
-  const monthEnd = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
-
-  return {
-    journal: true,
-    createdFrom: monthStart.toISOString().slice(0, 10),
-    createdTo: monthEnd.toISOString().slice(0, 10),
-  };
 }
 
 // ============================================================================
 // JournalList
 // ============================================================================
 
-export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
-  const currentMonth = useMemo(() => startOfMonth(new Date()), []);
+export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
+  const currentWeek = useMemo(() => currentWeekStart(timezone), [timezone]);
   const [filterTag, setFilterTag] = useState("");
-  const [visibleMonth, setVisibleMonth] = useState<Date>(currentMonth);
+  const [visibleWeek, setVisibleWeek] = useState(currentWeek);
 
-  const filter = useMemo(() => monthRangeFilter(visibleMonth), [visibleMonth]);
+  useEffect(() => {
+    setVisibleWeek(currentWeek);
+    setFilterTag("");
+  }, [currentWeek]);
+
+  const filter = useMemo(() => weekRangeFilter(visibleWeek, timezone), [timezone, visibleWeek]);
   const { data: journalNotes, isLoading, isError, error } = useNotes(filter);
 
   const allTags = useMemo(() => {
@@ -96,8 +54,11 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
     [journalNotes, filterTag],
   );
 
-  const dayGroups = useMemo(() => groupByDay(visibleNotes), [visibleNotes]);
-  const isCurrentMonth = visibleMonth.getTime() === currentMonth.getTime();
+  const dayGroups = useMemo(
+    () => groupJournalNotesByDay(visibleNotes, timezone),
+    [timezone, visibleNotes],
+  );
+  const isCurrentWeek = visibleWeek === currentWeek;
 
   if (isLoading) {
     return (
@@ -139,21 +100,21 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => {
-              setVisibleMonth((month) => shiftMonth(month, -1));
+              setVisibleWeek((week) => shiftWeek(week, -1));
               setFilterTag("");
             }}
           >
             ← Older
           </button>
-          <span>{formatMonthLabel(visibleMonth)}</span>
+          <span>{formatWeekLabel(visibleWeek, timezone)}</span>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => {
-              setVisibleMonth((month) => shiftMonth(month, 1));
+              setVisibleWeek((week) => shiftWeek(week, 1));
               setFilterTag("");
             }}
-            disabled={isCurrentMonth}
+            disabled={isCurrentWeek}
           >
             Newer →
           </button>
@@ -174,13 +135,13 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
 
       {visibleNotes.length === 0 ? (
         <div className="empty-state">
-          <p>No journal entries found for {formatMonthLabel(visibleMonth)}</p>
+          <p>No journal entries found for {formatWeekLabel(visibleWeek, timezone)}</p>
         </div>
       ) : (
         <div className="journal-entries">
           {Array.from(dayGroups.entries()).map(([day, dayNotes]) => (
             <div key={day} className="journal-day-group">
-              <h3 className="journal-day-header">{formatDayHeader(day)}</h3>
+              <h3 className="journal-day-header">{formatJournalDayLabel(day, timezone)}</h3>
               {dayNotes.map((note) => (
                 <button
                   key={note.id}
@@ -188,7 +149,9 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
                   className="journal-entry-row"
                   onClick={() => onViewEntry(note)}
                 >
-                  <span className="journal-entry-time">{note.createdAt.slice(11, 16)}</span>
+                  <span className="journal-entry-time">
+                    {formatJournalEntryTime(note.createdAt, timezone)}
+                  </span>
                   {note.tags.length > 0 && (
                     <div className="label-chips">
                       {note.tags.map((tag) => (
