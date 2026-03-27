@@ -11,6 +11,7 @@ import { app, ipcMain, safeStorage } from "electron";
 export interface AgentSettings {
   provider: string;
   modelId: string;
+  timezone: string;
 }
 
 /** Shape returned by the providers IPC endpoint. */
@@ -23,6 +24,7 @@ export interface ProviderInfo {
 const DEFAULT_SETTINGS: AgentSettings = {
   provider: "anthropic",
   modelId: "claude-sonnet-4-20250514",
+  timezone: resolveSystemTimezone(),
 };
 
 // ============================================================================
@@ -49,6 +51,7 @@ export function loadSettings(): AgentSettings {
       return {
         provider: isValidProvider(data.provider) ? data.provider : DEFAULT_SETTINGS.provider,
         modelId: data.modelId || DEFAULT_SETTINGS.modelId,
+        timezone: isValidTimezone(data.timezone) ? data.timezone : DEFAULT_SETTINGS.timezone,
       };
     }
   } catch {
@@ -65,6 +68,23 @@ export function saveSettings(settings: AgentSettings): void {
 
 function isValidProvider(v: unknown): v is string {
   return typeof v === "string" && (getProviders() as string[]).includes(v);
+}
+
+function resolveSystemTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function isValidTimezone(value: unknown): value is string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return false;
+  }
+
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

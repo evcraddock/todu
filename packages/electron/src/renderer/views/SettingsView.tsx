@@ -144,6 +144,7 @@ export function SettingsView({
         const newSettings = {
           provider: providerId,
           modelId: provider.models[0]?.id ?? "",
+          timezone: settings.timezone,
         };
         setSettings(newSettings);
       }
@@ -166,7 +167,9 @@ export function SettingsView({
     setSaveMessage(null);
 
     try {
-      await window.todu.settings.save(settings);
+      const timezone = settings.timezone.trim();
+      new Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      await window.todu.settings.save({ ...settings, timezone });
       await window.todu.agent.setModel(settings.provider, settings.modelId);
       setSaveMessage("Settings saved");
       setTimeout(() => setSaveMessage(null), 2000);
@@ -322,6 +325,20 @@ export function SettingsView({
             <option value="dark">Dark</option>
             <option value="light">Light</option>
           </select>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="journal-timezone-input">
+            Journal timezone
+          </label>
+          <input
+            id="journal-timezone-input"
+            className="input"
+            value={settings.timezone}
+            onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+            placeholder="America/Chicago"
+          />
+          <span className="form-hint">Use an IANA timezone like `America/Chicago` or `UTC`.</span>
         </div>
       </div>
 

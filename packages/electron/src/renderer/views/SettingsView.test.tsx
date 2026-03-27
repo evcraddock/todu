@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsView } from "./SettingsView.js";
 
@@ -9,10 +9,12 @@ describe("SettingsView app version", () => {
   const settingsGet = vi.fn();
   const settingsStoredProviders = vi.fn();
   const settingsProviders = vi.fn();
+  const settingsSave = vi.fn();
   const settingsVersion = vi.fn();
   const oauthStatus = vi.fn();
   const syncStatus = vi.fn();
   const syncCatalogId = vi.fn();
+  const setModel = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -20,6 +22,7 @@ describe("SettingsView app version", () => {
     settingsGet.mockResolvedValue({
       provider: "anthropic",
       modelId: "claude-sonnet-4-20250514",
+      timezone: "America/Chicago",
     });
     settingsStoredProviders.mockResolvedValue({});
     settingsProviders.mockResolvedValue([
@@ -42,7 +45,7 @@ describe("SettingsView app version", () => {
       value: {
         settings: {
           get: settingsGet,
-          save: vi.fn().mockResolvedValue(undefined),
+          save: settingsSave.mockResolvedValue(undefined),
           setApiKey: vi.fn().mockResolvedValue(undefined),
           removeApiKey: vi.fn().mockResolvedValue(undefined),
           storedProviders: settingsStoredProviders,
@@ -50,7 +53,7 @@ describe("SettingsView app version", () => {
           version: settingsVersion,
         },
         agent: {
-          setModel: vi.fn().mockResolvedValue(undefined),
+          setModel: setModel.mockResolvedValue(undefined),
         },
         oauth: {
           status: oauthStatus,
@@ -92,5 +95,24 @@ describe("SettingsView app version", () => {
     await waitFor(() => {
       expect(screen.getByText("Unavailable")).toBeDefined();
     });
+  });
+
+  it("renders and saves the journal timezone setting", async () => {
+    render(<SettingsView themePreference="system" onThemeChange={() => {}} />);
+
+    const timezoneInput = await screen.findByLabelText("Journal timezone");
+    expect((timezoneInput as HTMLInputElement).value).toBe("America/Chicago");
+
+    fireEvent.change(timezoneInput, { target: { value: "America/New_York" } });
+    fireEvent.click(screen.getAllByText("Save")[0]);
+
+    await waitFor(() => {
+      expect(settingsSave).toHaveBeenCalledWith({
+        provider: "anthropic",
+        modelId: "claude-sonnet-4-20250514",
+        timezone: "America/New_York",
+      });
+    });
+    expect(setModel).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-20250514");
   });
 });

@@ -97,7 +97,7 @@ const api = {
   // ── Settings ─────────────────────────────────────────────────────
   settings: {
     get: () => ipcRenderer.invoke("todu:settings:get"),
-    save: (settings: { provider: string; modelId: string }) =>
+    save: (settings: { provider: string; modelId: string; timezone: string }) =>
       ipcRenderer.invoke("todu:settings:save", settings),
     setApiKey: (provider: string, key: string) =>
       ipcRenderer.invoke("todu:settings:set-api-key", provider, key),
