@@ -1,6 +1,13 @@
 import type { Note } from "@todu/core/browser";
 import { describe, expect, it } from "vitest";
-import { formatDayHeader, groupByDay } from "./JournalList.js";
+import {
+  formatDayHeader,
+  formatMonthLabel,
+  groupByDay,
+  monthRangeFilter,
+  shiftMonth,
+  startOfMonth,
+} from "./JournalList.js";
 
 function makeNote(overrides: Partial<Note> = {}): Note {
   return {
@@ -63,5 +70,29 @@ describe("formatDayHeader", () => {
     // 2026-02-13 is a Friday
     const result = formatDayHeader("2026-02-13");
     expect(result).toContain("Friday");
+  });
+});
+
+describe("journal month helpers", () => {
+  it("normalizes a date to the start of its UTC month", () => {
+    const result = startOfMonth(new Date("2026-03-15T18:45:00Z"));
+    expect(result.toISOString()).toBe("2026-03-01T00:00:00.000Z");
+  });
+
+  it("shifts months in UTC without drifting the day", () => {
+    const result = shiftMonth(new Date("2026-03-01T00:00:00.000Z"), -1);
+    expect(result.toISOString()).toBe("2026-02-01T00:00:00.000Z");
+  });
+
+  it("builds a month-scoped journal filter", () => {
+    expect(monthRangeFilter(new Date("2026-02-13T10:00:00Z"))).toEqual({
+      journal: true,
+      createdFrom: "2026-02-01",
+      createdTo: "2026-02-28",
+    });
+  });
+
+  it("formats a readable month label", () => {
+    expect(formatMonthLabel(new Date("2026-02-01T00:00:00.000Z"))).toBe("February 2026");
   });
 });

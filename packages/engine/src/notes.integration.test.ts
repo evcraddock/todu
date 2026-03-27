@@ -492,8 +492,7 @@ describe("note namespace", () => {
       expect(Object.keys(catalogDoc.notesBucketDocIds)).toEqual(
         expect.arrayContaining([journalBucket, taskBucket]),
       );
-      expect(catalogDoc.noteBucketByNoteId[journalNote.value.id]).toBe(journalBucket);
-      expect(catalogDoc.noteBucketByNoteId[taskNote.value.id]).toBe(taskBucket);
+      expect(catalogDoc.noteBucketByNoteId).toEqual({});
       expect(journalBucket).toBe("journal:2021-04");
     });
 
@@ -552,7 +551,43 @@ describe("note namespace", () => {
 
       const catalogDoc = await readCatalogDocument(tmpDir);
       expect(catalogDoc.notesDocId).toBeUndefined();
-      expect(catalogDoc.noteBucketByNoteId[legacyNote.id]).toBe("journal:2026-02");
+      expect(catalogDoc.noteBucketByNoteId).toEqual({});
+    });
+
+    it("clears legacy note bucket indexes and still updates notes", async () => {
+      const created = await todu.note.create({
+        content: "Indexed note",
+        createdAt: "2026-02-24T12:00:00.000Z",
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const repo = new Repo({
+        storage: new NodeFSStorageAdapter(tmpDir),
+      });
+      const catalogDocId = fs.readFileSync(path.join(tmpDir, "todu-catalog.id"), "utf-8").trim();
+      const catalogHandle = await repo.find<CatalogDocument>(catalogDocId as DocumentId);
+      catalogHandle.change((doc) => {
+        doc.noteBucketByNoteId = { [created.value.id]: "journal:2026-02" };
+      });
+      await repo.flush();
+      await repo.shutdown();
+      await new Promise((r) => setTimeout(r, 50));
+
+      todu = await createTodu({ storagePath: tmpDir });
+      const updated = await todu.note.update(created.value.id, { content: "Updated note" });
+      expect(updated.ok).toBe(true);
+      if (!updated.ok) return;
+      expect(updated.value.content).toBe("Updated note");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const catalogDoc = await readCatalogDocument(tmpDir);
+      expect(catalogDoc.noteBucketByNoteId).toEqual({});
     });
   });
 });

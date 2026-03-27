@@ -86,7 +86,7 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 Notes are partitioned into multiple Automerge documents instead of one global notes document.
 
 - Catalog keeps `notesBucketDocIds` (bucket key → document ID).
-- Catalog keeps `noteBucketByNoteId` (note ID → bucket key) for direct update/delete lookup.
+- Legacy `noteBucketByNoteId` entries are cleared during migration/startup to avoid unbounded catalog growth; note update/delete now locate notes by scanning bucket documents on demand.
 - Bucket selection:
   - Entity-attached notes use `entity:<type>:<entityId>`.
   - Standalone journal notes use monthly buckets `journal:<YYYY-MM>`.
