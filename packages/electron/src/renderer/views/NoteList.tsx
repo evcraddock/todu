@@ -14,9 +14,11 @@ export function NoteList({
   const [filterTag, setFilterTag] = useState("");
 
   const filter: NoteFilter = {
-    ...(filterType !== "all" && filterType !== "standalone"
-      ? { entityType: filterType as NoteEntityType }
-      : {}),
+    ...(filterType === "standalone"
+      ? { journal: true }
+      : filterType !== "all"
+        ? { entityType: filterType as NoteEntityType }
+        : {}),
     ...(filterTag ? { tag: filterTag } : {}),
   };
 
@@ -43,8 +45,7 @@ export function NoteList({
     return Array.from(tags).sort();
   }, [notes]);
 
-  // Filter standalone notes client-side (no entityType)
-  const displayNotes = filterType === "standalone" ? notes?.filter((n) => !n.entityType) : notes;
+  const displayNotes = notes;
 
   const handleDelete = () => {
     if (!deleteTarget) return;

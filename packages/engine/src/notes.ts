@@ -183,10 +183,6 @@ export function createNoteNamespace(
         doc.noteBucketByNoteId = {};
       }
 
-      for (const note of notesToMigrate) {
-        doc.noteBucketByNoteId[note.id] = noteBucketKeyForNote(note);
-      }
-
       delete doc.notesDocId;
     });
 
@@ -198,6 +194,20 @@ export function createNoteNamespace(
     emitDiagnostic("legacy-migration", {
       migratedNoteCount: notesToMigrate.length,
       targetBucketCount: byBucket.size,
+    });
+  }
+
+  function clearLegacyNoteBucketIndex(): void {
+    const catalogDoc = catalog.doc();
+    const legacyEntryCount = Object.keys(catalogDoc?.noteBucketByNoteId ?? {}).length;
+    if (legacyEntryCount === 0) return;
+
+    catalog.change((doc) => {
+      doc.noteBucketByNoteId = {};
+    });
+
+    emitDiagnostic("legacy-note-index-cleared", {
+      legacyEntryCount,
     });
   }
 
@@ -222,29 +232,12 @@ export function createNoteNamespace(
     }
 
     await migrateLegacyGlobalNotesDoc();
+    clearLegacyNoteBucketIndex();
   }
 
   async function findNoteLocation(id: NoteId): Promise<NoteLocation | null> {
     const catalogDoc = catalog.doc();
     if (!catalogDoc) return null;
-
-    const indexedBucketKey = catalogDoc.noteBucketByNoteId?.[id];
-    if (indexedBucketKey) {
-      const handle = await getBucketHandle(indexedBucketKey);
-      const notesDoc = handle?.doc();
-      if (handle && notesDoc) {
-        const index = notesDoc.notes.findIndex((n) => n.id === id);
-        if (index !== -1) {
-          return { bucketKey: indexedBucketKey, handle, index };
-        }
-      }
-
-      // Repair stale index entry.
-      catalog.change((doc) => {
-        if (!doc.noteBucketByNoteId) return;
-        delete doc.noteBucketByNoteId[id];
-      });
-    }
 
     for (const [bucketKey, docId] of Object.entries(catalogDoc.notesBucketDocIds ?? {})) {
       const handle = await repo.find<NotesDocument>(docId as DocumentId);
@@ -253,13 +246,6 @@ export function createNoteNamespace(
 
       const index = notesDoc.notes.findIndex((n) => n.id === id);
       if (index === -1) continue;
-
-      catalog.change((doc) => {
-        if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
-          doc.noteBucketByNoteId = {};
-        }
-        doc.noteBucketByNoteId[id] = bucketKey;
-      });
 
       return { bucketKey, handle, index };
     }
@@ -358,13 +344,6 @@ export function createNoteNamespace(
       const bucketKey = noteBucketKeyForNote(note);
       const notesHandle = await getOrCreateBucketHandle(bucketKey);
       appendNotesWithoutDuplicates(notesHandle, [note]);
-
-      catalog.change((doc) => {
-        if (doc.noteBucketByNoteId === undefined || doc.noteBucketByNoteId === null) {
-          doc.noteBucketByNoteId = {};
-        }
-        doc.noteBucketByNoteId[id] = bucketKey;
-      });
 
       emitDiagnostic("create", {
         noteId: id,
@@ -478,10 +457,6 @@ export function createNoteNamespace(
       const bucketIsEmpty = (location.handle.doc()?.notes.length ?? 0) === 0;
 
       catalog.change((doc) => {
-        if (doc.noteBucketByNoteId !== undefined && doc.noteBucketByNoteId !== null) {
-          delete doc.noteBucketByNoteId[id];
-        }
-
         if (
           bucketIsEmpty &&
           doc.notesBucketDocIds !== undefined &&

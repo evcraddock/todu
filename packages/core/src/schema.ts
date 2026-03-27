@@ -45,7 +45,7 @@ export interface CatalogDocument {
   /** Map of notes partition key → Automerge document ID */
   notesBucketDocIds: Record<string, string>;
 
-  /** Map of note ID → notes partition key */
+  /** Legacy map of note ID → notes partition key retained for migration compatibility */
   noteBucketByNoteId: Record<string, string>;
 
   /** Recurring task templates */

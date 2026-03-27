@@ -1,4 +1,4 @@
-import type { Note } from "@todu/core/browser";
+import type { Note, NoteFilter } from "@todu/core/browser";
 import { type ReactNode, useMemo, useState } from "react";
 import { useNotes } from "../hooks/useTodu.js";
 
@@ -41,40 +41,63 @@ export function formatDayHeader(dateStr: string): string {
   });
 }
 
+export function startOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+export function shiftMonth(date: Date, delta: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1));
+}
+
+export function formatMonthLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
+export function monthRangeFilter(date: Date): NoteFilter {
+  const monthStart = startOfMonth(date);
+  const monthEnd = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+
+  return {
+    journal: true,
+    createdFrom: monthStart.toISOString().slice(0, 10),
+    createdTo: monthEnd.toISOString().slice(0, 10),
+  };
+}
+
 // ============================================================================
 // JournalList
 // ============================================================================
 
 export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
+  const currentMonth = useMemo(() => startOfMonth(new Date()), []);
   const [filterTag, setFilterTag] = useState("");
+  const [visibleMonth, setVisibleMonth] = useState<Date>(currentMonth);
 
-  // Always fetch all notes (unfiltered) so we can derive the full tag list
-  const { data: allNotes, isLoading, isError, error } = useNotes({});
+  const filter = useMemo(() => monthRangeFilter(visibleMonth), [visibleMonth]);
+  const { data: journalNotes, isLoading, isError, error } = useNotes(filter);
 
-  // Filter to standalone notes only (no entityType)
-  const allStandaloneNotes = useMemo(
-    () => allNotes?.filter((n) => !n.entityType) ?? [],
-    [allNotes],
-  );
-
-  // Collect all tags from ALL standalone notes (not filtered subset)
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    for (const note of allStandaloneNotes) {
+    for (const note of journalNotes ?? []) {
       for (const tag of note.tags) tags.add(tag);
     }
     return Array.from(tags).sort();
-  }, [allStandaloneNotes]);
+  }, [journalNotes]);
 
-  // Apply tag filter client-side
-  const standaloneNotes = useMemo(
+  const visibleNotes = useMemo(
     () =>
-      filterTag ? allStandaloneNotes.filter((n) => n.tags.includes(filterTag)) : allStandaloneNotes,
-    [allStandaloneNotes, filterTag],
+      filterTag
+        ? (journalNotes ?? []).filter((n) => n.tags.includes(filterTag))
+        : (journalNotes ?? []),
+    [journalNotes, filterTag],
   );
 
-  // Group by day (already sorted newest first from engine)
-  const dayGroups = useMemo(() => groupByDay(standaloneNotes), [standaloneNotes]);
+  const dayGroups = useMemo(() => groupByDay(visibleNotes), [visibleNotes]);
+  const isCurrentMonth = visibleMonth.getTime() === currentMonth.getTime();
 
   if (isLoading) {
     return (
@@ -112,6 +135,28 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
 
       <div className="filter-bar">
         <div className="filter-row">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setVisibleMonth((month) => shiftMonth(month, -1));
+              setFilterTag("");
+            }}
+          >
+            ← Older
+          </button>
+          <span>{formatMonthLabel(visibleMonth)}</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              setVisibleMonth((month) => shiftMonth(month, 1));
+              setFilterTag("");
+            }}
+            disabled={isCurrentMonth}
+          >
+            Newer →
+          </button>
           <select
             className="filter-select"
             value={filterTag}
@@ -127,9 +172,9 @@ export function JournalList({ onCreateEntry, onViewEntry }: JournalListProps): R
         </div>
       </div>
 
-      {standaloneNotes.length === 0 ? (
+      {visibleNotes.length === 0 ? (
         <div className="empty-state">
-          <p>No journal entries found</p>
+          <p>No journal entries found for {formatMonthLabel(visibleMonth)}</p>
         </div>
       ) : (
         <div className="journal-entries">
