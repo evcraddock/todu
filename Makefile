@@ -79,19 +79,16 @@ build-cli-binaries: check-bun build ## Build standalone CLI binaries for all pla
 # Development
 # =============================================================================
 
-run: node_modules ## Run CLI (usage: make run ARGS="task list")
-	@TODU_CONFIG=$(DEV_CONFIG) node packages/cli/dist/index.js $(ARGS)
+run: node_modules ## Run CLI against the isolated dev daemon/config (usage: make run ARGS="task list")
+	@TODU_CONFIG=$(DEV_CONFIG) TODU_DAEMON_SOCKET=$(DEV_DAEMON_SOCKET) node packages/cli/dist/index.js $(ARGS)
 
-dev: node_modules ## Start dev environment (daemon + local sync server via overmind)
+dev: node_modules ## Start isolated dev environment (daemon + local sync server via overmind)
 	@if overmind ps -s $(SOCKET) >/dev/null 2>&1; then \
 		echo "Dev environment already running."; \
 	else \
-		pids=$$(ps -eo pid=,args= | grep 'packages/daemon/src/entrypoint.ts' | grep -v grep | awk '{print $$1}'); \
-		if [ -n "$$pids" ]; then \
-			kill $$pids 2>/dev/null || true; \
-		fi; \
+		rm -f $(SOCKET); \
 		rm -f $(DEV_DAEMON_SOCKET); \
-		TODU_CONFIG=$(DEV_CONFIG) overmind start -D -s $(SOCKET) --can-die sync-server; \
+		TODU_CONFIG=$(DEV_CONFIG) TODU_DAEMON_SOCKET=$(DEV_DAEMON_SOCKET) overmind start -D -s $(SOCKET) --can-die sync-server; \
 	fi
 	@for i in $$(seq 1 150); do \
 		if [ -S "$(DEV_DAEMON_SOCKET)" ]; then \
@@ -108,17 +105,13 @@ dev: node_modules ## Start dev environment (daemon + local sync server via overm
 	fi; \
 	exit 1
 
-dev-stop: ## Stop dev environment
+dev-stop: ## Stop isolated dev environment
 	overmind quit -s $(SOCKET) 2>/dev/null || true
-	@pids=$$(ps -eo pid=,args= | grep 'packages/daemon/src/entrypoint.ts' | grep -v grep | awk '{print $$1}'); \
-	if [ -n "$$pids" ]; then \
-		kill $$pids 2>/dev/null || true; \
-	fi
 	rm -f $(SOCKET)
 	rm -f $(DEV_DAEMON_SOCKET)
 
-dev-status: ## Check if dev environment is healthy (outputs: running | stopped)
-	@if [ -S "$(DEV_DAEMON_SOCKET)" ] && ps -eo args= | grep -q '[p]ackages/daemon/src/entrypoint.ts'; then \
+dev-status: ## Check if isolated dev environment is healthy (outputs: running | stopped)
+	@if overmind ps -s $(SOCKET) >/dev/null 2>&1 && [ -S "$(DEV_DAEMON_SOCKET)" ]; then \
 		echo "running"; \
 	else \
 		echo "stopped"; \
@@ -150,8 +143,8 @@ dev-tail: ## Show last 100 lines of dev logs (non-blocking)
 # Electron
 # =============================================================================
 
-dev-electron: node_modules ## Launch Electron app in dev mode (hot reload)
-	TODU_CONFIG=$(DEV_CONFIG) npm run --workspace=packages/electron dev
+dev-electron: node_modules ## Launch Electron app in dev mode against the isolated dev daemon (hot reload)
+	TODU_CONFIG=$(DEV_CONFIG) TODU_DAEMON_SOCKET=$(DEV_DAEMON_SOCKET) npm run --workspace=packages/electron dev
 
 build-electron: node_modules ## Build Electron app for distribution
 	npm run --workspace=packages/electron build
