@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-03-27
+
+This release improves the journal experience in Electron with timezone-aware weekly browsing and reduces note-related sync pressure by removing an unbounded catalog index and narrowing default journal reads.
+
+### Added
+- The Electron journal now uses the saved settings timezone for date display, shows 12-hour times with AM/PM, and loads entries one week at a time starting with the current week (#366)
+
+### Changed
+- Journal navigation now pages by week instead of month, with older/newer controls scoped to the active week (#366)
+- Dev workflow startup now uses an isolated daemon socket/config so `make dev` and `make dev-electron` can run alongside a production daemon on the same machine (#366)
+
+### Fixed
+- Note-heavy sync flows no longer maintain the unbounded catalog-level `noteBucketByNoteId` index, reducing default note serialization pressure and root-catalog growth (#364)
+- Journal and standalone note views no longer eagerly load unrelated note payloads by default, reducing unnecessary note reads in normal operation (#364)
+
 ## [0.13.0] - 2026-03-22
 
 This release adds created-at date range filtering to task listing, making task history queries line up with the date-range behavior already available for notes.

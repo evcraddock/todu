@@ -1,6 +1,6 @@
 {
   "name": "@todu/core",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Core types, validation, and schemas for todu task management",
   "type": "module",
   "main": "./dist/index.js",
