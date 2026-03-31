@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import type { HabitId, ProjectId } from "@todu/core";
 import { createProjectId } from "@todu/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTodu } from "./index.js";
+import * as schedule from "./schedule.js";
 import { clearProcessors } from "./scheduling.js";
 import type { Todu } from "./todu.js";
 
@@ -464,6 +465,40 @@ describe("habits", () => {
       expect(streak.value.current).toBe(1);
       expect(streak.value.completedToday).toBe(true);
       expect(streak.value.totalCheckins).toBe(1);
+    });
+
+    it("preserves streak when today is scheduled but not yet checked in", async () => {
+      const create = await todu.habit.create({
+        projectId,
+        title: "Daily",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2020-01-01",
+      });
+      expect(create.ok).toBe(true);
+      if (!create.ok) return;
+
+      // Check in "today"
+      await todu.habit.check(create.value.id);
+
+      // Now pretend tomorrow is "today" so the real today becomes a past checked day
+      // and tomorrow is the new unchecked scheduled day
+      const tomorrow = new Date();
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+      const spy = vi.spyOn(schedule, "todayInTimezone").mockReturnValue(tomorrowStr);
+
+      try {
+        const streak = await todu.habit.streak(create.value.id);
+        expect(streak.ok).toBe(true);
+        if (!streak.ok) return;
+
+        // Current streak should be 1 (yesterday's real check-in), not 0
+        expect(streak.value.current).toBe(1);
+        expect(streak.value.completedToday).toBe(false);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
