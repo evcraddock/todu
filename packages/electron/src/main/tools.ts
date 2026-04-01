@@ -318,7 +318,7 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     {
       name: "list_tasks",
       description:
-        "List tasks with optional filtering by status, priority, project, label, or due date. Supports sorting.",
+        "List tasks with optional filtering by status, priority, project, label, due date, or completion date. Use completedFrom/completedTo for monthly review. Supports sorting.",
       label: "List Tasks",
       parameters: ListTasksParams,
       execute: async (_toolCallId, params) => {

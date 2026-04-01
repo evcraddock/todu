@@ -50,4 +50,51 @@ describe("task commands", () => {
     });
     expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
   });
+
+  it("passes completion-date range filtering through on task list", async () => {
+    const invokeDaemonMock = vi.fn(async (method: string) => {
+      if (method === "task.list") {
+        return {
+          ok: true,
+          value: [] satisfies Task[],
+        };
+      }
+
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const invokeDaemon = invokeDaemonMock as unknown as CliDaemonInvoker;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const program = new Command();
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
+    registerTaskCommands(program, invokeDaemon);
+
+    await program.parseAsync(
+      [
+        "--format",
+        "json",
+        "task",
+        "list",
+        "--status",
+        "done",
+        "--completed-from",
+        "2026-03-01",
+        "--completed-to",
+        "2026-03-31",
+      ],
+      {
+        from: "user",
+      },
+    );
+
+    expect(invokeDaemonMock).toHaveBeenCalledWith("task.list", {
+      filter: expect.objectContaining({
+        completedFrom: "2026-03-01",
+        completedTo: "2026-03-31",
+        status: "done",
+      }),
+      sort: undefined,
+    });
+    expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
+  });
 });
