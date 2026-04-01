@@ -6,6 +6,7 @@ import {
   createTaskDetailDocument,
   createTaskId,
   createTaskListDocument,
+  dateToTimezoneISO,
   err,
   notFound,
   ok,
@@ -54,8 +55,15 @@ export function createTaskNamespace(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
 ): InternalTaskNamespace {
-  function normalizeRangeBoundary(value: string, bound: "start" | "end"): string {
+  function normalizeRangeBoundary(
+    value: string,
+    bound: "start" | "end",
+    timezone?: string,
+  ): string {
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      if (timezone) {
+        return dateToTimezoneISO(value, bound, timezone);
+      }
       const [year, month, day] = value.split("-").map(Number);
       const time =
         bound === "start"
@@ -72,10 +80,10 @@ export function createTaskNamespace(
 
     const normalized: TaskFilter = { ...filter };
     if (filter.createdFrom !== undefined) {
-      normalized.createdFrom = normalizeRangeBoundary(filter.createdFrom, "start");
+      normalized.createdFrom = normalizeRangeBoundary(filter.createdFrom, "start", filter.timezone);
     }
     if (filter.createdTo !== undefined) {
-      normalized.createdTo = normalizeRangeBoundary(filter.createdTo, "end");
+      normalized.createdTo = normalizeRangeBoundary(filter.createdTo, "end", filter.timezone);
     }
 
     return normalized;

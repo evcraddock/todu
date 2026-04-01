@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dateToTimezoneISO,
   generateScheduledTaskId,
   validateDateString,
   validateRRule,
@@ -237,5 +238,41 @@ describe("validateScheduleDefinition", () => {
     });
     expect(result).not.toBeNull();
     expect(result!.field).toBe("endDate");
+  });
+});
+
+describe("dateToTimezoneISO", () => {
+  it("converts start of day in UTC", () => {
+    const result = dateToTimezoneISO("2026-03-29", "start", "UTC");
+    expect(result).toBe("2026-03-29T00:00:00.000Z");
+  });
+
+  it("converts end of day in UTC", () => {
+    const result = dateToTimezoneISO("2026-03-29", "end", "UTC");
+    expect(result).toBe("2026-03-29T23:59:59.999Z");
+  });
+
+  it("converts start of day in America/Chicago (CST, UTC-6)", () => {
+    // March 29 2026 is in CDT (UTC-5), midnight CDT = 05:00 UTC
+    const result = dateToTimezoneISO("2026-03-29", "start", "America/Chicago");
+    expect(result).toBe("2026-03-29T05:00:00.000Z");
+  });
+
+  it("converts end of day in America/Chicago (CDT, UTC-5)", () => {
+    // 23:59:59.999 CDT = 04:59:59.999 UTC next day
+    const result = dateToTimezoneISO("2026-03-29", "end", "America/Chicago");
+    expect(result).toBe("2026-03-30T04:59:59.999Z");
+  });
+
+  it("converts start of day in Asia/Tokyo (UTC+9)", () => {
+    // Midnight JST = 15:00 UTC previous day
+    const result = dateToTimezoneISO("2026-03-29", "start", "Asia/Tokyo");
+    expect(result).toBe("2026-03-28T15:00:00.000Z");
+  });
+
+  it("converts end of day in Asia/Tokyo (UTC+9)", () => {
+    // 23:59:59.999 JST = 14:59:59.999 UTC same day
+    const result = dateToTimezoneISO("2026-03-29", "end", "Asia/Tokyo");
+    expect(result).toBe("2026-03-29T14:59:59.999Z");
   });
 });

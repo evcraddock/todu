@@ -995,6 +995,15 @@ describe("validateTaskFilter", () => {
     expect(error?.field).toBe("createdTo");
     expect(error?.message).toContain("on or after");
   });
+
+  it("accepts valid timezone", () => {
+    expect(validateTaskFilter({ timezone: "America/Chicago" })).toBeNull();
+  });
+
+  it("rejects invalid timezone", () => {
+    const error = validateTaskFilter({ timezone: "Fake/Zone" });
+    expect(error?.field).toBe("timezone");
+  });
 });
 
 describe("validateNoteFilter", () => {
@@ -1030,5 +1039,14 @@ describe("validateNoteFilter", () => {
   it("rejects journal combined with entity filters", () => {
     const error = validateNoteFilter({ journal: true, entityType: "task", entityId: "task-123" });
     expect(error?.field).toBe("journal");
+  });
+
+  it("accepts valid timezone", () => {
+    expect(validateNoteFilter({ timezone: "America/Chicago" })).toBeNull();
+  });
+
+  it("rejects invalid timezone", () => {
+    const error = validateNoteFilter({ timezone: "Fake/Zone" });
+    expect(error?.field).toBe("timezone");
   });
 });
