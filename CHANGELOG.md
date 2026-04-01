@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-04-01
+
+Timezone-aware date filtering for notes and tasks.
+
+### Fixed
+- Date range filters (`createdFrom`/`createdTo`) now accept an optional `timezone` field so day boundaries are calculated relative to the caller's timezone instead of always UTC (#372)
+
 ## [0.14.1] - 2026-03-31
 
 Patch release fixing habit streak calculation.
