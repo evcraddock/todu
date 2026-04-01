@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-01
+
+Completion-date filtering for task lists, enabling monthly review workflows.
+
+### Added
+- Tasks now track a `completedAt` timestamp, set automatically when status transitions to `done` and cleared when reopened
+- New `completedFrom`/`completedTo` filter fields on task list queries to find tasks completed within a date range
+- CLI flags `--completed-from` / `--completed-to` on `todu task list`
+- Electron agent tool `list_tasks` exposes completion-date filtering
+- Documentation for using completion-date filters in monthly review workflows
+
 ## [0.14.2] - 2026-04-01
 
 Timezone-aware date filtering for notes and tasks.
