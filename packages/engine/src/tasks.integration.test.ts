@@ -399,6 +399,107 @@ describe("task namespace", () => {
       expect(result.value[1].title).toBe("Early");
       expect(result.value[2].title).toBe("No due");
     });
+
+    it("filters by completedFrom/completedTo", async () => {
+      // Create task in January, complete in March
+      const janTask = await todu.task.create({
+        title: "Jan created, Mar completed",
+        projectId,
+        createdAt: "2026-01-15T12:00:00.000Z",
+      });
+      if (!janTask.ok) throw new Error("create failed");
+      await todu.task.update(janTask.value.id, {
+        status: "done",
+        updatedAt: "2026-03-15T12:00:00.000Z",
+      });
+
+      // Create task in March, complete in April
+      const marTask = await todu.task.create({
+        title: "Mar created, Apr completed",
+        projectId,
+        createdAt: "2026-03-10T12:00:00.000Z",
+      });
+      if (!marTask.ok) throw new Error("create failed");
+      await todu.task.update(marTask.value.id, {
+        status: "done",
+        updatedAt: "2026-04-05T12:00:00.000Z",
+      });
+
+      // Query for tasks completed in March
+      const result = await todu.task.list({
+        completedFrom: "2026-03-01",
+        completedTo: "2026-03-31",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Jan created, Mar completed");
+    });
+
+    it("sets completedAt when task is created with done status", async () => {
+      const result = await todu.task.create({
+        title: "Born done",
+        projectId,
+        status: "done",
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.completedAt).toBeDefined();
+    });
+
+    it("sets completedAt on status transition to done", async () => {
+      const created = await todu.task.create({ title: "Pending", projectId });
+      if (!created.ok) throw new Error("create failed");
+      expect(created.value.completedAt).toBeUndefined();
+
+      const updated = await todu.task.update(created.value.id, { status: "done" });
+      expect(updated.ok).toBe(true);
+      if (!updated.ok) return;
+      expect(updated.value.completedAt).toBeDefined();
+    });
+
+    it("clears completedAt when moving away from done", async () => {
+      const created = await todu.task.create({ title: "Will reopen", projectId });
+      if (!created.ok) throw new Error("create failed");
+      await todu.task.update(created.value.id, { status: "done" });
+
+      const reopened = await todu.task.update(created.value.id, { status: "active" });
+      expect(reopened.ok).toBe(true);
+      if (!reopened.ok) return;
+      expect(reopened.value.completedAt).toBeUndefined();
+    });
+
+    it("existing creation-date filters still work alongside completion filters", async () => {
+      // Create in January, complete in March
+      const task = await todu.task.create({
+        title: "Cross-range",
+        projectId,
+        createdAt: "2026-01-15T12:00:00.000Z",
+      });
+      if (!task.ok) throw new Error("create failed");
+      await todu.task.update(task.value.id, {
+        status: "done",
+        updatedAt: "2026-03-15T12:00:00.000Z",
+      });
+
+      // createdFrom in January should find it
+      const byCreated = await todu.task.list({
+        createdFrom: "2026-01-01",
+        createdTo: "2026-01-31",
+      });
+      expect(byCreated.ok).toBe(true);
+      if (!byCreated.ok) return;
+      expect(byCreated.value).toHaveLength(1);
+
+      // completedFrom in March should find it
+      const byCompleted = await todu.task.list({
+        completedFrom: "2026-03-01",
+        completedTo: "2026-03-31",
+      });
+      expect(byCompleted.ok).toBe(true);
+      if (!byCompleted.ok) return;
+      expect(byCompleted.value).toHaveLength(1);
+    });
   });
 
   describe("get", () => {

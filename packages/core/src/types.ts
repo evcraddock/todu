@@ -190,6 +190,7 @@ export interface Task {
   externalId?: string;
   sourceUrl?: string;
   templateId?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -326,6 +327,8 @@ export interface TaskFilter {
   createdTo?: string;
   dueBefore?: string;
   dueAfter?: string;
+  completedFrom?: string;
+  completedTo?: string;
   overdue?: boolean;
   today?: boolean;
   timezone?: string;

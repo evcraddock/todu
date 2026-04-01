@@ -602,10 +602,7 @@ export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError
   return null;
 }
 
-function validateCreatedRangeDate(
-  field: "createdFrom" | "createdTo",
-  value: string,
-): ValidationError | null {
+function validateCreatedRangeDate(field: string, value: string): ValidationError | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return validateDateString(field, value);
   }
@@ -613,13 +610,12 @@ function validateCreatedRangeDate(
   return validateISODate(field, value);
 }
 
-function normalizeCreatedRangeDate(field: "createdFrom" | "createdTo", value: string): string {
+function normalizeCreatedRangeDate(field: string, value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [year, month, day] = value.split("-").map(Number);
-    const time =
-      field === "createdFrom"
-        ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
-        : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+    const time = field.endsWith("From")
+      ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+      : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
     return new Date(time).toISOString();
   }
 
@@ -642,6 +638,24 @@ export function validateTaskFilter(filter: TaskFilter): ValidationError | null {
     const createdTo = normalizeCreatedRangeDate("createdTo", filter.createdTo);
     if (createdFrom > createdTo) {
       return validationError("createdTo", "createdTo must be on or after createdFrom");
+    }
+  }
+
+  if (filter.completedFrom !== undefined) {
+    const completedFromError = validateCreatedRangeDate("completedFrom", filter.completedFrom);
+    if (completedFromError) return completedFromError;
+  }
+
+  if (filter.completedTo !== undefined) {
+    const completedToError = validateCreatedRangeDate("completedTo", filter.completedTo);
+    if (completedToError) return completedToError;
+  }
+
+  if (filter.completedFrom !== undefined && filter.completedTo !== undefined) {
+    const completedFrom = normalizeCreatedRangeDate("completedFrom", filter.completedFrom);
+    const completedTo = normalizeCreatedRangeDate("completedTo", filter.completedTo);
+    if (completedFrom > completedTo) {
+      return validationError("completedTo", "completedTo must be on or after completedFrom");
     }
   }
 
