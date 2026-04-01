@@ -645,6 +645,11 @@ export function validateTaskFilter(filter: TaskFilter): ValidationError | null {
     }
   }
 
+  if (filter.timezone !== undefined) {
+    const tzError = validateTimezone(filter.timezone);
+    if (tzError) return tzError;
+  }
+
   return null;
 }
 
@@ -673,6 +678,11 @@ export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
     if (createdFrom > createdTo) {
       return validationError("createdTo", "createdTo must be on or after createdFrom");
     }
+  }
+
+  if (filter.timezone !== undefined) {
+    const tzError = validateTimezone(filter.timezone);
+    if (tzError) return tzError;
   }
 
   return null;

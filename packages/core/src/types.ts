@@ -328,6 +328,7 @@ export interface TaskFilter {
   dueAfter?: string;
   overdue?: boolean;
   today?: boolean;
+  timezone?: string;
 }
 
 export const TASK_SORT_FIELDS = ["priority", "dueDate", "createdAt", "updatedAt", "title"] as const;
@@ -374,6 +375,7 @@ export interface NoteFilter {
   createdFrom?: string;
   createdTo?: string;
   journal?: boolean;
+  timezone?: string;
 }
 
 // ============================================================================

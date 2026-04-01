@@ -147,3 +147,44 @@ export function validateScheduleDefinition(schedule: {
 
   return null;
 }
+
+/**
+ * Convert a YYYY-MM-DD date string to a UTC ISO timestamp at the start or end
+ * of that day in the given IANA timezone.
+ */
+export function dateToTimezoneISO(date: string, bound: "start" | "end", timezone: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+
+  // Build a reference UTC date near the target, then compute the timezone offset.
+  const refUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  // Use Intl to find the UTC offset for this timezone at the reference time.
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(refUtc);
+  const get = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((p) => p.type === type)!.value);
+
+  const localAtRef = new Date(
+    Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")),
+  );
+  const offsetMs = localAtRef.getTime() - refUtc.getTime();
+
+  // Target local time: start or end of the requested day.
+  const localTarget =
+    bound === "start"
+      ? Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+      : Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+
+  // Subtract offset to get UTC equivalent.
+  return new Date(localTarget - offsetMs).toISOString();
+}
