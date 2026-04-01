@@ -108,6 +108,18 @@ const ListTasksParams = Type.Object({
     Type.String({ description: "Filter tasks due before date (YYYY-MM-DD)" }),
   ),
   dueAfter: Type.Optional(Type.String({ description: "Filter tasks due after date (YYYY-MM-DD)" })),
+  completedFrom: Type.Optional(
+    Type.String({
+      description:
+        "Filter by completion date start (YYYY-MM-DD or ISO-8601). Use for monthly review.",
+    }),
+  ),
+  completedTo: Type.Optional(
+    Type.String({
+      description:
+        "Filter by completion date end (YYYY-MM-DD or ISO-8601). Use for monthly review.",
+    }),
+  ),
   overdue: Type.Optional(Type.Boolean({ description: "Filter overdue tasks" })),
   today: Type.Optional(Type.Boolean({ description: "Filter tasks due today" })),
   sortField: Type.Optional(
