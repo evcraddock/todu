@@ -344,6 +344,8 @@ export function createHabitNamespace(
         if (isScheduled) {
           if (entries[checkDate]?.completed) {
             current++;
+          } else if (checkDate === today) {
+            // Today is not over yet — skip without breaking the streak
           } else {
             break;
           }
