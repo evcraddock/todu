@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-03-31
+
+Patch release fixing habit streak calculation.
+
+### Fixed
+- Habit streak no longer resets to 0 when today's check-in is pending — the current streak now reflects consecutive past days until the user actually misses a scheduled day (#369)
+
 ## [0.14.0] - 2026-03-27
 
 This release improves the journal experience in Electron with timezone-aware weekly browsing and reduces note-related sync pressure by removing an unbounded catalog index and narrowing default journal reads.
