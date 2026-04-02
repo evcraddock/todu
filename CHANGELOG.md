@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-01
+
+Replace completion-date filtering with updated-at range filtering for reliable reporting across all tasks.
+
+### Changed
+- Task list filtering now uses `updatedFrom`/`updatedTo` instead of `completedFrom`/`completedTo`, querying the existing `updatedAt` timestamp which is available on all tasks including historical data
+- CLI flags changed from `--completed-from`/`--completed-to` to `--updated-from`/`--updated-to`
+- Monthly review workflow: use `--status done --updated-from/--updated-to` to find tasks completed in a date range
+
+### Removed
+- `completedAt` field on tasks (replaced by filtering on `updatedAt`)
+- `completedFrom`/`completedTo` filter fields (replaced by `updatedFrom`/`updatedTo`)
+
 ## [0.15.0] - 2026-04-01
 
 Completion-date filtering for task lists, enabling monthly review workflows.
