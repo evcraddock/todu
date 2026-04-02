@@ -400,10 +400,10 @@ describe("task namespace", () => {
       expect(result.value[2].title).toBe("No due");
     });
 
-    it("filters by completedFrom/completedTo", async () => {
-      // Create task in January, complete in March
+    it("filters by updatedFrom/updatedTo", async () => {
+      // Create task in January, mark done in March
       const janTask = await todu.task.create({
-        title: "Jan created, Mar completed",
+        title: "Jan created, Mar done",
         projectId,
         createdAt: "2026-01-15T12:00:00.000Z",
       });
@@ -413,9 +413,9 @@ describe("task namespace", () => {
         updatedAt: "2026-03-15T12:00:00.000Z",
       });
 
-      // Create task in March, complete in April
+      // Create task in March, mark done in April
       const marTask = await todu.task.create({
-        title: "Mar created, Apr completed",
+        title: "Mar created, Apr done",
         projectId,
         createdAt: "2026-03-10T12:00:00.000Z",
       });
@@ -425,52 +425,42 @@ describe("task namespace", () => {
         updatedAt: "2026-04-05T12:00:00.000Z",
       });
 
-      // Query for tasks completed in March
+      // Query for done tasks updated in March
       const result = await todu.task.list({
-        completedFrom: "2026-03-01",
-        completedTo: "2026-03-31",
+        status: "done",
+        updatedFrom: "2026-03-01",
+        updatedTo: "2026-03-31",
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
-      expect(result.value[0].title).toBe("Jan created, Mar completed");
+      expect(result.value[0].title).toBe("Jan created, Mar done");
     });
 
-    it("sets completedAt when task is created with done status", async () => {
-      const result = await todu.task.create({
-        title: "Born done",
+    it("excludes done tasks updated outside the window", async () => {
+      const task = await todu.task.create({
+        title: "Apr done",
         projectId,
+        createdAt: "2026-03-01T12:00:00.000Z",
+      });
+      if (!task.ok) throw new Error("create failed");
+      await todu.task.update(task.value.id, {
         status: "done",
+        updatedAt: "2026-04-05T12:00:00.000Z",
+      });
+
+      const result = await todu.task.list({
+        status: "done",
+        updatedFrom: "2026-03-01",
+        updatedTo: "2026-03-31",
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value.completedAt).toBeDefined();
+      expect(result.value).toHaveLength(0);
     });
 
-    it("sets completedAt on status transition to done", async () => {
-      const created = await todu.task.create({ title: "Pending", projectId });
-      if (!created.ok) throw new Error("create failed");
-      expect(created.value.completedAt).toBeUndefined();
-
-      const updated = await todu.task.update(created.value.id, { status: "done" });
-      expect(updated.ok).toBe(true);
-      if (!updated.ok) return;
-      expect(updated.value.completedAt).toBeDefined();
-    });
-
-    it("clears completedAt when moving away from done", async () => {
-      const created = await todu.task.create({ title: "Will reopen", projectId });
-      if (!created.ok) throw new Error("create failed");
-      await todu.task.update(created.value.id, { status: "done" });
-
-      const reopened = await todu.task.update(created.value.id, { status: "active" });
-      expect(reopened.ok).toBe(true);
-      if (!reopened.ok) return;
-      expect(reopened.value.completedAt).toBeUndefined();
-    });
-
-    it("existing creation-date filters still work alongside completion filters", async () => {
-      // Create in January, complete in March
+    it("existing creation-date filters still work alongside updatedAt filters", async () => {
+      // Create in January, mark done in March
       const task = await todu.task.create({
         title: "Cross-range",
         projectId,
@@ -491,14 +481,14 @@ describe("task namespace", () => {
       if (!byCreated.ok) return;
       expect(byCreated.value).toHaveLength(1);
 
-      // completedFrom in March should find it
-      const byCompleted = await todu.task.list({
-        completedFrom: "2026-03-01",
-        completedTo: "2026-03-31",
+      // updatedFrom in March should find it
+      const byUpdated = await todu.task.list({
+        updatedFrom: "2026-03-01",
+        updatedTo: "2026-03-31",
       });
-      expect(byCompleted.ok).toBe(true);
-      if (!byCompleted.ok) return;
-      expect(byCompleted.value).toHaveLength(1);
+      expect(byUpdated.ok).toBe(true);
+      if (!byUpdated.ok) return;
+      expect(byUpdated.value).toHaveLength(1);
     });
   });
 

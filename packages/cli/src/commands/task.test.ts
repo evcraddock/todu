@@ -51,7 +51,7 @@ describe("task commands", () => {
     expect(JSON.parse(logSpy.mock.calls[0][0] as string)).toEqual([]);
   });
 
-  it("passes completion-date range filtering through on task list", async () => {
+  it("passes updated-at date range filtering through on task list", async () => {
     const invokeDaemonMock = vi.fn(async (method: string) => {
       if (method === "task.list") {
         return {
@@ -77,9 +77,9 @@ describe("task commands", () => {
         "list",
         "--status",
         "done",
-        "--completed-from",
+        "--updated-from",
         "2026-03-01",
-        "--completed-to",
+        "--updated-to",
         "2026-03-31",
       ],
       {
@@ -89,8 +89,8 @@ describe("task commands", () => {
 
     expect(invokeDaemonMock).toHaveBeenCalledWith("task.list", {
       filter: expect.objectContaining({
-        completedFrom: "2026-03-01",
-        completedTo: "2026-03-31",
+        updatedFrom: "2026-03-01",
+        updatedTo: "2026-03-31",
         status: "done",
       }),
       sort: undefined,

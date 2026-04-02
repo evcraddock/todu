@@ -641,21 +641,21 @@ export function validateTaskFilter(filter: TaskFilter): ValidationError | null {
     }
   }
 
-  if (filter.completedFrom !== undefined) {
-    const completedFromError = validateCreatedRangeDate("completedFrom", filter.completedFrom);
-    if (completedFromError) return completedFromError;
+  if (filter.updatedFrom !== undefined) {
+    const updatedFromError = validateCreatedRangeDate("updatedFrom", filter.updatedFrom);
+    if (updatedFromError) return updatedFromError;
   }
 
-  if (filter.completedTo !== undefined) {
-    const completedToError = validateCreatedRangeDate("completedTo", filter.completedTo);
-    if (completedToError) return completedToError;
+  if (filter.updatedTo !== undefined) {
+    const updatedToError = validateCreatedRangeDate("updatedTo", filter.updatedTo);
+    if (updatedToError) return updatedToError;
   }
 
-  if (filter.completedFrom !== undefined && filter.completedTo !== undefined) {
-    const completedFrom = normalizeCreatedRangeDate("completedFrom", filter.completedFrom);
-    const completedTo = normalizeCreatedRangeDate("completedTo", filter.completedTo);
-    if (completedFrom > completedTo) {
-      return validationError("completedTo", "completedTo must be on or after completedFrom");
+  if (filter.updatedFrom !== undefined && filter.updatedTo !== undefined) {
+    const updatedFrom = normalizeCreatedRangeDate("updatedFrom", filter.updatedFrom);
+    const updatedTo = normalizeCreatedRangeDate("updatedTo", filter.updatedTo);
+    if (updatedFrom > updatedTo) {
+      return validationError("updatedTo", "updatedTo must be on or after updatedFrom");
     }
   }
 

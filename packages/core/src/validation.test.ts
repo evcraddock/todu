@@ -1005,20 +1005,18 @@ describe("validateTaskFilter", () => {
     expect(error?.field).toBe("timezone");
   });
 
-  it("accepts completedFrom/completedTo bounds", () => {
-    expect(
-      validateTaskFilter({ completedFrom: "2026-03-01", completedTo: "2026-03-31" }),
-    ).toBeNull();
+  it("accepts updatedFrom/updatedTo bounds", () => {
+    expect(validateTaskFilter({ updatedFrom: "2026-03-01", updatedTo: "2026-03-31" })).toBeNull();
   });
 
-  it("rejects invalid completedFrom", () => {
-    const error = validateTaskFilter({ completedFrom: "not-a-date" });
-    expect(error?.field).toBe("completedFrom");
+  it("rejects invalid updatedFrom", () => {
+    const error = validateTaskFilter({ updatedFrom: "not-a-date" });
+    expect(error?.field).toBe("updatedFrom");
   });
 
-  it("rejects inverted completed date ranges", () => {
-    const error = validateTaskFilter({ completedFrom: "2026-04-01", completedTo: "2026-03-31" });
-    expect(error?.field).toBe("completedTo");
+  it("rejects inverted updated date ranges", () => {
+    const error = validateTaskFilter({ updatedFrom: "2026-04-01", updatedTo: "2026-03-31" });
+    expect(error?.field).toBe("updatedTo");
     expect(error?.message).toContain("on or after");
   });
 });
