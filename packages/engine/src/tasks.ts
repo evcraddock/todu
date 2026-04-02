@@ -85,15 +85,11 @@ export function createTaskNamespace(
     if (filter.createdTo !== undefined) {
       normalized.createdTo = normalizeRangeBoundary(filter.createdTo, "end", filter.timezone);
     }
-    if (filter.completedFrom !== undefined) {
-      normalized.completedFrom = normalizeRangeBoundary(
-        filter.completedFrom,
-        "start",
-        filter.timezone,
-      );
+    if (filter.updatedFrom !== undefined) {
+      normalized.updatedFrom = normalizeRangeBoundary(filter.updatedFrom, "start", filter.timezone);
     }
-    if (filter.completedTo !== undefined) {
-      normalized.completedTo = normalizeRangeBoundary(filter.completedTo, "end", filter.timezone);
+    if (filter.updatedTo !== undefined) {
+      normalized.updatedTo = normalizeRangeBoundary(filter.updatedTo, "end", filter.timezone);
     }
 
     return normalized;
@@ -236,7 +232,6 @@ export function createTaskNamespace(
       if (input.externalId !== undefined) task.externalId = input.externalId.trim();
       if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
       if (templateId !== undefined) task.templateId = templateId;
-      if (task.status === "done") task.completedAt = updatedAt;
 
       // Add to task list document
       const listHandle = await getOrCreateTaskListDoc(input.projectId);
@@ -308,15 +303,11 @@ export function createTaskNamespace(
       if (normalizedFilter?.createdTo) {
         filtered = filtered.filter((t) => t.createdAt <= normalizedFilter.createdTo!);
       }
-      if (normalizedFilter?.completedFrom) {
-        filtered = filtered.filter(
-          (t) => t.completedAt !== undefined && t.completedAt >= normalizedFilter.completedFrom!,
-        );
+      if (normalizedFilter?.updatedFrom) {
+        filtered = filtered.filter((t) => t.updatedAt >= normalizedFilter.updatedFrom!);
       }
-      if (normalizedFilter?.completedTo) {
-        filtered = filtered.filter(
-          (t) => t.completedAt !== undefined && t.completedAt <= normalizedFilter.completedTo!,
-        );
+      if (normalizedFilter?.updatedTo) {
+        filtered = filtered.filter((t) => t.updatedAt <= normalizedFilter.updatedTo!);
       }
       if (normalizedFilter?.dueBefore) {
         filtered = filtered.filter(
@@ -422,14 +413,7 @@ export function createTaskNamespace(
         if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
         if (input.externalId !== undefined) task.externalId = input.externalId.trim();
         if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
-        if (input.status !== undefined) {
-          if (input.status === "done") {
-            task.completedAt = updatedAt;
-          } else if (result.task.status === "done") {
-            // Moving away from done — clear completedAt
-            delete (task as unknown as Record<string, unknown>).completedAt;
-          }
-        }
+
         task.updatedAt = updatedAt;
       });
 
@@ -594,7 +578,6 @@ function cloneTask(t: Task): Task {
     externalId: t.externalId,
     sourceUrl: t.sourceUrl,
     templateId: t.templateId,
-    completedAt: t.completedAt,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
   };

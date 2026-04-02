@@ -108,16 +108,16 @@ const ListTasksParams = Type.Object({
     Type.String({ description: "Filter tasks due before date (YYYY-MM-DD)" }),
   ),
   dueAfter: Type.Optional(Type.String({ description: "Filter tasks due after date (YYYY-MM-DD)" })),
-  completedFrom: Type.Optional(
+  updatedFrom: Type.Optional(
     Type.String({
       description:
-        "Filter by completion date start (YYYY-MM-DD or ISO-8601). Use for monthly review.",
+        "Filter by updated-at start (YYYY-MM-DD or ISO-8601). Use with status=done for monthly review.",
     }),
   ),
-  completedTo: Type.Optional(
+  updatedTo: Type.Optional(
     Type.String({
       description:
-        "Filter by completion date end (YYYY-MM-DD or ISO-8601). Use for monthly review.",
+        "Filter by updated-at end (YYYY-MM-DD or ISO-8601). Use with status=done for monthly review.",
     }),
   ),
   overdue: Type.Optional(Type.Boolean({ description: "Filter overdue tasks" })),
@@ -318,7 +318,7 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     {
       name: "list_tasks",
       description:
-        "List tasks with optional filtering by status, priority, project, label, due date, or completion date. Use completedFrom/completedTo for monthly review. Supports sorting.",
+        "List tasks with optional filtering by status, priority, project, label, due date, or updated-at range. Use updatedFrom/updatedTo with status=done for monthly review. Supports sorting.",
       label: "List Tasks",
       parameters: ListTasksParams,
       execute: async (_toolCallId, params) => {

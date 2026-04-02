@@ -309,17 +309,17 @@ todu --format json task list --from 2026-03-01 --to 2026-03-31
 todu --format json task list --project proj-123 --from 2026-03-01T00:00:00Z --to 2026-03-31T23:59:59Z
 ```
 
-Filter tasks by completion date range (for monthly review and reporting):
+Filter tasks by updated-at date range (for monthly review and reporting):
 
 ```bash
-todu --format json task list --status done --completed-from 2026-03-01 --completed-to 2026-03-31
+todu --format json task list --status done --updated-from 2026-03-01 --updated-to 2026-03-31
 ```
 
 Task date-range behavior notes:
 - `task list --from/--to` uses created-at timestamps, not due dates.
-- `task list --completed-from/--completed-to` uses the date the task was marked done.
+- `task list --updated-from/--updated-to` uses the `updatedAt` timestamp.
 - Both accept either `YYYY-MM-DD` or ISO-8601 date/datetime strings.
-- For monthly review, use `--completed-from`/`--completed-to` to find tasks finished during the target month regardless of when they were created.
+- For monthly review, use `--status done --updated-from/--updated-to` to find tasks completed during the target month.
 - Invalid task date input fails with a validation error.
 
 ## Validate connectivity

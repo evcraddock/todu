@@ -154,8 +154,8 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--label <label>", "filter by label")
     .option("--from <date>", "filter by created-at start (YYYY-MM-DD or ISO-8601)")
     .option("--to <date>", "filter by created-at end (YYYY-MM-DD or ISO-8601)")
-    .option("--completed-from <date>", "filter by completion date start (YYYY-MM-DD or ISO-8601)")
-    .option("--completed-to <date>", "filter by completion date end (YYYY-MM-DD or ISO-8601)")
+    .option("--updated-from <date>", "filter by updated-at start (YYYY-MM-DD or ISO-8601)")
+    .option("--updated-to <date>", "filter by updated-at end (YYYY-MM-DD or ISO-8601)")
     .option("--overdue", "show overdue tasks only")
     .option("--today", "show tasks due or scheduled today")
     .option("--sort <field>", "sort by field (priority, dueDate, createdAt, updatedAt, title)")
@@ -211,8 +211,8 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
           label: opts.label,
           createdFrom: opts.from,
           createdTo: opts.to,
-          completedFrom: opts.completedFrom,
-          completedTo: opts.completedTo,
+          updatedFrom: opts.updatedFrom,
+          updatedTo: opts.updatedTo,
           overdue: opts.overdue,
           today: opts.today,
         },
