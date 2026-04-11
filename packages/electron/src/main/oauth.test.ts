@@ -1,4 +1,4 @@
-import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai";
+import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
 import { describe, expect, it } from "vitest";
 import { OAUTH_PROVIDER_ALIASES } from "./oauth.js";
 
@@ -27,10 +27,10 @@ describe("OAuth provider registry", () => {
     expect(typeof provider!.getApiKey).toBe("function");
   });
 
-  it("anthropic does not use callback server", () => {
+  it("anthropic uses callback server", () => {
     const provider = getOAuthProvider("anthropic");
     expect(provider).toBeDefined();
-    expect(provider!.usesCallbackServer).toBeFalsy();
+    expect(provider!.usesCallbackServer).toBe(true);
   });
 
   it("getApiKey returns the access token", () => {

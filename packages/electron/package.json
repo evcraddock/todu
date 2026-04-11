@@ -20,8 +20,8 @@
     "dist:win": "electron-builder --config electron-builder.yml --win"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.52.12",
-    "@mariozechner/pi-ai": "^0.52.12",
+    "@mariozechner/pi-agent-core": "^0.66.1",
+    "@mariozechner/pi-ai": "^0.66.1",
     "@sinclair/typebox": "^0.34.48",
     "@tanstack/react-query": "^5.90.20",
     "@tiptap/extension-link": "3.19.0",

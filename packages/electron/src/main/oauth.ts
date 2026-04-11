@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { OAuthCredentials, OAuthProviderInterface } from "@mariozechner/pi-ai";
-import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai";
+import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
 import type { BrowserWindow } from "electron";
 import { app, ipcMain, safeStorage, shell } from "electron";
 
