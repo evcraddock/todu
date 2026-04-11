@@ -72,6 +72,7 @@ make dev-electron
 
 - Contributing and required workflow: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Dependency maintenance: [docs/dependency-maintenance.md](docs/dependency-maintenance.md)
 - Daemon CLI behavior: [docs/cli-daemon-usage.md](docs/cli-daemon-usage.md)
 
 ## License
