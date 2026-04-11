@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-04-11
+
+This release improves dependency maintenance and updates the Electron app’s pi integration to the latest supported library versions.
+
+### Changed
+- Added a documented dependency maintenance policy and low-noise Dependabot configuration for grouped npm and GitHub Actions updates (#380)
+- Added a manual `make deps-outdated` workflow for checking dependency drift outside automated PRs (#380)
+- Upgraded Electron’s pi integration libraries to the latest supported npm versions and aligned OAuth imports with the current pi package export surface (#382)
+
+### Fixed
+- Updated the Electron pi OAuth integration to use the current `@mariozechner/pi-ai/oauth` entry point and match current upstream Anthropic OAuth provider behavior (#382)
+
 ## [0.16.0] - 2026-04-01
 
 Replace completion-date filtering with updated-at range filtering for reliable reporting across all tasks.
