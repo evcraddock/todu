@@ -1,0 +1,161 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    rebase-strategy: auto
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore"
+      include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+    groups:
+      tooling-and-tests:
+        patterns:
+          - "@biomejs/*"
+          - "@testing-library/*"
+          - "@types/*"
+          - "@typescript/*"
+          - "@vitejs/*"
+          - "@vitest/*"
+          - "husky"
+          - "jsdom"
+          - "tsx"
+          - "typescript"
+          - "vite"
+          - "vitest"
+        update-types:
+          - minor
+          - patch
+      react-ui:
+        patterns:
+          - "@tanstack/react-query"
+          - "@tiptap/*"
+          - "react"
+          - "react-dom"
+          - "tiptap-markdown"
+        update-types:
+          - minor
+          - patch
+      electron-packaging:
+        patterns:
+          - "@electron-toolkit/*"
+          - "electron"
+          - "electron-builder"
+          - "electron-vite"
+        update-types:
+          - minor
+          - patch
+      automerge-runtime-sync:
+        patterns:
+          - "@automerge/*"
+          - "rrule"
+          - "ws"
+          - "yaml"
+        update-types:
+          - minor
+          - patch
+      pi-packages:
+        patterns:
+          - "@mariozechner/pi-*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: monday
+      time: "08:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    versioning-strategy: increase-if-necessary
+    rebase-strategy: auto
+    labels:
+      - dependencies
+      - major-update
+    commit-message:
+      prefix: "chore"
+      include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+    groups:
+      tooling-and-tests-major:
+        patterns:
+          - "@biomejs/*"
+          - "@testing-library/*"
+          - "@types/*"
+          - "@typescript/*"
+          - "@vitejs/*"
+          - "@vitest/*"
+          - "husky"
+          - "jsdom"
+          - "tsx"
+          - "typescript"
+          - "vite"
+          - "vitest"
+        update-types:
+          - major
+      react-ui-major:
+        patterns:
+          - "@tanstack/react-query"
+          - "@tiptap/*"
+          - "react"
+          - "react-dom"
+          - "tiptap-markdown"
+        update-types:
+          - major
+      electron-packaging-major:
+        patterns:
+          - "@electron-toolkit/*"
+          - "electron"
+          - "electron-builder"
+          - "electron-vite"
+        update-types:
+          - major
+      automerge-runtime-sync-major:
+        patterns:
+          - "@automerge/*"
+          - "rrule"
+          - "ws"
+          - "yaml"
+        update-types:
+          - major
+      pi-packages-major:
+        patterns:
+          - "@mariozechner/pi-*"
+        update-types:
+          - major
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: monday
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "chore"
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"

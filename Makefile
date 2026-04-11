@@ -1,4 +1,4 @@
-.PHONY: build test test-sync-server-integration check check-ci typecheck pre-pr run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
+.PHONY: build test test-sync-server-integration check check-ci typecheck pre-pr deps-outdated run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
@@ -52,6 +52,9 @@ pre-pr: node_modules ## Run pre-PR checks (check + unit tests + build)
 	npm run check:ci
 	npm test
 	npm run build
+
+deps-outdated: node_modules ## Report outdated npm dependencies across the workspace
+	npm outdated --workspaces --include-workspace-root || true
 
 clean: ## Remove build artifacts
 	rm -rf packages/*/dist packages/*/*.tsbuildinfo dist/cli
