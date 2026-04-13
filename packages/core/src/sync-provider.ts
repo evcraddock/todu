@@ -7,10 +7,18 @@ import {
   type Result,
   type Task,
   type TaskId,
+  type TaskPriority,
   type TaskPushPayload,
+  type TaskStatus,
 } from "./types.js";
 
-export const SYNC_PROVIDER_API_VERSION = 2 as const;
+export const SYNC_PROVIDER_API_VERSION_V2 = 2 as const;
+export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
+export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V3;
+export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
+  SYNC_PROVIDER_API_VERSION_V2,
+  SYNC_PROVIDER_API_VERSION_V3,
+] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
 export type SyncConflictResolutionPolicy = (typeof SYNC_CONFLICT_RESOLUTION_POLICIES)[number];
@@ -45,6 +53,58 @@ export interface ExternalComment {
   raw?: unknown;
 }
 
+export interface ExternalActorRef {
+  externalAccountId?: string;
+  externalLogin?: string;
+  displayName?: string;
+  raw?: unknown;
+}
+
+export interface ImportedTaskInput {
+  externalId: string;
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  labels?: string[];
+  assignees?: ExternalActorRef[];
+  sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+export interface ImportedCommentInput {
+  externalId: string;
+  externalTaskId: string;
+  body: string;
+  author?: ExternalActorRef;
+  createdAt: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+export interface ExportedCommentInput {
+  localNoteId: NoteId;
+  body: string;
+  createdAt: string;
+  updatedAt?: string;
+  sourceUrl?: string;
+}
+
+export interface ExportedTaskInput {
+  localTaskId: TaskId;
+  externalId?: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  labels: string[];
+  assignees: ExternalActorRef[];
+  sourceUrl?: string;
+  comments: ExportedCommentInput[];
+}
+
 export interface SyncProviderConfig {
   settings: Record<string, unknown>;
 }
@@ -52,6 +112,11 @@ export interface SyncProviderConfig {
 export interface SyncProviderPullResult {
   tasks: ExternalTask[];
   comments?: ExternalComment[];
+}
+
+export interface SyncProviderPullResultV3 {
+  tasks: ImportedTaskInput[];
+  comments?: ImportedCommentInput[];
 }
 
 export interface SyncProviderPushCommentLink {
@@ -75,7 +140,7 @@ export interface SyncProviderPushResult {
   taskLinks: SyncProviderPushTaskLink[];
 }
 
-export interface SyncProvider {
+export interface SyncProviderV2 {
   readonly name: string;
   readonly version: string;
   initialize(config: SyncProviderConfig): Promise<void>;
@@ -90,10 +155,39 @@ export interface SyncProvider {
   mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
 }
 
-export interface SyncProviderRegistration {
-  manifest: SyncProviderManifest;
-  provider: SyncProvider;
+export interface SyncProviderV3 {
+  readonly name: string;
+  readonly version: string;
+  initialize(config: SyncProviderConfig): Promise<void>;
+  shutdown(): Promise<void>;
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV3>;
+  push(
+    binding: IntegrationBinding,
+    tasks: ExportedTaskInput[],
+    project: Project,
+  ): Promise<SyncProviderPushResult>;
 }
+
+export type SyncProvider = SyncProviderV2;
+export type AnySyncProvider = SyncProviderV2 | SyncProviderV3;
+
+export interface SyncProviderRegistrationV2 {
+  manifest: SyncProviderManifest & {
+    apiVersion: typeof SYNC_PROVIDER_API_VERSION_V2;
+  };
+  provider: SyncProviderV2;
+}
+
+export interface SyncProviderRegistrationV3 {
+  manifest: SyncProviderManifest & {
+    apiVersion: typeof SYNC_PROVIDER_API_VERSION_V3;
+  };
+  provider: SyncProviderV3;
+}
+
+export type AnySyncProviderRegistration = SyncProviderRegistrationV2 | SyncProviderRegistrationV3;
+export type SyncProviderRegistration = AnySyncProviderRegistration;
+export type LegacySyncProviderRegistration = SyncProviderRegistrationV2;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
   "INVALID_MANIFEST",
@@ -112,9 +206,10 @@ export interface SyncProviderValidationError {
 
 export interface ValidateSyncProviderRegistrationOptions {
   supportedApiVersion?: number;
+  supportedApiVersions?: readonly number[];
 }
 
-const REQUIRED_SYNC_PROVIDER_METHODS = [
+const REQUIRED_SYNC_PROVIDER_V2_METHODS = [
   "initialize",
   "shutdown",
   "pull",
@@ -123,18 +218,40 @@ const REQUIRED_SYNC_PROVIDER_METHODS = [
   "mapFromTask",
 ] as const;
 
+const REQUIRED_SYNC_PROVIDER_V3_METHODS = ["initialize", "shutdown", "pull", "push"] as const;
+
 export function isSyncProviderApiVersionCompatible(
   providerApiVersion: number,
-  supportedApiVersion: number = SYNC_PROVIDER_API_VERSION,
+  supportedApiVersions: readonly number[] | number = SYNC_PROVIDER_SUPPORTED_API_VERSIONS,
 ): boolean {
-  return Number.isInteger(providerApiVersion) && providerApiVersion === supportedApiVersion;
+  if (!Number.isInteger(providerApiVersion)) {
+    return false;
+  }
+
+  const normalizedSupportedApiVersions = Array.isArray(supportedApiVersions)
+    ? supportedApiVersions
+    : [supportedApiVersions];
+
+  return normalizedSupportedApiVersions.includes(providerApiVersion);
+}
+
+export function isSyncProviderRegistrationV2(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV2 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V2;
+}
+
+export function isSyncProviderRegistrationV3(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV3 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V3;
 }
 
 export function validateSyncProviderRegistration(
-  registration: SyncProviderRegistration,
+  registration: AnySyncProviderRegistration,
   options: ValidateSyncProviderRegistrationOptions = {},
-): Result<SyncProviderRegistration, SyncProviderValidationError> {
-  const supportedApiVersion = options.supportedApiVersion ?? SYNC_PROVIDER_API_VERSION;
+): Result<AnySyncProviderRegistration, SyncProviderValidationError> {
+  const supportedApiVersions = resolveSupportedApiVersions(options);
 
   const manifestCandidate = registration.manifest as unknown;
   if (!manifestCandidate || typeof manifestCandidate !== "object") {
@@ -187,15 +304,23 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  if (!isSyncProviderApiVersionCompatible(manifestApiVersion, supportedApiVersion)) {
+  if (!isSyncProviderApiVersionCompatible(manifestApiVersion, supportedApiVersions)) {
     return err(
       createSyncProviderValidationError(
         "API_VERSION_MISMATCH",
-        `Sync provider API version mismatch: provider=${manifestApiVersion} host=${supportedApiVersion}`,
-        {
-          providerApiVersion: manifestApiVersion,
-          supportedApiVersion,
-        },
+        `Sync provider API version mismatch: provider=${manifestApiVersion} host=${supportedApiVersions.join(",")}`,
+        createApiVersionMismatchDetails(manifestApiVersion, supportedApiVersions),
+      ),
+    );
+  }
+
+  const requiredMethods = getRequiredSyncProviderMethods(manifestApiVersion);
+  if (!requiredMethods) {
+    return err(
+      createSyncProviderValidationError(
+        "API_VERSION_MISMATCH",
+        `Sync provider API version is recognized as compatible but has no validator: provider=${manifestApiVersion}`,
+        createApiVersionMismatchDetails(manifestApiVersion, supportedApiVersions),
       ),
     );
   }
@@ -250,7 +375,7 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  for (const method of REQUIRED_SYNC_PROVIDER_METHODS) {
+  for (const method of requiredMethods) {
     if (typeof providerRecord[method] !== "function") {
       return err(
         createSyncProviderValidationError(
@@ -258,20 +383,74 @@ export function validateSyncProviderRegistration(
           `Sync provider is missing required method: ${method}`,
           {
             method,
+            apiVersion: manifestApiVersion,
           },
         ),
       );
     }
   }
 
+  const normalizedManifest = {
+    name: manifestName,
+    version: manifestVersion,
+    apiVersion: manifestApiVersion,
+  };
+
+  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V2) {
+    return ok({
+      manifest: normalizedManifest as SyncProviderRegistrationV2["manifest"],
+      provider: registration.provider as SyncProviderV2,
+    });
+  }
+
   return ok({
-    manifest: {
-      name: manifestName,
-      version: manifestVersion,
-      apiVersion: manifestApiVersion,
-    },
-    provider: registration.provider,
+    manifest: normalizedManifest as SyncProviderRegistrationV3["manifest"],
+    provider: registration.provider as SyncProviderV3,
   });
+}
+
+function resolveSupportedApiVersions(
+  options: ValidateSyncProviderRegistrationOptions,
+): readonly number[] {
+  if (options.supportedApiVersions) {
+    return options.supportedApiVersions;
+  }
+
+  if (options.supportedApiVersion !== undefined) {
+    return [options.supportedApiVersion];
+  }
+
+  return SYNC_PROVIDER_SUPPORTED_API_VERSIONS;
+}
+
+function getRequiredSyncProviderMethods(apiVersion: number): readonly string[] | null {
+  if (apiVersion === SYNC_PROVIDER_API_VERSION_V2) {
+    return REQUIRED_SYNC_PROVIDER_V2_METHODS;
+  }
+
+  if (apiVersion === SYNC_PROVIDER_API_VERSION_V3) {
+    return REQUIRED_SYNC_PROVIDER_V3_METHODS;
+  }
+
+  return null;
+}
+
+function createApiVersionMismatchDetails(
+  providerApiVersion: number,
+  supportedApiVersions: readonly number[],
+): Record<string, unknown> {
+  if (supportedApiVersions.length === 1) {
+    return {
+      providerApiVersion,
+      supportedApiVersion: supportedApiVersions[0],
+      supportedApiVersions: [...supportedApiVersions],
+    };
+  }
+
+  return {
+    providerApiVersion,
+    supportedApiVersions: [...supportedApiVersions],
+  };
 }
 
 function normalizeNonEmptyString(value: unknown): string | null {

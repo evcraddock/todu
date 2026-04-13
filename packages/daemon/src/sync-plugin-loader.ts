@@ -1,7 +1,10 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  type SyncProviderRegistration,
+  type AnySyncProviderRegistration,
+  isSyncProviderRegistrationV2,
+  type SyncProviderRegistrationV2,
+  type SyncProviderRegistrationV3,
   type SyncProviderValidationError,
   validateSyncProviderRegistration,
   validateWorkerPluginRegistration,
@@ -30,13 +33,23 @@ export interface SyncPluginLoadError {
   details?: Record<string, unknown>;
 }
 
-export interface LoadedSyncPlugin {
+export interface LoadedSyncPluginV2 {
   kind: "sync-provider";
   workerRegistration: WorkerRegistration;
-  manifest: SyncProviderRegistration["manifest"];
-  provider: SyncProviderRegistration["provider"];
+  manifest: SyncProviderRegistrationV2["manifest"];
+  provider: SyncProviderRegistrationV2["provider"];
   modulePath: string;
 }
+
+export interface LoadedSyncPluginV3 {
+  kind: "sync-provider";
+  workerRegistration: WorkerRegistration;
+  manifest: SyncProviderRegistrationV3["manifest"];
+  provider: SyncProviderRegistrationV3["provider"];
+  modulePath: string;
+}
+
+export type LoadedSyncPlugin = LoadedSyncPluginV2 | LoadedSyncPluginV3;
 
 export interface LoadedWorkerPlugin {
   kind: "worker-plugin";
@@ -47,6 +60,14 @@ export interface LoadedWorkerPlugin {
 }
 
 export type LoadedConfiguredPlugin = LoadedSyncPlugin | LoadedWorkerPlugin;
+
+export function isLoadedSyncPluginV2(plugin: LoadedSyncPlugin): plugin is LoadedSyncPluginV2 {
+  return plugin.manifest.apiVersion === 2;
+}
+
+export function isLoadedSyncPluginV3(plugin: LoadedSyncPlugin): plugin is LoadedSyncPluginV3 {
+  return plugin.manifest.apiVersion === 3;
+}
 
 export interface LoadConfiguredPluginsResult {
   loadedPlugins: LoadedConfiguredPlugin[];
@@ -163,16 +184,29 @@ export async function loadConfiguredPlugins(
 
     seenWorkerTypes.add(workerType);
 
-    loadedPlugins.push({
-      kind: "sync-provider",
-      modulePath,
-      manifest: syncValidation.value.manifest,
-      provider: syncValidation.value.provider,
-      workerRegistration: {
-        manifest: createSyncPluginWorkerManifest(workerType),
-        runtime: createNoopWorkerRuntime(),
-      },
-    });
+    loadedPlugins.push(
+      isSyncProviderRegistrationV2(syncValidation.value)
+        ? {
+            kind: "sync-provider",
+            modulePath,
+            manifest: syncValidation.value.manifest,
+            provider: syncValidation.value.provider,
+            workerRegistration: {
+              manifest: createSyncPluginWorkerManifest(workerType),
+              runtime: createNoopWorkerRuntime(),
+            },
+          }
+        : {
+            kind: "sync-provider",
+            modulePath,
+            manifest: syncValidation.value.manifest,
+            provider: syncValidation.value.provider,
+            workerRegistration: {
+              manifest: createSyncPluginWorkerManifest(workerType),
+              runtime: createNoopWorkerRuntime(),
+            },
+          },
+    );
   }
 
   return {
@@ -215,7 +249,9 @@ function createInvalidWorkerPluginError(
   };
 }
 
-function extractSyncProviderRegistration(moduleExports: unknown): SyncProviderRegistration | null {
+function extractSyncProviderRegistration(
+  moduleExports: unknown,
+): AnySyncProviderRegistration | null {
   if (!moduleExports || typeof moduleExports !== "object") {
     return null;
   }
@@ -226,7 +262,7 @@ function extractSyncProviderRegistration(moduleExports: unknown): SyncProviderRe
     return null;
   }
 
-  return candidate as SyncProviderRegistration;
+  return candidate as AnySyncProviderRegistration;
 }
 
 function extractWorkerPluginRegistration(moduleExports: unknown): WorkerPluginRegistration | null {
