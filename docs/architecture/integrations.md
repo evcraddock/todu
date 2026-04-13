@@ -80,6 +80,12 @@ To keep the first version simple and avoid overlapping control planes:
 
 Provider-specific desired-state options may live in `binding.options`, but only as plain JSON configuration needed to express shared user intent. Do not use `binding.options` for plugin internals.
 
+For the actor-assignment rollout, binding-scoped actor mappings belong here as shared desired state:
+
+- `binding.options.actorMappings[].actorId`
+- external identity fields such as `externalAccountId`, `externalLogin`, and `displayName`
+- binding-scoped trust metadata such as `trusted`
+
 The following remain outside synced core entities:
 
 - credentials and tokens

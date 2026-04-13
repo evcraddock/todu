@@ -7,6 +7,7 @@ import {
   createNotesDocument,
   dateToTimezoneISO,
   err,
+  type ImportedContentApproval,
   type Note,
   type NoteFilter,
   type NoteId,
@@ -23,6 +24,20 @@ import {
 import type { NoteNamespace } from "./todu.js";
 
 const NOTES_DIAGNOSTICS_ENV = "TODU_NOTES_DIAGNOSTICS";
+
+function createStoredNoteContentFingerprint(content: string): string {
+  return `sha1:${crypto.createHash("sha1").update(content).digest("hex")}`;
+}
+
+function normalizeStoredNoteContentApproval(
+  content: string,
+  approval?: ImportedContentApproval,
+): ImportedContentApproval {
+  return {
+    ...(approval ?? { state: "notRequired" }),
+    sourceFingerprint: createStoredNoteContentFingerprint(content),
+  };
+}
 
 interface NoteLocation {
   bucketKey: string;
@@ -96,6 +111,20 @@ export function createNoteNamespace(
     }
 
     return normalized;
+  }
+
+  function createContentFingerprint(content: string): string {
+    return `sha1:${crypto.createHash("sha1").update(content).digest("hex")}`;
+  }
+
+  function normalizeContentApproval(
+    content: string,
+    approval?: ImportedContentApproval,
+  ): ImportedContentApproval {
+    return {
+      ...(approval ?? { state: "notRequired" }),
+      sourceFingerprint: createContentFingerprint(content),
+    };
   }
 
   function isJournalBucketKey(bucketKey: string): boolean {
@@ -366,12 +395,14 @@ export function createNoteNamespace(
         : new Date().toISOString();
       const id = createNoteId(`note-${crypto.randomUUID().slice(0, 8)}`);
 
+      const content = input.content.trim();
       const note: Note = {
         id,
-        content: input.content.trim(),
+        content,
         author: input.author ?? "user",
         tags: input.tags ?? [],
         createdAt,
+        contentApproval: normalizeContentApproval(content, input.contentApproval),
       };
       if (authorActorId !== undefined) note.authorActorId = authorActorId;
       if (input.entityType !== undefined) note.entityType = input.entityType;
@@ -469,7 +500,12 @@ export function createNoteNamespace(
 
       location.handle.change((doc) => {
         const note = doc.notes[location.index];
-        if (input.content !== undefined) note.content = input.content.trim();
+        if (input.content !== undefined) {
+          note.content = input.content.trim();
+          note.contentApproval = normalizeContentApproval(note.content, input.contentApproval);
+        } else if (input.contentApproval !== undefined) {
+          note.contentApproval = normalizeContentApproval(note.content, input.contentApproval);
+        }
         if (input.authorActorId !== undefined) note.authorActorId = input.authorActorId;
         if (input.tags !== undefined) {
           // Clear and repopulate tags array for Automerge compatibility
@@ -529,6 +565,7 @@ function toStorageNote(n: Note): Note {
     author: n.author,
     tags: [...n.tags],
     createdAt: n.createdAt,
+    contentApproval: normalizeStoredNoteContentApproval(n.content, n.contentApproval),
   };
 
   if (n.authorActorId !== undefined) note.authorActorId = n.authorActorId;

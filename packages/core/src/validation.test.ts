@@ -19,6 +19,7 @@ import {
   validateCreateRecurringInput,
   validateCreateTaskInput,
   validateDescription,
+  validateImportedContentApproval,
   validateIntegrationBindingField,
   validateIntegrationBindingProjectUniqueness,
   validateISODate,
@@ -286,6 +287,28 @@ describe("validateCreateIntegrationBindingInput", () => {
     ).toBeNull();
   });
 
+  it("accepts actor mappings with trust metadata", () => {
+    expect(
+      validateCreateIntegrationBindingInput({
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        options: {
+          actorMappings: [
+            {
+              actorId: createActorId("actor-1"),
+              externalAccountId: "12345",
+              externalLogin: "evcraddock",
+              displayName: "Erik",
+              trusted: true,
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
   it("rejects non-object options", () => {
     const error = validateCreateIntegrationBindingInput({
       provider: "github",
@@ -293,6 +316,19 @@ describe("validateCreateIntegrationBindingInput", () => {
       targetKind: "repository",
       targetRef: "owner/repo",
       options: ["bad"] as unknown as Record<string, unknown>,
+    });
+    expect(error?.field).toBe("options");
+  });
+
+  it("rejects invalid actor mappings", () => {
+    const error = validateCreateIntegrationBindingInput({
+      provider: "github",
+      projectId,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      options: {
+        actorMappings: [{ actorId: "", trusted: "yes" }],
+      } as unknown as Record<string, unknown>,
     });
     expect(error?.field).toBe("options");
   });
@@ -372,6 +408,16 @@ describe("validateUpdateIntegrationBindingInput", () => {
       validateUpdateIntegrationBindingInput({
         options: {
           importClosedOnBootstrap: true,
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts actor mapping option updates", () => {
+    expect(
+      validateUpdateIntegrationBindingInput({
+        options: {
+          actorMappings: [{ actorId: createActorId("actor-1"), trusted: false }],
         },
       }),
     ).toBeNull();
@@ -489,6 +535,28 @@ describe("validateISODate", () => {
   });
 });
 
+describe("validateImportedContentApproval", () => {
+  it("accepts approval metadata", () => {
+    expect(
+      validateImportedContentApproval("contentApproval", {
+        state: "approved",
+        sourceBindingId: createIntegrationBindingId("ibind-1"),
+        sourceActorId: createActorId("actor-1"),
+        sourceFingerprint: "sha1:abc",
+        reviewedAt: "2026-04-13T00:00:00Z",
+        reviewedByActorId: createActorId("actor-2"),
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid approval state", () => {
+    const error = validateImportedContentApproval("contentApproval", {
+      state: "unknown" as "approved",
+    });
+    expect(error?.field).toBe("contentApproval");
+  });
+});
+
 describe("validateCreateTaskInput", () => {
   const projectId = createProjectId("proj-test");
 
@@ -503,6 +571,12 @@ describe("validateCreateTaskInput", () => {
         projectId,
         priority: "high",
         description: "Details here",
+        descriptionApproval: {
+          state: "pendingApproval",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-1"),
+          sourceFingerprint: "sha1:abc",
+        },
         labels: ["bug"],
         assignees: ["alice"],
         dueDate: "2026-04-01",
@@ -622,6 +696,15 @@ describe("validateCreateTaskInput", () => {
     });
     expect(error?.field).toBe("externalId");
   });
+
+  it("rejects description approval without description", () => {
+    const error = validateCreateTaskInput({
+      title: "Test",
+      projectId,
+      descriptionApproval: { state: "pendingApproval" },
+    });
+    expect(error?.field).toBe("descriptionApproval");
+  });
 });
 
 describe("validateUpdateTaskInput", () => {
@@ -684,6 +767,21 @@ describe("validateUpdateTaskInput", () => {
 
   it("accepts imported updatedAt in update", () => {
     expect(validateUpdateTaskInput({ updatedAt: "2021-04-18T09:15:00Z" })).toBeNull();
+  });
+
+  it("accepts description approval updates", () => {
+    expect(
+      validateUpdateTaskInput({
+        descriptionApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-1"),
+          sourceFingerprint: "sha1:abc",
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-2"),
+        },
+      }),
+    ).toBeNull();
   });
 
   it("rejects invalid updatedAt in update", () => {
@@ -982,6 +1080,20 @@ describe("validateCreateNoteInput", () => {
     ).toBeNull();
   });
 
+  it("accepts note content approval metadata", () => {
+    expect(
+      validateCreateNoteInput({
+        content: "Thought",
+        contentApproval: {
+          state: "pendingApproval",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-1"),
+          sourceFingerprint: "sha1:abc",
+        },
+      }),
+    ).toBeNull();
+  });
+
   it("accepts note with createdAt", () => {
     expect(
       validateCreateNoteInput({
@@ -1041,8 +1153,24 @@ describe("validateUpdateNoteInput", () => {
     expect(validateUpdateNoteInput({ content: "New", tags: ["tag"] })).toBeNull();
   });
 
-  it("accepts empty update (no fields)", () => {
-    expect(validateUpdateNoteInput({})).toBeNull();
+  it("accepts content approval updates", () => {
+    expect(
+      validateUpdateNoteInput({
+        contentApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-1"),
+          sourceFingerprint: "sha1:abc",
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-2"),
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects empty update (no fields)", () => {
+    const error = validateUpdateNoteInput({});
+    expect(error?.field).toBe("input");
   });
 
   it("rejects empty content string", () => {

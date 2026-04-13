@@ -10,6 +10,8 @@ For generic daemon worker plugins, see `docs/worker-plugin-api.md`.
 
 This document defines the provider execution contract. Shared integration binding desired state is a separate architecture concern owned by core and documented in `docs/architecture/integrations.md`.
 
+Core-owned imported-content approval metadata also remains outside provider-managed state. Task description approval metadata lives with `TaskDetailDocument`, note/comment approval metadata lives with `Note`, and later runtime work is responsible for deriving approval from binding identity, actor identity, and content fingerprint.
+
 ## Relationship to generic integration architecture
 
 Provider plugins should not own the canonical cross-device integration binding registry for projects and external targets.

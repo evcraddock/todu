@@ -163,6 +163,39 @@ export interface Actor {
 }
 
 // ============================================================================
+// Imported content approval + binding-scoped actor mapping metadata
+// ============================================================================
+
+export const CONTENT_APPROVAL_STATES = ["notRequired", "pendingApproval", "approved"] as const;
+export type ContentApprovalState = (typeof CONTENT_APPROVAL_STATES)[number];
+
+export function isContentApprovalState(value: string): value is ContentApprovalState {
+  return (CONTENT_APPROVAL_STATES as readonly string[]).includes(value);
+}
+
+export interface ImportedContentApproval {
+  state: ContentApprovalState;
+  sourceBindingId?: IntegrationBindingId;
+  sourceActorId?: ActorId;
+  sourceFingerprint?: string;
+  reviewedAt?: string;
+  reviewedByActorId?: ActorId;
+}
+
+export interface IntegrationBindingActorMapping {
+  actorId: ActorId;
+  externalAccountId?: string;
+  externalLogin?: string;
+  displayName?: string;
+  trusted?: boolean;
+}
+
+export interface IntegrationBindingOptions {
+  actorMappings?: IntegrationBindingActorMapping[];
+  [key: string]: unknown;
+}
+
+// ============================================================================
 // Integration binding entities — shared desired state for external integrations
 // ============================================================================
 
@@ -174,7 +207,7 @@ export interface IntegrationBinding {
   targetRef: string;
   strategy: SyncStrategy;
   enabled: boolean;
-  options?: Record<string, unknown>;
+  options?: IntegrationBindingOptions;
   createdAt: string;
   updatedAt: string;
 }
@@ -215,6 +248,7 @@ export interface Task {
 /** Task with description loaded from TaskDetailDocument */
 export interface TaskWithDetail extends Task {
   description?: string;
+  descriptionApproval?: ImportedContentApproval;
 }
 
 /** Task with description and comments, used as sync-provider push input */
@@ -250,6 +284,7 @@ export interface Note {
   /** @deprecated Compatibility field kept during actor-model rollout. */
   author: string;
   authorActorId?: ActorId;
+  contentApproval?: ImportedContentApproval;
   entityType?: NoteEntityType;
   entityId?: string;
   tags: string[];
@@ -282,7 +317,7 @@ export interface CreateIntegrationBindingInput {
   targetRef: string;
   strategy?: SyncStrategy;
   enabled?: boolean;
-  options?: Record<string, unknown>;
+  options?: IntegrationBindingOptions;
 }
 
 export interface UpdateIntegrationBindingInput {
@@ -292,7 +327,7 @@ export interface UpdateIntegrationBindingInput {
   targetRef?: string;
   strategy?: SyncStrategy;
   enabled?: boolean;
-  options?: Record<string, unknown>;
+  options?: IntegrationBindingOptions;
 }
 
 export interface IntegrationBindingFilter {
@@ -315,6 +350,7 @@ export interface CreateTaskInput {
   status?: TaskStatus;
   priority?: TaskPriority;
   description?: string;
+  descriptionApproval?: ImportedContentApproval;
   labels?: string[];
   assigneeActorIds?: ActorId[];
   /** @deprecated Compatibility field kept during actor-model rollout. */
@@ -332,6 +368,7 @@ export interface UpdateTaskInput {
   status?: TaskStatus;
   priority?: TaskPriority;
   description?: string;
+  descriptionApproval?: ImportedContentApproval;
   labels?: string[];
   assigneeActorIds?: ActorId[];
   /** @deprecated Compatibility field kept during actor-model rollout. */
@@ -386,6 +423,7 @@ export interface CreateNoteInput {
   /** @deprecated Compatibility field kept during actor-model rollout. */
   author?: string;
   authorActorId?: ActorId;
+  contentApproval?: ImportedContentApproval;
   entityType?: NoteEntityType;
   entityId?: string;
   tags?: string[];
@@ -396,6 +434,7 @@ export interface UpdateNoteInput {
   content?: string;
   tags?: string[];
   authorActorId?: ActorId;
+  contentApproval?: ImportedContentApproval;
 }
 
 export interface NoteFilter {

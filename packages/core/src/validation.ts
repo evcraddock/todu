@@ -7,6 +7,7 @@ import type {
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  ImportedContentApproval,
   IntegrationBinding,
   IntegrationBindingId,
   NoteFilter,
@@ -23,6 +24,7 @@ import type {
   ValidationError,
 } from "./types.js";
 import {
+  isContentApprovalState,
   isIntegrationBindingState,
   isNoteEntityType,
   isProjectStatus,
@@ -102,6 +104,58 @@ function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+export function validateImportedContentApproval(
+  field: string,
+  approval: ImportedContentApproval,
+): ValidationError | null {
+  if (!isContentApprovalState(approval.state)) {
+    return validationError(field, `Invalid content approval state: ${approval.state}`);
+  }
+
+  if (approval.sourceBindingId !== undefined) {
+    const sourceBindingId = approval.sourceBindingId.trim();
+    if (sourceBindingId.length === 0) {
+      return validationError(field, "sourceBindingId must be a non-empty string");
+    }
+    if (sourceBindingId.length > MAX_INTEGRATION_FIELD_LENGTH) {
+      return validationError(
+        field,
+        `sourceBindingId must be ${MAX_INTEGRATION_FIELD_LENGTH} characters or less`,
+      );
+    }
+  }
+
+  if (approval.sourceActorId !== undefined) {
+    const actorIdError = validateActorId("sourceActorId", approval.sourceActorId);
+    if (actorIdError) return validationError(field, actorIdError.message);
+  }
+
+  if (approval.sourceFingerprint !== undefined) {
+    const fingerprint = approval.sourceFingerprint.trim();
+    if (fingerprint.length === 0) {
+      return validationError(field, "sourceFingerprint must be a non-empty string");
+    }
+    if (fingerprint.length > MAX_DESCRIPTION_LENGTH) {
+      return validationError(
+        field,
+        `sourceFingerprint must be ${MAX_DESCRIPTION_LENGTH} characters or less`,
+      );
+    }
+  }
+
+  if (approval.reviewedAt !== undefined) {
+    const reviewedAtError = validateISODate("reviewedAt", approval.reviewedAt);
+    if (reviewedAtError) return validationError(field, reviewedAtError.message);
+  }
+
+  if (approval.reviewedByActorId !== undefined) {
+    const actorIdError = validateActorId("reviewedByActorId", approval.reviewedByActorId);
+    if (actorIdError) return validationError(field, actorIdError.message);
+  }
+
+  return null;
+}
+
 function validateIntegrationBindingOptions(options: unknown): ValidationError | null {
   if (options === undefined) {
     return null;
@@ -109,6 +163,49 @@ function validateIntegrationBindingOptions(options: unknown): ValidationError | 
 
   if (!isPlainJsonObject(options)) {
     return validationError("options", "options must be a JSON object");
+  }
+
+  if (options.actorMappings !== undefined) {
+    if (!Array.isArray(options.actorMappings)) {
+      return validationError("options", "actorMappings must be an array");
+    }
+
+    const seenActorIds = new Set<string>();
+    for (const mapping of options.actorMappings) {
+      if (!isPlainJsonObject(mapping)) {
+        return validationError("options", "actorMappings entries must be JSON objects");
+      }
+
+      if (typeof mapping.actorId !== "string") {
+        return validationError("options", "actorMappings.actorId is required");
+      }
+      const actorIdError = validateActorId("actorId", mapping.actorId);
+      if (actorIdError) return validationError("options", actorIdError.message);
+
+      const normalizedActorId = mapping.actorId.trim();
+      if (seenActorIds.has(normalizedActorId)) {
+        return validationError("options", "actorMappings actorIds must be unique");
+      }
+      seenActorIds.add(normalizedActorId);
+
+      for (const field of ["externalAccountId", "externalLogin", "displayName"] as const) {
+        const value = mapping[field];
+        if (value === undefined) continue;
+        if (typeof value !== "string" || value.trim().length === 0) {
+          return validationError("options", `${field} must be a non-empty string`);
+        }
+        if (value.trim().length > MAX_INTEGRATION_FIELD_LENGTH) {
+          return validationError(
+            "options",
+            `${field} must be ${MAX_INTEGRATION_FIELD_LENGTH} characters or less`,
+          );
+        }
+      }
+
+      if (mapping.trusted !== undefined && typeof mapping.trusted !== "boolean") {
+        return validationError("options", "trusted must be a boolean");
+      }
+    }
   }
 
   return null;
@@ -418,6 +515,17 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
     if (descError) return descError;
   }
 
+  if (input.descriptionApproval !== undefined) {
+    if (input.description === undefined) {
+      return validationError("descriptionApproval", "descriptionApproval requires a description");
+    }
+    const approvalError = validateImportedContentApproval(
+      "descriptionApproval",
+      input.descriptionApproval,
+    );
+    if (approvalError) return approvalError;
+  }
+
   if (input.status !== undefined && !isTaskStatus(input.status)) {
     return validationError("status", `Invalid status: ${input.status}`);
   }
@@ -478,6 +586,7 @@ export function validateUpdateTaskInput(
     input.status === undefined &&
     input.priority === undefined &&
     input.description === undefined &&
+    input.descriptionApproval === undefined &&
     input.labels === undefined &&
     input.assigneeActorIds === undefined &&
     input.assignees === undefined &&
@@ -498,6 +607,14 @@ export function validateUpdateTaskInput(
   if (input.description !== undefined) {
     const descError = validateDescription(input.description);
     if (descError) return descError;
+  }
+
+  if (input.descriptionApproval !== undefined) {
+    const approvalError = validateImportedContentApproval(
+      "descriptionApproval",
+      input.descriptionApproval,
+    );
+    if (approvalError) return approvalError;
   }
 
   if (input.status !== undefined) {
@@ -629,6 +746,11 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
   const contentError = validateNoteContent(input.content);
   if (contentError) return contentError;
 
+  if (input.contentApproval !== undefined) {
+    const approvalError = validateImportedContentApproval("contentApproval", input.contentApproval);
+    if (approvalError) return approvalError;
+  }
+
   if (input.entityType !== undefined && !isNoteEntityType(input.entityType)) {
     return validationError("entityType", `Invalid entity type: ${input.entityType}`);
   }
@@ -655,6 +777,15 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
 }
 
 export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError | null {
+  if (
+    input.content === undefined &&
+    input.tags === undefined &&
+    input.authorActorId === undefined &&
+    input.contentApproval === undefined
+  ) {
+    return validationError("input", "At least one field must be provided");
+  }
+
   if (input.content !== undefined) {
     const contentError = validateNoteContent(input.content);
     if (contentError) return contentError;
@@ -663,6 +794,11 @@ export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError
   if (input.authorActorId !== undefined) {
     const actorIdError = validateActorId("authorActorId", input.authorActorId);
     if (actorIdError) return actorIdError;
+  }
+
+  if (input.contentApproval !== undefined) {
+    const approvalError = validateImportedContentApproval("contentApproval", input.contentApproval);
+    if (approvalError) return approvalError;
   }
 
   return null;

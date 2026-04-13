@@ -8,6 +8,7 @@ import {
   type CatalogDocument,
   createActorId,
   createEmptyCatalog,
+  createIntegrationBindingId,
   createNoteId,
   createNotesDocument,
   DEFAULT_OWNER_ACTOR_ID,
@@ -115,6 +116,10 @@ describe("note namespace", () => {
       expect(result.value.content).toBe("Today was productive");
       expect(result.value.author).toBe("user");
       expect(result.value.authorActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
+      expect(result.value.contentApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
       expect(result.value.entityType).toBeUndefined();
       expect(result.value.entityId).toBeUndefined();
       expect(result.value.tags).toEqual([]);
@@ -172,10 +177,21 @@ describe("note namespace", () => {
       const result = await todu.note.create({
         content: "Actor-authored note",
         authorActorId: createActorId("actor-user"),
+        contentApproval: {
+          state: "pendingApproval",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+        },
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.authorActorId).toBe("actor-user");
+      expect(result.value.contentApproval).toEqual({
+        state: "pendingApproval",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
     });
 
     it("rejects unknown author actor id", async () => {
@@ -486,7 +502,37 @@ describe("note namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.content).toBe("Updated");
+      expect(result.value.contentApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
       expect(result.value.id).toBe(created.value.id);
+    });
+
+    it("updates note approval metadata without changing content", async () => {
+      const created = await todu.note.create({ content: "Original" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, {
+        contentApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.content).toBe("Original");
+      expect(result.value.contentApproval).toEqual({
+        state: "approved",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        reviewedAt: "2026-04-13T00:00:00Z",
+        reviewedByActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
     });
 
     it("updates note tags", async () => {
@@ -503,6 +549,17 @@ describe("note namespace", () => {
       const created = await todu.note.create({ content: "Old", tags: ["a"] });
       if (!created.ok) throw new Error("create failed");
 
+      const approved = await todu.note.update(created.value.id, {
+        contentApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
+      });
+      if (!approved.ok) throw new Error("approval update failed");
+
       const result = await todu.note.update(created.value.id, {
         content: "New",
         tags: ["b", "c"],
@@ -511,6 +568,13 @@ describe("note namespace", () => {
       if (!result.ok) return;
       expect(result.value.content).toBe("New");
       expect(result.value.tags).toEqual(["b", "c"]);
+      expect(result.value.contentApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
+      expect(result.value.contentApproval?.sourceFingerprint).not.toBe(
+        approved.value.contentApproval?.sourceFingerprint,
+      );
     });
 
     it("updates note author actor id", async () => {
@@ -600,7 +664,17 @@ describe("note namespace", () => {
 
   describe("persistence", () => {
     it("notes survive close and reopen", async () => {
-      await todu.note.create({ content: "Persistent thought", tags: ["journal"] });
+      await todu.note.create({
+        content: "Persistent thought",
+        tags: ["journal"],
+        contentApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
+      });
       await todu.close();
       await new Promise((r) => setTimeout(r, 50));
 
@@ -611,6 +685,14 @@ describe("note namespace", () => {
       expect(result.value).toHaveLength(1);
       expect(result.value[0].content).toBe("Persistent thought");
       expect(result.value[0].tags).toEqual(["journal"]);
+      expect(result.value[0].contentApproval).toEqual({
+        state: "approved",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        reviewedAt: "2026-04-13T00:00:00Z",
+        reviewedByActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
     });
 
     it("stores notes in partitioned bucket documents", async () => {

@@ -8,6 +8,7 @@ import {
   createTaskListDocument,
   dateToTimezoneISO,
   err,
+  type ImportedContentApproval,
   notFound,
   ok,
   type ProjectId,
@@ -94,6 +95,20 @@ export function createTaskNamespace(
     }
 
     return normalized;
+  }
+
+  function createContentFingerprint(content: string): string {
+    return `sha1:${crypto.createHash("sha1").update(content).digest("hex")}`;
+  }
+
+  function normalizeContentApproval(
+    content: string,
+    approval?: ImportedContentApproval,
+  ): ImportedContentApproval {
+    return {
+      ...(approval ?? { state: "notRequired" }),
+      sourceFingerprint: createContentFingerprint(content),
+    };
   }
 
   function findMissingActorId(actorIds: readonly string[]): string | null {
@@ -280,12 +295,17 @@ export function createTaskNamespace(
 
       // Create detail document if description provided
       const description = input.description?.trim();
+      let descriptionApproval: ImportedContentApproval | undefined;
       if (description) {
+        descriptionApproval = normalizeContentApproval(description, input.descriptionApproval);
         const detailHandle = repo.create<TaskDetailDocument>();
-        const template = createTaskDetailDocument(id, description);
+        const template = createTaskDetailDocument(id, description, descriptionApproval);
         detailHandle.change((doc) => {
           doc.taskId = template.taskId;
           doc.description = template.description;
+          if (template.descriptionApproval !== undefined) {
+            doc.descriptionApproval = template.descriptionApproval;
+          }
         });
 
         listHandle.change((doc) => {
@@ -293,7 +313,7 @@ export function createTaskNamespace(
         });
       }
 
-      return ok({ ...task, description });
+      return ok({ ...task, description, descriptionApproval });
     },
 
     async list(filter?: TaskFilter, sort?: TaskSortOptions): Promise<Result<Task[]>> {
@@ -411,16 +431,21 @@ export function createTaskNamespace(
       const listDoc = result.listHandle.doc();
       const detailDocId = listDoc?.detailDocIds[id];
       let description: string | undefined;
+      let descriptionApproval: ImportedContentApproval | undefined;
 
       if (detailDocId) {
         const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
         const detailDoc = detailHandle.doc();
         if (detailDoc) {
           description = detailDoc.description;
+          descriptionApproval = normalizeContentApproval(
+            detailDoc.description,
+            detailDoc.descriptionApproval,
+          );
         }
       }
 
-      return ok({ ...result.task, description });
+      return ok({ ...result.task, description, descriptionApproval });
     },
 
     async update(id: TaskId, input: UpdateTaskInput): Promise<Result<TaskWithDetail>> {
@@ -477,43 +502,61 @@ export function createTaskNamespace(
 
       // Update description in detail document if changed
       let description: string | undefined;
-      if (input.description !== undefined) {
-        const listDoc = result.listHandle.doc();
-        const detailDocId = listDoc?.detailDocIds[id];
+      let descriptionApproval: ImportedContentApproval | undefined;
+      const listDoc = result.listHandle.doc();
+      const detailDocId = listDoc?.detailDocIds[id];
 
-        if (detailDocId) {
-          // Update existing detail doc
-          const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+      if (detailDocId) {
+        const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+
+        if (input.description !== undefined || input.descriptionApproval !== undefined) {
           detailHandle.change((doc) => {
-            doc.description = input.description!.trim();
+            const nextDescription =
+              input.description !== undefined ? input.description.trim() : doc.description;
+            doc.description = nextDescription;
+            doc.descriptionApproval = normalizeContentApproval(
+              nextDescription,
+              input.descriptionApproval,
+            );
           });
-          description = input.description.trim();
-        } else if (input.description.trim()) {
-          // Create new detail doc
-          const detailHandle = repo.create<TaskDetailDocument>();
-          const template = createTaskDetailDocument(id, input.description.trim());
-          detailHandle.change((doc) => {
-            doc.taskId = template.taskId;
-            doc.description = template.description;
-          });
-          result.listHandle.change((doc) => {
-            doc.detailDocIds[id] = detailHandle.documentId;
-          });
-          description = input.description.trim();
         }
-      } else {
-        // Load existing description
-        const listDoc = result.listHandle.doc();
-        const detailDocId = listDoc?.detailDocIds[id];
-        if (detailDocId) {
-          const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
-          description = detailHandle.doc()?.description;
+
+        const detailDoc = detailHandle.doc();
+        description = detailDoc?.description;
+        if (detailDoc?.description !== undefined) {
+          descriptionApproval = normalizeContentApproval(
+            detailDoc.description,
+            detailDoc.descriptionApproval,
+          );
         }
+      } else if (input.description?.trim()) {
+        const descriptionText = input.description.trim();
+        descriptionApproval = normalizeContentApproval(descriptionText, input.descriptionApproval);
+        const detailHandle = repo.create<TaskDetailDocument>();
+        const template = createTaskDetailDocument(id, descriptionText, descriptionApproval);
+        detailHandle.change((doc) => {
+          doc.taskId = template.taskId;
+          doc.description = template.description;
+          if (template.descriptionApproval !== undefined) {
+            doc.descriptionApproval = template.descriptionApproval;
+          }
+        });
+        result.listHandle.change((doc) => {
+          doc.detailDocIds[id] = detailHandle.documentId;
+        });
+        description = descriptionText;
+      } else if (input.descriptionApproval !== undefined) {
+        return err(
+          validationError(
+            "descriptionApproval",
+            "Cannot update description approval without an existing description",
+          ),
+        );
       }
 
       // Read back updated task
       const updated = result.listHandle.doc()!.tasks[result.index];
-      return ok({ ...cloneTask(updated), description });
+      return ok({ ...cloneTask(updated), description, descriptionApproval });
     },
 
     async delete(id: TaskId): Promise<Result<void>> {
@@ -587,12 +630,20 @@ export function createTaskNamespace(
 
       // Load description for return value
       let description: string | undefined;
+      let descriptionApproval: ImportedContentApproval | undefined;
       if (detailDocId) {
         const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
-        description = detailHandle.doc()?.description;
+        const detailDoc = detailHandle.doc();
+        description = detailDoc?.description;
+        if (detailDoc?.description !== undefined) {
+          descriptionApproval = normalizeContentApproval(
+            detailDoc.description,
+            detailDoc.descriptionApproval,
+          );
+        }
       }
 
-      return ok({ ...taskData, description });
+      return ok({ ...taskData, description, descriptionApproval });
     },
 
     async search(query: string): Promise<Result<Task[]>> {
