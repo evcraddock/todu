@@ -1,4 +1,6 @@
 import type {
+  Actor,
+  ActorId,
   CreateHabitInput,
   CreateIntegrationBindingInput,
   CreateLabelInput,
@@ -237,6 +239,22 @@ export interface Todu {
   onChange(callback: () => void): () => void;
 
   close(): Promise<void>;
+}
+
+export interface SyncRuntimeActorTools {
+  list(): Promise<Result<Actor[]>>;
+  getOwnerActorId(): Promise<Result<ActorId | undefined>>;
+  ensure(input: { id: ActorId; displayName: string }): Promise<Result<Actor>>;
+}
+
+export interface ToduInternalTools {
+  syncRuntime: {
+    actors: SyncRuntimeActorTools;
+  };
+}
+
+export interface ToduWithInternalTools extends Todu {
+  __internal: ToduInternalTools;
 }
 
 // ============================================================================

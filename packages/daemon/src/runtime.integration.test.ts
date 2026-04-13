@@ -1347,6 +1347,56 @@ describe("createDaemonRuntime", () => {
     expect(runtime.getWorker("github-sync")?.state).toBe("stopped");
   });
 
+  it("loads configured v3 sync plugins and surfaces runtime state via worker.status", async () => {
+    const pluginPath = writeValidSyncPluginModule(tmpDir, "github-plugin-v3.mjs", {
+      providerName: "github",
+      providerVersion: "2.0.0",
+      apiVersion: 3,
+    });
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      syncPluginModulePaths: [pluginPath],
+      enabledWorkerDomains: ["project", "task", "sync"],
+    });
+
+    await runtime.start();
+
+    expect(runtime.getWorker("github-sync")).toMatchObject({
+      state: "running",
+      manifest: {
+        type: "github-sync",
+      },
+    });
+
+    const workerStatusResponse = await sendRequest(runtime.config().socketPath, {
+      id: "worker-status-plugin-v3-1",
+      method: "worker.status",
+      params: {
+        workerType: "github-sync",
+      },
+    });
+
+    expect(workerStatusResponse).toEqual({
+      id: "worker-status-plugin-v3-1",
+      result: {
+        workers: [
+          expect.objectContaining({
+            type: "github-sync",
+            state: "running",
+            requiredDomains: ["sync", "task"],
+          }),
+        ],
+        assignment: {
+          assignedWorkerTypes: null,
+        },
+        enabledWorkerDomains: ["project", "task", "sync"],
+      },
+    });
+
+    await runtime.stop();
+  });
+
   it("executes sync provider work from integration bindings and persists status for later observers", async () => {
     const outputPath = path.join(tmpDir, "github-provider-events.ndjson");
     const pluginPath = writeRecordingSyncPluginModule(tmpDir, "github-recording-plugin.mjs", {
@@ -1493,6 +1543,117 @@ describe("createDaemonRuntime", () => {
     );
 
     await observerRuntime.stop();
+  });
+
+  it("executes mixed v2 and v3 sync providers in the same daemon runtime", async () => {
+    const githubOutputPath = path.join(tmpDir, "github-provider-events.ndjson");
+    const forgejoOutputPath = path.join(tmpDir, "forgejo-provider-events.ndjson");
+    const githubPluginPath = writeRecordingSyncPluginModule(tmpDir, "github-mixed-plugin.mjs", {
+      providerName: "github",
+      providerVersion: "1.0.0",
+      outputPath: githubOutputPath,
+      apiVersion: 2,
+    });
+    const forgejoPluginPath = writeRecordingSyncPluginModule(tmpDir, "forgejo-mixed-plugin.mjs", {
+      providerName: "forgejo",
+      providerVersion: "2.0.0",
+      outputPath: forgejoOutputPath,
+      apiVersion: 3,
+    });
+
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      socketPath: path.join(tmpDir, "mixed.sock"),
+      syncPluginModulePaths: [githubPluginPath, forgejoPluginPath],
+      syncPluginConfigs: {
+        github: { intervalSeconds: 0.05 },
+        forgejo: { intervalSeconds: 0.05 },
+      },
+      enabledWorkerDomains: ["project", "task", "sync"],
+    });
+
+    await runtime.start();
+
+    const githubProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-mixed-github-create",
+      method: "project.create",
+      params: { input: { name: "GitHub Mixed Project" } },
+    });
+    const githubProjectId = (githubProjectResponse.result as { id: string }).id;
+
+    const forgejoProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-mixed-forgejo-create",
+      method: "project.create",
+      params: { input: { name: "Forgejo Mixed Project" } },
+    });
+    const forgejoProjectId = (forgejoProjectResponse.result as { id: string }).id;
+
+    await sendRequest(runtime.config().socketPath, {
+      id: "task-mixed-github-create",
+      method: "task.create",
+      params: { input: { title: "GitHub Task", projectId: githubProjectId } },
+    });
+    await sendRequest(runtime.config().socketPath, {
+      id: "task-mixed-forgejo-create",
+      method: "task.create",
+      params: { input: { title: "Forgejo Task", projectId: forgejoProjectId } },
+    });
+
+    const githubIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-mixed-github-create",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "github",
+          projectId: githubProjectId,
+          targetKind: "repository",
+          targetRef: "owner/repo",
+          strategy: "bidirectional",
+          enabled: true,
+        },
+      },
+    });
+    const githubBindingId = (githubIntegrationResponse.result as { id: string }).id;
+
+    const forgejoIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "integration-mixed-forgejo-create",
+      method: "integration.create",
+      params: {
+        input: {
+          provider: "forgejo",
+          projectId: forgejoProjectId,
+          targetKind: "repository",
+          targetRef: "team/repo",
+          strategy: "bidirectional",
+          enabled: true,
+        },
+      },
+    });
+    const forgejoBindingId = (forgejoIntegrationResponse.result as { id: string }).id;
+
+    await waitForProviderEvent(
+      githubOutputPath,
+      (event) => event.type === "push" && event.bindingId === githubBindingId,
+    );
+    await waitForProviderEvent(
+      forgejoOutputPath,
+      (event) => event.type === "push" && event.bindingId === forgejoBindingId,
+    );
+
+    expect(readProviderEvents(githubOutputPath)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "pull", bindingId: githubBindingId }),
+        expect.objectContaining({ type: "push", bindingId: githubBindingId, taskCount: 1 }),
+      ]),
+    );
+    expect(readProviderEvents(forgejoOutputPath)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "pull", bindingId: forgejoBindingId }),
+        expect.objectContaining({ type: "push", bindingId: forgejoBindingId, taskCount: 1 }),
+      ]),
+    );
+
+    await runtime.stop();
   });
 
   it("loads configured worker plugins and surfaces runtime state via worker.status", async () => {
@@ -2149,15 +2310,37 @@ function writeValidSyncPluginModule(
   options: {
     providerName: string;
     providerVersion: string;
+    apiVersion?: 2 | 3;
   },
 ): string {
   const modulePath = path.join(directory, filename);
 
-  const moduleSource = `export const syncProvider = {
+  const moduleSource =
+    options.apiVersion === 3
+      ? `export const syncProvider = {
   manifest: {
     name: ${JSON.stringify(options.providerName)},
     version: ${JSON.stringify(options.providerVersion)},
-    apiVersion: 1,
+    apiVersion: 3,
+  },
+  provider: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    async initialize() {},
+    async shutdown() {},
+    async pull() {
+      return { tasks: [], comments: [] };
+    },
+    async push() {
+      return { commentLinks: [], taskLinks: [] };
+    },
+  },
+};`
+      : `export const syncProvider = {
+  manifest: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    apiVersion: 2,
   },
   provider: {
     name: ${JSON.stringify(options.providerName)},
@@ -2167,7 +2350,9 @@ function writeValidSyncPluginModule(
     async pull() {
       return { tasks: [] };
     },
-    async push() {},
+    async push() {
+      return { commentLinks: [], taskLinks: [] };
+    },
     mapToTask() {
       return {
         id: "task-1",
@@ -2176,6 +2361,7 @@ function writeValidSyncPluginModule(
         priority: "medium",
         projectId: "project-1",
         labels: [],
+        assigneeActorIds: [],
         assignees: [],
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),
@@ -2202,11 +2388,14 @@ function writeRecordingSyncPluginModule(
     providerName: string;
     providerVersion: string;
     outputPath: string;
+    apiVersion?: 2 | 3;
   },
 ): string {
   const modulePath = path.join(directory, filename);
 
-  const moduleSource = `import fs from "node:fs";
+  const moduleSource =
+    options.apiVersion === 3
+      ? `import fs from "node:fs";
 
 const outputPath = ${JSON.stringify(options.outputPath)};
 
@@ -2218,7 +2407,55 @@ export const syncProvider = {
   manifest: {
     name: ${JSON.stringify(options.providerName)},
     version: ${JSON.stringify(options.providerVersion)},
-    apiVersion: 1,
+    apiVersion: 3,
+  },
+  provider: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    async initialize(config) {
+      record({ type: "initialize", settings: config.settings });
+    },
+    async shutdown() {
+      record({ type: "shutdown" });
+    },
+    async pull(binding, project) {
+      record({
+        type: "pull",
+        bindingId: binding.id,
+        provider: binding.provider,
+        targetRef: binding.targetRef,
+        projectId: project.id,
+        strategy: binding.strategy,
+      });
+      return { tasks: [], comments: [] };
+    },
+    async push(binding, tasks, project) {
+      record({
+        type: "push",
+        bindingId: binding.id,
+        provider: binding.provider,
+        targetRef: binding.targetRef,
+        projectId: project.id,
+        strategy: binding.strategy,
+        taskCount: tasks.length,
+      });
+      return { commentLinks: [], taskLinks: [] };
+    },
+  },
+};`
+      : `import fs from "node:fs";
+
+const outputPath = ${JSON.stringify(options.outputPath)};
+
+function record(event) {
+  fs.appendFileSync(outputPath, JSON.stringify(event) + "\\n", "utf8");
+}
+
+export const syncProvider = {
+  manifest: {
+    name: ${JSON.stringify(options.providerName)},
+    version: ${JSON.stringify(options.providerVersion)},
+    apiVersion: 2,
   },
   provider: {
     name: ${JSON.stringify(options.providerName)},
@@ -2250,6 +2487,7 @@ export const syncProvider = {
         strategy: binding.strategy,
         taskCount: tasks.length,
       });
+      return { commentLinks: [], taskLinks: [] };
     },
     mapToTask() {
       return {
@@ -2259,6 +2497,7 @@ export const syncProvider = {
         priority: "medium",
         projectId: "project-1",
         labels: [],
+        assigneeActorIds: [],
         assignees: [],
         createdAt: new Date(0).toISOString(),
         updatedAt: new Date(0).toISOString(),

@@ -13,6 +13,7 @@ import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
+import { createSyncRuntimeActorTools } from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
 import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
 import { addRemoteSyncAdapter, connectSyncClient } from "./sync-client.js";
@@ -24,6 +25,7 @@ import {
   type SyncStatus,
   type Todu,
   type ToduConfig,
+  type ToduWithInternalTools,
 } from "./todu.js";
 
 export type { RemoteSyncConfig } from "@todu/core";
@@ -56,10 +58,13 @@ export type {
   ProjectNamespace,
   RecurringNamespace,
   RemoteSyncState,
+  SyncRuntimeActorTools,
   SyncStatus,
   TaskNamespace,
   Todu,
   ToduConfig,
+  ToduInternalTools,
+  ToduWithInternalTools,
 } from "./todu.js";
 
 /**
@@ -240,8 +245,13 @@ export async function createTodu(
 
   const stubs = createStubNamespaces(resolvedConfig);
 
-  return {
+  const todu: ToduWithInternalTools = {
     ...stubs,
+    __internal: {
+      syncRuntime: {
+        actors: createSyncRuntimeActorTools(storage.catalog),
+      },
+    },
     project: createProjectNamespace(storage.catalog),
     task: createTaskNamespace(storage.catalog, storage.repo),
     label: createLabelNamespace(storage.catalog, storage.repo),
@@ -277,4 +287,6 @@ export async function createTodu(
       }
     },
   };
+
+  return todu;
 }
