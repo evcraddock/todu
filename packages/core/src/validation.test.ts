@@ -555,6 +555,14 @@ describe("validateImportedContentApproval", () => {
     });
     expect(error?.field).toBe("contentApproval");
   });
+
+  it("rejects null approval payloads safely", () => {
+    const error = validateImportedContentApproval(
+      "contentApproval",
+      null as unknown as { state: "approved" },
+    );
+    expect(error?.field).toBe("contentApproval");
+  });
 });
 
 describe("validateCreateTaskInput", () => {
@@ -702,6 +710,16 @@ describe("validateCreateTaskInput", () => {
       title: "Test",
       projectId,
       descriptionApproval: { state: "pendingApproval" },
+    });
+    expect(error?.field).toBe("descriptionApproval");
+  });
+
+  it("rejects null description approval payloads safely", () => {
+    const error = validateCreateTaskInput({
+      title: "Test",
+      projectId,
+      description: "Details",
+      descriptionApproval: null as unknown as { state: "pendingApproval" },
     });
     expect(error?.field).toBe("descriptionApproval");
   });
@@ -1092,6 +1110,14 @@ describe("validateCreateNoteInput", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("rejects null note content approval payloads safely", () => {
+    const error = validateCreateNoteInput({
+      content: "Thought",
+      contentApproval: null as unknown as { state: "pendingApproval" },
+    });
+    expect(error?.field).toBe("contentApproval");
   });
 
   it("accepts note with createdAt", () => {

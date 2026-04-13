@@ -108,6 +108,10 @@ export function validateImportedContentApproval(
   field: string,
   approval: ImportedContentApproval,
 ): ValidationError | null {
+  if (typeof approval !== "object" || approval === null || Array.isArray(approval)) {
+    return validationError(field, `${field} must be a JSON object`);
+  }
+
   if (!isContentApprovalState(approval.state)) {
     return validationError(field, `Invalid content approval state: ${approval.state}`);
   }
