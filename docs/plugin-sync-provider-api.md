@@ -6,7 +6,7 @@ For generic daemon worker plugins, see `docs/worker-plugin-api.md`.
 
 ## Purpose
 
-`SyncProvider` is the runtime contract for plugins that synchronize todu data with external systems (for example, GitHub or Forgejo issue trackers).
+`SyncProvider` is the runtime contract for plugins that synchronize todu data with external systems such as GitHub or Forgejo.
 
 This document defines the provider execution contract. Shared integration binding desired state is a separate architecture concern owned by core and documented in `docs/architecture/integrations.md`.
 
@@ -29,10 +29,12 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Host-supported provider API version: `SYNC_PROVIDER_API_VERSION` (currently `2`).
+- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `3`).
+- Host-supported provider API versions during the rollout window: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `2` and `3`).
 - Every provider manifest must declare `apiVersion`.
-- Providers are loadable only when `manifest.apiVersion` matches the host-supported API version.
-- Version mismatches must fail at load time.
+- Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
+- Unsupported versions must fail closed at load time.
+- Provider API v2 remains a transition contract and will be removed after the compatibility window closes.
 
 Use `validateSyncProviderRegistration(...)` during plugin load to enforce this gate.
 
@@ -52,10 +54,36 @@ Rules:
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
 
-## Provider Lifecycle Contract
+## API v2 contract
+
+API v2 is the legacy string-based provider contract.
 
 ```ts
-interface SyncProvider {
+interface ExternalTask {
+  externalId: string;
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+  assignees?: string[];
+  sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+interface ExternalComment {
+  externalId: string;
+  externalTaskId: string;
+  body: string;
+  author?: string;
+  createdAt: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+interface SyncProviderV2 {
   readonly name: string;
   readonly version: string;
   initialize(config: SyncProviderConfig): Promise<void>;
@@ -69,7 +97,84 @@ interface SyncProvider {
 
 `TaskPushPayload` extends `TaskWithDetail` with `comments: Note[]`, providing each task's description and attached comments during push.
 
-Expected lifecycle:
+Use v2 only for compatibility with the existing runtime shim path.
+
+## API v3 contract
+
+API v3 replaces direct `mapToTask(...)` and `mapFromTask(...)` coupling with normalized import/export payloads and structured external actor references.
+
+```ts
+interface ExternalActorRef {
+  externalAccountId?: string;
+  externalLogin?: string;
+  displayName?: string;
+  raw?: unknown;
+}
+
+interface ImportedTaskInput {
+  externalId: string;
+  title: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  labels?: string[];
+  assignees?: ExternalActorRef[];
+  sourceUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+interface ImportedCommentInput {
+  externalId: string;
+  externalTaskId: string;
+  body: string;
+  author?: ExternalActorRef;
+  createdAt: string;
+  updatedAt?: string;
+  raw?: unknown;
+}
+
+interface ExportedCommentInput {
+  localNoteId: NoteId;
+  body: string;
+  createdAt: string;
+  updatedAt?: string;
+  sourceUrl?: string;
+}
+
+interface ExportedTaskInput {
+  localTaskId: TaskId;
+  externalId?: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  labels: string[];
+  assignees: ExternalActorRef[];
+  sourceUrl?: string;
+  comments: ExportedCommentInput[];
+}
+
+interface SyncProviderV3 {
+  readonly name: string;
+  readonly version: string;
+  initialize(config: SyncProviderConfig): Promise<void>;
+  shutdown(): Promise<void>;
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV3>;
+  push(binding: IntegrationBinding, tasks: ExportedTaskInput[], project: Project): Promise<SyncProviderPushResult>;
+}
+```
+
+### v3 boundary rules
+
+- Providers must not consume or emit local `ActorId` values.
+- Providers own external identity extraction only.
+- The host/runtime owns local actor resolution, mapping persistence, and imported-content approval computation.
+- `binding.options.actorMappings` is shared desired state, not provider-local runtime bookkeeping.
+- Provider-local secrets, cursors, caches, and linkage internals remain outside synced core entities.
+
+## Expected lifecycle
 
 1. Load plugin module.
 2. Validate registration and compatibility.
@@ -77,9 +182,11 @@ Expected lifecycle:
 4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy.
 5. Call `shutdown()` during daemon stop/unload.
 
-## Task Pull Contract
+## Task and comment sync semantics
 
-`SyncProviderPullResult.tasks` accepts `ExternalTask[]`. The runtime reconciles pulled tasks within the binding's project by `externalId`:
+### v2 pull behavior
+
+`SyncProviderPullResult.tasks` accepts `ExternalTask[]`. The runtime reconciles pulled tasks within the binding's project by `externalId`.
 
 - Each pulled item is mapped through `mapToTask(external, project)`.
 - When no local task with the same `externalId` exists, the runtime creates a new task in the bound project.
@@ -88,21 +195,25 @@ Expected lifecycle:
 
 The runtime persists the pulled task's core fields, including mapped status, priority, labels, assignees, `externalId`, and `sourceUrl`. Task descriptions come from `ExternalTask.description`.
 
-Imported timestamp semantics:
+### v3 pull behavior
 
-- Newly created local tasks preserve external `createdAt` when provided.
-- Newly created local tasks preserve external `updatedAt` when provided.
-- If only one external task timestamp is provided, the runtime uses that timestamp for both local `createdAt` and `updatedAt` so imported history remains deterministic.
-- For later pull updates of already-linked tasks, local `createdAt` remains unchanged and local `updatedAt` follows the imported external timestamp used for the update decision.
-- Invalid external task timestamps fail the pull safely instead of being written into local task state.
+`SyncProviderPullResultV3.tasks` accepts `ImportedTaskInput[]` and `comments` accepts `ImportedCommentInput[]`.
 
-## Comment Sync Contract
+In v3:
 
-The sync-provider runtime supports comment/note mirroring through pull and push paths.
+- providers return normalized external identity data with `ExternalActorRef`
+- providers do not translate directly into local tasks or notes
+- the host/runtime is responsible for actor creation/reuse, binding mapping updates, and approval-state computation
+
+Imported timestamp semantics stay the same across v2 and v3:
+
+- newly created local tasks preserve external `createdAt` when provided
+- newly created local tasks preserve external `updatedAt` when provided
+- if only one external task timestamp is provided, the runtime uses that timestamp for both local `createdAt` and `updatedAt`
+- later pull updates preserve local `createdAt` and use external update timestamps for conflict resolution
+- invalid timestamps fail the pull safely instead of being written into local task state
 
 ### Push path
-
-Each `TaskPushPayload` in `push(...)` includes a `comments: Note[]` array containing the task's attached notes (entity type `task`). Providers can use these to detect local comment creates, edits, and deletes by comparing with external state.
 
 `push(...)` must return a `SyncProviderPushResult`:
 
@@ -133,29 +244,17 @@ The runtime applies returned `taskLinks` first, writing back task linkage for pu
 
 The runtime then applies each returned comment link idempotently by attaching the canonical `sync:externalId:<externalCommentId>` tag to the referenced local note. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error.
 
-### Pull path
+### Comment pull path
 
-`SyncProviderPullResult.comments` accepts `ExternalComment[]`. The runtime reconciles pulled comments with local notes using a snapshot model:
+For v2, pulled comments are `ExternalComment[]` with string `author` values.
 
-- Comments with an `externalId` not present locally are created as new notes with a `sync:externalId:<value>` tag.
-- Comments matching an existing local note (by external ID tag) are updated if the external `updatedAt` is newer than the local `createdAt` (last-write-wins).
-- Local synced notes whose external IDs are absent from the pull result are deleted.
+For v3, pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalActorRef`.
 
-### ExternalComment
+In both cases, the runtime reconciles pulled comments with local notes using a snapshot model:
 
-```ts
-interface ExternalComment {
-  externalId: string;
-  externalTaskId: string;
-  body: string;
-  author?: string;
-  createdAt: string;
-  updatedAt?: string;
-  raw?: unknown;
-}
-```
-
-The `externalTaskId` must match a todu task ID for the comment to be applied. The `createdAt` timestamp is required; `updatedAt` is used for conflict resolution when present (falls back to `createdAt`).
+- comments with an `externalId` not present locally are created as new notes with a `sync:externalId:<value>` tag
+- comments matching an existing local note are updated if the external `updatedAt` is newer than the local `createdAt`
+- local synced notes whose external IDs are absent from the pull result are deleted
 
 ## Load-Time Enforcement
 
@@ -167,10 +266,10 @@ validateSyncProviderRegistration(registration)
 
 Validation enforces:
 
-- manifest shape and non-empty identity fields,
-- required provider lifecycle methods,
-- provider/manifest identity consistency (`name` + `version`),
-- API-version compatibility.
+- manifest shape and non-empty identity fields
+- required provider lifecycle methods for the declared API version
+- provider/manifest identity consistency (`name` + `version`)
+- API-version compatibility against the host-supported version set
 
 Validation errors use structured codes:
 
@@ -197,21 +296,21 @@ Runtime behavior:
 
 Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginName>` in config file, `TODU_DAEMON_PLUGIN_CONFIG`, or legacy `TODUAI_DAEMON_PLUGIN_CONFIG` (JSON object). Supported fields:
 
-- `intervalSeconds`: steady-state cycle interval.
-- `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls.
-- `enabled`: optional execution toggle for the local provider worker.
-- `settings`: provider-specific object passed to `initialize(...)`.
+- `intervalSeconds`: steady-state cycle interval
+- `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls
+- `enabled`: optional execution toggle for the local provider worker
+- `settings`: provider-specific object passed to `initialize(...)`
 
-Binding desired state is no longer configured through local plugin config. The daemon host now enumerates shared integration bindings from core state, filters by provider name and `enabled` state, and executes provider work according to each binding's `strategy`, `projectId`, `targetKind`, `targetRef`, and optional `options` object.
+Binding desired state is no longer configured through local plugin config. The daemon host enumerates shared integration bindings from core state, filters by provider name and `enabled` state, and executes provider work according to each binding's `strategy`, `projectId`, `targetKind`, `targetRef`, and optional `options` object.
 
 Architecture note: the generic integration direction in `docs/architecture/integrations.md` moves project-to-external integration binding desired state into synced core data. In that model, local provider config remains the place for secrets, credentials, retry tuning, and other host-local runtime settings. `binding.options` is for provider-specific desired-state configuration only and must not be used for secrets or runtime internals.
 
 Retry policy:
 
-- Pull/push cycle failures are logged and retried with exponential backoff.
-- Delay formula is `retryInitialSeconds * 2^attempt`, capped by `retryMaxSeconds`.
-- Retry state resets after a successful cycle.
-- Daemon shutdown stops further scheduling and calls provider `shutdown()`.
+- pull/push cycle failures are logged and retried with exponential backoff
+- delay formula is `retryInitialSeconds * 2^attempt`, capped by `retryMaxSeconds`
+- retry state resets after a successful cycle
+- daemon shutdown stops further scheduling and calls provider `shutdown()`
 
 ## Conflict Resolution Baseline
 
