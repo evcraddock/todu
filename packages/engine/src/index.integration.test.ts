@@ -192,6 +192,6 @@ describe("createTodu", () => {
     expect(migratedCatalog.integrationStatusDocIds).toEqual({});
     expect(migratedCatalog.recurringTemplates).toEqual([]);
     expect(migratedCatalog.habits).toEqual([]);
-    expect(migratedCatalog.settings.schemaVersion).toBe(1);
+    expect(migratedCatalog.settings.schemaVersion).toBe(2);
   });
 });

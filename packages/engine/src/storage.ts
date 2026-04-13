@@ -1,13 +1,21 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { DocHandle, DocumentId } from "@automerge/automerge-repo/slim";
 import { Repo } from "@automerge/automerge-repo/slim";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
+  type Actor,
   CATALOG_DOC_KEY,
   type CatalogDocument,
+  createActorId,
   createEmptyCatalog,
+  createNotesDocument,
+  DEFAULT_OWNER_ACTOR_ID,
+  type Note,
+  type NotesDocument,
   SCHEMA_VERSION,
+  type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 
@@ -21,6 +29,137 @@ const SYNC_THROTTLE_MS = 100;
 const SYNC_DELIVERY_MS = 20;
 /** Catalog load timeout for startup and join checks */
 const CATALOG_LOAD_TIMEOUT_MS = 10_000;
+
+type MutableLegacyTask = TaskListDocument["tasks"][number] & {
+  labels?: string[];
+  assigneeActorIds?: string[];
+  assignees?: string[];
+};
+
+type MutableLegacyNote = Note & {
+  author?: string;
+  authorActorId?: string;
+};
+
+interface LegacyActorRegistry {
+  ownerActorId: string;
+  actorIds: Set<string>;
+  normalizedNameToActorId: Map<string, string>;
+  newActors: Actor[];
+}
+
+function normalizeLegacyActorName(name: string | null | undefined): string | null {
+  const trimmed = name?.trim();
+  if (!trimmed) return null;
+  return trimmed.toLowerCase();
+}
+
+function createStableLegacyActorId(normalizedName: string, existingActorIds: Set<string>): string {
+  const hash = crypto.createHash("sha1").update(normalizedName).digest("hex");
+  let candidate = `actor-legacy-${hash}`;
+  let suffix = 1;
+
+  while (existingActorIds.has(candidate)) {
+    candidate = `actor-legacy-${hash}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function noteBucketKeyForNote(note: Note): string {
+  if (note.entityType && note.entityId) {
+    return `entity:${note.entityType}:${note.entityId}`;
+  }
+
+  return `journal:${note.createdAt.slice(0, 7)}`;
+}
+
+function cloneNote(note: MutableLegacyNote): Note {
+  const cloned: Note = {
+    id: note.id,
+    content: note.content,
+    author: note.author ?? "user",
+    tags: [...(note.tags ?? [])],
+    createdAt: note.createdAt,
+  };
+
+  if (note.authorActorId !== undefined) {
+    cloned.authorActorId = createActorId(note.authorActorId);
+  }
+  if (note.entityType !== undefined) cloned.entityType = note.entityType;
+  if (note.entityId !== undefined) cloned.entityId = note.entityId;
+
+  return cloned;
+}
+
+function buildLegacyActorRegistry(doc: CatalogDocument): LegacyActorRegistry {
+  const ownerActorId = doc.ownerActorId ?? DEFAULT_OWNER_ACTOR_ID;
+  const actorIds = new Set<string>();
+  const normalizedNameToActorId = new Map<string, string>();
+
+  for (const actor of doc.actors ?? []) {
+    actorIds.add(actor.id);
+    const normalizedName = normalizeLegacyActorName(actor.displayName);
+    if (normalizedName && !normalizedNameToActorId.has(normalizedName)) {
+      normalizedNameToActorId.set(normalizedName, actor.id);
+    }
+  }
+
+  actorIds.add(ownerActorId);
+  normalizedNameToActorId.set("user", ownerActorId);
+
+  return {
+    ownerActorId,
+    actorIds,
+    normalizedNameToActorId,
+    newActors: [],
+  };
+}
+
+function resolveLegacyActorId(
+  registry: LegacyActorRegistry,
+  rawName: string | null | undefined,
+): string {
+  const normalizedName = normalizeLegacyActorName(rawName);
+  if (!normalizedName || normalizedName === "user") {
+    return registry.ownerActorId;
+  }
+
+  const existingActorId = registry.normalizedNameToActorId.get(normalizedName);
+  if (existingActorId) {
+    return existingActorId;
+  }
+
+  const actorId = createStableLegacyActorId(normalizedName, registry.actorIds);
+  const displayName = rawName?.trim() || normalizedName;
+  registry.actorIds.add(actorId);
+  registry.normalizedNameToActorId.set(normalizedName, actorId);
+  registry.newActors.push({ id: createActorId(actorId), displayName });
+  return actorId;
+}
+
+function migrateLegacyAssigneeActorIds(
+  registry: LegacyActorRegistry,
+  legacyAssignees: readonly string[] | null | undefined,
+): string[] {
+  const actorIds: string[] = [];
+  const seen = new Set<string>();
+
+  for (const assignee of legacyAssignees ?? []) {
+    const actorId = resolveLegacyActorId(registry, assignee);
+    if (!seen.has(actorId)) {
+      seen.add(actorId);
+      actorIds.push(actorId);
+    }
+  }
+
+  return actorIds;
+}
 
 /**
  * Wait for pending sync messages to be generated and delivered.
@@ -343,6 +482,7 @@ async function loadCatalogById(
       signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
     });
     migrateCatalog(handle);
+    await migrateLegacyIdentityModel(handle, repo);
     return handle;
   } catch {
     throw new Error(
@@ -406,6 +546,9 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
     needsMigration = true;
   if (doc.settings === undefined || doc.settings === null) needsMigration = true;
   if (doc.version === undefined || doc.version === null) needsMigration = true;
+  if (doc.settings?.schemaVersion === undefined || doc.settings?.schemaVersion === null) {
+    needsMigration = true;
+  }
   if (doc.projects?.some((project) => project.authorizedAssigneeActorIds === undefined)) {
     needsMigration = true;
   }
@@ -431,8 +574,12 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
       d.noteBucketByNoteId = defaults.noteBucketByNoteId;
     if (d.integrationStatusDocIds === undefined || d.integrationStatusDocIds === null)
       d.integrationStatusDocIds = defaults.integrationStatusDocIds;
-    if (d.settings === undefined || d.settings === null) d.settings = defaults.settings;
-    if (d.version === undefined || d.version === null) d.version = SCHEMA_VERSION;
+    if (d.settings === undefined || d.settings === null) {
+      d.settings = { schemaVersion: d.version ?? 1 };
+    } else if (d.settings.schemaVersion === undefined || d.settings.schemaVersion === null) {
+      d.settings.schemaVersion = d.version ?? 1;
+    }
+    if (d.version === undefined || d.version === null) d.version = 1;
     for (const project of d.projects) {
       if (
         project.authorizedAssigneeActorIds === undefined ||
@@ -442,4 +589,196 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
       }
     }
   });
+}
+
+async function migrateLegacyIdentityModel(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+): Promise<void> {
+  const catalogDoc = catalog.doc();
+  if (!catalogDoc) return;
+
+  const currentSchemaVersion = catalogDoc.settings?.schemaVersion ?? catalogDoc.version ?? 1;
+  if (currentSchemaVersion >= SCHEMA_VERSION) return;
+
+  const registry = buildLegacyActorRegistry(catalogDoc);
+  const projectAssignedActorIds = await migrateLegacyTaskAssignments(catalog, repo, registry);
+  await migrateLegacyNotes(catalog, repo, registry);
+
+  catalog.change((doc) => {
+    if (registry.newActors.length > 0) {
+      doc.actors.push(...registry.newActors);
+    }
+
+    for (const project of doc.projects) {
+      const nextAuthorizedActorIds = new Set<string>(project.authorizedAssigneeActorIds ?? []);
+      nextAuthorizedActorIds.add(registry.ownerActorId);
+      for (const actorId of projectAssignedActorIds.get(project.id) ?? []) {
+        nextAuthorizedActorIds.add(actorId);
+      }
+
+      const nextAuthorized = [...nextAuthorizedActorIds];
+      if (!arraysEqual(project.authorizedAssigneeActorIds ?? [], nextAuthorized)) {
+        project.authorizedAssigneeActorIds.splice(
+          0,
+          project.authorizedAssigneeActorIds.length,
+          ...nextAuthorized.map((actorId) => createActorId(actorId)),
+        );
+      }
+    }
+
+    doc.version = SCHEMA_VERSION;
+    doc.settings.schemaVersion = SCHEMA_VERSION;
+  });
+}
+
+async function migrateLegacyTaskAssignments(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+  registry: LegacyActorRegistry,
+): Promise<Map<string, Set<string>>> {
+  const projectAssignedActorIds = new Map<string, Set<string>>();
+  const catalogDoc = catalog.doc();
+  if (!catalogDoc) return projectAssignedActorIds;
+
+  for (const [projectId, docId] of Object.entries(catalogDoc.taskListDocIds ?? {})) {
+    const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+    await handle.whenReady();
+    const taskListDoc = handle.doc();
+    if (!taskListDoc) continue;
+
+    handle.change((doc) => {
+      for (const task of doc.tasks as MutableLegacyTask[]) {
+        if (task.labels === undefined || task.labels === null) {
+          task.labels = [];
+        }
+        if (task.assigneeActorIds === undefined || task.assigneeActorIds === null) {
+          task.assigneeActorIds = [];
+        }
+        if (task.assignees === undefined || task.assignees === null) {
+          task.assignees = [];
+        }
+
+        const hasMissingActorReferences = task.assigneeActorIds.some(
+          (actorId) => !registry.actorIds.has(actorId),
+        );
+        if (
+          task.assignees.length > 0 &&
+          (task.assigneeActorIds.length === 0 || hasMissingActorReferences)
+        ) {
+          const migratedActorIds = migrateLegacyAssigneeActorIds(registry, task.assignees);
+          task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...migratedActorIds);
+        }
+
+        let assigned = projectAssignedActorIds.get(projectId);
+        if (!assigned) {
+          assigned = new Set<string>();
+          projectAssignedActorIds.set(projectId, assigned);
+        }
+        for (const actorId of task.assigneeActorIds) {
+          assigned.add(actorId);
+        }
+      }
+    });
+  }
+
+  return projectAssignedActorIds;
+}
+
+async function migrateLegacyNotes(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+  registry: LegacyActorRegistry,
+): Promise<void> {
+  const catalogDoc = catalog.doc();
+  if (!catalogDoc) return;
+
+  if (catalogDoc.notesBucketDocIds === undefined || catalogDoc.notesBucketDocIds === null) {
+    catalog.change((doc) => {
+      doc.notesBucketDocIds = {};
+    });
+  }
+  if (catalogDoc.noteBucketByNoteId === undefined || catalogDoc.noteBucketByNoteId === null) {
+    catalog.change((doc) => {
+      doc.noteBucketByNoteId = {};
+    });
+  }
+
+  if (catalogDoc.notesDocId) {
+    const legacyHandle = await repo.find<NotesDocument>(catalogDoc.notesDocId as DocumentId);
+    await legacyHandle.whenReady();
+    const legacyNotes = (legacyHandle.doc()?.notes ?? []).map((note) => cloneNote(note));
+
+    const notesByBucket = new Map<string, Note[]>();
+    for (const note of legacyNotes) {
+      const bucketKey = noteBucketKeyForNote(note);
+      const bucketNotes = notesByBucket.get(bucketKey);
+      if (bucketNotes) {
+        bucketNotes.push(note);
+      } else {
+        notesByBucket.set(bucketKey, [note]);
+      }
+    }
+
+    for (const [bucketKey, notes] of notesByBucket) {
+      const existingBucketId = catalog.doc()?.notesBucketDocIds?.[bucketKey];
+      const bucketHandle = existingBucketId
+        ? await repo.find<NotesDocument>(existingBucketId as DocumentId)
+        : repo.create<NotesDocument>();
+      await bucketHandle.whenReady();
+      if (!existingBucketId) {
+        const empty = createNotesDocument();
+        bucketHandle.change((doc) => {
+          doc.notes = empty.notes;
+        });
+        catalog.change((doc) => {
+          doc.notesBucketDocIds[bucketKey] = bucketHandle.documentId;
+        });
+      }
+
+      bucketHandle.change((doc) => {
+        const existingIds = new Set(doc.notes.map((note) => note.id));
+        for (const note of notes) {
+          if (!existingIds.has(note.id)) {
+            doc.notes.push(note);
+            existingIds.add(note.id);
+          }
+        }
+      });
+    }
+
+    catalog.change((doc) => {
+      delete doc.notesDocId;
+      doc.noteBucketByNoteId = {};
+    });
+
+    legacyHandle.change((doc) => {
+      doc.notes.splice(0, doc.notes.length);
+    });
+  }
+
+  for (const docId of Object.values(catalog.doc()?.notesBucketDocIds ?? {})) {
+    const handle = await repo.find<NotesDocument>(docId as DocumentId);
+    await handle.whenReady();
+    handle.change((doc) => {
+      for (const note of doc.notes as MutableLegacyNote[]) {
+        const hasMissingAuthorActor =
+          note.authorActorId === undefined ||
+          note.authorActorId === null ||
+          !registry.actorIds.has(note.authorActorId);
+        if (hasMissingAuthorActor) {
+          note.authorActorId = createActorId(resolveLegacyActorId(registry, note.author));
+        }
+        if (note.author === undefined || note.author === null || note.author.trim() === "") {
+          note.author = "user";
+        }
+      }
+    });
+  }
+
+  if (Object.keys(catalog.doc()?.noteBucketByNoteId ?? {}).length > 0) {
+    catalog.change((doc) => {
+      doc.noteBucketByNoteId = {};
+    });
+  }
 }

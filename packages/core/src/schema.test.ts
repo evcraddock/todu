@@ -13,7 +13,7 @@ import { createIntegrationBindingId, createProjectId } from "./types.js";
 
 describe("schema", () => {
   it("exports schema version", () => {
-    expect(SCHEMA_VERSION).toBe(1);
+    expect(SCHEMA_VERSION).toBe(2);
   });
 
   describe("createEmptyCatalog", () => {

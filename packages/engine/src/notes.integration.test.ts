@@ -37,6 +37,56 @@ async function readCatalogDocument(storagePath: string): Promise<CatalogDocument
   }
 }
 
+async function seedLegacyNoteIdentityData(
+  storagePath: string,
+  legacyAuthorsByNoteId: Record<string, string | null | undefined>,
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
+
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    catalogHandle.change((doc) => {
+      doc.version = 1;
+      doc.settings.schemaVersion = 1;
+      doc.actors.splice(0, doc.actors.length, {
+        id: DEFAULT_OWNER_ACTOR_ID,
+        displayName: "user",
+      });
+      doc.ownerActorId = DEFAULT_OWNER_ACTOR_ID;
+    });
+
+    const bucketDocIds = Object.values(catalogHandle.doc()?.notesBucketDocIds ?? {});
+    for (const docId of bucketDocIds) {
+      const notesHandle = await repo.find(docId as DocumentId);
+      await notesHandle.whenReady();
+      notesHandle.change((doc) => {
+        for (const note of doc.notes as Array<Note & { author?: string; authorActorId?: string }>) {
+          if (!(note.id in legacyAuthorsByNoteId)) continue;
+          delete note.authorActorId;
+          const legacyAuthor = legacyAuthorsByNoteId[note.id];
+          if (legacyAuthor === undefined) {
+            delete note.author;
+          } else if (legacyAuthor === null) {
+            note.author = "";
+          } else {
+            note.author = legacyAuthor;
+          }
+        }
+      });
+    }
+
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
+
 describe("note namespace", () => {
   let tmpDir: string;
   let todu: Todu;
@@ -206,6 +256,56 @@ describe("note namespace", () => {
       expect(result.value).toHaveLength(2);
       expect(result.value[0].content).toBe("Second");
       expect(result.value[1].content).toBe("First");
+    });
+
+    it("migrates legacy note authors into actor ids and reuses normalized actors across restarts", async () => {
+      const first = await todu.note.create({ content: "First note" });
+      const second = await todu.note.create({ content: "Second note" });
+      const third = await todu.note.create({ content: "Third note" });
+      if (!first.ok || !second.ok || !third.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyNoteIdentityData(tmpDir, {
+        [first.value.id]: " Alice ",
+        [second.value.id]: "",
+        [third.value.id]: undefined,
+      });
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.note.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const migratedFirst = result.value.find((note) => note.id === first.value.id);
+      const migratedSecond = result.value.find((note) => note.id === second.value.id);
+      const migratedThird = result.value.find((note) => note.id === third.value.id);
+      expect(migratedFirst?.authorActorId).toEqual(expect.any(String));
+      expect(migratedFirst?.authorActorId).not.toBe(DEFAULT_OWNER_ACTOR_ID);
+      expect(migratedSecond?.authorActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
+      expect(migratedThird?.authorActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.version).toBe(2);
+      expect(catalog.settings.schemaVersion).toBe(2);
+      expect(catalog.actors).toEqual([
+        { id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" },
+        { id: migratedFirst?.authorActorId, displayName: "Alice" },
+      ]);
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const afterRestart = await todu.note.list();
+      expect(afterRestart.ok).toBe(true);
+      if (!afterRestart.ok) return;
+      expect(afterRestart.value.find((note) => note.id === first.value.id)?.authorActorId).toBe(
+        migratedFirst?.authorActorId,
+      );
     });
 
     it("filters by entityType", async () => {
