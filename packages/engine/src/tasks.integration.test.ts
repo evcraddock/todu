@@ -4,10 +4,28 @@ import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument, ProjectId, Task, TaskId, TaskListDocument } from "@todu/core";
-import { createActorId, createProjectId, createTaskId } from "@todu/core";
+import { createActorId, createProjectId, createTaskId, DEFAULT_OWNER_ACTOR_ID } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
+
+async function readCatalogDocument(storagePath: string): Promise<CatalogDocument> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    const catalogDoc = catalogHandle.doc();
+    if (!catalogDoc) throw new Error("catalog document not available");
+    return JSON.parse(JSON.stringify(catalogDoc)) as CatalogDocument;
+  } finally {
+    await repo.shutdown();
+  }
+}
 
 async function removeTaskArrays(
   storagePath: string,
@@ -42,6 +60,86 @@ async function removeTaskArrays(
       delete legacyTask.assigneeActorIds;
       delete legacyTask.assignees;
     });
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
+
+async function addCatalogActor(
+  storagePath: string,
+  actorId: string,
+  displayName: string,
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    catalogHandle.change((doc) => {
+      if (doc.actors.some((actor) => actor.id === actorId)) return;
+      doc.actors.push({ id: createActorId(actorId), displayName });
+    });
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
+
+async function seedLegacyTaskIdentityData(
+  storagePath: string,
+  projectId: ProjectId,
+  legacyAssigneesByTaskId: Record<string, string[]>,
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    catalogHandle.change((doc) => {
+      doc.version = 1;
+      doc.settings.schemaVersion = 1;
+      doc.actors.splice(0, doc.actors.length, {
+        id: DEFAULT_OWNER_ACTOR_ID,
+        displayName: "user",
+      });
+      doc.ownerActorId = DEFAULT_OWNER_ACTOR_ID;
+
+      const project = doc.projects.find((entry) => entry.id === projectId);
+      if (!project) throw new Error(`project not found: ${projectId}`);
+      project.authorizedAssigneeActorIds.splice(
+        0,
+        project.authorizedAssigneeActorIds.length,
+        DEFAULT_OWNER_ACTOR_ID,
+      );
+    });
+
+    const taskListDocId = catalogHandle.doc()?.taskListDocIds[projectId];
+    if (!taskListDocId) {
+      throw new Error(`task list not found for project ${projectId}`);
+    }
+
+    const taskListHandle = await repo.find<TaskListDocument>(taskListDocId);
+    await taskListHandle.whenReady();
+    taskListHandle.change((doc) => {
+      for (const task of doc.tasks as Array<
+        Task & { assigneeActorIds?: string[]; assignees?: string[] }
+      >) {
+        const legacyAssignees = legacyAssigneesByTaskId[task.id];
+        if (!legacyAssignees) continue;
+        delete task.assigneeActorIds;
+        task.assignees = [...legacyAssignees];
+      }
+    });
+
     await repo.flush();
   } finally {
     await repo.shutdown();
@@ -125,10 +223,15 @@ describe("task namespace", () => {
     });
 
     it("rejects unauthorized assignee actor ids", async () => {
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      await addCatalogActor(tmpDir, "actor-other", "Other");
+      todu = await createTodu({ storagePath: tmpDir });
+
       const result = await todu.task.create({
         title: "Actor-assigned task",
         projectId,
-        assigneeActorIds: [createActorId("actor-user")],
+        assigneeActorIds: [createActorId("actor-other")],
       });
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -261,6 +364,65 @@ describe("task namespace", () => {
       expect(result.value[0].labels).toEqual([]);
       expect(result.value[0].assigneeActorIds).toEqual([]);
       expect(result.value[0].assignees).toEqual([]);
+    });
+
+    it("migrates legacy assignees into actor ids and backfills project authorization", async () => {
+      const first = await todu.task.create({ title: "First legacy", projectId });
+      const second = await todu.task.create({ title: "Second legacy", projectId });
+      if (!first.ok || !second.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyTaskIdentityData(tmpDir, projectId, {
+        [first.value.id]: [" Alice ", "user", "alice"],
+        [second.value.id]: ["BOB"],
+      });
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.task.list({ projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const firstTask = result.value.find((task) => task.id === first.value.id);
+      const secondTask = result.value.find((task) => task.id === second.value.id);
+      expect(firstTask?.assigneeActorIds).toHaveLength(2);
+      expect(firstTask?.assigneeActorIds[0]).toEqual(expect.any(String));
+      expect(firstTask?.assigneeActorIds[0]).not.toBe(DEFAULT_OWNER_ACTOR_ID);
+      expect(firstTask?.assigneeActorIds[1]).toBe(DEFAULT_OWNER_ACTOR_ID);
+      expect(secondTask?.assigneeActorIds).toEqual([expect.any(String)]);
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.version).toBe(2);
+      expect(catalog.settings.schemaVersion).toBe(2);
+      expect(catalog.actors).toEqual([
+        { id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" },
+        { id: firstTask?.assigneeActorIds[0], displayName: "Alice" },
+        { id: secondTask?.assigneeActorIds[0], displayName: "BOB" },
+      ]);
+
+      const project = catalog.projects.find((entry) => entry.id === projectId);
+      expect(project?.authorizedAssigneeActorIds).toEqual([
+        DEFAULT_OWNER_ACTOR_ID,
+        firstTask?.assigneeActorIds[0],
+        secondTask?.assigneeActorIds[0],
+      ]);
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const afterRestart = await todu.task.list({ projectId });
+      expect(afterRestart.ok).toBe(true);
+      if (!afterRestart.ok) return;
+      expect(
+        afterRestart.value.find((task) => task.id === first.value.id)?.assigneeActorIds,
+      ).toEqual(firstTask?.assigneeActorIds);
+      expect(
+        afterRestart.value.find((task) => task.id === second.value.id)?.assigneeActorIds,
+      ).toEqual(secondTask?.assigneeActorIds);
     });
 
     it("filters by status", async () => {
@@ -639,8 +801,13 @@ describe("task namespace", () => {
     });
 
     it("rejects unauthorized assignee actor id updates", async () => {
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+      await addCatalogActor(tmpDir, "actor-other", "Other");
+      todu = await createTodu({ storagePath: tmpDir });
+
       const result = await todu.task.update(taskId, {
-        assigneeActorIds: [createActorId("actor-user")],
+        assigneeActorIds: [createActorId("actor-other")],
       });
       expect(result.ok).toBe(false);
       if (result.ok) return;

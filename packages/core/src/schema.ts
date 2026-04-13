@@ -154,7 +154,7 @@ export interface HabitLogDocument {
 // Schema version
 // ============================================================================
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const DEFAULT_OWNER_ACTOR_ID = createActorId("actor-user");
 
 // ============================================================================
