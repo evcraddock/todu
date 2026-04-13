@@ -6,9 +6,11 @@ import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type CatalogDocument,
+  createActorId,
   createEmptyCatalog,
   createNoteId,
   createNotesDocument,
+  DEFAULT_OWNER_ACTOR_ID,
   type Note,
   type ProjectId,
 } from "@todu/core";
@@ -62,6 +64,7 @@ describe("note namespace", () => {
       if (!result.ok) return;
       expect(result.value.content).toBe("Today was productive");
       expect(result.value.author).toBe("user");
+      expect(result.value.authorActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
       expect(result.value.entityType).toBeUndefined();
       expect(result.value.entityId).toBeUndefined();
       expect(result.value.tags).toEqual([]);
@@ -113,6 +116,27 @@ describe("note namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.author).toBe("agent");
+    });
+
+    it("creates a note with author actor id", async () => {
+      const result = await todu.note.create({
+        content: "Actor-authored note",
+        authorActorId: createActorId("actor-user"),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.authorActorId).toBe("actor-user");
+    });
+
+    it("rejects unknown author actor id", async () => {
+      const result = await todu.note.create({
+        content: "Actor-authored note",
+        authorActorId: createActorId("actor-missing"),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("actor");
     });
 
     it("creates a journal note with an explicit historical timestamp", async () => {
@@ -387,6 +411,31 @@ describe("note namespace", () => {
       if (!result.ok) return;
       expect(result.value.content).toBe("New");
       expect(result.value.tags).toEqual(["b", "c"]);
+    });
+
+    it("updates note author actor id", async () => {
+      const created = await todu.note.create({ content: "Original" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, {
+        authorActorId: createActorId("actor-user"),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.authorActorId).toBe("actor-user");
+    });
+
+    it("rejects unknown note author actor id updates", async () => {
+      const created = await todu.note.create({ content: "Original" });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.update(created.value.id, {
+        authorActorId: createActorId("actor-missing"),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("actor");
     });
 
     it("returns NotFound for nonexistent note", async () => {

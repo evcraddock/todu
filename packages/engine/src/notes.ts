@@ -116,6 +116,28 @@ export function createNoteNamespace(
     return true;
   }
 
+  function findActorIdByDisplayName(displayName: string): Note["authorActorId"] {
+    const catalogDoc = catalog.doc();
+    return catalogDoc?.actors.find((actor) => actor.displayName === displayName)?.id;
+  }
+
+  function actorExists(actorId: string): boolean {
+    const catalogDoc = catalog.doc();
+    return catalogDoc?.actors.some((actor) => actor.id === actorId) ?? false;
+  }
+
+  function resolveAuthorActorId(input: CreateNoteInput): Note["authorActorId"] {
+    if (input.authorActorId !== undefined) {
+      return input.authorActorId;
+    }
+
+    if (input.author === undefined || input.author === "user") {
+      return catalog.doc()?.ownerActorId;
+    }
+
+    return findActorIdByDisplayName(input.author);
+  }
+
   async function getBucketHandle(bucketKey: string): Promise<DocHandle<NotesDocument> | null> {
     const catalogDoc = catalog.doc();
     const docId = catalogDoc?.notesBucketDocIds?.[bucketKey];
@@ -334,6 +356,11 @@ export function createNoteNamespace(
         }
       }
 
+      const authorActorId = resolveAuthorActorId(input);
+      if (authorActorId !== undefined && !actorExists(authorActorId)) {
+        return err(notFound("actor", authorActorId));
+      }
+
       const createdAt = input.createdAt
         ? new Date(input.createdAt).toISOString()
         : new Date().toISOString();
@@ -346,6 +373,7 @@ export function createNoteNamespace(
         tags: input.tags ?? [],
         createdAt,
       };
+      if (authorActorId !== undefined) note.authorActorId = authorActorId;
       if (input.entityType !== undefined) note.entityType = input.entityType;
       if (input.entityId !== undefined) note.entityId = input.entityId;
 
@@ -398,6 +426,10 @@ export function createNoteNamespace(
         const author = normalizedFilter.author;
         notes = notes.filter((n) => n.author === author);
       }
+      if (normalizedFilter?.authorActorId) {
+        const authorActorId = normalizedFilter.authorActorId;
+        notes = notes.filter((n) => n.authorActorId === authorActorId);
+      }
       if (normalizedFilter?.journal) {
         notes = notes.filter((n) => n.entityType === undefined && n.entityId === undefined);
       }
@@ -431,9 +463,14 @@ export function createNoteNamespace(
       const location = await findNoteLocation(id);
       if (!location) return err(notFound("note", id));
 
+      if (input.authorActorId !== undefined && !actorExists(input.authorActorId)) {
+        return err(notFound("actor", input.authorActorId));
+      }
+
       location.handle.change((doc) => {
         const note = doc.notes[location.index];
         if (input.content !== undefined) note.content = input.content.trim();
+        if (input.authorActorId !== undefined) note.authorActorId = input.authorActorId;
         if (input.tags !== undefined) {
           // Clear and repopulate tags array for Automerge compatibility
           while (note.tags.length > 0) note.tags.pop();
@@ -494,6 +531,7 @@ function toStorageNote(n: Note): Note {
     createdAt: n.createdAt,
   };
 
+  if (n.authorActorId !== undefined) note.authorActorId = n.authorActorId;
   if (n.entityType !== undefined) note.entityType = n.entityType;
   if (n.entityId !== undefined) note.entityId = n.entityId;
 

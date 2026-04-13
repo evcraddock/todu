@@ -21,6 +21,7 @@ import {
   type TaskSortOptions,
   type TaskWithDetail,
   type UpdateTaskInput,
+  type ValidationError,
   validateCreateTaskInput,
   validateTaskFilter,
   validateUpdateTaskInput,
@@ -95,6 +96,28 @@ export function createTaskNamespace(
     return normalized;
   }
 
+  function findMissingActorId(actorIds: readonly string[]): string | null {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc) return actorIds[0] ?? null;
+
+    const catalogActorIds = new Set<string>(catalogDoc.actors.map((actor) => actor.id));
+    return actorIds.find((actorId) => !catalogActorIds.has(actorId)) ?? null;
+  }
+
+  function validateAuthorizedAssigneeActorIds(
+    project: { authorizedAssigneeActorIds: string[] },
+    assigneeActorIds: readonly string[],
+  ): ValidationError | null {
+    const authorized = new Set(project.authorizedAssigneeActorIds);
+    const unauthorizedActorId = assigneeActorIds.find((actorId) => !authorized.has(actorId));
+    if (!unauthorizedActorId) return null;
+
+    return validationError(
+      "assigneeActorIds",
+      `Actor is not authorized for project assignment: ${unauthorizedActorId}`,
+    );
+  }
+
   function migrateTaskListDoc(handle: DocHandle<TaskListDocument>): void {
     const doc = handle.doc();
     if (!doc) return;
@@ -104,6 +127,7 @@ export function createTaskNamespace(
       doc.detailDocIds === undefined ||
       doc.detailDocIds === null ||
       tasks.some((task) => task.labels === undefined || task.labels === null) ||
+      tasks.some((task) => task.assigneeActorIds === undefined || task.assigneeActorIds === null) ||
       tasks.some((task) => task.assignees === undefined || task.assignees === null);
 
     if (!needsMigration) return;
@@ -115,6 +139,9 @@ export function createTaskNamespace(
       for (const task of d.tasks) {
         if (task.labels === undefined || task.labels === null) {
           task.labels = [];
+        }
+        if (task.assigneeActorIds === undefined || task.assigneeActorIds === null) {
+          task.assigneeActorIds = [];
         }
         if (task.assignees === undefined || task.assignees === null) {
           task.assignees = [];
@@ -202,6 +229,17 @@ export function createTaskNamespace(
       const project = catalogDoc.projects.find((p) => p.id === input.projectId);
       if (!project) return err(notFound("project", input.projectId));
 
+      if (input.assigneeActorIds !== undefined) {
+        const missingActorId = findMissingActorId(input.assigneeActorIds);
+        if (missingActorId) return err(notFound("actor", missingActorId));
+
+        const authorizationError = validateAuthorizedAssigneeActorIds(
+          project,
+          input.assigneeActorIds,
+        );
+        if (authorizationError) return err(authorizationError);
+      }
+
       const now = new Date().toISOString();
       const createdAt = input.createdAt
         ? normalizeTaskTimestamp(input.createdAt)
@@ -222,6 +260,7 @@ export function createTaskNamespace(
         priority: input.priority ?? "medium",
         projectId: input.projectId,
         labels: input.labels ?? [],
+        assigneeActorIds: input.assigneeActorIds ?? [],
         assignees: input.assignees ?? [],
         createdAt,
         updatedAt,
@@ -391,6 +430,22 @@ export function createTaskNamespace(
       const validationErr = validateUpdateTaskInput(input, result.task.status);
       if (validationErr) return err(validationErr);
 
+      const catalogDoc = catalog.doc();
+      if (!catalogDoc) return err(notFound("project", result.task.projectId));
+      const project = catalogDoc.projects.find((p) => p.id === result.task.projectId);
+      if (!project) return err(notFound("project", result.task.projectId));
+
+      if (input.assigneeActorIds !== undefined) {
+        const missingActorId = findMissingActorId(input.assigneeActorIds);
+        if (missingActorId) return err(notFound("actor", missingActorId));
+
+        const authorizationError = validateAuthorizedAssigneeActorIds(
+          project,
+          input.assigneeActorIds,
+        );
+        if (authorizationError) return err(authorizationError);
+      }
+
       const updatedAt = input.updatedAt
         ? normalizeTaskTimestamp(input.updatedAt)
         : new Date().toISOString();
@@ -404,6 +459,9 @@ export function createTaskNamespace(
         if (input.labels !== undefined) {
           // Replace labels array entirely
           task.labels.splice(0, task.labels.length, ...input.labels);
+        }
+        if (input.assigneeActorIds !== undefined) {
+          task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...input.assigneeActorIds);
         }
         if (input.assignees !== undefined) {
           // Replace assignees array entirely
@@ -572,6 +630,7 @@ function cloneTask(t: Task): Task {
     priority: t.priority,
     projectId: t.projectId,
     labels: [...(t.labels ?? [])],
+    assigneeActorIds: [...(t.assigneeActorIds ?? [])],
     assignees: [...(t.assignees ?? [])],
     dueDate: t.dueDate,
     scheduledDate: t.scheduledDate,

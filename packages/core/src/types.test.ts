@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  ActorId,
   HabitId,
   IntegrationBindingId,
   LabelId,
@@ -9,6 +10,7 @@ import type {
   TaskId,
 } from "./types.js";
 import {
+  createActorId,
   createHabitId,
   createIntegrationBindingId,
   createLabelId,
@@ -40,6 +42,11 @@ describe("branded IDs", () => {
   it("creates a branded ProjectId", () => {
     const id = createProjectId("project-456");
     expect(id).toBe("project-456" as ProjectId);
+  });
+
+  it("creates a branded ActorId", () => {
+    const id = createActorId("actor-123");
+    expect(id).toBe("actor-123" as ActorId);
   });
 
   it("creates a branded LabelId", () => {

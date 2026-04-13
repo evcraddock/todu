@@ -1,17 +1,20 @@
-import type {
-  Habit,
-  HabitEntry,
-  HabitId,
-  IntegrationBinding,
-  IntegrationBindingId,
-  IntegrationBindingStatus,
-  Label,
-  Note,
-  Project,
-  ProjectId,
-  RecurringTemplate,
-  Settings,
-  Task,
+import {
+  type Actor,
+  type ActorId,
+  createActorId,
+  type Habit,
+  type HabitEntry,
+  type HabitId,
+  type IntegrationBinding,
+  type IntegrationBindingId,
+  type IntegrationBindingStatus,
+  type Label,
+  type Note,
+  type Project,
+  type ProjectId,
+  type RecurringTemplate,
+  type Settings,
+  type Task,
 } from "./types.js";
 
 // ============================================================================
@@ -32,6 +35,12 @@ export interface CatalogDocument {
 
   /** All labels */
   labels: Label[];
+
+  /** Catalog-wide actors used for assignment and authorship. */
+  actors: Actor[];
+
+  /** Catalog owner actor, when established. */
+  ownerActorId?: ActorId;
 
   /**
    * Map of projectId → Automerge document ID for that project's task list.
@@ -146,6 +155,7 @@ export interface HabitLogDocument {
 // ============================================================================
 
 export const SCHEMA_VERSION = 1;
+export const DEFAULT_OWNER_ACTOR_ID = createActorId("actor-user");
 
 // ============================================================================
 // Factory functions
@@ -156,6 +166,8 @@ export function createEmptyCatalog(): CatalogDocument {
     version: SCHEMA_VERSION,
     projects: [],
     labels: [],
+    actors: [{ id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" }],
+    ownerActorId: DEFAULT_OWNER_ACTOR_ID,
     taskListDocIds: {},
     notesBucketDocIds: {},
     noteBucketByNoteId: {},

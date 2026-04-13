@@ -361,6 +361,8 @@ function createBootstrapCatalog(repo: Repo, markerPath: string): DocHandle<Catal
     doc.version = empty.version;
     doc.projects = empty.projects;
     doc.labels = empty.labels;
+    doc.actors = empty.actors;
+    doc.ownerActorId = empty.ownerActorId;
     doc.recurringTemplates = empty.recurringTemplates;
     doc.habits = empty.habits;
     doc.habitLogDocIds = empty.habitLogDocIds;
@@ -391,6 +393,8 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
   // Check for missing fields
   if (!Array.isArray(doc.projects)) needsMigration = true;
   if (!Array.isArray(doc.labels)) needsMigration = true;
+  if (!Array.isArray(doc.actors)) needsMigration = true;
+  if (doc.ownerActorId === undefined || doc.ownerActorId === null) needsMigration = true;
   if (!Array.isArray(doc.recurringTemplates)) needsMigration = true;
   if (!Array.isArray(doc.habits)) needsMigration = true;
   if (doc.taskListDocIds === undefined || doc.taskListDocIds === null) needsMigration = true;
@@ -402,12 +406,19 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
     needsMigration = true;
   if (doc.settings === undefined || doc.settings === null) needsMigration = true;
   if (doc.version === undefined || doc.version === null) needsMigration = true;
+  if (doc.projects?.some((project) => project.authorizedAssigneeActorIds === undefined)) {
+    needsMigration = true;
+  }
 
   if (!needsMigration) return;
 
   handle.change((d) => {
     if (!Array.isArray(d.projects)) d.projects = defaults.projects;
     if (!Array.isArray(d.labels)) d.labels = defaults.labels;
+    if (!Array.isArray(d.actors)) d.actors = defaults.actors;
+    if (d.ownerActorId === undefined || d.ownerActorId === null) {
+      d.ownerActorId = defaults.ownerActorId;
+    }
     if (!Array.isArray(d.recurringTemplates)) d.recurringTemplates = defaults.recurringTemplates;
     if (!Array.isArray(d.habits)) d.habits = defaults.habits;
     if (d.taskListDocIds === undefined || d.taskListDocIds === null)
@@ -422,5 +433,13 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
       d.integrationStatusDocIds = defaults.integrationStatusDocIds;
     if (d.settings === undefined || d.settings === null) d.settings = defaults.settings;
     if (d.version === undefined || d.version === null) d.version = SCHEMA_VERSION;
+    for (const project of d.projects) {
+      if (
+        project.authorizedAssigneeActorIds === undefined ||
+        project.authorizedAssigneeActorIds === null
+      ) {
+        project.authorizedAssigneeActorIds = d.ownerActorId ? [d.ownerActorId] : [];
+      }
+    }
   });
 }

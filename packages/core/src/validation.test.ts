@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createIntegrationBindingId, createProjectId } from "./types.js";
+import { createActorId, createIntegrationBindingId, createProjectId } from "./types.js";
 import {
+  MAX_ACTOR_ID_LENGTH,
   MAX_ASSIGNEE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_INTEGRATION_FIELD_LENGTH,
@@ -8,6 +9,7 @@ import {
   MAX_NOTE_CONTENT_LENGTH,
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  validateActorIds,
   validateAssignees,
   validateCreateHabitInput,
   validateCreateIntegrationBindingInput,
@@ -95,9 +97,26 @@ describe("validateCreateProjectInput", () => {
     expect(validateCreateProjectInput(input)).toBeNull();
   });
 
+  it("accepts valid authorized assignee actor ids", () => {
+    expect(
+      validateCreateProjectInput({
+        name: "Test",
+        authorizedAssigneeActorIds: [createActorId("actor-1"), createActorId("actor-2")],
+      }),
+    ).toBeNull();
+  });
+
   it("rejects empty name", () => {
     const error = validateCreateProjectInput({ name: "" });
     expect(error?.field).toBe("name");
+  });
+
+  it("rejects duplicate authorized assignee actor ids", () => {
+    const error = validateCreateProjectInput({
+      name: "Test",
+      authorizedAssigneeActorIds: [createActorId("actor-1"), createActorId("actor-1")],
+    });
+    expect(error?.field).toBe("authorizedAssigneeActorIds");
   });
 
   it("rejects invalid priority", () => {
@@ -128,6 +147,14 @@ describe("validateUpdateProjectInput", () => {
 
   it("accepts valid priority update", () => {
     expect(validateUpdateProjectInput({ priority: "low" })).toBeNull();
+  });
+
+  it("accepts authorized assignee actor id update", () => {
+    expect(
+      validateUpdateProjectInput({
+        authorizedAssigneeActorIds: [createActorId("actor-1")],
+      }),
+    ).toBeNull();
   });
 
   it("accepts multiple field updates", () => {
@@ -490,6 +517,16 @@ describe("validateCreateTaskInput", () => {
     ).toBeNull();
   });
 
+  it("accepts valid input with assignee actor ids", () => {
+    expect(
+      validateCreateTaskInput({
+        title: "Test",
+        projectId,
+        assigneeActorIds: [createActorId("actor-1"), createActorId("actor-2")],
+      }),
+    ).toBeNull();
+  });
+
   it("accepts valid sync linkage fields in create", () => {
     expect(
       validateCreateTaskInput({
@@ -534,6 +571,15 @@ describe("validateCreateTaskInput", () => {
   it("rejects empty assignee string in create", () => {
     const error = validateCreateTaskInput({ title: "Test", projectId, assignees: [""] });
     expect(error?.field).toBe("assignees");
+  });
+
+  it("rejects duplicate assignee actor ids in create", () => {
+    const error = validateCreateTaskInput({
+      title: "Test",
+      projectId,
+      assigneeActorIds: [createActorId("actor-1"), createActorId("actor-1")],
+    });
+    expect(error?.field).toBe("assigneeActorIds");
   });
 
   it("rejects empty title", () => {
@@ -619,6 +665,14 @@ describe("validateUpdateTaskInput", () => {
     expect(validateUpdateTaskInput({ assignees: ["alice", "bob"] })).toBeNull();
   });
 
+  it("accepts valid assignee actor id update", () => {
+    expect(
+      validateUpdateTaskInput({
+        assigneeActorIds: [createActorId("actor-1"), createActorId("actor-2")],
+      }),
+    ).toBeNull();
+  });
+
   it("accepts valid sync linkage updates", () => {
     expect(
       validateUpdateTaskInput({
@@ -672,6 +726,32 @@ describe("validateAssignees", () => {
     const error = validateAssignees(["a".repeat(MAX_ASSIGNEE_LENGTH + 1)]);
     expect(error?.field).toBe("assignees");
     expect(error?.message).toContain(`${MAX_ASSIGNEE_LENGTH}`);
+  });
+});
+
+describe("validateActorIds", () => {
+  it("accepts empty actor id array", () => {
+    expect(validateActorIds("assigneeActorIds", [])).toBeNull();
+  });
+
+  it("accepts valid actor ids", () => {
+    expect(validateActorIds("assigneeActorIds", ["actor-1", "actor-2"])).toBeNull();
+  });
+
+  it("rejects empty actor id", () => {
+    const error = validateActorIds("assigneeActorIds", [""]);
+    expect(error?.field).toBe("assigneeActorIds");
+  });
+
+  it("rejects duplicate actor ids", () => {
+    const error = validateActorIds("assigneeActorIds", ["actor-1", "actor-1"]);
+    expect(error?.field).toBe("assigneeActorIds");
+  });
+
+  it("rejects too-long actor id", () => {
+    const error = validateActorIds("assigneeActorIds", ["a".repeat(MAX_ACTOR_ID_LENGTH + 1)]);
+    expect(error?.field).toBe("assigneeActorIds");
+    expect(error?.message).toContain(`${MAX_ACTOR_ID_LENGTH}`);
   });
 });
 
@@ -896,6 +976,12 @@ describe("validateCreateNoteInput", () => {
     expect(validateCreateNoteInput({ content: "Thought", tags: ["idea", "design"] })).toBeNull();
   });
 
+  it("accepts note with author actor id", () => {
+    expect(
+      validateCreateNoteInput({ content: "Thought", authorActorId: createActorId("actor-1") }),
+    ).toBeNull();
+  });
+
   it("accepts note with createdAt", () => {
     expect(
       validateCreateNoteInput({
@@ -941,6 +1027,10 @@ describe("validateCreateNoteInput", () => {
 describe("validateUpdateNoteInput", () => {
   it("accepts content update", () => {
     expect(validateUpdateNoteInput({ content: "Updated content" })).toBeNull();
+  });
+
+  it("accepts author actor id update", () => {
+    expect(validateUpdateNoteInput({ authorActorId: createActorId("actor-1") })).toBeNull();
   });
 
   it("accepts tags update", () => {

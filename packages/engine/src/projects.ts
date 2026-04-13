@@ -22,10 +22,29 @@ import type { ProjectNamespace } from "./todu.js";
 // ============================================================================
 
 export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): ProjectNamespace {
+  function findMissingAuthorizedActorId(
+    actorIds: Project["authorizedAssigneeActorIds"],
+  ): Project["authorizedAssigneeActorIds"][number] | null {
+    const catalogDoc = catalog.doc();
+    if (!catalogDoc) return actorIds[0] ?? null;
+
+    const catalogActorIds = new Set<string>(catalogDoc.actors.map((actor) => actor.id));
+    return actorIds.find((actorId) => !catalogActorIds.has(actorId)) ?? null;
+  }
+
   return {
     async create(input: CreateProjectInput): Promise<Result<Project>> {
       const validationErr = validateCreateProjectInput(input);
       if (validationErr) return err(validationErr);
+
+      const catalogDoc = catalog.doc();
+      const authorizedAssigneeActorIds =
+        input.authorizedAssigneeActorIds ??
+        (catalogDoc?.ownerActorId ? [catalogDoc.ownerActorId] : []);
+      const missingActorId = findMissingAuthorizedActorId(authorizedAssigneeActorIds);
+      if (missingActorId) {
+        return err(notFound("actor", missingActorId));
+      }
 
       const now = new Date().toISOString();
       const id = createProjectId(`proj-${crypto.randomUUID().slice(0, 8)}`);
@@ -35,6 +54,7 @@ export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): Pro
         name: input.name.trim(),
         status: "active",
         priority: input.priority ?? "medium",
+        authorizedAssigneeActorIds,
         createdAt: now,
         updatedAt: now,
       };
@@ -91,6 +111,13 @@ export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): Pro
       const index = doc.projects.findIndex((p) => p.id === id);
       if (index === -1) return err(notFound("project", id));
 
+      const nextAuthorizedAssigneeActorIds =
+        input.authorizedAssigneeActorIds ?? doc.projects[index].authorizedAssigneeActorIds;
+      const missingActorId = findMissingAuthorizedActorId(nextAuthorizedAssigneeActorIds);
+      if (missingActorId) {
+        return err(notFound("actor", missingActorId));
+      }
+
       const now = new Date().toISOString();
 
       catalog.change((doc) => {
@@ -99,6 +126,13 @@ export function createProjectNamespace(catalog: DocHandle<CatalogDocument>): Pro
         if (input.description !== undefined) project.description = input.description.trim();
         if (input.status !== undefined) project.status = input.status;
         if (input.priority !== undefined) project.priority = input.priority;
+        if (input.authorizedAssigneeActorIds !== undefined) {
+          project.authorizedAssigneeActorIds.splice(
+            0,
+            project.authorizedAssigneeActorIds.length,
+            ...input.authorizedAssigneeActorIds,
+          );
+        }
         project.updatedAt = now;
       });
 
@@ -134,6 +168,7 @@ function cloneProject(p: Project): Project {
     description: p.description,
     status: p.status,
     priority: p.priority,
+    authorizedAssigneeActorIds: [...(p.authorizedAssigneeActorIds ?? [])],
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };

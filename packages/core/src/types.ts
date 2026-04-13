@@ -4,6 +4,7 @@
 
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ProjectId = string & { readonly __brand: "ProjectId" };
+export type ActorId = string & { readonly __brand: "ActorId" };
 export type LabelId = string & { readonly __brand: "LabelId" };
 export type NoteId = string & { readonly __brand: "NoteId" };
 export type HabitId = string & { readonly __brand: "HabitId" };
@@ -16,6 +17,10 @@ export function createTaskId(id: string): TaskId {
 
 export function createProjectId(id: string): ProjectId {
   return id as ProjectId;
+}
+
+export function createActorId(id: string): ActorId {
+  return id as ActorId;
 }
 
 export function createLabelId(id: string): LabelId {
@@ -136,6 +141,7 @@ export interface Project {
   description?: string;
   status: ProjectStatus;
   priority: TaskPriority;
+  authorizedAssigneeActorIds: ActorId[];
   createdAt: string;
   updatedAt: string;
 }
@@ -144,6 +150,16 @@ export interface ProjectFilter {
   status?: ProjectStatus | ProjectStatus[];
   priority?: TaskPriority;
   search?: string;
+}
+
+// ============================================================================
+// Actor entity — stored in catalog document
+// ============================================================================
+
+export interface Actor {
+  id: ActorId;
+  displayName: string;
+  archived?: boolean;
 }
 
 // ============================================================================
@@ -184,6 +200,8 @@ export interface Task {
   priority: TaskPriority;
   projectId: ProjectId;
   labels: string[];
+  assigneeActorIds: ActorId[];
+  /** @deprecated Compatibility field kept during actor-model rollout. */
   assignees: string[];
   dueDate?: string;
   scheduledDate?: string;
@@ -229,7 +247,9 @@ export function isNoteEntityType(value: string): value is NoteEntityType {
 export interface Note {
   id: NoteId;
   content: string;
+  /** @deprecated Compatibility field kept during actor-model rollout. */
   author: string;
+  authorActorId?: ActorId;
   entityType?: NoteEntityType;
   entityId?: string;
   tags: string[];
@@ -244,6 +264,7 @@ export interface CreateProjectInput {
   name: string;
   description?: string;
   priority?: TaskPriority;
+  authorizedAssigneeActorIds?: ActorId[];
 }
 
 export interface UpdateProjectInput {
@@ -251,6 +272,7 @@ export interface UpdateProjectInput {
   description?: string;
   status?: ProjectStatus;
   priority?: TaskPriority;
+  authorizedAssigneeActorIds?: ActorId[];
 }
 
 export interface CreateIntegrationBindingInput {
@@ -294,6 +316,8 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   description?: string;
   labels?: string[];
+  assigneeActorIds?: ActorId[];
+  /** @deprecated Compatibility field kept during actor-model rollout. */
   assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
@@ -309,6 +333,8 @@ export interface UpdateTaskInput {
   priority?: TaskPriority;
   description?: string;
   labels?: string[];
+  assigneeActorIds?: ActorId[];
+  /** @deprecated Compatibility field kept during actor-model rollout. */
   assignees?: string[];
   dueDate?: string;
   scheduledDate?: string;
@@ -357,7 +383,9 @@ export interface UpdateLabelInput {
 
 export interface CreateNoteInput {
   content: string;
+  /** @deprecated Compatibility field kept during actor-model rollout. */
   author?: string;
+  authorActorId?: ActorId;
   entityType?: NoteEntityType;
   entityId?: string;
   tags?: string[];
@@ -367,6 +395,7 @@ export interface CreateNoteInput {
 export interface UpdateNoteInput {
   content?: string;
   tags?: string[];
+  authorActorId?: ActorId;
 }
 
 export interface NoteFilter {
@@ -374,6 +403,7 @@ export interface NoteFilter {
   entityId?: string;
   tag?: string;
   author?: string;
+  authorActorId?: ActorId;
   createdFrom?: string;
   createdTo?: string;
   journal?: boolean;

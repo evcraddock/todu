@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { ProjectId } from "@todu/core";
-import { createProjectId } from "@todu/core";
+import { createActorId, createProjectId, DEFAULT_OWNER_ACTOR_ID } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
@@ -35,6 +35,7 @@ describe("project namespace", () => {
       expect(result.value).not.toHaveProperty("syncStrategy");
       expect(result.value).not.toHaveProperty("systemId");
       expect(result.value).not.toHaveProperty("externalId");
+      expect(result.value.authorizedAssigneeActorIds).toEqual([DEFAULT_OWNER_ACTOR_ID]);
       expect(result.value.id).toMatch(/^proj-/);
       expect(result.value.createdAt).toBeTruthy();
       expect(result.value.updatedAt).toBeTruthy();
@@ -52,6 +53,17 @@ describe("project namespace", () => {
       expect(result.value.name).toBe("Full Project");
       expect(result.value.description).toBe("A detailed description");
       expect(result.value.priority).toBe("high");
+    });
+
+    it("creates a project with authorized assignee actor ids", async () => {
+      const result = await todu.project.create({
+        name: "Assigned Project",
+        authorizedAssigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.authorizedAssigneeActorIds).toEqual(["actor-user"]);
     });
 
     it("trims whitespace from name", async () => {
@@ -76,6 +88,17 @@ describe("project namespace", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.error.type).toBe("validation");
+    });
+
+    it("returns not found for unknown authorized actor ids", async () => {
+      const result = await todu.project.create({
+        name: "Assigned Project",
+        authorizedAssigneeActorIds: [createActorId("actor-missing")],
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("actor");
     });
   });
 
@@ -210,6 +233,15 @@ describe("project namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.description).toBe("New desc");
+    });
+
+    it("updates authorized assignee actor ids", async () => {
+      const result = await todu.project.update(projectId, {
+        authorizedAssigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.authorizedAssigneeActorIds).toEqual(["actor-user"]);
     });
 
     it("updates multiple fields at once", async () => {

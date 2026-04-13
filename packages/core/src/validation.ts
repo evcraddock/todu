@@ -45,6 +45,7 @@ export const MAX_LABEL_NAME_LENGTH = 50;
 export const MAX_NOTE_CONTENT_LENGTH = 10000;
 export const MAX_INTEGRATION_FIELD_LENGTH = 255;
 export const MAX_ASSIGNEE_LENGTH = 100;
+export const MAX_ACTOR_ID_LENGTH = 100;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
@@ -144,6 +145,33 @@ export function validateAssignees(assignees: string[]): ValidationError | null {
   return null;
 }
 
+export function validateActorId(field: string, actorId: string): ValidationError | null {
+  if (typeof actorId !== "string" || actorId.trim().length === 0) {
+    return validationError(field, "Actor ID must be a non-empty string");
+  }
+  if (actorId.trim().length > MAX_ACTOR_ID_LENGTH) {
+    return validationError(field, `Actor ID must be ${MAX_ACTOR_ID_LENGTH} characters or less`);
+  }
+  return null;
+}
+
+export function validateActorIds(field: string, actorIds: string[]): ValidationError | null {
+  const seen = new Set<string>();
+
+  for (const actorId of actorIds) {
+    const actorIdError = validateActorId(field, actorId);
+    if (actorIdError) return actorIdError;
+
+    const normalized = actorId.trim();
+    if (seen.has(normalized)) {
+      return validationError(field, "Actor IDs must be unique");
+    }
+    seen.add(normalized);
+  }
+
+  return null;
+}
+
 // ============================================================================
 // Input validators
 // ============================================================================
@@ -161,6 +189,14 @@ export function validateCreateProjectInput(input: CreateProjectInput): Validatio
     return validationError("priority", `Invalid priority: ${input.priority}`);
   }
 
+  if (input.authorizedAssigneeActorIds !== undefined) {
+    const actorIdsError = validateActorIds(
+      "authorizedAssigneeActorIds",
+      input.authorizedAssigneeActorIds,
+    );
+    if (actorIdsError) return actorIdsError;
+  }
+
   return null;
 }
 
@@ -170,7 +206,8 @@ export function validateUpdateProjectInput(input: UpdateProjectInput): Validatio
     input.name === undefined &&
     input.description === undefined &&
     input.status === undefined &&
-    input.priority === undefined
+    input.priority === undefined &&
+    input.authorizedAssigneeActorIds === undefined
   ) {
     return validationError("input", "At least one field must be provided");
   }
@@ -191,6 +228,14 @@ export function validateUpdateProjectInput(input: UpdateProjectInput): Validatio
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
     return validationError("priority", `Invalid priority: ${input.priority}`);
+  }
+
+  if (input.authorizedAssigneeActorIds !== undefined) {
+    const actorIdsError = validateActorIds(
+      "authorizedAssigneeActorIds",
+      input.authorizedAssigneeActorIds,
+    );
+    if (actorIdsError) return actorIdsError;
   }
 
   return null;
@@ -381,6 +426,11 @@ export function validateCreateTaskInput(input: CreateTaskInput): ValidationError
     return validationError("priority", `Invalid priority: ${input.priority}`);
   }
 
+  if (input.assigneeActorIds !== undefined) {
+    const actorIdsError = validateActorIds("assigneeActorIds", input.assigneeActorIds);
+    if (actorIdsError) return actorIdsError;
+  }
+
   if (input.assignees !== undefined) {
     const assigneesError = validateAssignees(input.assignees);
     if (assigneesError) return assigneesError;
@@ -429,6 +479,7 @@ export function validateUpdateTaskInput(
     input.priority === undefined &&
     input.description === undefined &&
     input.labels === undefined &&
+    input.assigneeActorIds === undefined &&
     input.assignees === undefined &&
     input.dueDate === undefined &&
     input.scheduledDate === undefined &&
@@ -463,6 +514,11 @@ export function validateUpdateTaskInput(
 
   if (input.priority !== undefined && !isTaskPriority(input.priority)) {
     return validationError("priority", `Invalid priority: ${input.priority}`);
+  }
+
+  if (input.assigneeActorIds !== undefined) {
+    const actorIdsError = validateActorIds("assigneeActorIds", input.assigneeActorIds);
+    if (actorIdsError) return actorIdsError;
   }
 
   if (input.assignees !== undefined) {
@@ -582,6 +638,11 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
     if (createdAtError) return createdAtError;
   }
 
+  if (input.authorActorId !== undefined) {
+    const actorIdError = validateActorId("authorActorId", input.authorActorId);
+    if (actorIdError) return actorIdError;
+  }
+
   // If entityType is set, entityId must also be set (and vice versa)
   if (input.entityType !== undefined && !input.entityId) {
     return validationError("entityId", "Entity ID is required when entity type is specified");
@@ -597,6 +658,11 @@ export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError
   if (input.content !== undefined) {
     const contentError = validateNoteContent(input.content);
     if (contentError) return contentError;
+  }
+
+  if (input.authorActorId !== undefined) {
+    const actorIdError = validateActorId("authorActorId", input.authorActorId);
+    if (actorIdError) return actorIdError;
   }
 
   return null;
@@ -670,6 +736,11 @@ export function validateTaskFilter(filter: TaskFilter): ValidationError | null {
 export function validateNoteFilter(filter: NoteFilter): ValidationError | null {
   if (filter.entityType !== undefined && !isNoteEntityType(filter.entityType)) {
     return validationError("entityType", `Invalid entity type: ${filter.entityType}`);
+  }
+
+  if (filter.authorActorId !== undefined) {
+    const actorIdError = validateActorId("authorActorId", filter.authorActorId);
+    if (actorIdError) return actorIdError;
   }
 
   if (filter.journal && (filter.entityType !== undefined || filter.entityId !== undefined)) {
