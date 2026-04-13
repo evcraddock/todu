@@ -146,6 +146,54 @@ async function seedLegacyTaskIdentityData(
   }
 }
 
+async function seedPartiallyMigratedTaskIdentityData(
+  storagePath: string,
+  projectId: ProjectId,
+  taskId: TaskId,
+  assigneeActorIds: string[],
+  assignees: string[],
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    catalogHandle.change((doc) => {
+      doc.version = 1;
+      doc.settings.schemaVersion = 1;
+      doc.actors.splice(0, doc.actors.length, {
+        id: DEFAULT_OWNER_ACTOR_ID,
+        displayName: "user",
+      });
+      doc.ownerActorId = DEFAULT_OWNER_ACTOR_ID;
+    });
+
+    const taskListDocId = catalogHandle.doc()?.taskListDocIds[projectId];
+    if (!taskListDocId) {
+      throw new Error(`task list not found for project ${projectId}`);
+    }
+
+    const taskListHandle = await repo.find<TaskListDocument>(taskListDocId);
+    await taskListHandle.whenReady();
+    taskListHandle.change((doc) => {
+      const task = doc.tasks.find((entry) => entry.id === taskId) as
+        | (Task & { assigneeActorIds?: string[]; assignees?: string[] })
+        | undefined;
+      if (!task) throw new Error(`task not found: ${taskId}`);
+      task.assigneeActorIds = [...assigneeActorIds];
+      task.assignees = [...assignees];
+    });
+
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
+
 describe("task namespace", () => {
   let tmpDir: string;
   let todu: Todu;
@@ -423,6 +471,42 @@ describe("task namespace", () => {
       expect(
         afterRestart.value.find((task) => task.id === second.value.id)?.assigneeActorIds,
       ).toEqual(secondTask?.assigneeActorIds);
+    });
+
+    it("repairs partially migrated task assignees on retry", async () => {
+      const created = await todu.task.create({ title: "Retry legacy", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedPartiallyMigratedTaskIdentityData(
+        tmpDir,
+        projectId,
+        created.value.id,
+        ["actor-legacy-broken"],
+        ["Alice"],
+      );
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.task.list({ projectId });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const repairedTask = result.value.find((task) => task.id === created.value.id);
+      expect(repairedTask?.assigneeActorIds).toEqual([expect.any(String)]);
+      expect(repairedTask?.assigneeActorIds?.[0]).not.toBe("actor-legacy-broken");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.version).toBe(2);
+      expect(catalog.actors).toContainEqual({
+        id: repairedTask?.assigneeActorIds?.[0],
+        displayName: "Alice",
+      });
     });
 
     it("filters by status", async () => {

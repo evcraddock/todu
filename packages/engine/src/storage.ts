@@ -659,7 +659,13 @@ async function migrateLegacyTaskAssignments(
           task.assignees = [];
         }
 
-        if (task.assigneeActorIds.length === 0 && task.assignees.length > 0) {
+        const hasMissingActorReferences = task.assigneeActorIds.some(
+          (actorId) => !registry.actorIds.has(actorId),
+        );
+        if (
+          task.assignees.length > 0 &&
+          (task.assigneeActorIds.length === 0 || hasMissingActorReferences)
+        ) {
           const migratedActorIds = migrateLegacyAssigneeActorIds(registry, task.assignees);
           task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...migratedActorIds);
         }
@@ -756,7 +762,11 @@ async function migrateLegacyNotes(
     await handle.whenReady();
     handle.change((doc) => {
       for (const note of doc.notes as MutableLegacyNote[]) {
-        if (note.authorActorId === undefined || note.authorActorId === null) {
+        const hasMissingAuthorActor =
+          note.authorActorId === undefined ||
+          note.authorActorId === null ||
+          !registry.actorIds.has(note.authorActorId);
+        if (hasMissingAuthorActor) {
           note.authorActorId = createActorId(resolveLegacyActorId(registry, note.author));
         }
         if (note.author === undefined || note.author === null || note.author.trim() === "") {
