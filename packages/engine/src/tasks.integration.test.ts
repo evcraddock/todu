@@ -4,7 +4,7 @@ import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument, ProjectId, Task, TaskId, TaskListDocument } from "@todu/core";
-import { createProjectId, createTaskId } from "@todu/core";
+import { createActorId, createProjectId, createTaskId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
@@ -32,13 +32,14 @@ async function removeTaskArrays(
     await taskListHandle.whenReady();
     taskListHandle.change((doc) => {
       const legacyTask = doc.tasks.find((task) => task.id === taskId) as
-        | (Task & { labels?: string[]; assignees?: string[] })
+        | (Task & { labels?: string[]; assigneeActorIds?: string[]; assignees?: string[] })
         | undefined;
       if (!legacyTask) {
         throw new Error(`task not found: ${taskId}`);
       }
 
       delete legacyTask.labels;
+      delete legacyTask.assigneeActorIds;
       delete legacyTask.assignees;
     });
     await repo.flush();
@@ -79,6 +80,7 @@ describe("task namespace", () => {
       expect(result.value.priority).toBe("medium");
       expect(result.value.projectId).toBe(projectId);
       expect(result.value.labels).toEqual([]);
+      expect(result.value.assigneeActorIds).toEqual([]);
       expect(result.value.assignees).toEqual([]);
       expect(result.value.id).toMatch(/^task-/);
     });
@@ -93,6 +95,45 @@ describe("task namespace", () => {
       if (!result.ok) return;
 
       expect(result.value.assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("creates a task with assignee actor ids", async () => {
+      await todu.project.update(projectId, {
+        authorizedAssigneeActorIds: [createActorId("actor-user")],
+      });
+      const result = await todu.task.create({
+        title: "Actor-assigned task",
+        projectId,
+        assigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.assigneeActorIds).toEqual(["actor-user"]);
+    });
+
+    it("rejects unknown assignee actor ids", async () => {
+      const result = await todu.task.create({
+        title: "Actor-assigned task",
+        projectId,
+        assigneeActorIds: [createActorId("actor-missing")],
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("actor");
+    });
+
+    it("rejects unauthorized assignee actor ids", async () => {
+      const result = await todu.task.create({
+        title: "Actor-assigned task",
+        projectId,
+        assigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+      expect(result.error.field).toBe("assigneeActorIds");
     });
 
     it("creates a task with all optional fields", async () => {
@@ -218,6 +259,7 @@ describe("task namespace", () => {
       expect(result.value).toHaveLength(1);
       expect(result.value[0].title).toBe("Legacy task");
       expect(result.value[0].labels).toEqual([]);
+      expect(result.value[0].assigneeActorIds).toEqual([]);
       expect(result.value[0].assignees).toEqual([]);
     });
 
@@ -582,6 +624,28 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.assignees).toEqual(["alice", "bob"]);
+    });
+
+    it("updates assignee actor ids", async () => {
+      await todu.project.update(projectId, {
+        authorizedAssigneeActorIds: [createActorId("actor-user")],
+      });
+      const result = await todu.task.update(taskId, {
+        assigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.assigneeActorIds).toEqual(["actor-user"]);
+    });
+
+    it("rejects unauthorized assignee actor id updates", async () => {
+      const result = await todu.task.update(taskId, {
+        assigneeActorIds: [createActorId("actor-user")],
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("validation");
+      expect(result.error.field).toBe("assigneeActorIds");
     });
 
     it("updates sync linkage fields", async () => {

@@ -6,6 +6,7 @@ import {
   createNotesDocument,
   createTaskDetailDocument,
   createTaskListDocument,
+  DEFAULT_OWNER_ACTOR_ID,
   SCHEMA_VERSION,
 } from "./schema.js";
 import { createIntegrationBindingId, createProjectId } from "./types.js";
@@ -29,6 +30,12 @@ describe("schema", () => {
     it("creates a catalog with empty labels", () => {
       const catalog = createEmptyCatalog();
       expect(catalog.labels).toEqual([]);
+    });
+
+    it("creates a catalog with the default owner actor", () => {
+      const catalog = createEmptyCatalog();
+      expect(catalog.actors).toEqual([{ id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" }]);
+      expect(catalog.ownerActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
     });
 
     it("creates a catalog with empty taskListDocIds", () => {

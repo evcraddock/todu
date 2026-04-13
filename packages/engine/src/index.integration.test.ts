@@ -184,6 +184,8 @@ describe("createTodu", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     const migratedCatalog = await readCatalogDocument(tmpDir);
+    expect(migratedCatalog.actors).toEqual([{ id: "actor-user", displayName: "user" }]);
+    expect(migratedCatalog.ownerActorId).toBe("actor-user");
     expect(migratedCatalog.taskListDocIds).toEqual({});
     expect(migratedCatalog.notesBucketDocIds).toEqual({});
     expect(migratedCatalog.noteBucketByNoteId).toEqual({});

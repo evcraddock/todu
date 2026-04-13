@@ -80,6 +80,8 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 
 - Dataset is rooted by a catalog document ID.
 - All clients/daemons for the same dataset should converge on the same catalog ID and referenced sub-document graph.
+- The catalog stores small shared metadata including projects, labels, actors, owner identity, habits, recurring templates, and references to heavier sub-documents.
+- Projects carry authorized-assignee actor ids, tasks carry actor assignment metadata, and notes carry actor authorship metadata as the assignment model evolves.
 
 ### Notes storage partitioning
 
