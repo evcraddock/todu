@@ -4,7 +4,13 @@ import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument, ProjectId, Task, TaskId, TaskListDocument } from "@todu/core";
-import { createActorId, createProjectId, createTaskId, DEFAULT_OWNER_ACTOR_ID } from "@todu/core";
+import {
+  createActorId,
+  createIntegrationBindingId,
+  createProjectId,
+  createTaskId,
+  DEFAULT_OWNER_ACTOR_ID,
+} from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
@@ -293,6 +299,11 @@ describe("task namespace", () => {
         projectId,
         priority: "high",
         description: "Detailed description",
+        descriptionApproval: {
+          state: "pendingApproval",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+        },
         labels: ["bug", "urgent"],
         dueDate: "2026-04-01",
         scheduledDate: "2026-03-30",
@@ -302,6 +313,12 @@ describe("task namespace", () => {
 
       expect(result.value.priority).toBe("high");
       expect(result.value.description).toBe("Detailed description");
+      expect(result.value.descriptionApproval).toEqual({
+        state: "pendingApproval",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
       expect(result.value.labels).toEqual(["bug", "urgent"]);
       expect(result.value.dueDate).toBe("2026-04-01");
       expect(result.value.scheduledDate).toBe("2026-03-30");
@@ -846,6 +863,57 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.description).toBe("New desc");
+      expect(result.value.descriptionApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
+    });
+
+    it("updates description approval metadata without changing the description", async () => {
+      const result = await todu.task.update(taskId, {
+        descriptionApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.description).toBe("Original desc");
+      expect(result.value.descriptionApproval).toEqual({
+        state: "approved",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        reviewedAt: "2026-04-13T00:00:00Z",
+        reviewedByActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
+    });
+
+    it("resets description approval when the description revision changes locally", async () => {
+      const approved = await todu.task.update(taskId, {
+        descriptionApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
+      });
+      if (!approved.ok) throw new Error("approval update failed");
+
+      const result = await todu.task.update(taskId, { description: "Locally edited" });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.descriptionApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
+      expect(result.value.descriptionApproval?.sourceFingerprint).not.toBe(
+        approved.value.descriptionApproval?.sourceFingerprint,
+      );
     });
 
     it("adds description to task that had none", async () => {
@@ -958,6 +1026,10 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.description).toBe("Original desc");
+      expect(result.value.descriptionApproval).toEqual({
+        state: "notRequired",
+        sourceFingerprint: expect.any(String),
+      });
     });
   });
 
@@ -1092,6 +1164,13 @@ describe("task namespace", () => {
         title: "Persistent",
         projectId,
         description: "Survives restart",
+        descriptionApproval: {
+          state: "approved",
+          sourceBindingId: createIntegrationBindingId("ibind-1"),
+          sourceActorId: createActorId("actor-user"),
+          reviewedAt: "2026-04-13T00:00:00Z",
+          reviewedByActorId: createActorId("actor-user"),
+        },
       });
       await todu.close();
       await new Promise((r) => setTimeout(r, 50));
@@ -1108,6 +1187,14 @@ describe("task namespace", () => {
       expect(detail.ok).toBe(true);
       if (!detail.ok) return;
       expect(detail.value.description).toBe("Survives restart");
+      expect(detail.value.descriptionApproval).toEqual({
+        state: "approved",
+        sourceBindingId: "ibind-1",
+        sourceActorId: "actor-user",
+        reviewedAt: "2026-04-13T00:00:00Z",
+        reviewedByActorId: "actor-user",
+        sourceFingerprint: expect.any(String),
+      });
     });
   });
 });

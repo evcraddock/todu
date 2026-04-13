@@ -9,7 +9,7 @@ import {
   DEFAULT_OWNER_ACTOR_ID,
   SCHEMA_VERSION,
 } from "./schema.js";
-import { createIntegrationBindingId, createProjectId } from "./types.js";
+import { createActorId, createIntegrationBindingId, createProjectId } from "./types.js";
 
 describe("schema", () => {
   it("exports schema version", () => {
@@ -76,9 +76,16 @@ describe("schema", () => {
 
   describe("createTaskDetailDocument", () => {
     it("creates a detail document", () => {
-      const doc = createTaskDetailDocument("task-123", "Some description");
+      const doc = createTaskDetailDocument("task-123", "Some description", {
+        state: "pendingApproval",
+        sourceBindingId: createIntegrationBindingId("ibind-1"),
+        sourceActorId: createActorId("actor-1"),
+        sourceFingerprint: "sha1:abc",
+      });
       expect(doc.taskId).toBe("task-123");
       expect(doc.description).toBe("Some description");
+      expect(doc.descriptionApproval?.state).toBe("pendingApproval");
+      expect(doc.descriptionApproval?.sourceBindingId).toBe("ibind-1");
     });
   });
 

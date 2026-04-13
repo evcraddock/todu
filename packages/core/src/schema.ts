@@ -5,6 +5,7 @@ import {
   type Habit,
   type HabitEntry,
   type HabitId,
+  type ImportedContentApproval,
   type IntegrationBinding,
   type IntegrationBindingId,
   type IntegrationBindingStatus,
@@ -109,6 +110,9 @@ export interface TaskDetailDocument {
 
   /** Full task description (markdown) */
   description: string;
+
+  /** Imported-content approval metadata for the description revision. */
+  descriptionApproval?: ImportedContentApproval;
 }
 
 /**
@@ -189,10 +193,15 @@ export function createTaskListDocument(projectId: ProjectId): TaskListDocument {
   };
 }
 
-export function createTaskDetailDocument(taskId: string, description: string): TaskDetailDocument {
+export function createTaskDetailDocument(
+  taskId: string,
+  description: string,
+  descriptionApproval?: ImportedContentApproval,
+): TaskDetailDocument {
   return {
     taskId,
     description,
+    ...(descriptionApproval !== undefined ? { descriptionApproval } : {}),
   };
 }
 

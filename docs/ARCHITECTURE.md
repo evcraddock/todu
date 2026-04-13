@@ -82,6 +82,8 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 - All clients/daemons for the same dataset should converge on the same catalog ID and referenced sub-document graph.
 - The catalog stores small shared metadata including projects, labels, actors, owner identity, habits, recurring templates, and references to heavier sub-documents.
 - Projects carry authorized-assignee actor ids, tasks carry actor assignment metadata, and notes carry actor authorship metadata as the assignment model evolves.
+- Integration bindings may also carry binding-scoped actor mappings and trust flags in `binding.options.actorMappings`.
+- Task descriptions and note bodies persist imported-content approval metadata beside the governed content so later runtime paths can recompute approval by binding, actor, and content fingerprint.
 - Legacy string assignees and note authors are migrated to actor ids during persistent catalog load before the catalog schema version is advanced.
 
 ### Notes storage partitioning

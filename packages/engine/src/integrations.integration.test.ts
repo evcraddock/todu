@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { IntegrationBindingId, ProjectId } from "@todu/core";
-import { createIntegrationBindingId } from "@todu/core";
+import { createActorId, createIntegrationBindingId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
@@ -100,6 +100,59 @@ describe("integration namespace", () => {
       if (!disabled.ok) return;
       expect(disabled.value).toHaveLength(1);
       expect(disabled.value[0].id).toBe(bindingB.value.id);
+    });
+
+    it("persists actor mappings with trust metadata in binding options", async () => {
+      const created = await todu.integration.create({
+        provider: "github",
+        projectId,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        options: {
+          actorMappings: [
+            {
+              actorId: createActorId("actor-user"),
+              externalAccountId: "12345",
+              externalLogin: "evcraddock",
+              displayName: "Erik",
+              trusted: true,
+            },
+          ],
+        },
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+
+      expect(created.value.options?.actorMappings).toEqual([
+        {
+          actorId: "actor-user",
+          externalAccountId: "12345",
+          externalLogin: "evcraddock",
+          displayName: "Erik",
+          trusted: true,
+        },
+      ]);
+
+      const fetched = await todu.integration.get(created.value.id);
+      expect(fetched.ok).toBe(true);
+      if (!fetched.ok) return;
+      expect(fetched.value.options?.actorMappings).toEqual(created.value.options?.actorMappings);
+
+      const returnedMappings = fetched.value.options?.actorMappings as Array<{ trusted?: boolean }>;
+      returnedMappings[0].trusted = false;
+
+      const fetchedAgain = await todu.integration.get(created.value.id);
+      expect(fetchedAgain.ok).toBe(true);
+      if (!fetchedAgain.ok) return;
+      expect(fetchedAgain.value.options?.actorMappings).toEqual([
+        {
+          actorId: "actor-user",
+          externalAccountId: "12345",
+          externalLogin: "evcraddock",
+          displayName: "Erik",
+          trusted: true,
+        },
+      ]);
     });
 
     it("gets, updates, and deletes a binding", async () => {

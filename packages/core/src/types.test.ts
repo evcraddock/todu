@@ -19,6 +19,7 @@ import {
   createRecurringId,
   createTaskId,
   err,
+  isContentApprovalState,
   isIntegrationBindingState,
   isNoteEntityType,
   isProjectStatus,
@@ -175,6 +176,19 @@ describe("type guards", () => {
     it("rejects invalid integration binding states", () => {
       expect(isIntegrationBindingState("pending")).toBe(false);
       expect(isIntegrationBindingState("")).toBe(false);
+    });
+  });
+
+  describe("isContentApprovalState", () => {
+    it("accepts valid content approval states", () => {
+      expect(isContentApprovalState("notRequired")).toBe(true);
+      expect(isContentApprovalState("pendingApproval")).toBe(true);
+      expect(isContentApprovalState("approved")).toBe(true);
+    });
+
+    it("rejects invalid content approval states", () => {
+      expect(isContentApprovalState("pending")).toBe(false);
+      expect(isContentApprovalState("")).toBe(false);
     });
   });
 });
