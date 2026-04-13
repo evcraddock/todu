@@ -1,19 +1,24 @@
 import {
+  type Actor,
+  createActorId,
   createIntegrationBindingId,
   createNoteId,
   createProjectId,
   createTaskId,
   type ExternalComment,
   type ExternalTask,
+  type ImportedCommentInput,
+  type ImportedTaskInput,
   type IntegrationBinding,
   type IntegrationBindingStatus,
   type Note,
   ok,
   type Project,
   type SyncProvider,
+  type SyncProviderV3,
   type Task,
 } from "@todu/core";
-import type { Todu } from "@todu/engine";
+import type { ToduWithInternalTools } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonLogger } from "./logger.js";
 import {
@@ -732,9 +737,17 @@ describe("sync-worker-runtime", () => {
     expect(todu.note.update).toHaveBeenNthCalledWith(1, localNote.id, {
       tags: ["sync:externalId:gh-comment-1"],
     });
-    expect(todu.note.update).toHaveBeenNthCalledWith(2, localNote.id, {
-      content: "remote edit",
-    });
+    expect(todu.note.update).toHaveBeenNthCalledWith(
+      2,
+      localNote.id,
+      expect.objectContaining({
+        content: "remote edit",
+        contentApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+        }),
+      }),
+    );
 
     handle.stop();
   });
@@ -860,21 +873,34 @@ describe("sync-worker-runtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(provider.mapToTask).toHaveBeenCalledTimes(1);
-    expect(provider.mapToTask).toHaveBeenCalledWith(pulledTasks[0], project);
-    expect(todu.task.create).toHaveBeenCalledTimes(1);
-    expect(todu.task.create).toHaveBeenCalledWith({
-      title: "Pulled bug",
-      projectId: project.id,
-      status: "waiting",
-      priority: "high",
-      description: "Imported from GitHub",
-      labels: ["bug"],
-      assignees: ["octocat"],
-      externalId: "gh-101",
-      sourceUrl: "https://example.com/issues/101",
-      createdAt: "2021-04-17T14:30:00.000Z",
-      updatedAt: "2026-03-10T15:00:00.000Z",
+    expect(provider.mapToTask).toHaveBeenCalledWith(
+      pulledTasks[0],
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(todu.project.update).toHaveBeenCalledWith(project.id, {
+      authorizedAssigneeActorIds: expect.arrayContaining([createActorId("actor-user")]),
     });
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    expect(todu.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Pulled bug",
+        projectId: project.id,
+        status: "waiting",
+        priority: "high",
+        description: "Imported from GitHub",
+        descriptionApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+        }),
+        labels: ["bug"],
+        assignees: ["octocat"],
+        assigneeActorIds: expect.arrayContaining([expect.stringMatching(/^actor-imported-/)]),
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+        createdAt: "2021-04-17T14:30:00.000Z",
+        updatedAt: "2026-03-10T15:00:00.000Z",
+      }),
+    );
 
     handle.stop();
   });
@@ -939,17 +965,25 @@ describe("sync-worker-runtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(todu.task.update).toHaveBeenCalledTimes(1);
-    expect(todu.task.update).toHaveBeenCalledWith(existingTask.id, {
-      title: "Updated pulled bug",
-      status: "inprogress",
-      priority: "high",
-      description: "Updated from GitHub",
-      labels: ["bug", "synced"],
-      assignees: ["octocat"],
-      externalId: "gh-101",
-      sourceUrl: "https://example.com/issues/101",
-      updatedAt: "2026-03-10T15:00:00.000Z",
-    });
+    expect(todu.task.update).toHaveBeenCalledWith(
+      existingTask.id,
+      expect.objectContaining({
+        title: "Updated pulled bug",
+        status: "inprogress",
+        priority: "high",
+        description: "Updated from GitHub",
+        descriptionApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+        }),
+        labels: ["bug", "synced"],
+        assignees: ["octocat"],
+        assigneeActorIds: expect.arrayContaining([expect.stringMatching(/^actor-imported-/)]),
+        externalId: "gh-101",
+        sourceUrl: "https://example.com/issues/101",
+        updatedAt: "2026-03-10T15:00:00.000Z",
+      }),
+    );
 
     handle.stop();
   });
@@ -1006,18 +1040,25 @@ describe("sync-worker-runtime", () => {
     const handle = runtime.start();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(todu.task.create).toHaveBeenCalledWith({
-      title: "Pulled bug",
-      projectId: project.id,
-      status: "waiting",
-      priority: "high",
-      description: "Imported from GitHub",
-      labels: ["bug"],
-      assignees: ["octocat"],
-      externalId: "gh-101",
-      createdAt: "2021-04-17T14:30:00.000Z",
-      updatedAt: "2021-04-17T14:30:00.000Z",
-    });
+    expect(todu.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Pulled bug",
+        projectId: project.id,
+        status: "waiting",
+        priority: "high",
+        description: "Imported from GitHub",
+        descriptionApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+        }),
+        labels: ["bug"],
+        assignees: ["octocat"],
+        assigneeActorIds: expect.arrayContaining([expect.stringMatching(/^actor-imported-/)]),
+        externalId: "gh-101",
+        createdAt: "2021-04-17T14:30:00.000Z",
+        updatedAt: "2021-04-17T14:30:00.000Z",
+      }),
+    );
 
     handle.stop();
   });
@@ -1157,13 +1198,22 @@ describe("sync-worker-runtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(todu.note.create).toHaveBeenCalledTimes(1);
-    expect(todu.note.create).toHaveBeenCalledWith({
-      content: "New comment from GitHub",
-      author: "octocat",
-      entityType: "task",
-      entityId: task.id,
-      tags: ["sync:externalId:gh-comment-1"],
-    });
+    expect(todu.note.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "New comment from GitHub",
+        author: "octocat",
+        authorActorId: expect.stringMatching(/^actor-imported-/),
+        contentApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+          sourceActorId: expect.stringMatching(/^actor-imported-/),
+        }),
+        entityType: "task",
+        entityId: task.id,
+        tags: ["sync:externalId:gh-comment-1"],
+        createdAt: "2026-03-10T10:00:00.000Z",
+      }),
+    );
 
     handle.stop();
   });
@@ -1219,9 +1269,18 @@ describe("sync-worker-runtime", () => {
 
     expect(todu.note.create).not.toHaveBeenCalled();
     expect(todu.note.update).toHaveBeenCalledTimes(1);
-    expect(todu.note.update).toHaveBeenCalledWith(existingNote.id, {
-      content: "Updated content from GitHub",
-    });
+    expect(todu.note.update).toHaveBeenCalledWith(
+      existingNote.id,
+      expect.objectContaining({
+        content: "Updated content from GitHub",
+        authorActorId: expect.stringMatching(/^actor-imported-/),
+        contentApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+          sourceActorId: expect.stringMatching(/^actor-imported-/),
+        }),
+      }),
+    );
 
     handle.stop();
   });
@@ -1627,6 +1686,260 @@ describe("sync-worker-runtime", () => {
 
     handle.stop();
   });
+
+  it("reuses trusted actor mappings during v2 pull and skips approval for mapped note authors", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, {
+      strategy: "pull",
+      options: {
+        actorMappings: [
+          {
+            actorId: createActorId("actor-octocat"),
+            externalLogin: "octocat",
+            displayName: "octocat",
+            trusted: true,
+          },
+        ],
+      },
+    });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [
+          {
+            externalId: "gh-101",
+            title: "Pulled bug",
+            description: "Imported from GitHub",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: "Trusted comment",
+            author: "octocat",
+            createdAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+      mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockReturnValue({
+        id: createTaskId("task-gh-101"),
+        title: "Pulled bug",
+        status: "active",
+        priority: "medium",
+        projectId: project.id,
+        labels: [],
+        assigneeActorIds: [],
+        assignees: ["octocat"],
+        externalId: "gh-101",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], {
+      actors: [{ id: createActorId("actor-octocat"), displayName: "octocat" }],
+    });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.integration.update).not.toHaveBeenCalled();
+    expect(todu.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assigneeActorIds: [createActorId("actor-octocat")],
+      }),
+    );
+    expect(todu.note.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorActorId: createActorId("actor-octocat"),
+        contentApproval: expect.objectContaining({
+          state: "notRequired",
+          sourceBindingId: binding.id,
+          sourceActorId: createActorId("actor-octocat"),
+        }),
+      }),
+    );
+
+    handle.stop();
+  });
+
+  it("executes the v3 import path and auto-creates actor mappings", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const provider = createV3Provider({
+      pull: vi.fn<SyncProviderV3["pull"]>().mockResolvedValue({
+        tasks: [
+          {
+            externalId: "gh-101",
+            title: "Pulled via v3",
+            description: "Imported from v3",
+            assignees: [{ externalLogin: "octocat", displayName: "Octocat" }],
+            createdAt: "2026-01-01T00:00:00Z",
+          } satisfies ImportedTaskInput,
+        ],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: "Imported comment",
+            author: { externalLogin: "octobot", displayName: "Octobot" },
+            createdAt: "2026-01-02T00:00:00Z",
+          } satisfies ImportedCommentInput,
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      providerApiVersion: 3,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.integration.update).toHaveBeenCalledTimes(1);
+    expect(todu.integration.update).toHaveBeenCalledWith(
+      binding.id,
+      expect.objectContaining({
+        options: expect.objectContaining({
+          actorMappings: expect.arrayContaining([
+            expect.objectContaining({
+              externalLogin: "octocat",
+              trusted: false,
+            }),
+            expect.objectContaining({
+              externalLogin: "octobot",
+              trusted: false,
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(todu.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Pulled via v3",
+        assigneeActorIds: expect.arrayContaining([expect.stringMatching(/^actor-imported-/)]),
+        descriptionApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+        }),
+      }),
+    );
+    expect(todu.note.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authorActorId: expect.stringMatching(/^actor-imported-/),
+        contentApproval: expect.objectContaining({
+          state: "pendingApproval",
+          sourceBindingId: binding.id,
+          sourceActorId: expect.stringMatching(/^actor-imported-/),
+        }),
+      }),
+    );
+
+    handle.stop();
+  });
+
+  it("skips unmapped outbound assignees with warnings on the v3 push path", async () => {
+    const project = createProject();
+    const task = createTask(project.id, {
+      assigneeActorIds: [createActorId("actor-mapped"), createActorId("actor-unmapped")],
+    });
+    const binding = createBinding(project.id, {
+      strategy: "push",
+      options: {
+        actorMappings: [
+          {
+            actorId: createActorId("actor-mapped"),
+            externalLogin: "octocat",
+            displayName: "Octocat",
+          },
+        ],
+      },
+    });
+    const provider = createV3Provider();
+    const logger = createLogger();
+    const todu = createTodu(project, [task], [binding], {
+      actors: [
+        { id: createActorId("actor-mapped"), displayName: "Mapped" },
+        { id: createActorId("actor-unmapped"), displayName: "Unmapped" },
+      ],
+    });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      providerApiVersion: 3,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger,
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.push).toHaveBeenCalledWith(
+      binding,
+      [
+        expect.objectContaining({
+          localTaskId: task.id,
+          assignees: [{ externalLogin: "octocat", displayName: "Octocat" }],
+        }),
+      ],
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "sync plugin skipped unmapped outbound assignee",
+      expect.objectContaining({
+        bindingId: binding.id,
+        taskId: task.id,
+        actorId: createActorId("actor-unmapped"),
+      }),
+    );
+
+    handle.stop();
+  });
 });
 
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
@@ -1642,6 +1955,7 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
       priority: "medium",
       projectId: createProject().id,
       labels: [],
+      assigneeActorIds: [],
       assignees: [],
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
@@ -1656,6 +1970,18 @@ function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   };
 }
 
+function createV3Provider(overrides: Partial<SyncProviderV3> = {}): SyncProviderV3 {
+  return {
+    initialize: vi.fn<SyncProviderV3["initialize"]>().mockResolvedValue(undefined),
+    pull: vi.fn<SyncProviderV3["pull"]>().mockResolvedValue({ tasks: [], comments: [] }),
+    push: vi.fn<SyncProviderV3["push"]>().mockResolvedValue({ commentLinks: [], taskLinks: [] }),
+    shutdown: vi.fn<SyncProviderV3["shutdown"]>().mockResolvedValue(undefined),
+    name: "github",
+    version: "1.0.0",
+    ...overrides,
+  };
+}
+
 function createProject(): Project {
   const now = new Date(0).toISOString();
 
@@ -1664,6 +1990,7 @@ function createProject(): Project {
     name: "Project",
     status: "active",
     priority: "medium",
+    authorizedAssigneeActorIds: [createActorId("actor-user")],
     createdAt: now,
     updatedAt: now,
   };
@@ -1679,6 +2006,7 @@ function createTask(projectId: Project["id"], overrides: Partial<Task> = {}): Ta
     priority: overrides.priority ?? "medium",
     projectId,
     labels: overrides.labels ?? [],
+    assigneeActorIds: overrides.assigneeActorIds ?? [],
     assignees: overrides.assignees ?? [],
     externalId: overrides.externalId,
     sourceUrl: overrides.sourceUrl,
@@ -1714,6 +2042,8 @@ function createNote(overrides: Partial<Note> & { content: string }): Note {
     id: createNoteId(overrides.id ?? `note-${Math.random().toString(36).slice(2, 8)}`),
     content: overrides.content,
     author: overrides.author ?? "user",
+    authorActorId: overrides.authorActorId,
+    contentApproval: overrides.contentApproval,
     entityType: overrides.entityType,
     entityId: overrides.entityId,
     tags: overrides.tags ?? [],
@@ -1723,6 +2053,7 @@ function createNote(overrides: Partial<Note> & { content: string }): Note {
 
 interface CreateToduOptions {
   notes?: Note[];
+  actors?: Actor[];
 }
 
 function createTodu(
@@ -1731,10 +2062,15 @@ function createTodu(
   bindings: IntegrationBinding[],
   options: CreateToduOptions = {},
 ): {
-  instance: Todu;
+  instance: ToduWithInternalTools;
   integration: {
     list: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
     updateStatus: ReturnType<typeof vi.fn>;
+  };
+  project: {
+    get: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
   task: {
     list: ReturnType<typeof vi.fn>;
@@ -1748,9 +2084,17 @@ function createTodu(
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
   };
+  actors: Actor[];
 } {
   const tasks: Task[] = [...initialTasks];
   const notes: Note[] = [...(options.notes ?? [])];
+  const actors: Actor[] = [{ id: createActorId("actor-user"), displayName: "user" }];
+  for (const actor of options.actors ?? []) {
+    if (!actors.some((candidate) => candidate.id === actor.id)) {
+      actors.push(actor);
+    }
+  }
+
   const statuses = new Map<string, IntegrationBindingStatus>();
   const integrationList = vi.fn(async (filter?: { provider?: string; enabled?: boolean }) => {
     let filtered = bindings;
@@ -1764,6 +2108,18 @@ function createTodu(
 
     return ok(filtered);
   });
+
+  const integrationUpdate = vi.fn(
+    async (id: string, input: { options?: IntegrationBinding["options"] }) => {
+      const binding = bindings.find((candidate) => candidate.id === id);
+      if (!binding) return ok(undefined);
+      if (input.options !== undefined) {
+        binding.options = input.options;
+      }
+      binding.updatedAt = new Date(0).toISOString();
+      return ok({ ...binding });
+    },
+  );
 
   const updateStatus = vi.fn(
     async (
@@ -1810,6 +2166,29 @@ function createTodu(
     },
   );
 
+  const projectGet = vi.fn().mockImplementation(async (id: string) => {
+    if (project.id !== id) return ok(undefined);
+    return ok({ ...project, authorizedAssigneeActorIds: [...project.authorizedAssigneeActorIds] });
+  });
+
+  const projectUpdate = vi.fn().mockImplementation(
+    async (
+      id: string,
+      input: {
+        authorizedAssigneeActorIds?: Project["authorizedAssigneeActorIds"];
+      },
+    ) => {
+      if (project.id !== id) return ok(undefined);
+      if (input.authorizedAssigneeActorIds !== undefined) {
+        project.authorizedAssigneeActorIds = [...input.authorizedAssigneeActorIds];
+      }
+      return ok({
+        ...project,
+        authorizedAssigneeActorIds: [...project.authorizedAssigneeActorIds],
+      });
+    },
+  );
+
   const taskList = vi.fn().mockImplementation(async (filter?: { projectId?: string }) => {
     if (!filter?.projectId) {
       return ok([...tasks]);
@@ -1833,7 +2212,9 @@ function createTodu(
         status?: Task["status"];
         priority?: Task["priority"];
         description?: string;
+        descriptionApproval?: unknown;
         labels?: string[];
+        assigneeActorIds?: Task["assigneeActorIds"];
         assignees?: string[];
         externalId?: string;
         sourceUrl?: string;
@@ -1847,6 +2228,7 @@ function createTodu(
           priority: input.priority ?? "medium",
           projectId: input.projectId as Project["id"],
           labels: input.labels ?? [],
+          assigneeActorIds: input.assigneeActorIds ?? [],
           assignees: input.assignees ?? [],
           createdAt: input.createdAt ?? new Date(0).toISOString(),
           updatedAt: input.updatedAt ?? input.createdAt ?? new Date(0).toISOString(),
@@ -1866,7 +2248,9 @@ function createTodu(
         status?: Task["status"];
         priority?: Task["priority"];
         description?: string;
+        descriptionApproval?: unknown;
         labels?: string[];
+        assigneeActorIds?: Task["assigneeActorIds"];
         assignees?: string[];
         externalId?: string;
         sourceUrl?: string;
@@ -1879,6 +2263,7 @@ function createTodu(
       if (input.status !== undefined) task.status = input.status;
       if (input.priority !== undefined) task.priority = input.priority;
       if (input.labels !== undefined) task.labels = [...input.labels];
+      if (input.assigneeActorIds !== undefined) task.assigneeActorIds = [...input.assigneeActorIds];
       if (input.assignees !== undefined) task.assignees = [...input.assignees];
       if (input.externalId !== undefined) task.externalId = input.externalId;
       if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl;
@@ -1898,42 +2283,60 @@ function createTodu(
         filtered = filtered.filter((n) => n.entityId === filter.entityId);
       }
       if (filter?.tag) {
-        const tag = filter.tag;
-        filtered = filtered.filter((n) => n.tags.includes(tag));
+        filtered = filtered.filter((n) => n.tags.includes(filter.tag));
       }
       return ok(filtered);
     },
   );
 
-  const noteCreate = vi.fn(
-    async (input: {
-      content: string;
-      author?: string;
-      entityType?: string;
-      entityId?: string;
-      tags?: string[];
-    }) => {
-      const note: Note = {
-        id: createNoteId(`note-${String(noteIdCounter++).padStart(3, "0")}`),
-        content: input.content,
-        author: input.author ?? "user",
-        entityType: input.entityType as Note["entityType"],
-        entityId: input.entityId,
-        tags: input.tags ?? [],
-        createdAt: new Date(0).toISOString(),
-      };
-      notes.push(note);
+  const noteCreate = vi
+    .fn()
+    .mockImplementation(
+      async (input: {
+        content: string;
+        author?: string;
+        authorActorId?: Note["authorActorId"];
+        contentApproval?: Note["contentApproval"];
+        entityType?: string;
+        entityId?: string;
+        tags?: string[];
+        createdAt?: string;
+      }) => {
+        const note: Note = {
+          id: createNoteId(`note-${String(noteIdCounter++).padStart(3, "0")}`),
+          content: input.content,
+          author: input.author ?? "user",
+          authorActorId: input.authorActorId,
+          contentApproval: input.contentApproval,
+          entityType: input.entityType as Note["entityType"],
+          entityId: input.entityId,
+          tags: input.tags ?? [],
+          createdAt: input.createdAt ?? new Date(0).toISOString(),
+        };
+        notes.push(note);
+        return ok(note);
+      },
+    );
+
+  const noteUpdate = vi.fn().mockImplementation(
+    async (
+      id: string,
+      input: {
+        content?: string;
+        tags?: string[];
+        authorActorId?: Note["authorActorId"];
+        contentApproval?: Note["contentApproval"];
+      },
+    ) => {
+      const note = notes.find((n) => n.id === id);
+      if (!note) return ok(undefined);
+      if (input.content !== undefined) note.content = input.content;
+      if (input.tags !== undefined) note.tags = input.tags;
+      if (input.authorActorId !== undefined) note.authorActorId = input.authorActorId;
+      if (input.contentApproval !== undefined) note.contentApproval = input.contentApproval;
       return ok(note);
     },
   );
-
-  const noteUpdate = vi.fn(async (id: string, input: { content?: string; tags?: string[] }) => {
-    const note = notes.find((n) => n.id === id);
-    if (!note) return ok(undefined);
-    if (input.content !== undefined) note.content = input.content;
-    if (input.tags !== undefined) note.tags = input.tags;
-    return ok(note);
-  });
 
   const noteDelete = vi.fn(async (id: string) => {
     const index = notes.findIndex((n) => n.id === id);
@@ -1941,10 +2344,33 @@ function createTodu(
     return ok(undefined);
   });
 
+  const actorList = vi.fn().mockImplementation(async () => ok([...actors]));
+  const actorEnsure = vi
+    .fn()
+    .mockImplementation(async (input: { id: Actor["id"]; displayName: string }) => {
+      const existing = actors.find((actor) => actor.id === input.id);
+      if (existing) return ok(existing);
+      const created: Actor = { id: input.id, displayName: input.displayName };
+      actors.push(created);
+      return ok(created);
+    });
+
   return {
     instance: {
+      __internal: {
+        syncRuntime: {
+          actors: {
+            list: actorList,
+            getOwnerActorId: vi
+              .fn()
+              .mockImplementation(async () => ok(createActorId("actor-user"))),
+            ensure: actorEnsure,
+          },
+        },
+      },
       project: {
-        get: vi.fn().mockResolvedValue(ok(project)),
+        get: projectGet,
+        update: projectUpdate,
       },
       task: {
         list: taskList,
@@ -1954,6 +2380,7 @@ function createTodu(
       },
       integration: {
         list: integrationList,
+        update: integrationUpdate,
         updateStatus,
       },
       note: {
@@ -1962,10 +2389,15 @@ function createTodu(
         update: noteUpdate,
         delete: noteDelete,
       },
-    } as unknown as Todu,
+    } as unknown as ToduWithInternalTools,
     integration: {
       list: integrationList,
+      update: integrationUpdate,
       updateStatus,
+    },
+    project: {
+      get: projectGet,
+      update: projectUpdate,
     },
     task: {
       list: taskList,
@@ -1979,6 +2411,7 @@ function createTodu(
       update: noteUpdate,
       delete: noteDelete,
     },
+    actors,
   };
 }
 

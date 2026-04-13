@@ -27,11 +27,7 @@ import {
   DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
-import {
-  isLoadedSyncPluginV2,
-  type LoadedConfiguredPlugin,
-  loadConfiguredPlugins,
-} from "./sync-plugin-loader.js";
+import { type LoadedConfiguredPlugin, loadConfiguredPlugins } from "./sync-plugin-loader.js";
 import {
   createSyncPluginWorkerRuntime,
   resolveSyncPluginExecutionConfig,
@@ -679,17 +675,6 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       let workerRegistration: WorkerRegistration;
 
       if (loadedPlugin.kind === "sync-provider") {
-        if (!isLoadedSyncPluginV2(loadedPlugin)) {
-          runtimeLogger.info("sync provider loaded without runtime execution support yet", {
-            pluginName: loadedPlugin.manifest.name,
-            pluginVersion: loadedPlugin.manifest.version,
-            modulePath: loadedPlugin.modulePath,
-            apiVersion: loadedPlugin.manifest.apiVersion,
-          });
-          loadedPlugins.set(loadedPlugin.workerRegistration.manifest.type, loadedPlugin);
-          continue;
-        }
-
         const pluginConfigResolution = resolveSyncPluginExecutionConfig(
           loadedPlugin.manifest.name,
           pluginConfig,
@@ -711,6 +696,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
             modulePath: loadedPlugin.modulePath,
             authorityId: resolvedConfig.socketPath,
             provider: loadedPlugin.provider,
+            providerApiVersion: loadedPlugin.manifest.apiVersion,
             config: pluginConfigResolution.config,
             logger: runtimeLogger,
             getTodu: () => todu,
