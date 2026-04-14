@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
 
 describe("createDaemonToduClient", () => {
+  it("routes actor.list to daemon RPC and preserves Result shape", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      value: [{ id: "actor-user", displayName: "user" }],
+    });
+
+    const client = createDaemonToduClient({ request });
+
+    const result = await client.actor.list();
+
+    expect(request).toHaveBeenCalledWith("actor.list", {});
+    expect(result).toEqual({
+      ok: true,
+      value: [{ id: "actor-user", displayName: "user" }],
+    });
+  });
+
   it("routes task.list to daemon RPC and preserves Result shape", async () => {
     const request = vi.fn().mockResolvedValue({
       ok: true,

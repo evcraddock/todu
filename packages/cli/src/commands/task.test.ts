@@ -10,6 +10,76 @@ describe("task commands", () => {
     process.exitCode = undefined;
   });
 
+  it("passes actor assignee updates through on task update", async () => {
+    const invokeDaemonMock = vi.fn(async (method: string) => {
+      if (method === "task.update") {
+        return {
+          ok: true,
+          value: {
+            id: "task-1",
+            title: "Actor task",
+            status: "active",
+            priority: "medium",
+            projectId: "proj-1",
+            labels: [],
+            assigneeActorIds: ["actor-user"],
+            assignees: [],
+            createdAt: "2026-03-01T00:00:00.000Z",
+            updatedAt: "2026-03-01T00:00:00.000Z",
+          },
+        };
+      }
+      if (method === "project.list") {
+        return { ok: true, value: [] };
+      }
+      if (method === "actor.list") {
+        return {
+          ok: true,
+          value: [{ id: "actor-user", displayName: "user" }],
+        };
+      }
+
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const invokeDaemon = invokeDaemonMock as unknown as CliDaemonInvoker;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const program = new Command();
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
+    registerTaskCommands(program, invokeDaemon);
+
+    await program.parseAsync(["task", "update", "task-1", "--assignee-actor", "actor-user"], {
+      from: "user",
+    });
+
+    expect(invokeDaemonMock).toHaveBeenCalledWith("task.update", {
+      id: "task-1",
+      input: expect.objectContaining({ assigneeActorIds: ["actor-user"] }),
+    });
+    expect(logSpy).toHaveBeenCalled();
+  });
+
+  it("rejects conflicting assignee update flags", async () => {
+    const invokeDaemon = vi.fn() as unknown as CliDaemonInvoker;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const program = new Command();
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
+    registerTaskCommands(program, invokeDaemon);
+
+    await program.parseAsync(
+      ["task", "update", "task-1", "--assignee-actor", "actor-user", "--clear-assignees"],
+      {
+        from: "user",
+      },
+    );
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "Error: --assignee-actor and --clear-assignees cannot be used together",
+    );
+    expect(process.exitCode).toBe(1);
+  });
+
   it("passes created-at date range filtering through on task list", async () => {
     const invokeDaemonMock = vi.fn(async (method: string) => {
       if (method === "task.list") {

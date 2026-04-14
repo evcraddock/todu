@@ -1,6 +1,7 @@
 import type { Project, ProjectStatus } from "@todu/core";
 import { isProjectStatus } from "@todu/core";
 import type { Command } from "commander";
+import { buildActorMap, formatActorList } from "../actor-display.js";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { colorPriority, colorStatus, formatJSON, formatTable } from "../format.js";
 
@@ -20,12 +21,13 @@ function projectToRow(p: Project): Record<string, string> {
   };
 }
 
-function projectDetail(p: Project): string {
+function projectDetail(p: Project, actorMap: Awaited<ReturnType<typeof buildActorMap>>): string {
   const lines = [
     `ID:          ${p.id}`,
     `Name:        ${p.name}`,
     `Status:      ${p.status}`,
     `Priority:    ${p.priority}`,
+    `Actors:      ${formatActorList(p.authorizedAssigneeActorIds, actorMap, [], { includeIds: true })}`,
     `Created:     ${p.createdAt}`,
     `Updated:     ${p.updatedAt}`,
   ];
@@ -99,8 +101,9 @@ export function registerProjectCommands(program: Command, invokeDaemon: CliDaemo
       if (format === "json") {
         console.log(formatJSON(result.value));
       } else {
+        const actorMap = await buildActorMap(invokeDaemon);
         console.log("Project created:");
-        console.log(projectDetail(result.value));
+        console.log(projectDetail(result.value, actorMap));
       }
     });
 
@@ -152,7 +155,8 @@ export function registerProjectCommands(program: Command, invokeDaemon: CliDaemo
       if (format === "json") {
         console.log(formatJSON(resolved.value));
       } else {
-        console.log(projectDetail(resolved.value));
+        const actorMap = await buildActorMap(invokeDaemon);
+        console.log(projectDetail(resolved.value, actorMap));
       }
     });
 
@@ -192,8 +196,9 @@ export function registerProjectCommands(program: Command, invokeDaemon: CliDaemo
       if (format === "json") {
         console.log(formatJSON(result.value));
       } else {
+        const actorMap = await buildActorMap(invokeDaemon);
         console.log("Project updated:");
-        console.log(projectDetail(result.value));
+        console.log(projectDetail(result.value, actorMap));
       }
     });
 

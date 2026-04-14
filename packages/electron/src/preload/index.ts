@@ -7,6 +7,11 @@ import { contextBridge, ipcRenderer } from "electron";
  * Each method maps 1:1 to an IPC channel registered in main/ipc.ts.
  */
 const api = {
+  // ── Actor ──────────────────────────────────────────────────────────
+  actor: {
+    list: () => ipcRenderer.invoke("todu:actor:list"),
+  },
+
   // ── Project ────────────────────────────────────────────────────────
   project: {
     list: (filter?: unknown) => ipcRenderer.invoke("todu:project:list", filter),

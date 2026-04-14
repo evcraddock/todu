@@ -5,6 +5,7 @@ import {
 } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
+import { createActorNamespace } from "./actors.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
@@ -50,6 +51,7 @@ export {
 export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
+  ActorNamespace,
   HabitNamespace,
   IntegrationNamespace,
   LabelNamespace,
@@ -252,6 +254,7 @@ export async function createTodu(
         actors: createSyncRuntimeActorTools(storage.catalog),
       },
     },
+    actor: createActorNamespace(storage.catalog),
     project: createProjectNamespace(storage.catalog),
     task: createTaskNamespace(storage.catalog, storage.repo),
     label: createLabelNamespace(storage.catalog, storage.repo),

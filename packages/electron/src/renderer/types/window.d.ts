@@ -1,4 +1,5 @@
 import type {
+  Actor,
   CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
@@ -35,6 +36,10 @@ import type {
   UpdateTaskInput,
 } from "@todu/core/browser";
 import type { UpcomingOccurrence } from "@todu/engine";
+
+export interface ToduActorApi {
+  list(): Promise<Result<Actor[]>>;
+}
 
 export interface ToduProjectApi {
   list(filter?: ProjectFilter): Promise<Result<Project[]>>;
@@ -185,6 +190,7 @@ export interface ToduSyncApi {
 }
 
 export interface ToduApi {
+  actor: ToduActorApi;
   project: ToduProjectApi;
   task: ToduTaskApi;
   label: ToduLabelApi;

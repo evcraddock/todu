@@ -1101,10 +1101,19 @@ button.detail-description {
   gap: 6px;
 }
 
+.detail-meta-cell-wide {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
 .detail-meta-label {
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.detail-approval-row {
+  margin-bottom: 8px;
 }
 
 /* Tabbed detail content */

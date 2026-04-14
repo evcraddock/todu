@@ -21,7 +21,6 @@ export function CreateNoteDialog({ onClose }: { onClose: () => void }): ReactNod
       {
         content: content.trim(),
         tags: tags.length > 0 ? tags : undefined,
-        author: "user",
       },
       {
         onSuccess: onClose,

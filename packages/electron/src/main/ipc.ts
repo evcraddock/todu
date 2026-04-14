@@ -35,6 +35,9 @@ export function createDaemonIpcHandlers(
     invokeDaemonRaw<T>(options.daemon, method, params);
 
   return {
+    // ── Actor ─────────────────────────────────────────────────────────────
+    "todu:actor:list": () => invokeResult("actor.list"),
+
     // ── Project ───────────────────────────────────────────────────────────
     "todu:project:list": (_event, filter) => invokeResult("project.list", { filter }),
     "todu:project:get": (_event, id) => invokeResult("project.get", { id }),

@@ -78,6 +78,8 @@ describe("project CLI commands", () => {
     const showOutput = run(`project show ${created.id}`);
     expect(showOutput).toContain("JSON Project");
     expect(showOutput).toContain(created.id);
+    expect(showOutput).toContain("Actors:");
+    expect(showOutput).toContain("actor-user");
     expect(showOutput).not.toContain("Sync:");
 
     // Show by name

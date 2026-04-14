@@ -62,12 +62,13 @@ describe("task CLI commands", () => {
 
     // Create task JSON
     const taskJson = run(
-      `--format json task create --title "Add signup" --project "My App" --label feature`,
+      `--format json task create --title "Add signup" --project "My App" --label feature --assignee-actor actor-user`,
     );
     const task = JSON.parse(taskJson);
     expect(task.title).toBe("Add signup");
     expect(task.id).toMatch(/^task-/);
     expect(task.labels).toContain("feature");
+    expect(task.assigneeActorIds).toEqual(["actor-user"]);
 
     // List
     const listOutput = run("task list");
@@ -88,14 +89,17 @@ describe("task CLI commands", () => {
     const showOutput = run(`task show ${task.id}`);
     expect(showOutput).toContain("Add signup");
     expect(showOutput).toContain(task.id);
+    expect(showOutput).toContain("Assignees:");
+    expect(showOutput).toContain("user (actor-user)");
 
     // Update
     const updateOutput = run(
-      `task update ${task.id} --status inprogress --title "Add signup flow"`,
+      `task update ${task.id} --status inprogress --title "Add signup flow" --clear-assignees`,
     );
     expect(updateOutput).toContain("Task updated:");
     expect(updateOutput).toContain("Add signup flow");
     expect(updateOutput).toContain("inprogress");
+    expect(updateOutput).toContain("Assignees:   (none)");
 
     // Search
     const searchOutput = run("task search login");
@@ -114,6 +118,9 @@ describe("task CLI commands", () => {
     // Verify moved
     const archiveTasks = run('--format json task list --project "Archive"');
     expect(JSON.parse(archiveTasks)).toHaveLength(1);
+
+    const textList = run('task list --project "My App"');
+    expect(textList).toContain("Assignees");
 
     const appTasks = run('--format json task list --project "My App"');
     expect(JSON.parse(appTasks)).toHaveLength(1); // only the login bug remains

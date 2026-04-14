@@ -16,6 +16,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@todu/core/browser": path.resolve(root, "packages/core/src/browser.ts"),
       "@todu/core": path.resolve(root, "packages/core/src/index.ts"),
       "@todu/engine": path.resolve(root, "packages/engine/src/index.ts"),
       "@todu/cli": path.resolve(root, "packages/cli/src/index.ts"),

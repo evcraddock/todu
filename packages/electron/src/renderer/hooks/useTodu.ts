@@ -33,6 +33,7 @@ import type {
 // ============================================================================
 
 export const queryKeys = {
+  actors: ["actors"] as const,
   projects: ["projects"] as const,
   project: (id: string) => ["projects", id] as const,
   tasks: (filter?: unknown, sort?: unknown) => ["tasks", filter, sort] as const,
@@ -75,6 +76,17 @@ function unwrap<T>(result: Result<T>): T {
     throw new Error(formatError(result.error));
   }
   return result.value;
+}
+
+// ============================================================================
+// Actor Hooks
+// ============================================================================
+
+export function useActors() {
+  return useQuery({
+    queryKey: queryKeys.actors,
+    queryFn: async () => unwrap(await window.todu.actor.list()),
+  });
 }
 
 // ============================================================================
