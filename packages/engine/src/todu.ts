@@ -1,6 +1,7 @@
 import type {
   Actor,
   ActorId,
+  CreateActorInput,
   CreateHabitInput,
   CreateIntegrationBindingInput,
   CreateLabelInput,
@@ -96,6 +97,10 @@ export interface ToduConfig {
 
 export interface ActorNamespace {
   list(): Promise<Result<Actor[]>>;
+  create(input: CreateActorInput): Promise<Result<Actor>>;
+  rename(id: ActorId, displayName: string): Promise<Result<Actor>>;
+  archive(id: ActorId): Promise<Result<Actor>>;
+  unarchive(id: ActorId): Promise<Result<Actor>>;
 }
 
 export interface ProjectNamespace {
@@ -276,6 +281,10 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
   return {
     actor: {
       list: stub,
+      create: stub,
+      rename: stub,
+      archive: stub,
+      unarchive: stub,
     },
     project: {
       create: stub,

@@ -162,6 +162,11 @@ export interface Actor {
   archived?: boolean;
 }
 
+export interface CreateActorInput {
+  id: ActorId;
+  displayName: string;
+}
+
 // ============================================================================
 // Imported content approval + binding-scoped actor mapping metadata
 // ============================================================================

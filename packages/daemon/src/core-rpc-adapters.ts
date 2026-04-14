@@ -1,4 +1,5 @@
 import {
+  type CreateActorInput,
   type CreateHabitInput,
   type CreateIntegrationBindingInput,
   type CreateLabelInput,
@@ -6,6 +7,7 @@ import {
   type CreateProjectInput,
   type CreateRecurringInput,
   type CreateTaskInput,
+  createActorId,
   createHabitId,
   createIntegrationBindingId,
   createLabelId,
@@ -53,6 +55,30 @@ export function createCoreNamespaceHandlers(
     actor: {
       list: method(async (_request, todu) => {
         return todu.actor.list();
+      }),
+      create: method(async (request, todu) => {
+        const rawInput = getRequiredObjectParam<{ id: string; displayName: string }>(
+          request,
+          "input",
+        );
+        const input: CreateActorInput = {
+          id: createActorId(rawInput.id),
+          displayName: rawInput.displayName,
+        };
+        return todu.actor.create(input);
+      }),
+      rename: method(async (request, todu) => {
+        const id = createActorId(getRequiredStringParam(request, "id"));
+        const displayName = getRequiredStringParam(request, "displayName");
+        return todu.actor.rename(id, displayName);
+      }),
+      archive: method(async (request, todu) => {
+        const id = createActorId(getRequiredStringParam(request, "id"));
+        return todu.actor.archive(id);
+      }),
+      unarchive: method(async (request, todu) => {
+        const id = createActorId(getRequiredStringParam(request, "id"));
+        return todu.actor.unarchive(id);
       }),
     },
     project: {

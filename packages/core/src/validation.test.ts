@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createActorId, createIntegrationBindingId, createProjectId } from "./types.js";
 import {
+  MAX_ACTOR_DISPLAY_NAME_LENGTH,
   MAX_ACTOR_ID_LENGTH,
   MAX_ASSIGNEE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
@@ -9,8 +10,10 @@ import {
   MAX_NOTE_CONTENT_LENGTH,
   MAX_PROJECT_NAME_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  validateActorDisplayName,
   validateActorIds,
   validateAssignees,
+  validateCreateActorInput,
   validateCreateHabitInput,
   validateCreateIntegrationBindingInput,
   validateCreateLabelInput,
@@ -842,6 +845,37 @@ describe("validateAssignees", () => {
     const error = validateAssignees(["a".repeat(MAX_ASSIGNEE_LENGTH + 1)]);
     expect(error?.field).toBe("assignees");
     expect(error?.message).toContain(`${MAX_ASSIGNEE_LENGTH}`);
+  });
+});
+
+describe("validateCreateActorInput", () => {
+  it("accepts valid actor create input", () => {
+    expect(
+      validateCreateActorInput({ id: createActorId("actor-reviewer"), displayName: "Reviewer" }),
+    ).toBeNull();
+  });
+
+  it("rejects blank actor display names", () => {
+    const error = validateCreateActorInput({
+      id: createActorId("actor-reviewer"),
+      displayName: "   ",
+    });
+    expect(error?.field).toBe("displayName");
+  });
+});
+
+describe("validateActorDisplayName", () => {
+  it("accepts valid actor display names", () => {
+    expect(validateActorDisplayName("displayName", "Reviewer")).toBeNull();
+  });
+
+  it("rejects too-long actor display names", () => {
+    const error = validateActorDisplayName(
+      "displayName",
+      "a".repeat(MAX_ACTOR_DISPLAY_NAME_LENGTH + 1),
+    );
+    expect(error?.field).toBe("displayName");
+    expect(error?.message).toContain(`${MAX_ACTOR_DISPLAY_NAME_LENGTH}`);
   });
 });
 
