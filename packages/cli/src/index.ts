@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { registerActorCommands } from "./commands/actor.js";
 import { registerConfigCommands } from "./commands/config.js";
 import { registerDaemonCommands } from "./commands/daemon.js";
 import { registerHabitCommands } from "./commands/habit.js";
@@ -39,6 +40,7 @@ program
 const invokeDaemon = createCliDaemonInvoker(program);
 
 // Register command groups
+registerActorCommands(program, invokeDaemon);
 registerDaemonCommands(program, invokeDaemon);
 registerProjectCommands(program, invokeDaemon);
 registerTaskCommands(program, invokeDaemon);

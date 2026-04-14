@@ -1,5 +1,6 @@
 import { validateDateString, validateRRule, validateTimezone } from "./schedule.js";
 import type {
+  CreateActorInput,
   CreateHabitInput,
   CreateIntegrationBindingInput,
   CreateLabelInput,
@@ -48,6 +49,7 @@ export const MAX_NOTE_CONTENT_LENGTH = 10000;
 export const MAX_INTEGRATION_FIELD_LENGTH = 255;
 export const MAX_ASSIGNEE_LENGTH = 100;
 export const MAX_ACTOR_ID_LENGTH = 100;
+export const MAX_ACTOR_DISPLAY_NAME_LENGTH = 100;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
@@ -253,6 +255,32 @@ export function validateActorId(field: string, actorId: string): ValidationError
   if (actorId.trim().length > MAX_ACTOR_ID_LENGTH) {
     return validationError(field, `Actor ID must be ${MAX_ACTOR_ID_LENGTH} characters or less`);
   }
+  return null;
+}
+
+export function validateActorDisplayName(
+  field: string,
+  displayName: string,
+): ValidationError | null {
+  if (typeof displayName !== "string" || displayName.trim().length === 0) {
+    return validationError(field, "Actor display name must be a non-empty string");
+  }
+  if (displayName.trim().length > MAX_ACTOR_DISPLAY_NAME_LENGTH) {
+    return validationError(
+      field,
+      `Actor display name must be ${MAX_ACTOR_DISPLAY_NAME_LENGTH} characters or less`,
+    );
+  }
+  return null;
+}
+
+export function validateCreateActorInput(input: CreateActorInput): ValidationError | null {
+  const actorIdError = validateActorId("id", input.id);
+  if (actorIdError) return actorIdError;
+
+  const displayNameError = validateActorDisplayName("displayName", input.displayName);
+  if (displayNameError) return displayNameError;
+
   return null;
 }
 

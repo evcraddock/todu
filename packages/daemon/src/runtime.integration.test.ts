@@ -86,6 +86,10 @@ describe("createDaemonRuntime", () => {
 
     expect(DAEMON_CAPABILITY_METHODS).toEqual(
       expect.arrayContaining([
+        "actor.create",
+        "actor.rename",
+        "actor.archive",
+        "actor.unarchive",
         "integration.create",
         "integration.status",
         "recurring.process",
@@ -94,6 +98,87 @@ describe("createDaemonRuntime", () => {
         "sync.join",
       ]),
     );
+
+    await runtime.stop();
+  });
+
+  it("routes actor list/create/rename/archive/unarchive over UDS", async () => {
+    const runtime = createDaemonRuntime({
+      storagePath: tmpDir,
+      role: "authority",
+    });
+
+    await runtime.start();
+
+    const createResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-create-1",
+      method: "actor.create",
+      params: {
+        input: {
+          id: "actor-reviewer",
+          displayName: "Reviewer",
+        },
+      },
+    });
+
+    expect(createResponse.result).toEqual({
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+    });
+
+    const renameResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-rename-1",
+      method: "actor.rename",
+      params: {
+        id: "actor-reviewer",
+        displayName: "Lead Reviewer",
+      },
+    });
+
+    expect(renameResponse.result).toEqual({
+      id: "actor-reviewer",
+      displayName: "Lead Reviewer",
+    });
+
+    const archiveResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-archive-1",
+      method: "actor.archive",
+      params: {
+        id: "actor-reviewer",
+      },
+    });
+
+    expect(archiveResponse.result).toEqual({
+      id: "actor-reviewer",
+      displayName: "Lead Reviewer",
+      archived: true,
+    });
+
+    const listResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-list-1",
+      method: "actor.list",
+      params: {},
+    });
+
+    expect(listResponse.result).toEqual(
+      expect.arrayContaining([
+        { id: "actor-user", displayName: "user" },
+        { id: "actor-reviewer", displayName: "Lead Reviewer", archived: true },
+      ]),
+    );
+
+    const unarchiveResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-unarchive-1",
+      method: "actor.unarchive",
+      params: {
+        id: "actor-reviewer",
+      },
+    });
+
+    expect(unarchiveResponse.result).toEqual({
+      id: "actor-reviewer",
+      displayName: "Lead Reviewer",
+    });
 
     await runtime.stop();
   });
@@ -2051,6 +2136,23 @@ describe("createDaemonRuntime", () => {
       },
     });
 
+    const actorRenameBadRequestResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-rename-bad-request",
+      method: "actor.rename",
+      params: {
+        id: "actor-user",
+        displayName: 42,
+      },
+    });
+
+    expect(actorRenameBadRequestResponse.error).toEqual({
+      code: "BAD_REQUEST",
+      message: "actor.rename requires params.displayName as a non-empty string",
+      details: {
+        field: "displayName",
+      },
+    });
+
     const notFoundResponse = await sendRequest(runtime.config().socketPath, {
       id: "project-get-not-found",
       method: "project.get",
@@ -2065,6 +2167,42 @@ describe("createDaemonRuntime", () => {
       details: {
         entity: "project",
         id: "proj-missing",
+      },
+    });
+
+    const actorNotFoundResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-archive-not-found",
+      method: "actor.archive",
+      params: {
+        id: "actor-missing",
+      },
+    });
+
+    expect(actorNotFoundResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "actor not found: actor-missing",
+      details: {
+        entity: "actor",
+        id: "actor-missing",
+      },
+    });
+
+    const actorValidationResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-create-validation",
+      method: "actor.create",
+      params: {
+        input: {
+          id: "actor-user",
+          displayName: "Duplicate",
+        },
+      },
+    });
+
+    expect(actorValidationResponse.error).toEqual({
+      code: "VALIDATION_ERROR",
+      message: "Actor ID already exists: actor-user",
+      details: {
+        field: "id",
       },
     });
 

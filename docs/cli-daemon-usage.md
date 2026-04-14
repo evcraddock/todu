@@ -322,6 +322,27 @@ Task date-range behavior notes:
 - For monthly review, use `--status done --updated-from/--updated-to` to find tasks completed during the target month.
 - Invalid task date input fails with a validation error.
 
+## Actor management via CLI
+
+Manage catalog actors directly through the local daemon:
+
+```bash
+todu actor list
+todu --format json actor list
+
+todu actor create --id actor-reviewer --name "Reviewer"
+todu actor rename actor-reviewer --name "Lead Reviewer"
+todu actor archive actor-reviewer
+todu actor unarchive actor-reviewer
+```
+
+Behavior notes:
+- `actor list` shows actor IDs, display names, and archived state in both text and JSON output.
+- `actor create` rejects duplicate actor IDs.
+- `actor rename` updates only the display name; actor IDs remain stable.
+- `actor archive` and `actor unarchive` toggle archived state without deleting the actor.
+- Invalid actor operations return daemon-backed validation or not-found errors.
+
 ## Actor-aware task and note surfaces
 
 Task and note text output now prefers actor-based identity data when available.
