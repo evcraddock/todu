@@ -50,6 +50,11 @@ export function createCoreNamespaceHandlers(
   const method = createMethodExecutor(options.getTodu);
 
   return {
+    actor: {
+      list: method(async (_request, todu) => {
+        return todu.actor.list();
+      }),
+    },
     project: {
       create: method(async (request, todu) => {
         const input = getRequiredObjectParam<CreateProjectInput>(request, "input");

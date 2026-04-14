@@ -94,6 +94,10 @@ export interface ToduConfig {
 // Each vertical slice will implement its namespace.
 // ============================================================================
 
+export interface ActorNamespace {
+  list(): Promise<Result<Actor[]>>;
+}
+
 export interface ProjectNamespace {
   create(input: CreateProjectInput): Promise<Result<Project>>;
   list(filter?: ProjectFilter): Promise<Result<Project[]>>;
@@ -222,6 +226,7 @@ export interface ConfigNamespace {
 }
 
 export interface Todu {
+  actor: ActorNamespace;
   project: ProjectNamespace;
   task: TaskNamespace;
   label: LabelNamespace;
@@ -269,6 +274,9 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
   const stub = () => notImplemented();
 
   return {
+    actor: {
+      list: stub,
+    },
     project: {
       create: stub,
       list: stub,

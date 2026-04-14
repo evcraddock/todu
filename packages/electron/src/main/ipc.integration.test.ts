@@ -2,6 +2,28 @@ import { describe, expect, it, vi } from "vitest";
 import { createDaemonIpcHandlers, mapDaemonErrorToToduError } from "./ipc.js";
 
 describe("createDaemonIpcHandlers", () => {
+  it("routes actor IPC handlers to daemon RPC and preserves Result contract", async () => {
+    const daemon = {
+      request: vi.fn().mockResolvedValue({
+        ok: true,
+        value: [{ id: "actor-user", displayName: "user" }],
+      }),
+    };
+
+    const handlers = createDaemonIpcHandlers({
+      daemon,
+      storagePath: "/tmp/todu-ipc-test",
+    });
+
+    const result = await handlers["todu:actor:list"](undefined);
+
+    expect(daemon.request).toHaveBeenCalledWith("actor.list", {});
+    expect(result).toEqual({
+      ok: true,
+      value: [{ id: "actor-user", displayName: "user" }],
+    });
+  });
+
   it("routes task IPC handlers to daemon RPC and preserves Result contract", async () => {
     const daemon = {
       request: vi.fn().mockResolvedValue({

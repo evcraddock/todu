@@ -1,7 +1,8 @@
 import type { NoteEntityType, NoteFilter, NoteId } from "@todu/core/browser";
 import { type ReactNode, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
-import { useDeleteNote, useNotes, useProjects, useTasks } from "../hooks/useTodu.js";
+import { useActors, useDeleteNote, useNotes, useProjects, useTasks } from "../hooks/useTodu.js";
+import { createActorMap, getActorName, getApprovalLabel } from "../lib/actors.js";
 
 export function NoteList({
   onCreateNote,
@@ -25,8 +26,11 @@ export function NoteList({
   const { data: notes, isLoading, isError, error } = useNotes(filter);
   const { data: projects } = useProjects();
   const { data: tasks } = useTasks();
+  const { data: actors } = useActors();
   const deleteNote = useDeleteNote();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; preview: string } | null>(null);
+
+  const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   // Build entity name lookup
   const entityNames = useMemo(() => {
@@ -143,6 +147,7 @@ export function NoteList({
             <tr>
               <th>Date</th>
               <th>Author</th>
+              <th>Approval</th>
               <th>Content</th>
               <th>Attached To</th>
               <th>Tags</th>
@@ -153,7 +158,10 @@ export function NoteList({
             {displayNotes.map((note) => (
               <tr key={note.id}>
                 <td className="cell-date">{note.createdAt.slice(0, 16).replace("T", " ")}</td>
-                <td>{note.author}</td>
+                <td>{getActorName(note.authorActorId, actorMap, note.author)}</td>
+                <td>
+                  {getApprovalLabel(note.contentApproval) ?? <span className="empty-hint">-</span>}
+                </td>
                 <td className="cell-content">
                   {note.content.length > 100 ? `${note.content.slice(0, 100)}…` : note.content}
                 </td>

@@ -1,5 +1,6 @@
 import type { Note, NoteEntityType } from "@todu/core";
 import type { Command } from "commander";
+import { buildActorMap, formatActorDisplay, formatApprovalSummary } from "../actor-display.js";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { formatJSON, formatTable } from "../format.js";
 
@@ -7,27 +8,38 @@ const NOTE_COLUMNS = [
   { key: "id", label: "ID" },
   { key: "content", label: "Content" },
   { key: "author", label: "Author" },
+  { key: "approval", label: "Approval" },
   { key: "entity", label: "Entity" },
   { key: "tags", label: "Tags" },
   { key: "createdAt", label: "Created" },
 ];
 
-function noteToRow(n: Note): Record<string, string> {
+function noteToRow(
+  n: Note,
+  actorMap: Awaited<ReturnType<typeof buildActorMap>>,
+): Record<string, string> {
   const entity = n.entityType ? `${n.entityType}:${n.entityId}` : "";
   const content = n.content.length > 60 ? `${n.content.slice(0, 57)}...` : n.content;
   return {
     id: n.id,
     content,
-    author: n.author,
+    author: formatActorDisplay(n.authorActorId, actorMap, n.author),
+    approval: formatApprovalSummary(n.contentApproval) ?? "-",
     entity,
     tags: n.tags.join(", "),
     createdAt: n.createdAt,
   };
 }
 
-function noteDetail(n: Note): string {
-  const lines = [`ID:      ${n.id}`, `Author:  ${n.author}`, `Created: ${n.createdAt}`];
+function noteDetail(n: Note, actorMap: Awaited<ReturnType<typeof buildActorMap>>): string {
+  const lines = [
+    `ID:      ${n.id}`,
+    `Author:  ${formatActorDisplay(n.authorActorId, actorMap, n.author)}`,
+    `Created: ${n.createdAt}`,
+  ];
   if (n.entityType) lines.push(`Entity:  ${n.entityType}:${n.entityId}`);
+  const approvalSummary = formatApprovalSummary(n.contentApproval);
+  if (approvalSummary) lines.push(`Approval: ${approvalSummary}`);
   if (n.tags.length > 0) lines.push(`Tags:    ${n.tags.join(", ")}`);
   lines.push("", n.content);
   return lines.join("\n");
@@ -73,9 +85,15 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--project <ref>", "attach to a project")
     .option("--habit <id>", "attach to a habit")
     .option("--tag <tags...>", "tags")
-    .option("--author <author>", "author (default: user)")
+    .option("--author <author>", "legacy author display name")
+    .option("--author-actor <actorId>", "author actor ID")
     .option("--created-at <iso>", "ISO timestamp for importing/backdating a journal entry")
     .action(async (content, opts) => {
+      if (opts.author && opts.authorActor) {
+        console.error("Error: --author and --author-actor cannot be used together");
+        process.exitCode = 1;
+        return;
+      }
       let entityType: NoteEntityType | undefined;
       let entityId: string | undefined;
 
@@ -104,6 +122,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
           entityId,
           tags: opts.tag,
           author: opts.author,
+          authorActorId: opts.authorActor,
           createdAt: opts.createdAt,
         },
       });
@@ -118,8 +137,9 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
       if (format === "json") {
         console.log(formatJSON(result.value));
       } else {
+        const actorMap = await buildActorMap(invokeDaemon);
         console.log("Note added:");
-        console.log(noteDetail(result.value));
+        console.log(noteDetail(result.value, actorMap));
       }
     });
 
@@ -130,11 +150,17 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--project <ref>", "filter by project")
     .option("--habit <id>", "filter by habit")
     .option("--tag <tag>", "filter by tag")
-    .option("--author <author>", "filter by author")
+    .option("--author <author>", "filter by legacy author display name")
+    .option("--author-actor <actorId>", "filter by author actor ID")
     .option("--journal", "filter to standalone journal entries only")
     .option("--from <date>", "filter by created-at start (YYYY-MM-DD or ISO-8601)")
     .option("--to <date>", "filter by created-at end (YYYY-MM-DD or ISO-8601)")
     .action(async (opts) => {
+      if (opts.author && opts.authorActor) {
+        console.error("Error: --author and --author-actor cannot be used together");
+        process.exitCode = 1;
+        return;
+      }
       let entityType: NoteEntityType | undefined;
       let entityId: string | undefined;
 
@@ -162,6 +188,7 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
           entityId,
           tag: opts.tag,
           author: opts.author,
+          authorActorId: opts.authorActor,
           journal: opts.journal,
           createdFrom: opts.from,
           createdTo: opts.to,
@@ -180,7 +207,13 @@ export function registerNoteCommands(program: Command, invokeDaemon: CliDaemonIn
       } else if (result.value.length === 0) {
         console.log("No notes.");
       } else {
-        console.log(formatTable(result.value.map(noteToRow), NOTE_COLUMNS));
+        const actorMap = await buildActorMap(invokeDaemon);
+        console.log(
+          formatTable(
+            result.value.map((value) => noteToRow(value, actorMap)),
+            NOTE_COLUMNS,
+          ),
+        );
       }
     });
 

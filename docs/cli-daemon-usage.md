@@ -322,6 +322,34 @@ Task date-range behavior notes:
 - For monthly review, use `--status done --updated-from/--updated-to` to find tasks completed during the target month.
 - Invalid task date input fails with a validation error.
 
+## Actor-aware task and note surfaces
+
+Task and note text output now prefers actor-based identity data when available.
+
+Examples:
+
+```bash
+todu task create --title "Pair on rollout" --project proj-123 --assignee-actor actor-user
+
+todu task update task-123 --assignee-actor actor-user actor-reviewer
+todu task update task-123 --clear-assignees
+
+todu task show task-123
+todu project show proj-123
+
+todu note add "Imported comment" --task task-123 --author-actor actor-reviewer
+todu note list --author-actor actor-reviewer
+```
+
+Behavior notes:
+- `task create --assignee-actor` and `task update --assignee-actor` set actor-based task assignment by actor ID.
+- `task update --clear-assignees` clears actor-based task assignment.
+- `task show` text output displays actor assignees and imported description approval state when applicable.
+- `project show` text output displays the project's authorized assignee actors.
+- `note add --author-actor` and `note list --author-actor` work with actor-based note authorship.
+- `note` text output shows actor-based author names and imported-content approval state when applicable.
+- Legacy `--author` note filtering/input remains available during the compatibility window.
+
 ## Validate connectivity
 
 ```bash

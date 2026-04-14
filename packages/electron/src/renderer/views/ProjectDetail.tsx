@@ -10,6 +10,7 @@ import { StatusChip } from "../components/StatusChip.js";
 import { TabBar } from "../components/TabBar.js";
 import { TaskTable } from "../components/TaskTable.js";
 import {
+  useActors,
   useDeleteProject,
   useProject,
   useProjects,
@@ -17,6 +18,7 @@ import {
   useTasks,
   useUpdateProject,
 } from "../hooks/useTodu.js";
+import { createActorMap, getActorNames } from "../lib/actors.js";
 
 // ============================================================================
 // Content tabs
@@ -45,6 +47,7 @@ export function ProjectDetail({
 }): ReactNode {
   const { data: project, isLoading, isError, error } = useProject(projectId);
   const { data: projects } = useProjects();
+  const { data: actors } = useActors();
   const deleteProject = useDeleteProject();
   const updateProject = useUpdateProject();
 
@@ -88,6 +91,7 @@ export function ProjectDetail({
   const [editingDescription, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("tasks");
+  const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
     return (
@@ -130,6 +134,7 @@ export function ProjectDetail({
     deleteProject.mutate(project.id as ProjectId, { onSuccess: onBack });
   };
 
+  const authorizedActorNames = getActorNames(project.authorizedAssigneeActorIds, actorMap);
   const taskCount = tasks?.length ?? 0;
   const displayTasks = searchQuery.length > 0 ? searchResults : tasks;
 
@@ -217,6 +222,23 @@ export function ProjectDetail({
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
+        </div>
+      </div>
+
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell detail-meta-cell-wide">
+          <span className="detail-meta-label">Authorized assignees</span>
+          <div className="label-chips">
+            {authorizedActorNames.length > 0 ? (
+              authorizedActorNames.map((actorName) => (
+                <span key={actorName} className="chip chip-label">
+                  {actorName}
+                </span>
+              ))
+            ) : (
+              <span className="empty-hint">None</span>
+            )}
+          </div>
         </div>
       </div>
 

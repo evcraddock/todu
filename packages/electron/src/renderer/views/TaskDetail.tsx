@@ -5,7 +5,7 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@todu/core/browser";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
@@ -13,12 +13,14 @@ import { PriorityChip } from "../components/PriorityChip.js";
 import { StatusChip } from "../components/StatusChip.js";
 import { TabBar } from "../components/TabBar.js";
 import {
+  useActors,
   useDeleteTask,
   useMoveTask,
   useProjects,
   useTask,
   useUpdateTask,
 } from "../hooks/useTodu.js";
+import { createActorMap, getActorNames, getApprovalLabel } from "../lib/actors.js";
 
 // ============================================================================
 // Status Shortcuts
@@ -74,6 +76,7 @@ const TABS = [
 export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => void }): ReactNode {
   const { data: task, isLoading, isError, error } = useTask(taskId);
   const { data: projects } = useProjects();
+  const { data: actors } = useActors();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const moveTask = useMoveTask();
@@ -90,6 +93,7 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const [titleValue, setTitleValue] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
+  const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
     return (
@@ -139,6 +143,9 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const handleMove = (projectId: string) => {
     moveTask.mutate({ id: task.id as TaskId, projectId: createProjectId(projectId) });
   };
+
+  const assigneeNames = getActorNames(task.assigneeActorIds, actorMap, task.assignees);
+  const descriptionApprovalLabel = getApprovalLabel(task.descriptionApproval);
 
   return (
     <div className="view-container">
@@ -255,12 +262,34 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
         </div>
       </div>
 
+      <div className="detail-meta-row">
+        <div className="detail-meta-cell detail-meta-cell-wide">
+          <span className="detail-meta-label">Assignees</span>
+          <div className="label-chips">
+            {assigneeNames.length > 0 ? (
+              assigneeNames.map((assignee) => (
+                <span key={assignee} className="chip chip-label">
+                  {assignee}
+                </span>
+              ))
+            ) : (
+              <span className="empty-hint">None</span>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Tabbed content */}
       <div className="detail-tabs">
         <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
 
         {activeTab === "description" && (
           <div className="detail-tab-content">
+            {descriptionApprovalLabel && (
+              <div className="detail-approval-row">
+                <span className="chip chip-label">{descriptionApprovalLabel}</span>
+              </div>
+            )}
             {editingDescription ? (
               <MarkdownEditor
                 value={task.description ?? ""}

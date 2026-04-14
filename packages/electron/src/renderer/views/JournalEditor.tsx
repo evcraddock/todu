@@ -70,7 +70,7 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
       );
     } else {
       createNote.mutate(
-        { content: content.trim(), tags: tags.length > 0 ? tags : undefined, author: "user" },
+        { content: content.trim(), tags: tags.length > 0 ? tags : undefined },
         {
           onSuccess: onClose,
           onError: (err) => setError(err instanceof Error ? err.message : "Failed to create"),

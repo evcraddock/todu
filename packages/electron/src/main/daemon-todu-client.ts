@@ -4,6 +4,9 @@ import type { DaemonConnectionManager } from "./daemon-connection-manager.js";
 import { mapDaemonErrorToToduError } from "./daemon-error-mapping.js";
 
 interface DaemonBackedToduMethods {
+  actor: {
+    list(): Promise<Result<unknown, ToduError>>;
+  };
   project: {
     list(filter?: unknown): Promise<Result<unknown, ToduError>>;
     get(id: string): Promise<Result<unknown, ToduError>>;
@@ -45,6 +48,9 @@ export function createDaemonToduClient(daemon: Pick<DaemonConnectionManager, "re
     invokeDaemonResult<T>(daemon, method, params);
 
   const client: DaemonBackedToduMethods = {
+    actor: {
+      list: () => invoke("actor.list", {}),
+    },
     project: {
       list: (filter) => invoke("project.list", { filter }),
       get: (id) => invoke("project.get", { id }),
