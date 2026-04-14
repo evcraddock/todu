@@ -90,6 +90,9 @@ describe("createDaemonRuntime", () => {
         "actor.rename",
         "actor.archive",
         "actor.unarchive",
+        "project.addAuthorizedActors",
+        "project.removeAuthorizedActors",
+        "project.setAuthorizedActors",
         "integration.create",
         "integration.status",
         "recurring.process",
@@ -331,6 +334,57 @@ describe("createDaemonRuntime", () => {
     expect(updateResponse.id).toBe("project-update-1");
     expect(updateResponse.result).toEqual(
       expect.objectContaining({ id: projectId, name: "Work Updated", priority: "high" }),
+    );
+
+    const addAuthorizedActorsResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-add-authorized-1",
+      method: "project.addAuthorizedActors",
+      params: {
+        id: projectId,
+        actorIds: ["actor-user"],
+      },
+    });
+
+    expect(addAuthorizedActorsResponse.id).toBe("project-add-authorized-1");
+    expect(addAuthorizedActorsResponse.result).toEqual(
+      expect.objectContaining({
+        id: projectId,
+        authorizedAssigneeActorIds: ["actor-user"],
+      }),
+    );
+
+    const removeAuthorizedActorsResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-remove-authorized-1",
+      method: "project.removeAuthorizedActors",
+      params: {
+        id: projectId,
+        actorIds: ["actor-user"],
+      },
+    });
+
+    expect(removeAuthorizedActorsResponse.id).toBe("project-remove-authorized-1");
+    expect(removeAuthorizedActorsResponse.result).toEqual(
+      expect.objectContaining({
+        id: projectId,
+        authorizedAssigneeActorIds: [],
+      }),
+    );
+
+    const setAuthorizedActorsResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-set-authorized-1",
+      method: "project.setAuthorizedActors",
+      params: {
+        id: projectId,
+        actorIds: ["actor-user"],
+      },
+    });
+
+    expect(setAuthorizedActorsResponse.id).toBe("project-set-authorized-1");
+    expect(setAuthorizedActorsResponse.result).toEqual(
+      expect.objectContaining({
+        id: projectId,
+        authorizedAssigneeActorIds: ["actor-user"],
+      }),
     );
 
     const deleteResponse = await sendRequest(runtime.config().socketPath, {

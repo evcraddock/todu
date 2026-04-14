@@ -294,6 +294,80 @@ describe("project namespace", () => {
     });
   });
 
+  describe("authorized actor management", () => {
+    let projectId: ProjectId;
+
+    beforeEach(async () => {
+      const project = await todu.project.create({ name: "Authorized Actors" });
+      if (!project.ok) throw new Error("create failed");
+      projectId = project.value.id;
+
+      const createdActor = await todu.actor.create({
+        id: createActorId("actor-reviewer"),
+        displayName: "Reviewer",
+      });
+      if (!createdActor.ok) throw new Error("actor create failed");
+    });
+
+    it("adds authorized actors without duplicating existing ids", async () => {
+      const result = await todu.project.addAuthorizedActors(projectId, [
+        createActorId("actor-user"),
+        createActorId("actor-reviewer"),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.authorizedAssigneeActorIds).toEqual([
+        DEFAULT_OWNER_ACTOR_ID,
+        createActorId("actor-reviewer"),
+      ]);
+    });
+
+    it("removes authorized actors while leaving others intact", async () => {
+      await todu.project.setAuthorizedActors(projectId, [
+        createActorId("actor-user"),
+        createActorId("actor-reviewer"),
+      ]);
+
+      const result = await todu.project.removeAuthorizedActors(projectId, [
+        createActorId("actor-reviewer"),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.authorizedAssigneeActorIds).toEqual([DEFAULT_OWNER_ACTOR_ID]);
+    });
+
+    it("replaces the full authorized actor list", async () => {
+      const result = await todu.project.setAuthorizedActors(projectId, [
+        createActorId("actor-reviewer"),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.authorizedAssigneeActorIds).toEqual([createActorId("actor-reviewer")]);
+    });
+
+    it("allows clearing the authorized actor list", async () => {
+      const result = await todu.project.setAuthorizedActors(projectId, []);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.authorizedAssigneeActorIds).toEqual([]);
+    });
+
+    it("returns not found for unknown actors in authorization updates", async () => {
+      const result = await todu.project.addAuthorizedActors(projectId, [
+        createActorId("actor-missing"),
+      ]);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("actor");
+    });
+  });
+
   describe("delete", () => {
     it("deletes an existing project", async () => {
       const created = await todu.project.create({ name: "To Delete" });

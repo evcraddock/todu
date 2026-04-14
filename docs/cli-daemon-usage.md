@@ -343,19 +343,27 @@ Behavior notes:
 - `actor archive` and `actor unarchive` toggle archived state without deleting the actor.
 - Invalid actor operations return daemon-backed validation or not-found errors.
 
-## Actor-aware task and note surfaces
+## Project authorization and actor-aware task surfaces
 
-Task and note text output now prefers actor-based identity data when available.
+Project authorization is managed through each project's `authorizedAssigneeActorIds` allowlist.
 
 Examples:
 
 ```bash
+todu actor create --id actor-reviewer --name "Reviewer"
+
+todu project auth show proj-123
+todu project auth add proj-123 actor-reviewer
+todu project auth remove proj-123 actor-reviewer
+todu project auth set proj-123 actor-user actor-reviewer
+
 todu task create --title "Pair on rollout" --project proj-123 --assignee-actor actor-user
 
 todu task update task-123 --assignee-actor actor-user actor-reviewer
 todu task update task-123 --clear-assignees
 
 todu task show task-123
+todu task list --project proj-123
 todu project show proj-123
 
 todu note add "Imported comment" --task task-123 --author-actor actor-reviewer
@@ -363,10 +371,14 @@ todu note list --author-actor actor-reviewer
 ```
 
 Behavior notes:
+- `project auth show` displays the authorized actor list with display names and actor IDs.
+- `project auth add`, `remove`, and `set` use daemon-backed project authorization updates instead of editing raw project JSON indirectly.
+- `project auth set` replaces the full authorized list; omitting actor IDs clears it.
+- `project show` text and JSON output include resolved `authorizedActors` and any `staleUnauthorizedAssignees` still present on project tasks.
 - `task create --assignee-actor` and `task update --assignee-actor` set actor-based task assignment by actor ID.
 - `task update --clear-assignees` clears actor-based task assignment.
-- `task show` text output displays actor assignees and imported description approval state when applicable.
-- `project show` text output displays the project's authorized assignee actors.
+- `task show` and `task list` mark archived or unauthorized assignees instead of silently hiding them.
+- JSON task output now includes `assigneeActors` with resolved actor display metadata and authorization state.
 - `note add --author-actor` and `note list --author-actor` work with actor-based note authorship.
 - `note` text output shows actor-based author names and imported-content approval state when applicable.
 - Legacy `--author` note filtering/input remains available during the compatibility window.

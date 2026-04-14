@@ -33,7 +33,13 @@ describe("task CLI commands", () => {
     try {
       const result = execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+        env: {
+          ...process.env,
+          TODU_DATA_DIR: tmpDir,
+          TODU_DAEMON_SOCKET: path.join(tmpDir, "daemon.sock"),
+          TODUAI_DAEMON_SOCKET: path.join(tmpDir, "daemon.sock"),
+          TODUAI_NO_SYNC: "1",
+        },
         encoding: "utf-8",
         timeout: 15000,
       });
@@ -192,6 +198,32 @@ describe("task CLI commands", () => {
     const parsed = JSON.parse(marchOnly);
     expect(parsed).toHaveLength(1);
     expect(parsed[0].title).toBe("March task");
+  });
+
+  it("marks unauthorized assignees in task text and json output", { timeout: 30000 }, () => {
+    run('--format json actor create --id actor-reviewer --name "Reviewer"');
+    const project = JSON.parse(run('--format json project create --name "Auth Task Project"'));
+    run(`project auth add ${project.id} actor-reviewer`);
+
+    const task = JSON.parse(
+      run(
+        `--format json task create --title "Review rollout" --project "${project.id}" --assignee-actor actor-reviewer`,
+      ),
+    );
+    expect(task.assigneeActors[0]).toMatchObject({ id: "actor-reviewer", authorized: true });
+
+    run(`project auth remove ${project.id} actor-reviewer`);
+
+    const showOutput = run(`task show ${task.id}`);
+    expect(showOutput).toContain("Reviewer (actor-reviewer, unauthorized)");
+
+    const listOutput = run(`task list --project "${project.id}"`);
+    expect(listOutput).toContain("Reviewer (unauthorized)");
+
+    const showJson = JSON.parse(run(`--format json task show ${task.id}`));
+    expect(showJson.assigneeActors).toEqual([
+      expect.objectContaining({ id: "actor-reviewer", authorized: false }),
+    ]);
   });
 
   it("handles errors gracefully", () => {

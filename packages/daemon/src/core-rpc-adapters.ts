@@ -99,6 +99,21 @@ export function createCoreNamespaceHandlers(
         const input = getRequiredObjectParam<UpdateProjectInput>(request, "input");
         return todu.project.update(id, input);
       }),
+      addAuthorizedActors: method(async (request, todu) => {
+        const id = createProjectId(getRequiredStringParam(request, "id"));
+        const actorIds = getRequiredStringArrayParam(request, "actorIds", false).map(createActorId);
+        return todu.project.addAuthorizedActors(id, actorIds);
+      }),
+      removeAuthorizedActors: method(async (request, todu) => {
+        const id = createProjectId(getRequiredStringParam(request, "id"));
+        const actorIds = getRequiredStringArrayParam(request, "actorIds", false).map(createActorId);
+        return todu.project.removeAuthorizedActors(id, actorIds);
+      }),
+      setAuthorizedActors: method(async (request, todu) => {
+        const id = createProjectId(getRequiredStringParam(request, "id"));
+        const actorIds = getRequiredStringArrayParam(request, "actorIds", true).map(createActorId);
+        return todu.project.setAuthorizedActors(id, actorIds);
+      }),
       delete: method(async (request, todu) => {
         const id = createProjectId(getRequiredStringParam(request, "id"));
         return todu.project.delete(id);
@@ -391,6 +406,31 @@ function getOptionalNumberParam(request: ProtocolRequestFrame, field: string): n
   }
 
   return Math.floor(value);
+}
+
+function getRequiredStringArrayParam(
+  request: ProtocolRequestFrame,
+  field: string,
+  allowEmpty: boolean,
+): string[] {
+  const value = request.params[field];
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw createProtocolError(
+      "BAD_REQUEST",
+      `${request.method} requires params.${field} as an array of strings`,
+      { field },
+    );
+  }
+
+  if (!allowEmpty && value.length === 0) {
+    throw createProtocolError(
+      "BAD_REQUEST",
+      `${request.method} requires params.${field} as a non-empty array of strings`,
+      { field },
+    );
+  }
+
+  return value;
 }
 
 function getRequiredObjectParam<T extends object>(request: ProtocolRequestFrame, field: string): T {

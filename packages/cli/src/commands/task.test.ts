@@ -88,6 +88,9 @@ describe("task commands", () => {
           value: [] satisfies Task[],
         };
       }
+      if (method === "project.list" || method === "actor.list") {
+        return { ok: true, value: [] };
+      }
 
       throw new Error(`Unexpected method: ${method}`);
     });
@@ -128,6 +131,9 @@ describe("task commands", () => {
           ok: true,
           value: [] satisfies Task[],
         };
+      }
+      if (method === "project.list" || method === "actor.list") {
+        return { ok: true, value: [] };
       }
 
       throw new Error(`Unexpected method: ${method}`);

@@ -1,7 +1,12 @@
 import type { Task, TaskSortOptions, TaskStatus, TaskWithDetail } from "@todu/core";
 import { isTaskPriority, isTaskSortField, isTaskStatus } from "@todu/core";
 import type { Command } from "commander";
-import { buildActorMap, formatActorList, formatApprovalSummary } from "../actor-display.js";
+import {
+  buildActorMap,
+  formatActorList,
+  formatApprovalSummary,
+  resolveActorDisplayInfo,
+} from "../actor-display.js";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { colorPriority, colorStatus, formatJSON, formatTable } from "../format.js";
 
@@ -14,45 +19,131 @@ const TASK_COLUMNS = [
   { key: "assignees", label: "Assignees" },
 ];
 
+type ProjectSummary = {
+  id: string;
+  name: string;
+  authorizedAssigneeActorIds: string[];
+};
+
+type ProjectSummaryMap = Record<string, ProjectSummary>;
+
+type TaskOutput<T extends Task | TaskWithDetail> = T & {
+  assigneeActors: Array<{
+    id: string;
+    displayName: string;
+    archived: boolean;
+    authorized: boolean;
+    known: boolean;
+  }>;
+};
+
 function taskToRow(
-  t: Task,
+  task: Task,
   actorMap: Awaited<ReturnType<typeof buildActorMap>>,
-  projectName?: string,
+  project?: ProjectSummary,
 ): Record<string, string> {
   return {
-    id: t.id,
-    title: t.title,
-    status: t.status,
-    priority: t.priority,
-    project: projectName ?? t.projectId,
-    assignees: formatActorList(t.assigneeActorIds, actorMap, t.assignees),
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    project: project?.name ?? task.projectId,
+    assignees: formatActorList(task.assigneeActorIds, actorMap, task.assignees, {
+      authorizedActorIds: project?.authorizedAssigneeActorIds,
+    }),
   };
 }
 
 function taskDetail(
-  t: TaskWithDetail,
+  task: TaskWithDetail,
   actorMap: Awaited<ReturnType<typeof buildActorMap>>,
-  projectName?: string,
+  project?: ProjectSummary,
 ): string {
   const lines = [
-    `ID:          ${t.id}`,
-    `Title:       ${t.title}`,
-    `Status:      ${t.status}`,
-    `Priority:    ${t.priority}`,
-    `Project:     ${projectName ?? t.projectId}`,
-    `Assignees:   ${formatActorList(t.assigneeActorIds, actorMap, t.assignees, { includeIds: true })}`,
-    `Labels:      ${t.labels.length > 0 ? t.labels.join(", ") : "(none)"}`,
-    `Created:     ${t.createdAt}`,
-    `Updated:     ${t.updatedAt}`,
+    `ID:          ${task.id}`,
+    `Title:       ${task.title}`,
+    `Status:      ${task.status}`,
+    `Priority:    ${task.priority}`,
+    `Project:     ${project?.name ?? task.projectId}`,
+    `Assignees:   ${formatActorList(task.assigneeActorIds, actorMap, task.assignees, {
+      includeIds: true,
+      authorizedActorIds: project?.authorizedAssigneeActorIds,
+    })}`,
+    `Labels:      ${task.labels.length > 0 ? task.labels.join(", ") : "(none)"}`,
+    `Created:     ${task.createdAt}`,
+    `Updated:     ${task.updatedAt}`,
   ];
-  if (t.dueDate) lines.push(`Due:         ${t.dueDate}`);
-  if (t.scheduledDate) lines.push(`Scheduled:   ${t.scheduledDate}`);
-  const approvalSummary = formatApprovalSummary(t.descriptionApproval);
+  if (task.dueDate) lines.push(`Due:         ${task.dueDate}`);
+  if (task.scheduledDate) lines.push(`Scheduled:   ${task.scheduledDate}`);
+  const approvalSummary = formatApprovalSummary(task.descriptionApproval);
   if (approvalSummary) lines.push(`Approval:    ${approvalSummary}`);
-  if (t.description) {
-    lines.push("", "Description:", t.description);
+  if (task.description) {
+    lines.push("", "Description:", task.description);
   }
   return lines.join("\n");
+}
+
+function enrichTaskForOutput<T extends Task | TaskWithDetail>(
+  task: T,
+  actorMap: Awaited<ReturnType<typeof buildActorMap>>,
+  project?: ProjectSummary,
+): TaskOutput<T> {
+  return {
+    ...task,
+    assigneeActors: task.assigneeActorIds.map((actorId) =>
+      resolveActorDisplayInfo(actorId, actorMap, {
+        authorizedActorIds: project?.authorizedAssigneeActorIds,
+      }),
+    ),
+  };
+}
+
+async function printTask<T extends Task | TaskWithDetail>(
+  program: Command,
+  invokeDaemon: CliDaemonInvoker,
+  task: T,
+  heading?: string,
+): Promise<void> {
+  const [projectMap, actorMap] = await Promise.all([
+    buildProjectMap(invokeDaemon),
+    buildActorMap(invokeDaemon),
+  ]);
+  const project = projectMap[task.projectId];
+  const format = program.opts().format;
+
+  if (format === "json") {
+    console.log(formatJSON(enrichTaskForOutput(task, actorMap, project)));
+    return;
+  }
+
+  if (heading) {
+    console.log(heading);
+  }
+  console.log(taskDetail(task as TaskWithDetail, actorMap, project));
+}
+
+async function printTaskList(
+  program: Command,
+  invokeDaemon: CliDaemonInvoker,
+  tasks: Task[],
+): Promise<void> {
+  const [projectMap, actorMap] = await Promise.all([
+    buildProjectMap(invokeDaemon),
+    buildActorMap(invokeDaemon),
+  ]);
+  const format = program.opts().format;
+
+  if (format === "json") {
+    console.log(
+      formatJSON(
+        tasks.map((task) => enrichTaskForOutput(task, actorMap, projectMap[task.projectId])),
+      ),
+    );
+    return;
+  }
+
+  const rows = tasks.map((task) => taskToRow(task, actorMap, projectMap[task.projectId]));
+  console.log(formatTable(rows, TASK_COLUMNS));
 }
 
 /**
@@ -63,7 +154,6 @@ async function resolveProjectId(
   invokeDaemon: CliDaemonInvoker,
   ref: string,
 ): Promise<{ ok: true; id: string; name: string } | { ok: false; message: string }> {
-  // Try as ID
   const byId = await invokeDaemon<{ id: string; name: string }>("project.get", { id: ref });
   if (byId.ok) {
     return { ok: true, id: byId.value.id, name: byId.value.name };
@@ -73,13 +163,12 @@ async function resolveProjectId(
     return { ok: false, message: formatDaemonCommandError(byId.error) };
   }
 
-  // Try name search
   const list = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
   if (!list.ok) {
     return { ok: false, message: formatDaemonCommandError(list.error) };
   }
 
-  const matches = list.value.filter((p) => p.name.toLowerCase() === ref.toLowerCase());
+  const matches = list.value.filter((project) => project.name.toLowerCase() === ref.toLowerCase());
   if (matches.length === 1) {
     return { ok: true, id: matches[0].id, name: matches[0].name };
   }
@@ -91,28 +180,18 @@ async function resolveProjectId(
   return { ok: false, message: `Project not found: ${ref}` };
 }
 
-/**
- * Build a map of projectId → projectName for display.
- */
-async function buildProjectNameMap(
-  invokeDaemon: CliDaemonInvoker,
-): Promise<Record<string, string>> {
-  const result = await invokeDaemon<Array<{ id: string; name: string }>>("project.list", {});
+async function buildProjectMap(invokeDaemon: CliDaemonInvoker): Promise<ProjectSummaryMap> {
+  const result = await invokeDaemon<ProjectSummary[]>("project.list", {});
   if (!result.ok) {
     return {};
   }
 
-  const map: Record<string, string> = {};
-  for (const p of result.value) {
-    map[p.id] = p.name;
-  }
-  return map;
+  return Object.fromEntries(result.value.map((project) => [project.id, project]));
 }
 
 export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const task = program.command("task").description("Manage tasks");
 
-  // create
   task
     .command("create")
     .description("Create a new task")
@@ -151,17 +230,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        const actorMap = await buildActorMap(invokeDaemon);
-        console.log("Task created:");
-        console.log(taskDetail(result.value, actorMap, project.name));
-      }
+      await printTask(program, invokeDaemon, result.value, "Task created:");
     });
 
-  // list
   task
     .command("list")
     .description("List tasks")
@@ -189,13 +260,12 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         projectId = project.id;
       }
 
-      // Parse multi-status: --status active,inprogress
       let status: TaskStatus | TaskStatus[] | undefined;
       if (opts.status) {
-        const parts = opts.status.split(",").map((s: string) => s.trim());
-        for (const s of parts) {
-          if (!isTaskStatus(s)) {
-            console.error(`Error: invalid status: ${s}`);
+        const parts = opts.status.split(",").map((value: string) => value.trim());
+        for (const value of parts) {
+          if (!isTaskStatus(value)) {
+            console.error(`Error: invalid status: ${value}`);
             process.exitCode = 1;
             return;
           }
@@ -209,7 +279,6 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      // Parse sort
       let sort: TaskSortOptions | undefined;
       if (opts.sort) {
         if (!isTaskSortField(opts.sort)) {
@@ -242,20 +311,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        const [nameMap, actorMap] = await Promise.all([
-          buildProjectNameMap(invokeDaemon),
-          buildActorMap(invokeDaemon),
-        ]);
-        const rows = result.value.map((t) => taskToRow(t, actorMap, nameMap[t.projectId]));
-        console.log(formatTable(rows, TASK_COLUMNS));
-      }
+      await printTaskList(program, invokeDaemon, result.value);
     });
 
-  // show
   task
     .command("show <id>")
     .description("Show task details")
@@ -267,19 +325,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const [nameMap, actorMap] = await Promise.all([
-        buildProjectNameMap(invokeDaemon),
-        buildActorMap(invokeDaemon),
-      ]);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        console.log(taskDetail(result.value, actorMap, nameMap[result.value.projectId]));
-      }
+      await printTask(program, invokeDaemon, result.value);
     });
 
-  // update
   task
     .command("update <id>")
     .description("Update a task")
@@ -319,20 +367,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const [nameMap, actorMap] = await Promise.all([
-        buildProjectNameMap(invokeDaemon),
-        buildActorMap(invokeDaemon),
-      ]);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        console.log("Task updated:");
-        console.log(taskDetail(result.value, actorMap, nameMap[result.value.projectId]));
-      }
+      await printTask(program, invokeDaemon, result.value, "Task updated:");
     });
 
-  // delete
   task
     .command("delete <id>")
     .description("Delete a task")
@@ -352,7 +389,6 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
       }
     });
 
-  // move
   task
     .command("move <id> <project>")
     .description("Move a task to another project")
@@ -374,17 +410,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        const actorMap = await buildActorMap(invokeDaemon);
-        console.log(`Moved task to ${project.name}:`);
-        console.log(taskDetail(result.value, actorMap, project.name));
-      }
+      await printTask(program, invokeDaemon, result.value, `Moved task to ${project.name}:`);
     });
 
-  // search
   task
     .command("search <query>")
     .description("Search tasks by title")
@@ -396,20 +424,9 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
         return;
       }
 
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(result.value));
-      } else {
-        const [nameMap, actorMap] = await Promise.all([
-          buildProjectNameMap(invokeDaemon),
-          buildActorMap(invokeDaemon),
-        ]);
-        const rows = result.value.map((t) => taskToRow(t, actorMap, nameMap[t.projectId]));
-        console.log(formatTable(rows, TASK_COLUMNS));
-      }
+      await printTaskList(program, invokeDaemon, result.value);
     });
 
-  // Status shortcut helper
   function statusShortcut(name: string, description: string, targetStatus: TaskStatus) {
     task
       .command(`${name} <id>`)
@@ -425,17 +442,7 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
           return;
         }
 
-        const [nameMap, actorMap] = await Promise.all([
-          buildProjectNameMap(invokeDaemon),
-          buildActorMap(invokeDaemon),
-        ]);
-        const format = program.opts().format;
-        if (format === "json") {
-          console.log(formatJSON(result.value));
-        } else {
-          console.log(`Task ${targetStatus}:`);
-          console.log(taskDetail(result.value, actorMap, nameMap[result.value.projectId]));
-        }
+        await printTask(program, invokeDaemon, result.value, `Task ${targetStatus}:`);
       });
   }
 

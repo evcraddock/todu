@@ -31,7 +31,16 @@ export const DAEMON_CAPABILITY_EVENTS = ["data.changed", "sync.statusChanged"] a
 
 export const CORE_DAEMON_NAMESPACE_METHODS = {
   actor: ["list", "create", "rename", "archive", "unarchive"],
-  project: ["create", "list", "get", "update", "delete"],
+  project: [
+    "create",
+    "list",
+    "get",
+    "update",
+    "addAuthorizedActors",
+    "removeAuthorizedActors",
+    "setAuthorizedActors",
+    "delete",
+  ],
   task: ["create", "list", "get", "update", "delete", "move", "search"],
   label: ["create", "list", "update", "delete"],
   integration: ["create", "list", "get", "update", "delete", "status"],
