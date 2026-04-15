@@ -334,6 +334,9 @@ todu actor create --id actor-reviewer --name "Reviewer"
 todu actor rename actor-reviewer --name "Lead Reviewer"
 todu actor archive actor-reviewer
 todu actor unarchive actor-reviewer
+
+todu actor owner show
+todu actor owner set actor-reviewer
 ```
 
 Behavior notes:
@@ -341,6 +344,11 @@ Behavior notes:
 - `actor create` rejects duplicate actor IDs.
 - `actor rename` updates only the display name; actor IDs remain stable.
 - `actor archive` and `actor unarchive` toggle archived state without deleting the actor.
+- `actor owner show` displays the current catalog owner actor clearly in text and JSON output.
+- `actor owner set <actor-id>` changes the canonical `ownerActorId` only after validating that the target actor exists and is not archived.
+- The owner actor has special semantics: legacy `"user"` identity fallback, default note authorship, approval reviewer attribution, and default project authorization all follow the current catalog owner.
+- Changing the owner actor does not silently rewrite unrelated actors or existing project authorization lists.
+- The current owner actor cannot be archived; switch the owner first if needed.
 - Invalid actor operations return daemon-backed validation or not-found errors.
 
 ## Project authorization and actor-aware task surfaces

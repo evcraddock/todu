@@ -1,6 +1,7 @@
 import type { DocHandle } from "@automerge/automerge-repo/slim";
 import {
   type Actor,
+  type ActorId,
   type CatalogDocument,
   type CreateActorInput,
   createActorId,
@@ -9,6 +10,7 @@ import {
   ok,
   type Result,
   validateActorDisplayName,
+  validateActorId,
   validateCreateActorInput,
   validationError,
 } from "@todu/core";
@@ -26,6 +28,14 @@ function normalizeActorDisplayName(displayName: string): string {
   return displayName.trim();
 }
 
+function normalizeActorId(id: ActorId): ActorId {
+  return createActorId(id.trim());
+}
+
+function findActor(doc: CatalogDocument | undefined, id: ActorId): Actor | undefined {
+  return doc?.actors.find((actor) => actor.id === id);
+}
+
 export function createActorNamespace(catalog: DocHandle<CatalogDocument>): ActorNamespace {
   return {
     async list(): Promise<Result<Actor[]>> {
@@ -41,7 +51,7 @@ export function createActorNamespace(catalog: DocHandle<CatalogDocument>): Actor
         return err(notFound("catalog", "default"));
       }
 
-      const normalizedId = createActorId(input.id.trim());
+      const normalizedId = normalizeActorId(input.id);
       if (doc.actors.some((actor) => actor.id === normalizedId)) {
         return err(validationError("id", `Actor ID already exists: ${normalizedId}`));
       }
@@ -58,6 +68,46 @@ export function createActorNamespace(catalog: DocHandle<CatalogDocument>): Actor
       return ok(cloneActor(actor));
     },
 
+    async getOwner(): Promise<Result<Actor>> {
+      const doc = catalog.doc();
+      if (!doc) {
+        return err(notFound("catalog", "default"));
+      }
+
+      const ownerActorId = doc.ownerActorId;
+      const owner = ownerActorId ? findActor(doc, ownerActorId) : undefined;
+      if (!owner) {
+        return err(notFound("actor", ownerActorId ?? "owner"));
+      }
+
+      return ok(cloneActor(owner));
+    },
+
+    async setOwner(id): Promise<Result<Actor>> {
+      const actorIdError = validateActorId("actorId", id);
+      if (actorIdError) return err(actorIdError);
+
+      const doc = catalog.doc();
+      if (!doc) {
+        return err(notFound("catalog", "default"));
+      }
+
+      const normalizedId = normalizeActorId(id);
+      const owner = findActor(doc, normalizedId);
+      if (!owner) {
+        return err(notFound("actor", normalizedId));
+      }
+      if (owner.archived) {
+        return err(validationError("actorId", `Archived actor cannot be owner: ${normalizedId}`));
+      }
+
+      catalog.change((nextDoc) => {
+        nextDoc.ownerActorId = normalizedId;
+      });
+
+      return ok(cloneActor(owner));
+    },
+
     async rename(id, displayName): Promise<Result<Actor>> {
       const displayNameError = validateActorDisplayName("displayName", displayName);
       if (displayNameError) return err(displayNameError);
@@ -65,7 +115,7 @@ export function createActorNamespace(catalog: DocHandle<CatalogDocument>): Actor
       const doc = catalog.doc();
       if (!doc) return err(notFound("actor", id));
 
-      const normalizedId = createActorId(id.trim());
+      const normalizedId = normalizeActorId(id);
       const index = doc.actors.findIndex((actor) => actor.id === normalizedId);
       if (index === -1) return err(notFound("actor", normalizedId));
 
@@ -81,9 +131,12 @@ export function createActorNamespace(catalog: DocHandle<CatalogDocument>): Actor
       const doc = catalog.doc();
       if (!doc) return err(notFound("actor", id));
 
-      const normalizedId = createActorId(id.trim());
+      const normalizedId = normalizeActorId(id);
       const index = doc.actors.findIndex((actor) => actor.id === normalizedId);
       if (index === -1) return err(notFound("actor", normalizedId));
+      if (doc.ownerActorId === normalizedId) {
+        return err(validationError("id", `Owner actor cannot be archived: ${normalizedId}`));
+      }
 
       catalog.change((nextDoc) => {
         nextDoc.actors[index].archived = true;
@@ -96,7 +149,7 @@ export function createActorNamespace(catalog: DocHandle<CatalogDocument>): Actor
       const doc = catalog.doc();
       if (!doc) return err(notFound("actor", id));
 
-      const normalizedId = createActorId(id.trim());
+      const normalizedId = normalizeActorId(id);
       const index = doc.actors.findIndex((actor) => actor.id === normalizedId);
       if (index === -1) return err(notFound("actor", normalizedId));
 

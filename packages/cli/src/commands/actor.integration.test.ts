@@ -55,7 +55,12 @@ describe("actor CLI commands", () => {
     }
   }
 
-  it("actor list/create/rename/archive/unarchive flow", () => {
+  it("actor owner/list/create/rename/archive/unarchive flow", () => {
+    const initialOwner = run("actor owner show");
+    expect(initialOwner).toContain("Owner actor:");
+    expect(initialOwner).toContain("actor-user");
+    expect(initialOwner).toContain("Name:        user");
+
     const initialList = run("actor list");
     expect(initialList).toContain("actor-user");
     expect(initialList).toContain("active");
@@ -65,17 +70,26 @@ describe("actor CLI commands", () => {
     expect(createOutput).toContain("actor-reviewer");
     expect(createOutput).toContain("Archived:    no");
 
-    const listJson = run("--format json actor list");
-    expect(JSON.parse(listJson)).toEqual(
-      expect.arrayContaining([
-        { id: "actor-user", displayName: "user", archived: false },
-        { id: "actor-reviewer", displayName: "Reviewer", archived: false },
-      ]),
-    );
+    const setOwnerOutput = run("actor owner set actor-reviewer");
+    expect(setOwnerOutput).toContain("Owner actor updated:");
+    expect(setOwnerOutput).toContain("actor-reviewer");
+    expect(setOwnerOutput).toContain("Reviewer");
+
+    const ownerJson = run("--format json actor owner show");
+    expect(JSON.parse(ownerJson)).toEqual({
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+      archived: false,
+    });
 
     const renameOutput = run('actor rename actor-reviewer --name "Lead Reviewer"');
     expect(renameOutput).toContain("Actor renamed:");
     expect(renameOutput).toContain("Lead Reviewer");
+
+    const archiveOwnerOutput = run("actor archive actor-reviewer", true);
+    expect(archiveOwnerOutput).toContain("Owner actor cannot be archived: actor-reviewer");
+
+    run("actor owner set actor-user");
 
     const archiveOutput = run("actor archive actor-reviewer");
     expect(archiveOutput).toContain("Actor archived:");
@@ -99,5 +113,11 @@ describe("actor CLI commands", () => {
 
     const missingOutput = run("actor archive actor-missing", true);
     expect(missingOutput).toContain("actor not found: actor-missing");
+
+    run('actor create --id actor-reviewer --name "Reviewer"');
+    run("actor archive actor-reviewer");
+
+    const archivedOwnerOutput = run("actor owner set actor-reviewer", true);
+    expect(archivedOwnerOutput).toContain("Archived actor cannot be owner: actor-reviewer");
   });
 });
