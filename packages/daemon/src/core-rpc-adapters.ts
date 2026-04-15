@@ -1,4 +1,5 @@
 import {
+  type ApprovalListFilter,
   type CreateActorInput,
   type CreateHabitInput,
   type CreateIntegrationBindingInput,
@@ -150,6 +151,20 @@ export function createCoreNamespaceHandlers(
       search: method(async (request, todu) => {
         const query = getRequiredStringParam(request, "query");
         return todu.task.search(query);
+      }),
+    },
+    approval: {
+      list: method(async (request, todu) => {
+        const filter = getOptionalObjectParam<ApprovalListFilter>(request, "filter");
+        return todu.approval.list(filter);
+      }),
+      approveTaskDescription: method(async (request, todu) => {
+        const id = createTaskId(getRequiredStringParam(request, "taskId"));
+        return todu.approval.approveTaskDescription(id);
+      }),
+      approveNoteContent: method(async (request, todu) => {
+        const id = createNoteId(getRequiredStringParam(request, "noteId"));
+        return todu.approval.approveNoteContent(id);
       }),
     },
     label: {

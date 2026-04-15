@@ -1,6 +1,8 @@
 import type {
   Actor,
   ActorId,
+  ApprovalItem,
+  ApprovalListFilter,
   CreateActorInput,
   CreateHabitInput,
   CreateIntegrationBindingInput,
@@ -154,6 +156,12 @@ export interface NoteNamespace {
   delete(id: NoteId): Promise<Result<void>>;
 }
 
+export interface ApprovalNamespace {
+  list(filter?: ApprovalListFilter): Promise<Result<ApprovalItem[]>>;
+  approveTaskDescription(taskId: TaskId): Promise<Result<ApprovalItem>>;
+  approveNoteContent(noteId: NoteId): Promise<Result<ApprovalItem>>;
+}
+
 export interface RecurringNamespace {
   create(input: CreateRecurringInput): Promise<Result<RecurringTemplate>>;
   list(filter?: RecurringFilter): Promise<Result<RecurringTemplate[]>>;
@@ -240,6 +248,7 @@ export interface Todu {
   label: LabelNamespace;
   integration: IntegrationNamespace;
   note: NoteNamespace;
+  approval: ApprovalNamespace;
   recurring: RecurringNamespace;
   habit: HabitNamespace;
   sync: SyncNamespace;
@@ -328,6 +337,11 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       list: stub,
       update: stub,
       delete: stub,
+    },
+    approval: {
+      list: stub,
+      approveTaskDescription: stub,
+      approveNoteContent: stub,
     },
     recurring: {
       create: stub,

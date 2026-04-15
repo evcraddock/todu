@@ -383,6 +383,28 @@ Behavior notes:
 - `note` text output shows actor-based author names and imported-content approval state when applicable.
 - Legacy `--author` note filtering/input remains available during the compatibility window.
 
+## Approval workflow via CLI
+
+Use explicit approval commands for imported task descriptions and note/comment content:
+
+```bash
+todu approval list
+todu approval list --kind task
+todu approval list --kind note
+
+todu approval approve task-description task-123
+todu approval approve note-content note-123
+```
+
+Behavior notes:
+- `approval list` shows only content currently pending approval.
+- `approval list --kind task|note` filters by task descriptions vs note/comment content.
+- `approval approve task-description <task-id>` approves the current imported task description revision explicitly.
+- `approval approve note-content <note-id>` approves the current imported note/comment revision explicitly.
+- Approval actions reject unknown items, content that is already approved, and content that does not require approval.
+- `task show` and `note list` continue to display current approval state in normal detail output.
+- JSON output for `approval list` and `approval approve ...` remains structured for automation.
+
 ## Validate connectivity
 
 ```bash

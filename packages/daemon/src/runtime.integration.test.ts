@@ -93,6 +93,9 @@ describe("createDaemonRuntime", () => {
         "project.addAuthorizedActors",
         "project.removeAuthorizedActors",
         "project.setAuthorizedActors",
+        "approval.list",
+        "approval.approveTaskDescription",
+        "approval.approveNoteContent",
         "integration.create",
         "integration.status",
         "recurring.process",
@@ -526,6 +529,103 @@ describe("createDaemonRuntime", () => {
       id: "task-delete-1",
       result: null,
     });
+
+    await runtime.stop();
+  });
+
+  it("routes approval namespace methods through runtime adapters", async () => {
+    const runtime = createDaemonRuntime({ storagePath: tmpDir });
+
+    await runtime.start();
+
+    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+      id: "project-approval-create",
+      method: "project.create",
+      params: {
+        input: {
+          name: "Approval Project",
+        },
+      },
+    });
+
+    const projectId = (createProjectResponse.result as { id: string }).id;
+
+    const createTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "task-approval-create",
+      method: "task.create",
+      params: {
+        input: {
+          title: "Imported task",
+          projectId,
+          description: "Imported task description",
+          descriptionApproval: {
+            state: "pendingApproval",
+            sourceBindingId: "ibind-approval",
+            sourceActorId: "actor-user",
+          },
+        },
+      },
+    });
+
+    const taskId = (createTaskResponse.result as { id: string }).id;
+
+    const createNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-approval-create",
+      method: "note.create",
+      params: {
+        input: {
+          content: "Imported note content",
+          entityType: "task",
+          entityId: taskId,
+          contentApproval: {
+            state: "pendingApproval",
+            sourceBindingId: "ibind-approval",
+            sourceActorId: "actor-user",
+          },
+        },
+      },
+    });
+
+    const noteId = (createNoteResponse.result as { id: string }).id;
+
+    const listApprovalsResponse = await sendRequest(runtime.config().socketPath, {
+      id: "approval-list-1",
+      method: "approval.list",
+      params: {
+        filter: {},
+      },
+    });
+
+    expect(listApprovalsResponse.result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "taskDescription", taskId, state: "pendingApproval" }),
+        expect.objectContaining({ kind: "noteContent", noteId, state: "pendingApproval" }),
+      ]),
+    );
+
+    const approveTaskResponse = await sendRequest(runtime.config().socketPath, {
+      id: "approval-task-1",
+      method: "approval.approveTaskDescription",
+      params: {
+        taskId,
+      },
+    });
+
+    expect(approveTaskResponse.result).toEqual(
+      expect.objectContaining({ kind: "taskDescription", taskId, state: "approved" }),
+    );
+
+    const approveNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "approval-note-1",
+      method: "approval.approveNoteContent",
+      params: {
+        noteId,
+      },
+    });
+
+    expect(approveNoteResponse.result).toEqual(
+      expect.objectContaining({ kind: "noteContent", noteId, state: "approved" }),
+    );
 
     await runtime.stop();
   });

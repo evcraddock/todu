@@ -42,6 +42,7 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
     "delete",
   ],
   task: ["create", "list", "get", "update", "delete", "move", "search"],
+  approval: ["list", "approveTaskDescription", "approveNoteContent"],
   label: ["create", "list", "update", "delete"],
   integration: ["create", "list", "get", "update", "delete", "status"],
   note: ["create", "list", "update", "delete"],

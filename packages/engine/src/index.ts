@@ -6,6 +6,7 @@ import {
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { createActorNamespace } from "./actors.js";
+import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
@@ -52,6 +53,7 @@ export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   ActorNamespace,
+  ApprovalNamespace,
   HabitNamespace,
   IntegrationNamespace,
   LabelNamespace,
@@ -246,6 +248,8 @@ export async function createTodu(
   }
 
   const stubs = createStubNamespaces(resolvedConfig);
+  const taskNamespace = createTaskNamespace(storage.catalog, storage.repo);
+  const noteNamespace = createNoteNamespace(storage.catalog, storage.repo);
 
   const todu: ToduWithInternalTools = {
     ...stubs,
@@ -256,10 +260,11 @@ export async function createTodu(
     },
     actor: createActorNamespace(storage.catalog),
     project: createProjectNamespace(storage.catalog),
-    task: createTaskNamespace(storage.catalog, storage.repo),
+    task: taskNamespace,
     label: createLabelNamespace(storage.catalog, storage.repo),
     integration: createIntegrationNamespace(storage.catalog, storage.repo),
-    note: createNoteNamespace(storage.catalog, storage.repo),
+    note: noteNamespace,
+    approval: createApprovalNamespace(storage.catalog, taskNamespace, noteNamespace),
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),
     sync: {
