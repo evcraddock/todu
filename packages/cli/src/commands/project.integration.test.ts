@@ -34,7 +34,13 @@ describe("project CLI commands", () => {
     try {
       const result = execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+        env: {
+          ...process.env,
+          TODU_DATA_DIR: tmpDir,
+          TODU_DAEMON_SOCKET: path.join(tmpDir, "daemon.sock"),
+          TODUAI_DAEMON_SOCKET: path.join(tmpDir, "daemon.sock"),
+          TODUAI_NO_SYNC: "1",
+        },
         encoding: "utf-8",
         timeout: 15000,
       });
@@ -78,7 +84,7 @@ describe("project CLI commands", () => {
     const showOutput = run(`project show ${created.id}`);
     expect(showOutput).toContain("JSON Project");
     expect(showOutput).toContain(created.id);
-    expect(showOutput).toContain("Actors:");
+    expect(showOutput).toContain("Authorized:");
     expect(showOutput).toContain("actor-user");
     expect(showOutput).not.toContain("Sync:");
 
@@ -107,6 +113,48 @@ describe("project CLI commands", () => {
     const remaining = JSON.parse(afterDelete);
     expect(remaining).toHaveLength(1);
     expect(remaining[0].name).toBe("Test Project");
+  });
+
+  it("manages project authorization and surfaces stale assignees", { timeout: 30000 }, () => {
+    run('--format json actor create --id actor-reviewer --name "Reviewer"');
+    const project = JSON.parse(run('--format json project create --name "Auth Project"'));
+
+    const authAdd = run(`project auth add ${project.id} actor-reviewer`);
+    expect(authAdd).toContain("Project authorization updated:");
+    expect(authAdd).toContain("Reviewer (actor-reviewer)");
+
+    const task = JSON.parse(
+      run(
+        `--format json task create --title "Assigned task" --project "${project.id}" --assignee-actor actor-reviewer`,
+      ),
+    );
+    expect(task.assigneeActors[0]).toMatchObject({ id: "actor-reviewer", authorized: true });
+
+    const authRemove = run(`project auth remove ${project.id} actor-reviewer`);
+    expect(authRemove).toContain("Unauthorized task assignees:");
+    expect(authRemove).toContain("Assigned task");
+    expect(authRemove).toContain("Reviewer (actor-reviewer, unauthorized)");
+
+    const showJson = JSON.parse(run(`--format json project show ${project.id}`));
+    expect(showJson.authorizedActors).toEqual([
+      expect.objectContaining({ id: "actor-user", authorized: true }),
+    ]);
+    expect(showJson.staleUnauthorizedAssignees).toEqual([
+      expect.objectContaining({
+        title: "Assigned task",
+        assignees: [expect.objectContaining({ id: "actor-reviewer", authorized: false })],
+      }),
+    ]);
+
+    const authSet = JSON.parse(
+      run(`--format json project auth set ${project.id} actor-user actor-reviewer`),
+    );
+    expect(authSet.authorizedActors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "actor-user" }),
+        expect.objectContaining({ id: "actor-reviewer", authorized: true }),
+      ]),
+    );
   });
 
   it("handles errors gracefully", () => {

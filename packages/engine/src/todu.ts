@@ -108,6 +108,9 @@ export interface ProjectNamespace {
   list(filter?: ProjectFilter): Promise<Result<Project[]>>;
   get(id: ProjectId): Promise<Result<Project>>;
   update(id: ProjectId, input: UpdateProjectInput): Promise<Result<Project>>;
+  addAuthorizedActors(id: ProjectId, actorIds: ActorId[]): Promise<Result<Project>>;
+  removeAuthorizedActors(id: ProjectId, actorIds: ActorId[]): Promise<Result<Project>>;
+  setAuthorizedActors(id: ProjectId, actorIds: ActorId[]): Promise<Result<Project>>;
   delete(id: ProjectId): Promise<Result<void>>;
 }
 
@@ -291,6 +294,9 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       list: stub,
       get: stub,
       update: stub,
+      addAuthorizedActors: stub,
+      removeAuthorizedActors: stub,
+      setAuthorizedActors: stub,
       delete: stub,
     },
     task: {
