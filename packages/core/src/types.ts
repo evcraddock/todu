@@ -454,6 +454,34 @@ export interface NoteFilter {
   timezone?: string;
 }
 
+export const APPROVAL_ITEM_KINDS = ["taskDescription", "noteContent"] as const;
+export type ApprovalItemKind = (typeof APPROVAL_ITEM_KINDS)[number];
+
+export function isApprovalItemKind(value: string): value is ApprovalItemKind {
+  return (APPROVAL_ITEM_KINDS as readonly string[]).includes(value);
+}
+
+export interface ApprovalListFilter {
+  kind?: ApprovalItemKind;
+}
+
+export interface ApprovalItem {
+  kind: ApprovalItemKind;
+  state: ContentApprovalState;
+  taskId?: TaskId;
+  noteId?: NoteId;
+  projectId?: ProjectId;
+  taskTitle?: string;
+  entityType?: NoteEntityType;
+  entityId?: string;
+  contentPreview: string;
+  sourceBindingId?: IntegrationBindingId;
+  sourceActorId?: ActorId;
+  sourceFingerprint?: string;
+  reviewedAt?: string;
+  reviewedByActorId?: ActorId;
+}
+
 // ============================================================================
 // Status transitions
 // ============================================================================

@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { registerActorCommands } from "./commands/actor.js";
+import { registerApprovalCommands } from "./commands/approval.js";
 import { registerConfigCommands } from "./commands/config.js";
 import { registerDaemonCommands } from "./commands/daemon.js";
 import { registerHabitCommands } from "./commands/habit.js";
@@ -41,6 +42,7 @@ const invokeDaemon = createCliDaemonInvoker(program);
 
 // Register command groups
 registerActorCommands(program, invokeDaemon);
+registerApprovalCommands(program, invokeDaemon);
 registerDaemonCommands(program, invokeDaemon);
 registerProjectCommands(program, invokeDaemon);
 registerTaskCommands(program, invokeDaemon);
