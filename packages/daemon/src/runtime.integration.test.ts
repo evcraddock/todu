@@ -87,6 +87,8 @@ describe("createDaemonRuntime", () => {
     expect(DAEMON_CAPABILITY_METHODS).toEqual(
       expect.arrayContaining([
         "actor.create",
+        "actor.getOwner",
+        "actor.setOwner",
         "actor.rename",
         "actor.archive",
         "actor.unarchive",
@@ -108,7 +110,7 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
-  it("routes actor list/create/rename/archive/unarchive over UDS", async () => {
+  it("routes actor owner/list/create/rename/archive/unarchive over UDS", async () => {
     const runtime = createDaemonRuntime({
       storagePath: tmpDir,
       role: "authority",
@@ -132,6 +134,30 @@ describe("createDaemonRuntime", () => {
       displayName: "Reviewer",
     });
 
+    const ownerResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-owner-1",
+      method: "actor.getOwner",
+      params: {},
+    });
+
+    expect(ownerResponse.result).toEqual({
+      id: "actor-user",
+      displayName: "user",
+    });
+
+    const setOwnerResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-set-owner-1",
+      method: "actor.setOwner",
+      params: {
+        actorId: "actor-reviewer",
+      },
+    });
+
+    expect(setOwnerResponse.result).toEqual({
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+    });
+
     const renameResponse = await sendRequest(runtime.config().socketPath, {
       id: "actor-rename-1",
       method: "actor.rename",
@@ -144,6 +170,34 @@ describe("createDaemonRuntime", () => {
     expect(renameResponse.result).toEqual({
       id: "actor-reviewer",
       displayName: "Lead Reviewer",
+    });
+
+    const archiveOwnerResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-archive-owner-1",
+      method: "actor.archive",
+      params: {
+        id: "actor-reviewer",
+      },
+    });
+
+    expect(archiveOwnerResponse.error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        field: "id",
+      },
+    });
+
+    const setOwnerBackResponse = await sendRequest(runtime.config().socketPath, {
+      id: "actor-set-owner-back-1",
+      method: "actor.setOwner",
+      params: {
+        actorId: "actor-user",
+      },
+    });
+
+    expect(setOwnerBackResponse.result).toEqual({
+      id: "actor-user",
+      displayName: "user",
     });
 
     const archiveResponse = await sendRequest(runtime.config().socketPath, {

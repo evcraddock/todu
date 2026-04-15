@@ -72,6 +72,46 @@ describe("actor commands", () => {
     ]);
   });
 
+  it("passes owner show and set through to the daemon", async () => {
+    const invokeDaemonMock = vi.fn(async (method: string) => {
+      if (method === "actor.getOwner") {
+        return {
+          ok: true,
+          value: {
+            id: "actor-user",
+            displayName: "user",
+          },
+        };
+      }
+      if (method === "actor.setOwner") {
+        return {
+          ok: true,
+          value: {
+            id: "actor-reviewer",
+            displayName: "Reviewer",
+          },
+        };
+      }
+
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const invokeDaemon = invokeDaemonMock as unknown as CliDaemonInvoker;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const program = new Command();
+    program.name("todu").option("--format <type>", "output format (text or json)", "text");
+    registerActorCommands(program, invokeDaemon);
+
+    await program.parseAsync(["actor", "owner", "show"], { from: "user" });
+    expect(invokeDaemonMock).toHaveBeenCalledWith("actor.getOwner", {});
+
+    await program.parseAsync(["actor", "owner", "set", "actor-reviewer"], { from: "user" });
+    expect(invokeDaemonMock).toHaveBeenCalledWith("actor.setOwner", {
+      actorId: "actor-reviewer",
+    });
+    expect(logSpy).toHaveBeenCalled();
+  });
+
   it("passes rename input through to the daemon", async () => {
     const invokeDaemonMock = vi.fn(async (method: string) => {
       if (method === "actor.rename") {

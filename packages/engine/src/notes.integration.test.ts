@@ -41,6 +41,10 @@ async function readCatalogDocument(storagePath: string): Promise<CatalogDocument
 async function seedLegacyNoteIdentityData(
   storagePath: string,
   legacyAuthorsByNoteId: Record<string, string | null | undefined>,
+  owner: { id: string; displayName: string } = {
+    id: DEFAULT_OWNER_ACTOR_ID,
+    displayName: "user",
+  },
 ): Promise<void> {
   const markerPath = path.join(storagePath, "todu-catalog.id");
   const catalogId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
@@ -56,10 +60,10 @@ async function seedLegacyNoteIdentityData(
       doc.version = 1;
       doc.settings.schemaVersion = 1;
       doc.actors.splice(0, doc.actors.length, {
-        id: DEFAULT_OWNER_ACTOR_ID,
-        displayName: "user",
+        id: createActorId(owner.id),
+        displayName: owner.displayName,
       });
-      doc.ownerActorId = DEFAULT_OWNER_ACTOR_ID;
+      doc.ownerActorId = createActorId(owner.id);
     });
 
     const bucketDocIds = Object.values(catalogHandle.doc()?.notesBucketDocIds ?? {});
@@ -321,6 +325,40 @@ describe("note namespace", () => {
       if (!afterRestart.ok) return;
       expect(afterRestart.value.find((note) => note.id === first.value.id)?.authorActorId).toBe(
         migratedFirst?.authorActorId,
+      );
+    });
+
+    it("maps legacy missing or 'user' note authors to the current owner actor during migration", async () => {
+      const first = await todu.note.create({ content: "Legacy user note" });
+      const second = await todu.note.create({ content: "Legacy missing note" });
+      if (!first.ok || !second.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyNoteIdentityData(
+        tmpDir,
+        {
+          [first.value.id]: "user",
+          [second.value.id]: undefined,
+        },
+        {
+          id: "actor-reviewer",
+          displayName: "Reviewer",
+        },
+      );
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.note.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.find((note) => note.id === first.value.id)?.authorActorId).toBe(
+        "actor-reviewer",
+      );
+      expect(result.value.find((note) => note.id === second.value.id)?.authorActorId).toBe(
+        "actor-reviewer",
       );
     });
 

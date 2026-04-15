@@ -100,6 +100,8 @@ export interface ToduConfig {
 export interface ActorNamespace {
   list(): Promise<Result<Actor[]>>;
   create(input: CreateActorInput): Promise<Result<Actor>>;
+  getOwner(): Promise<Result<Actor>>;
+  setOwner(id: ActorId): Promise<Result<Actor>>;
   rename(id: ActorId, displayName: string): Promise<Result<Actor>>;
   archive(id: ActorId): Promise<Result<Actor>>;
   unarchive(id: ActorId): Promise<Result<Actor>>;
@@ -294,6 +296,8 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
     actor: {
       list: stub,
       create: stub,
+      getOwner: stub,
+      setOwner: stub,
       rename: stub,
       archive: stub,
       unarchive: stub,

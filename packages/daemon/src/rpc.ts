@@ -30,7 +30,7 @@ export const DAEMON_BASE_METHODS = [
 export const DAEMON_CAPABILITY_EVENTS = ["data.changed", "sync.statusChanged"] as const;
 
 export const CORE_DAEMON_NAMESPACE_METHODS = {
-  actor: ["list", "create", "rename", "archive", "unarchive"],
+  actor: ["list", "create", "getOwner", "setOwner", "rename", "archive", "unarchive"],
   project: [
     "create",
     "list",

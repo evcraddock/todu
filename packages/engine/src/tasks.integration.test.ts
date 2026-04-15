@@ -92,7 +92,11 @@ async function addCatalogActor(
     });
     await repo.flush();
   } finally {
-    await repo.shutdown();
+    try {
+      await repo.shutdown();
+    } catch {
+      // Safe to ignore in helper cleanup when repo still has requesting docs.
+    }
   }
 }
 
@@ -100,6 +104,10 @@ async function seedLegacyTaskIdentityData(
   storagePath: string,
   projectId: ProjectId,
   legacyAssigneesByTaskId: Record<string, string[]>,
+  owner: { id: string; displayName: string } = {
+    id: DEFAULT_OWNER_ACTOR_ID,
+    displayName: "user",
+  },
 ): Promise<void> {
   const markerPath = path.join(storagePath, "todu-catalog.id");
   const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
@@ -114,17 +122,17 @@ async function seedLegacyTaskIdentityData(
       doc.version = 1;
       doc.settings.schemaVersion = 1;
       doc.actors.splice(0, doc.actors.length, {
-        id: DEFAULT_OWNER_ACTOR_ID,
-        displayName: "user",
+        id: createActorId(owner.id),
+        displayName: owner.displayName,
       });
-      doc.ownerActorId = DEFAULT_OWNER_ACTOR_ID;
+      doc.ownerActorId = createActorId(owner.id);
 
       const project = doc.projects.find((entry) => entry.id === projectId);
       if (!project) throw new Error(`project not found: ${projectId}`);
       project.authorizedAssigneeActorIds.splice(
         0,
         project.authorizedAssigneeActorIds.length,
-        DEFAULT_OWNER_ACTOR_ID,
+        createActorId(owner.id),
       );
     });
 
@@ -488,6 +496,36 @@ describe("task namespace", () => {
       expect(
         afterRestart.value.find((task) => task.id === second.value.id)?.assigneeActorIds,
       ).toEqual(secondTask?.assigneeActorIds);
+    });
+
+    it("maps legacy task assignee 'user' to the current owner actor during migration", async () => {
+      const created = await todu.task.create({ title: "Legacy owner task", projectId });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyTaskIdentityData(
+        tmpDir,
+        projectId,
+        {
+          [created.value.id]: ["user"],
+        },
+        {
+          id: "actor-reviewer",
+          displayName: "Reviewer",
+        },
+      );
+
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const migrated = await todu.task.get(created.value.id);
+      expect(migrated.ok).toBe(true);
+      if (!migrated.ok) return;
+      expect(migrated.value.assigneeActorIds).toEqual(["actor-reviewer"]);
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.ownerActorId).toBe("actor-reviewer");
     });
 
     it("repairs partially migrated task assignees on retry", async () => {

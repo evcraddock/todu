@@ -68,6 +68,13 @@ export function createCoreNamespaceHandlers(
         };
         return todu.actor.create(input);
       }),
+      getOwner: method(async (_request, todu) => {
+        return todu.actor.getOwner();
+      }),
+      setOwner: method(async (request, todu) => {
+        const actorId = createActorId(getRequiredStringParam(request, "actorId"));
+        return todu.actor.setOwner(actorId);
+      }),
       rename: method(async (request, todu) => {
         const id = createActorId(getRequiredStringParam(request, "id"));
         const displayName = getRequiredStringParam(request, "displayName");

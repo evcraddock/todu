@@ -32,6 +32,20 @@ function actorDetail(actor: Actor): string {
   ].join("\n");
 }
 
+function printActor(program: Command, actor: Actor, heading?: string): void {
+  const output = normalizeActorForOutput(actor);
+  const format = program.opts().format;
+  if (format === "json") {
+    console.log(formatJSON(output));
+    return;
+  }
+
+  if (heading) {
+    console.log(heading);
+  }
+  console.log(actorDetail(output));
+}
+
 export function registerActorCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const actor = program.command("actor").description("Manage actors");
 
@@ -73,14 +87,41 @@ export function registerActorCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
-      const output = normalizeActorForOutput(result.value);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(output));
-      } else {
-        console.log("Actor created:");
-        console.log(actorDetail(output));
+      printActor(program, result.value, "Actor created:");
+    });
+
+  const owner = actor
+    .command("owner")
+    .description(
+      "Inspect or change the catalog owner actor with special fallback/default semantics",
+    );
+
+  owner
+    .command("show")
+    .description("Show the current owner actor")
+    .action(async () => {
+      const result = await invokeDaemon<Actor>("actor.getOwner", {});
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
       }
+
+      printActor(program, result.value, "Owner actor:");
+    });
+
+  owner
+    .command("set <actorId>")
+    .description("Set the current owner actor to an existing non-archived actor")
+    .action(async (actorId) => {
+      const result = await invokeDaemon<Actor>("actor.setOwner", { actorId });
+      if (!result.ok) {
+        console.error(formatDaemonCommandError(result.error));
+        process.exitCode = 1;
+        return;
+      }
+
+      printActor(program, result.value, "Owner actor updated:");
     });
 
   actor
@@ -98,14 +139,7 @@ export function registerActorCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
-      const output = normalizeActorForOutput(result.value);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(output));
-      } else {
-        console.log("Actor renamed:");
-        console.log(actorDetail(output));
-      }
+      printActor(program, result.value, "Actor renamed:");
     });
 
   actor
@@ -119,14 +153,7 @@ export function registerActorCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
-      const output = normalizeActorForOutput(result.value);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(output));
-      } else {
-        console.log("Actor archived:");
-        console.log(actorDetail(output));
-      }
+      printActor(program, result.value, "Actor archived:");
     });
 
   actor
@@ -140,13 +167,6 @@ export function registerActorCommands(program: Command, invokeDaemon: CliDaemonI
         return;
       }
 
-      const output = normalizeActorForOutput(result.value);
-      const format = program.opts().format;
-      if (format === "json") {
-        console.log(formatJSON(output));
-      } else {
-        console.log("Actor unarchived:");
-        console.log(actorDetail(output));
-      }
+      printActor(program, result.value, "Actor unarchived:");
     });
 }

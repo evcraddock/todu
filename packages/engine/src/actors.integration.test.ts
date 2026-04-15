@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createActorId } from "@todu/core";
+import { createActorId, createIntegrationBindingId } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
@@ -27,6 +27,14 @@ describe("actor namespace", () => {
     if (!result.ok) return;
 
     expect(result.value).toEqual([{ id: "actor-user", displayName: "user" }]);
+  });
+
+  it("shows the default owner actor", async () => {
+    const result = await todu.actor.getOwner();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value).toEqual({ id: "actor-user", displayName: "user" });
   });
 
   it("creates an actor with normalized display name", async () => {
@@ -85,6 +93,77 @@ describe("actor namespace", () => {
     });
   });
 
+  it("sets owner actor without rewriting existing project authorization and updates future defaults", async () => {
+    await todu.actor.create({
+      id: createActorId("actor-reviewer"),
+      displayName: "Reviewer",
+    });
+
+    const existingProject = await todu.project.create({ name: "Existing project" });
+    if (!existingProject.ok) throw new Error("existing project create failed");
+
+    const owner = await todu.actor.setOwner(createActorId("actor-reviewer"));
+    expect(owner.ok).toBe(true);
+    if (!owner.ok) return;
+    expect(owner.value).toEqual({
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+    });
+
+    const ownerShow = await todu.actor.getOwner();
+    expect(ownerShow.ok).toBe(true);
+    if (!ownerShow.ok) return;
+    expect(ownerShow.value.id).toBe("actor-reviewer");
+
+    const existingProjectAfter = await todu.project.get(existingProject.value.id);
+    expect(existingProjectAfter.ok).toBe(true);
+    if (!existingProjectAfter.ok) return;
+    expect(existingProjectAfter.value.authorizedAssigneeActorIds).toEqual(["actor-user"]);
+
+    const futureProject = await todu.project.create({ name: "Future project" });
+    expect(futureProject.ok).toBe(true);
+    if (!futureProject.ok) return;
+    expect(futureProject.value.authorizedAssigneeActorIds).toEqual(["actor-reviewer"]);
+  });
+
+  it("updates owner-based note and approval fallbacks after owner change", async () => {
+    await todu.actor.create({
+      id: createActorId("actor-reviewer"),
+      displayName: "Reviewer",
+    });
+
+    const owner = await todu.actor.setOwner(createActorId("actor-reviewer"));
+    if (!owner.ok) throw new Error("owner set failed");
+
+    const project = await todu.project.create({
+      name: "Approvals",
+      authorizedAssigneeActorIds: [createActorId("actor-reviewer")],
+    });
+    if (!project.ok) throw new Error("project create failed");
+
+    const note = await todu.note.create({ content: "Owner fallback note" });
+    expect(note.ok).toBe(true);
+    if (!note.ok) return;
+    expect(note.value.authorActorId).toBe("actor-reviewer");
+
+    const task = await todu.task.create({
+      title: "Imported task",
+      projectId: project.value.id,
+      description: "Imported description",
+      descriptionApproval: {
+        state: "pendingApproval",
+        sourceBindingId: createIntegrationBindingId("ibind-owner-fallback"),
+        sourceActorId: createActorId("actor-reviewer"),
+      },
+    });
+    if (!task.ok) throw new Error("task create failed");
+
+    const approval = await todu.approval.approveTaskDescription(task.value.id);
+    expect(approval.ok).toBe(true);
+    if (!approval.ok) return;
+    expect(approval.value.reviewedByActorId).toBe("actor-reviewer");
+  });
+
   it("archives and unarchives actors", async () => {
     await todu.actor.create({
       id: createActorId("actor-reviewer"),
@@ -107,6 +186,39 @@ describe("actor namespace", () => {
       id: "actor-reviewer",
       displayName: "Reviewer",
     });
+  });
+
+  it("rejects archived or missing owner transitions", async () => {
+    await todu.actor.create({
+      id: createActorId("actor-reviewer"),
+      displayName: "Reviewer",
+    });
+
+    const archived = await todu.actor.archive(createActorId("actor-reviewer"));
+    if (!archived.ok) throw new Error("archive failed");
+
+    const archivedOwner = await todu.actor.setOwner(createActorId("actor-reviewer"));
+    expect(archivedOwner.ok).toBe(false);
+    if (archivedOwner.ok) return;
+    expect(archivedOwner.error.type).toBe("validation");
+    expect(archivedOwner.error.field).toBe("actorId");
+
+    const missingOwner = await todu.actor.setOwner(createActorId("actor-missing"));
+    expect(missingOwner.ok).toBe(false);
+    if (missingOwner.ok) return;
+    expect(missingOwner.error.type).toBe("not-found");
+    expect(missingOwner.error.entity).toBe("actor");
+    expect(missingOwner.error.id).toBe("actor-missing");
+  });
+
+  it("rejects archiving the current owner actor", async () => {
+    const result = await todu.actor.archive(createActorId("actor-user"));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.error.type).toBe("validation");
+    expect(result.error.field).toBe("id");
+    expect(result.error.message).toContain("Owner actor cannot be archived");
   });
 
   it("returns not-found for unknown actor ids on mutation", async () => {
