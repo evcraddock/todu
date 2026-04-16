@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ApprovalItem,
+  ApprovalListFilter,
   CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
@@ -38,6 +40,7 @@ export const queryKeys = {
   project: (id: string) => ["projects", id] as const,
   tasks: (filter?: unknown, sort?: unknown) => ["tasks", filter, sort] as const,
   task: (id: string) => ["tasks", id] as const,
+  approvals: (filter?: unknown) => ["approvals", filter] as const,
   labels: ["labels"] as const,
   notes: (filter?: unknown) => ["notes", filter] as const,
   recurring: (filter?: unknown) => ["recurring", filter] as const,
@@ -210,6 +213,48 @@ export function useSearchTasks(query: string) {
     queryKey: ["tasks", "search", query],
     queryFn: async () => unwrap(await window.todu.task.search(query)),
     enabled: query.length > 0,
+  });
+}
+
+// ============================================================================
+// Approval Hooks
+// ============================================================================
+
+export function useApprovals(filter?: ApprovalListFilter) {
+  return useQuery({
+    queryKey: queryKeys.approvals(filter),
+    queryFn: async () => unwrap(await window.todu.approval.list(filter)),
+  });
+}
+
+export function useApproveTaskDescription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (taskId: TaskId) =>
+      unwrap(await window.todu.approval.approveTaskDescription(taskId)),
+    onSuccess: (item: ApprovalItem, taskId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals() });
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
+      if (item.projectId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.project(item.projectId) });
+      }
+    },
+  });
+}
+
+export function useApproveNoteContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (noteId: NoteId) =>
+      unwrap(await window.todu.approval.approveNoteContent(noteId)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals() });
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
 }
 

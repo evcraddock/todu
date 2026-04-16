@@ -59,6 +59,49 @@ describe("createDaemonToduClient", () => {
     });
   });
 
+  it("routes approval methods to daemon RPC and preserves Result shape", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        value: [{ kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { kind: "noteContent", noteId: "note-1", contentPreview: "Imported note" },
+      });
+
+    const client = createDaemonToduClient({ request });
+
+    const listResult = await client.approval.list();
+    const taskResult = await client.approval.approveTaskDescription("task-1");
+    const noteResult = await client.approval.approveNoteContent("note-1");
+
+    expect(request).toHaveBeenNthCalledWith(1, "approval.list", { filter: undefined });
+    expect(request).toHaveBeenNthCalledWith(2, "approval.approveTaskDescription", {
+      id: "task-1",
+    });
+    expect(request).toHaveBeenNthCalledWith(3, "approval.approveNoteContent", {
+      id: "note-1",
+    });
+    expect(listResult).toEqual({
+      ok: true,
+      value: [{ kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" }],
+    });
+    expect(taskResult).toEqual({
+      ok: true,
+      value: { kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" },
+    });
+    expect(noteResult).toEqual({
+      ok: true,
+      value: { kind: "noteContent", noteId: "note-1", contentPreview: "Imported note" },
+    });
+  });
+
   it("maps daemon NOT_FOUND errors to not-found ToduError", async () => {
     const request = vi.fn().mockResolvedValue({
       ok: false,

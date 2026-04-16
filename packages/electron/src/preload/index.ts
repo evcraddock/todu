@@ -37,6 +37,15 @@ const api = {
     search: (query: string) => ipcRenderer.invoke("todu:task:search", query),
   },
 
+  // ── Approval ───────────────────────────────────────────────────────
+  approval: {
+    list: (filter?: unknown) => ipcRenderer.invoke("todu:approval:list", filter),
+    approveTaskDescription: (taskId: string) =>
+      ipcRenderer.invoke("todu:approval:approve-task-description", taskId),
+    approveNoteContent: (noteId: string) =>
+      ipcRenderer.invoke("todu:approval:approve-note-content", noteId),
+  },
+
   // ── Label ──────────────────────────────────────────────────────────
   label: {
     list: () => ipcRenderer.invoke("todu:label:list"),

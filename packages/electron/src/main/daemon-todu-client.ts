@@ -25,6 +25,11 @@ interface DaemonBackedToduMethods {
     move(id: string, projectId: string): Promise<Result<unknown, ToduError>>;
     search(query: string): Promise<Result<unknown, ToduError>>;
   };
+  approval: {
+    list(filter?: unknown): Promise<Result<unknown, ToduError>>;
+    approveTaskDescription(taskId: string): Promise<Result<unknown, ToduError>>;
+    approveNoteContent(noteId: string): Promise<Result<unknown, ToduError>>;
+  };
   label: {
     list(): Promise<Result<unknown, ToduError>>;
     create(input: unknown): Promise<Result<unknown, ToduError>>;
@@ -72,6 +77,11 @@ export function createDaemonToduClient(daemon: Pick<DaemonConnectionManager, "re
       update: (id, input) => invoke("task.update", { id, input }),
       move: (id, projectId) => invoke("task.move", { id, projectId }),
       search: (query) => invoke("task.search", { query }),
+    },
+    approval: {
+      list: (filter) => invoke("approval.list", { filter }),
+      approveTaskDescription: (taskId) => invoke("approval.approveTaskDescription", { id: taskId }),
+      approveNoteContent: (noteId) => invoke("approval.approveNoteContent", { id: noteId }),
     },
     label: {
       list: () => invoke("label.list", {}),

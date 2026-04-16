@@ -14,6 +14,7 @@ import { StatusChip } from "../components/StatusChip.js";
 import { TabBar } from "../components/TabBar.js";
 import {
   useActors,
+  useApproveTaskDescription,
   useDeleteTask,
   useMoveTask,
   useProjects,
@@ -78,6 +79,7 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const { data: projects } = useProjects();
   const { data: actors } = useActors();
   const updateTask = useUpdateTask();
+  const approveTaskDescription = useApproveTaskDescription();
   const deleteTask = useDeleteTask();
   const moveTask = useMoveTask();
   // Focus entity context for agent
@@ -97,6 +99,7 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const [replacementAssigneeActorIds, setReplacementAssigneeActorIds] = useState<
     Record<string, string>
   >({});
+  const [approvalMessage, setApprovalMessage] = useState("");
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
@@ -443,9 +446,30 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
 
         {activeTab === "description" && (
           <div className="detail-tab-content">
+            {approvalMessage && <div className="settings-hint">{approvalMessage}</div>}
             {descriptionApprovalLabel && (
               <div className="detail-approval-row">
                 <span className="chip chip-label">{descriptionApprovalLabel}</span>
+                {task.descriptionApproval?.state === "pendingApproval" && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() =>
+                      approveTaskDescription.mutate(task.id as TaskId, {
+                        onSuccess: () => setApprovalMessage("Task description approved."),
+                        onError: (err) =>
+                          setApprovalMessage(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to approve task description",
+                          ),
+                      })
+                    }
+                    disabled={approveTaskDescription.isPending}
+                  >
+                    {approveTaskDescription.isPending ? "Approving…" : "Approve"}
+                  </button>
+                )}
               </div>
             )}
             {editingDescription ? (

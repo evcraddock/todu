@@ -1,7 +1,16 @@
 import type { NoteEntityType, NoteFilter, NoteId } from "@todu/core/browser";
 import { type ReactNode, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
-import { useActors, useDeleteNote, useNotes, useProjects, useTasks } from "../hooks/useTodu.js";
+import {
+  useActors,
+  useApprovals,
+  useApproveNoteContent,
+  useApproveTaskDescription,
+  useDeleteNote,
+  useNotes,
+  useProjects,
+  useTasks,
+} from "../hooks/useTodu.js";
 import { createActorMap, getActorName, getApprovalLabel } from "../lib/actors.js";
 
 export function NoteList({
@@ -24,11 +33,15 @@ export function NoteList({
   };
 
   const { data: notes, isLoading, isError, error } = useNotes(filter);
+  const { data: approvals } = useApprovals();
   const { data: projects } = useProjects();
   const { data: tasks } = useTasks();
   const { data: actors } = useActors();
+  const approveTaskDescription = useApproveTaskDescription();
+  const approveNoteContent = useApproveNoteContent();
   const deleteNote = useDeleteNote();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; preview: string } | null>(null);
+  const [approvalMessage, setApprovalMessage] = useState("");
 
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
@@ -109,6 +122,94 @@ export function NoteList({
         </button>
       </div>
 
+      {approvalMessage && <div className="settings-hint">{approvalMessage}</div>}
+
+      {(approvals?.length ?? 0) > 0 && (
+        <div className="settings-section">
+          <h3 className="section-title">Approval Needed ({approvals?.length ?? 0})</h3>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Kind</th>
+                <th>Preview</th>
+                <th>Attached To</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {approvals?.map((approval) => (
+                <tr
+                  key={`${approval.kind}:${approval.taskId ?? approval.noteId ?? approval.contentPreview}`}
+                >
+                  <td>
+                    {approval.kind === "taskDescription" ? "Task description" : "Note content"}
+                  </td>
+                  <td className="cell-content">{approval.contentPreview}</td>
+                  <td>
+                    {approval.kind === "taskDescription" && approval.taskId ? (
+                      <button
+                        type="button"
+                        className="entity-link"
+                        onClick={() => onNavigateToEntity("task", approval.taskId as string)}
+                      >
+                        task: {approval.taskTitle ?? approval.taskId}
+                      </button>
+                    ) : approval.entityType && approval.entityId ? (
+                      entityLabel(approval.entityType, approval.entityId)
+                    ) : (
+                      <span className="empty-hint">Unknown</span>
+                    )}
+                  </td>
+                  <td className="cell-actions">
+                    {approval.kind === "taskDescription" && approval.taskId ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={approveTaskDescription.isPending}
+                        onClick={() =>
+                          approveTaskDescription.mutate(approval.taskId!, {
+                            onSuccess: () => setApprovalMessage("Task description approved."),
+                            onError: (err) =>
+                              setApprovalMessage(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Failed to approve task description",
+                              ),
+                          })
+                        }
+                      >
+                        {approveTaskDescription.isPending ? "Approving…" : "Approve"}
+                      </button>
+                    ) : approval.kind === "noteContent" && approval.noteId ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={approveNoteContent.isPending}
+                        onClick={() =>
+                          approveNoteContent.mutate(approval.noteId!, {
+                            onSuccess: () => setApprovalMessage("Note content approved."),
+                            onError: (err) =>
+                              setApprovalMessage(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Failed to approve note content",
+                              ),
+                          })
+                        }
+                      >
+                        {approveNoteContent.isPending ? "Approving…" : "Approve"}
+                      </button>
+                    ) : (
+                      <span className="empty-hint">-</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="filter-bar">
         <div className="filter-row">
           <select
@@ -176,6 +277,24 @@ export function NoteList({
                   </div>
                 </td>
                 <td className="cell-actions">
+                  {note.contentApproval?.state === "pendingApproval" && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() =>
+                        approveNoteContent.mutate(note.id, {
+                          onSuccess: () => setApprovalMessage("Note content approved."),
+                          onError: (err) =>
+                            setApprovalMessage(
+                              err instanceof Error ? err.message : "Failed to approve note content",
+                            ),
+                        })
+                      }
+                      disabled={approveNoteContent.isPending}
+                    >
+                      {approveNoteContent.isPending ? "Approving…" : "Approve"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-danger btn-sm"

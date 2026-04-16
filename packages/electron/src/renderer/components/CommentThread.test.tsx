@@ -9,6 +9,7 @@ import { CommentThread } from "./CommentThread.js";
 
 vi.mock("../hooks/useTodu.js", () => ({
   useActors: vi.fn(),
+  useApproveNoteContent: vi.fn(),
   useCreateNote: vi.fn(),
   useDeleteNote: vi.fn(),
   useNotes: vi.fn(),
@@ -29,6 +30,7 @@ function makeNote(overrides: Partial<Note> = {}): Note {
   };
 }
 
+const approveNoteContentMutate = vi.fn();
 const createNoteMutate = vi.fn();
 const deleteNoteMutate = vi.fn();
 
@@ -43,6 +45,11 @@ beforeEach(() => {
     data: [makeNote()],
     isLoading: false,
   } as ReturnType<typeof hooks.useNotes>);
+
+  vi.mocked(hooks.useApproveNoteContent).mockReturnValue({
+    mutate: approveNoteContentMutate,
+    isPending: false,
+  } as ReturnType<typeof hooks.useApproveNoteContent>);
 
   vi.mocked(hooks.useCreateNote).mockReturnValue({
     mutate: createNoteMutate,
@@ -65,6 +72,27 @@ describe("CommentThread", () => {
     expect(screen.getByText("Reviewer")).toBeDefined();
     expect(screen.getByText("Approved import")).toBeDefined();
     expect(screen.getByText("Imported comment")).toBeDefined();
+  });
+
+  it("shows explicit approve actions for pending imported comments", async () => {
+    vi.mocked(hooks.useNotes).mockReturnValue({
+      data: [makeNote({ contentApproval: { state: "pendingApproval" } })],
+      isLoading: false,
+    } as ReturnType<typeof hooks.useNotes>);
+
+    render(<CommentThread entityType="task" entityId="task-1" />);
+
+    fireEvent.click(screen.getByText("Approve"));
+
+    await waitFor(() => {
+      expect(approveNoteContentMutate).toHaveBeenCalledWith(
+        "note-1",
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      );
+    });
   });
 
   it("creates comments without legacy author strings", async () => {

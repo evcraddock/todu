@@ -1,4 +1,4 @@
-# Electron multi-user actor, project authorization, and task assignee management
+# Electron multi-user actor, project authorization, task assignee, and approval management
 
 The Electron app includes lightweight multi-user management surfaces backed by the local daemon.
 
@@ -49,3 +49,20 @@ Behavior notes:
 - new assignment choices are limited to non-archived actors authorized for the task's current project
 - when a task moves between projects, the available assignee choices refresh to match the new project's authorization list
 - existing archived or unauthorized assignees remain visible until the user removes or replaces them
+
+## Imported content approvals
+
+Open **Notes** to review the **Approval Needed** section for pending imported task descriptions and note/comment content.
+
+Supported actions:
+- discover all currently pending approvals in one visible list
+- open the related task or note/comment context from that list
+- explicitly approve imported task descriptions
+- explicitly approve imported note/comment content from the approval list, note rows, and comment threads
+
+Behavior notes:
+- approval actions are explicit; editing does not implicitly approve imported content
+- task detail views show an approve action for pending imported descriptions
+- note list rows and comment threads show approve actions for pending imported note/comment content
+- approval actions use daemon-backed core approval APIs and refresh task/note views after success
+- already-approved or invalid approval actions surface visible errors instead of silently doing nothing
