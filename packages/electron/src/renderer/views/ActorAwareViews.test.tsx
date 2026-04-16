@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { Note, Project, Task, TaskWithDetail } from "@todu/core/browser";
+import type { Actor, Note, Project, Task, TaskWithDetail } from "@todu/core/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "../hooks/useTodu.js";
 import { NoteList } from "./NoteList.js";
@@ -112,105 +112,234 @@ function makeNote(overrides: Partial<Note> = {}): Note {
   };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
+describe("actor-aware renderer views", () => {
+  const deleteNoteMutate = vi.fn();
+  const deleteProjectMutate = vi.fn();
+  const deleteTaskMutate = vi.fn();
+  const moveTaskMutate = vi.fn();
+  const updateProjectMutate = vi.fn();
+  const updateTaskMutate = vi.fn();
 
-  Object.defineProperty(window, "todu", {
-    configurable: true,
-    value: {
-      agent: {
-        focusEntity: vi.fn().mockResolvedValue(undefined),
-        clearFocusedEntity: vi.fn().mockResolvedValue(undefined),
-      },
-    },
-  });
+  let actorsData: Actor[];
+  let notesData: Note[];
+  let projectData: Project;
+  let projectsData: Project[];
+  let taskData: TaskWithDetail;
+  let tasksData: Task[];
 
-  vi.mocked(hooks.useActors).mockReturnValue({
-    data: [
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    actorsData = [
       { id: "actor-user", displayName: "user" },
       { id: "actor-reviewer", displayName: "Reviewer", archived: true },
       { id: "actor-collab", displayName: "Collaborator" },
-    ],
-  } as ReturnType<typeof hooks.useActors>);
+    ];
+    projectData = makeProject();
+    projectsData = [
+      projectData,
+      makeProject({
+        id: "proj-2" as Project["id"],
+        name: "Ops",
+        authorizedAssigneeActorIds: ["actor-collab"] as Project["authorizedAssigneeActorIds"],
+      }),
+    ];
+    taskData = makeTask();
+    tasksData = [taskData];
+    notesData = [makeNote()];
 
-  vi.mocked(hooks.useProjects).mockReturnValue({
-    data: [makeProject()],
-  } as ReturnType<typeof hooks.useProjects>);
+    Object.defineProperty(window, "todu", {
+      configurable: true,
+      value: {
+        agent: {
+          focusEntity: vi.fn().mockResolvedValue(undefined),
+          clearFocusedEntity: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+    });
 
-  vi.mocked(hooks.useTask).mockReturnValue({
-    data: makeTask(),
-    isLoading: false,
-    isError: false,
-    error: null,
-  } as ReturnType<typeof hooks.useTask>);
+    vi.mocked(hooks.useActors).mockImplementation(
+      () => ({ data: actorsData }) as ReturnType<typeof hooks.useActors>,
+    );
 
-  vi.mocked(hooks.useUpdateTask).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useUpdateTask>);
+    vi.mocked(hooks.useProjects).mockImplementation(
+      () => ({ data: projectsData }) as ReturnType<typeof hooks.useProjects>,
+    );
 
-  vi.mocked(hooks.useDeleteTask).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useDeleteTask>);
+    vi.mocked(hooks.useTask).mockImplementation(
+      () =>
+        ({
+          data: taskData,
+          isLoading: false,
+          isError: false,
+          error: null,
+        }) as ReturnType<typeof hooks.useTask>,
+    );
 
-  vi.mocked(hooks.useMoveTask).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useMoveTask>);
+    vi.mocked(hooks.useUpdateTask).mockReturnValue({
+      mutate: updateTaskMutate,
+    } as ReturnType<typeof hooks.useUpdateTask>);
 
-  vi.mocked(hooks.useProject).mockReturnValue({
-    data: makeProject(),
-    isLoading: false,
-    isError: false,
-    error: null,
-  } as ReturnType<typeof hooks.useProject>);
+    vi.mocked(hooks.useDeleteTask).mockReturnValue({
+      mutate: deleteTaskMutate,
+    } as ReturnType<typeof hooks.useDeleteTask>);
 
-  vi.mocked(hooks.useUpdateProject).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useUpdateProject>);
+    vi.mocked(hooks.useMoveTask).mockReturnValue({
+      mutate: moveTaskMutate,
+    } as ReturnType<typeof hooks.useMoveTask>);
 
-  vi.mocked(hooks.useDeleteProject).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useDeleteProject>);
+    vi.mocked(hooks.useProject).mockImplementation(
+      () =>
+        ({
+          data: projectData,
+          isLoading: false,
+          isError: false,
+          error: null,
+        }) as ReturnType<typeof hooks.useProject>,
+    );
 
-  vi.mocked(hooks.useTasks).mockReturnValue({
-    data: [makeTask()],
-  } as ReturnType<typeof hooks.useTasks>);
+    vi.mocked(hooks.useUpdateProject).mockReturnValue({
+      mutate: updateProjectMutate,
+    } as ReturnType<typeof hooks.useUpdateProject>);
 
-  vi.mocked(hooks.useSearchTasks).mockReturnValue({
-    data: [],
-  } as ReturnType<typeof hooks.useSearchTasks>);
+    vi.mocked(hooks.useDeleteProject).mockReturnValue({
+      mutate: deleteProjectMutate,
+    } as ReturnType<typeof hooks.useDeleteProject>);
 
-  vi.mocked(hooks.useNotes).mockReturnValue({
-    data: [makeNote()],
-    isLoading: false,
-    isError: false,
-    error: null,
-  } as ReturnType<typeof hooks.useNotes>);
+    vi.mocked(hooks.useTasks).mockImplementation(
+      () => ({ data: tasksData }) as ReturnType<typeof hooks.useTasks>,
+    );
 
-  vi.mocked(hooks.useDeleteNote).mockReturnValue({
-    mutate: vi.fn(),
-  } as ReturnType<typeof hooks.useDeleteNote>);
-});
+    vi.mocked(hooks.useSearchTasks).mockReturnValue({
+      data: [],
+    } as ReturnType<typeof hooks.useSearchTasks>);
 
-afterEach(() => {
-  cleanup();
-});
+    vi.mocked(hooks.useNotes).mockImplementation(
+      () =>
+        ({
+          data: notesData,
+          isLoading: false,
+          isError: false,
+          error: null,
+        }) as ReturnType<typeof hooks.useNotes>,
+    );
 
-describe("actor-aware renderer views", () => {
+    vi.mocked(hooks.useDeleteNote).mockReturnValue({
+      mutate: deleteNoteMutate,
+    } as ReturnType<typeof hooks.useDeleteNote>);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("shows archived and unauthorized actor assignees plus approval state in task detail", async () => {
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
 
     expect(screen.getByText("Assignees")).toBeDefined();
-    expect(screen.getByText("user")).toBeDefined();
-    expect(screen.getByText("Reviewer (archived, unauthorized)")).toBeDefined();
+    expect(screen.getByText("user (actor-user)")).toBeDefined();
+    expect(screen.getByText("Reviewer (actor-reviewer, archived, unauthorized)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
+    expect(screen.getByText("All authorized active actors are already assigned.")).toBeDefined();
+  });
+
+  it("adds actor assignees from the current project's authorized active actors", async () => {
+    projectData = makeProject({
+      authorizedAssigneeActorIds: [
+        "actor-user",
+        "actor-reviewer",
+        "actor-collab",
+      ] as Project["authorizedAssigneeActorIds"],
+    });
+    projectsData = [projectData, projectsData[1]];
+    taskData = makeTask({
+      assigneeActorIds: ["actor-user"] as Task["assigneeActorIds"],
+    });
+    tasksData = [taskData];
+
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText("Add assignee actor"), {
+      target: { value: "actor-collab" },
+    });
+    fireEvent.click(screen.getByText("Add"));
+
+    expect(updateTaskMutate).toHaveBeenCalledWith({
+      id: "task-1",
+      input: {
+        assigneeActorIds: ["actor-user", "actor-collab"],
+      },
+    });
+  });
+
+  it("removes and replaces actor assignees without raw id editing", async () => {
+    projectData = makeProject({
+      authorizedAssigneeActorIds: [
+        "actor-user",
+        "actor-collab",
+      ] as Project["authorizedAssigneeActorIds"],
+    });
+    projectsData = [projectData, projectsData[1]];
+
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText("Replace assignee actor-reviewer"), {
+      target: { value: "actor-collab" },
+    });
+    fireEvent.click(screen.getAllByText("Replace")[1]);
+
+    expect(updateTaskMutate).toHaveBeenCalledWith({
+      id: "task-1",
+      input: {
+        assigneeActorIds: ["actor-user", "actor-collab"],
+      },
+    });
+
+    fireEvent.click(screen.getAllByText("Remove")[0]);
+
+    expect(updateTaskMutate).toHaveBeenLastCalledWith({
+      id: "task-1",
+      input: {
+        assigneeActorIds: ["actor-reviewer"],
+      },
+    });
+  });
+
+  it("updates project-change behavior and shows a no-authorized-actors state", async () => {
+    const { rerender } = render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+
+    fireEvent.change(screen.getByDisplayValue("Inbox"), {
+      target: { value: "proj-2" },
+    });
+
+    expect(moveTaskMutate).toHaveBeenCalledWith({
+      id: "task-1",
+      projectId: "proj-2",
+    });
+
+    taskData = makeTask({
+      projectId: "proj-2" as TaskWithDetail["projectId"],
+      assigneeActorIds: ["actor-reviewer"] as Task["assigneeActorIds"],
+    });
+    tasksData = [taskData];
+    projectsData = [
+      projectsData[0],
+      makeProject({
+        id: "proj-2" as Project["id"],
+        name: "Ops",
+        authorizedAssigneeActorIds: [] as Project["authorizedAssigneeActorIds"],
+      }),
+    ];
+
+    rerender(<TaskDetail taskId="task-1" onBack={() => {}} />);
+
+    expect(screen.getByText("Reviewer (actor-reviewer, archived, unauthorized)")).toBeDefined();
+    expect(
+      screen.getByText("No authorized active actors available for this project."),
+    ).toBeDefined();
   });
 
   it("shows project authorization controls and stale unauthorized assignees", async () => {
-    const mutate = vi.fn();
-    vi.mocked(hooks.useUpdateProject).mockReturnValue({
-      mutate,
-    } as ReturnType<typeof hooks.useUpdateProject>);
-
     render(
       <ProjectDetail
         projectId="proj-1"
@@ -232,7 +361,7 @@ describe("actor-aware renderer views", () => {
     });
     fireEvent.click(screen.getByText("Add"));
 
-    expect(mutate).toHaveBeenCalledWith({
+    expect(updateProjectMutate).toHaveBeenCalledWith({
       id: "proj-1",
       input: {
         authorizedAssigneeActorIds: ["actor-user", "actor-collab"],
@@ -241,7 +370,7 @@ describe("actor-aware renderer views", () => {
 
     fireEvent.click(screen.getByText("Remove"));
 
-    expect(mutate).toHaveBeenLastCalledWith({
+    expect(updateProjectMutate).toHaveBeenLastCalledWith({
       id: "proj-1",
       input: {
         authorizedAssigneeActorIds: [],
