@@ -24,6 +24,19 @@ todu --format json daemon status
 - `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
 - The current compatibility daemon binary/service name remains `toduai-daemon` during the transition.
 
+### Bootstrap owner actor config
+
+To override the default migrated owner actor (`actor-user` / `user`), set this in `~/.config/todu/config.yaml` **before the first daemon startup that creates or migrates the dataset**:
+
+```yaml
+identity:
+  ownerActor:
+    id: erik
+    displayName: Erik
+```
+
+After the dataset is already migrated, changing this config later does not rewrite existing actor IDs.
+
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 
 `todu daemon start`, `todu daemon stop`, and `todu daemon restart` follow this deterministic order:

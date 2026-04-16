@@ -6,6 +6,7 @@ import { Repo } from "@automerge/automerge-repo/slim";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type Actor,
+  type BootstrapOwnerActor,
   CATALOG_DOC_KEY,
   type CatalogDocument,
   createActorId,
@@ -266,7 +267,11 @@ export function beginCatalogJoinSwitch(
  * - Existing marker: load that catalog
  * - Existing but unreachable marker: fail (do not implicitly create a new catalog)
  */
-export async function initBootstrapStorage(storagePath: string, repo?: Repo): Promise<Storage> {
+export async function initBootstrapStorage(
+  storagePath: string,
+  repo?: Repo,
+  bootstrapOwnerActor?: BootstrapOwnerActor,
+): Promise<Storage> {
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
@@ -278,7 +283,7 @@ export async function initBootstrapStorage(storagePath: string, repo?: Repo): Pr
     });
 
   try {
-    const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath);
+    const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath, bootstrapOwnerActor);
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
@@ -299,6 +304,7 @@ export async function initJoinStorage(
   storagePath: string,
   targetCatalogId: DocumentId,
   repo?: Repo,
+  bootstrapOwnerActor?: BootstrapOwnerActor,
 ): Promise<Storage> {
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
@@ -311,7 +317,7 @@ export async function initJoinStorage(
     });
 
   try {
-    const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join");
+    const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join", bootstrapOwnerActor);
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
@@ -457,15 +463,16 @@ function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>
 async function loadOrBootstrapCatalog(
   repo: Repo,
   storagePath: string,
+  bootstrapOwnerActor?: BootstrapOwnerActor,
 ): Promise<DocHandle<CatalogDocument>> {
   const markerPath = getCatalogMarkerPath(storagePath);
 
   if (fs.existsSync(markerPath)) {
     const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
-    return loadCatalogById(repo, docId, "bootstrap");
+    return loadCatalogById(repo, docId, "bootstrap", bootstrapOwnerActor);
   }
 
-  return createBootstrapCatalog(repo, markerPath);
+  return createBootstrapCatalog(repo, markerPath, bootstrapOwnerActor);
 }
 
 /**
@@ -476,12 +483,13 @@ async function loadCatalogById(
   repo: Repo,
   docId: DocumentId,
   mode: "bootstrap" | "join",
+  bootstrapOwnerActor?: BootstrapOwnerActor,
 ): Promise<DocHandle<CatalogDocument>> {
   try {
     const handle = await repo.find<CatalogDocument>(docId, {
       signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
     });
-    migrateCatalog(handle);
+    migrateCatalog(handle, bootstrapOwnerActor);
     await migrateLegacyIdentityModel(handle, repo);
     return handle;
   } catch {
@@ -494,10 +502,14 @@ async function loadCatalogById(
 /**
  * Create a new catalog and persist its marker.
  */
-function createBootstrapCatalog(repo: Repo, markerPath: string): DocHandle<CatalogDocument> {
+function createBootstrapCatalog(
+  repo: Repo,
+  markerPath: string,
+  bootstrapOwnerActor?: BootstrapOwnerActor,
+): DocHandle<CatalogDocument> {
   const handle = repo.create<CatalogDocument>();
   handle.change((doc: CatalogDocument) => {
-    const empty = createEmptyCatalog();
+    const empty = createEmptyCatalog(bootstrapOwnerActor);
     doc.version = empty.version;
     doc.projects = empty.projects;
     doc.labels = empty.labels;
@@ -523,17 +535,20 @@ function createBootstrapCatalog(repo: Repo, markerPath: string): DocHandle<Catal
  * Backfills any missing fields that were added in later versions.
  * This ensures engine code can always assume catalog fields exist.
  */
-function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
+function migrateCatalog(
+  handle: DocHandle<CatalogDocument>,
+  bootstrapOwnerActor?: BootstrapOwnerActor,
+): void {
   const doc = handle.doc();
   if (!doc) return;
 
-  const defaults = createEmptyCatalog();
+  const defaults = createEmptyCatalog(bootstrapOwnerActor);
   let needsMigration = false;
 
   // Check for missing fields
   if (!Array.isArray(doc.projects)) needsMigration = true;
   if (!Array.isArray(doc.labels)) needsMigration = true;
-  if (!Array.isArray(doc.actors)) needsMigration = true;
+  if (!Array.isArray(doc.actors) || doc.actors.length === 0) needsMigration = true;
   if (doc.ownerActorId === undefined || doc.ownerActorId === null) needsMigration = true;
   if (!Array.isArray(doc.recurringTemplates)) needsMigration = true;
   if (!Array.isArray(doc.habits)) needsMigration = true;
@@ -558,7 +573,7 @@ function migrateCatalog(handle: DocHandle<CatalogDocument>): void {
   handle.change((d) => {
     if (!Array.isArray(d.projects)) d.projects = defaults.projects;
     if (!Array.isArray(d.labels)) d.labels = defaults.labels;
-    if (!Array.isArray(d.actors)) d.actors = defaults.actors;
+    if (!Array.isArray(d.actors) || d.actors.length === 0) d.actors = defaults.actors;
     if (d.ownerActorId === undefined || d.ownerActorId === null) {
       d.ownerActorId = defaults.ownerActorId;
     }

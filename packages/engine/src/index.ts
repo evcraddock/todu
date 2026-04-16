@@ -90,6 +90,7 @@ export async function createTodu(
 ): Promise<Todu> {
   const resolvedConfig: ToduConfig = {
     storagePath: config.storagePath,
+    bootstrapOwnerActor: config.bootstrapOwnerActor,
   };
 
   await ensureAutomergeWasmInitialized();
@@ -123,7 +124,11 @@ export async function createTodu(
     if (config?.remoteSync) {
       initialRemoteAdapter = addRemoteSyncAdapter(repo, config.remoteSync.server);
     }
-    storage = await initBootstrapStorage(resolvedConfig.storagePath, repo);
+    storage = await initBootstrapStorage(
+      resolvedConfig.storagePath,
+      repo,
+      resolvedConfig.bootstrapOwnerActor,
+    );
 
     if (config?.syncServer) {
       syncServer = startSyncServer(storage.repo, config.syncPort);

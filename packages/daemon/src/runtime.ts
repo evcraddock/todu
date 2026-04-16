@@ -1,5 +1,12 @@
 import type { DocumentId } from "@automerge/automerge-repo";
-import { err, ok, type RemoteSyncConfig, type Result, resolveStoragePath } from "@todu/core";
+import {
+  type BootstrapOwnerActor,
+  err,
+  ok,
+  type RemoteSyncConfig,
+  type Result,
+  resolveStoragePath,
+} from "@todu/core";
 import {
   beginCatalogJoinSwitch,
   createTodu,
@@ -67,6 +74,7 @@ export interface DaemonRuntimeConfig {
   storagePath?: string;
   role?: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath?: string;
   socketMode?: number;
   daemonVersion?: string;
@@ -86,6 +94,7 @@ export interface ResolvedDaemonRuntimeConfig {
   storagePath: string;
   role: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath: string;
   socketMode: number;
   daemonVersion: string;
@@ -143,6 +152,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     storagePath: resolvedStoragePath,
     role: config.role ?? "node",
     remoteSync: config.remoteSync,
+    bootstrapOwnerActor: config.bootstrapOwnerActor,
     socketPath: resolvedSocketPath,
     socketMode: config.socketMode ?? 0o600,
     daemonVersion:
@@ -761,6 +771,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     return createTodu({
       storagePath: resolvedConfig.storagePath,
       remoteSync: resolvedConfig.remoteSync,
+      bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
       startupTemplateProcessing: {
         enabled: true,
       },
@@ -1090,6 +1101,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       const validationStorage = await initJoinStorage(
         resolvedConfig.storagePath,
         targetCatalogId as DocumentId,
+        undefined,
+        resolvedConfig.bootstrapOwnerActor,
       );
       await validationStorage.close();
     } catch (error) {
@@ -1277,6 +1290,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         storagePath: resolvedConfig.storagePath,
         role: resolvedConfig.role,
         remoteSync: resolvedConfig.remoteSync,
+        bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
         socketPath: resolvedConfig.socketPath,
         socketMode: resolvedConfig.socketMode,
         daemonVersion: resolvedConfig.daemonVersion,

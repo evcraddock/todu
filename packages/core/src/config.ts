@@ -1,6 +1,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  type ActorId,
+  createActorId,
+  err,
+  ok,
+  type Result,
+  type ValidationError,
+} from "./types.js";
+import { validateActorDisplayName, validateActorId } from "./validation.js";
 
 const CURRENT_CONFIG_DIRNAME = "todu";
 const LEGACY_CONFIG_DIRNAME = "toduai";
@@ -57,9 +66,21 @@ export const LEGACY_DEFAULT_CONFIG_DIR = getLegacyDefaultConfigDir();
 export const LEGACY_DEFAULT_CONFIG_FILE = getLegacyDefaultConfigFile();
 export const LEGACY_DEFAULT_DATA_DIR = getLegacyDefaultDataDir();
 
+export interface BootstrapOwnerActor {
+  id: ActorId;
+  displayName: string;
+}
+
 export interface ToduFileConfig {
   /** Path to data directory (absolute or relative to config file) */
   data_dir?: string;
+  /** Bootstrap identity for fresh catalog creation and pre-actor migration. */
+  identity?: {
+    ownerActor?: {
+      id?: string;
+      displayName?: string;
+    };
+  };
   /** Remote multi-device sync configuration */
   sync?: {
     remote?: {
@@ -120,6 +141,33 @@ interface ResolvedEnvValue {
  * IMPORTANT: Never use wss://sync.todu.sh in development or tests.
  * Use the local dev sync server (ws://localhost:3030) via `make dev`.
  */
+export function resolveBootstrapOwnerActor(
+  config: ToduFileConfig,
+): Result<BootstrapOwnerActor | null, ValidationError> {
+  const configuredOwner = config.identity?.ownerActor;
+  if (!configuredOwner) {
+    return ok(null);
+  }
+
+  const actorIdError = validateActorId("identity.ownerActor.id", configuredOwner.id ?? "");
+  if (actorIdError) {
+    return err(actorIdError);
+  }
+
+  const displayNameError = validateActorDisplayName(
+    "identity.ownerActor.displayName",
+    configuredOwner.displayName ?? "",
+  );
+  if (displayNameError) {
+    return err(displayNameError);
+  }
+
+  return ok({
+    id: createActorId(configuredOwner.id!.trim()),
+    displayName: configuredOwner.displayName!.trim(),
+  });
+}
+
 export function resolveRemoteSyncConfig(
   config: ToduFileConfig,
   options: ConfigResolutionOptions = {},

@@ -64,6 +64,7 @@ interface DaemonLifecycleResult {
 }
 
 interface DaemonCommandContext {
+  configPath: string;
   storagePath: string;
   socketPath: string;
   daemonPidPath: string;
@@ -834,13 +835,14 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
   const configOpt = program.opts().config as string | undefined;
   const configPath = getConfigPath(configOpt);
   const fileConfig = loadConfig(configPath);
-  const storagePath = resolveDataDir(configPath, fileConfig);
-  const remoteSync = resolveRemoteSyncConfig(fileConfig);
+  const storagePath = resolveDataDir(configPath, fileConfig, { env: process.env });
+  const remoteSync = resolveRemoteSyncConfig(fileConfig, { env: process.env });
   const assignedWorkers = resolveDaemonAssignedWorkers(fileConfig);
   const pluginPaths = resolveDaemonPluginPaths(configPath, fileConfig);
   const pluginConfig = resolveDaemonPluginConfig(fileConfig);
 
   return {
+    configPath,
     storagePath,
     socketPath: resolveDaemonSocketPath(storagePath),
     daemonPidPath: path.join(storagePath, DIRECT_PID_FILENAME),
@@ -854,9 +856,11 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
 function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
+    TODU_CONFIG: context.configPath,
     TODU_DATA_DIR: context.storagePath,
   };
 
+  delete childEnv.TODUAI_CONFIG;
   delete childEnv.TODUAI_DATA_DIR;
 
   if (context.remoteSyncServer) {

@@ -52,6 +52,10 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       cwd: rootDir,
       env: {
         ...process.env,
+        TODU_CONFIG: "",
+        TODUAI_CONFIG: "",
+        TODU_DAEMON_SOCKET: "",
+        TODUAI_DAEMON_SOCKET: "",
         TODU_DATA_DIR: tmpDir,
         TODUAI_NO_SYNC: "1",
         TODU_DAEMON_LIFECYCLE_MODE: "direct",
@@ -111,6 +115,10 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       cwd: rootDir,
       env: {
         ...process.env,
+        TODU_CONFIG: "",
+        TODUAI_CONFIG: "",
+        TODU_DAEMON_SOCKET: "",
+        TODUAI_DAEMON_SOCKET: "",
         TODU_DATA_DIR: tmpDir,
         TODUAI_NO_SYNC: "1",
         HOME: homeDir,

@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@todu/core": "*",
-    "@todu/engine": "*"
+    "@todu/engine": "*",
+    "yaml": "^2.8.2"
   },
   "publishConfig": {
     "access": "public"

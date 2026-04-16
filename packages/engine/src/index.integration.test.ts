@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
-import type { CatalogDocument } from "@todu/core";
+import { type CatalogDocument, createActorId } from "@todu/core";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu } from "./index.js";
 import { createTodu } from "./index.js";
@@ -85,6 +85,21 @@ describe("createTodu", () => {
     expect(docId.length).toBeGreaterThan(0);
   });
 
+  it("creates a fresh catalog with the configured bootstrap owner actor", async () => {
+    todu = await createTodu({
+      storagePath: tmpDir,
+      bootstrapOwnerActor: { id: createActorId("erik"), displayName: "Erik" },
+    });
+
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    const catalog = await readCatalogDocument(tmpDir);
+    expect(catalog.ownerActorId).toBe("erik");
+    expect(catalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
+  });
+
   it("loads existing catalog on subsequent runs", async () => {
     // First run — creates catalog
     todu = await createTodu({ storagePath: tmpDir });
@@ -98,6 +113,28 @@ describe("createTodu", () => {
     const secondDocId = fs.readFileSync(markerPath, "utf-8").trim();
 
     expect(secondDocId).toBe(firstDocId);
+  });
+
+  it("does not rewrite an already migrated catalog when bootstrap owner config changes", async () => {
+    todu = await createTodu({
+      storagePath: tmpDir,
+      bootstrapOwnerActor: { id: createActorId("erik"), displayName: "Erik" },
+    });
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    todu = await createTodu({
+      storagePath: tmpDir,
+      bootstrapOwnerActor: { id: createActorId("reviewer"), displayName: "Reviewer" },
+    });
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    const catalog = await readCatalogDocument(tmpDir);
+    expect(catalog.ownerActorId).toBe("erik");
+    expect(catalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
   });
 
   it("returns config via config.get()", async () => {
@@ -192,6 +229,35 @@ describe("createTodu", () => {
     expect(migratedCatalog.integrationStatusDocIds).toEqual({});
     expect(migratedCatalog.recurringTemplates).toEqual([]);
     expect(migratedCatalog.habits).toEqual([]);
+    expect(migratedCatalog.settings.schemaVersion).toBe(2);
+  });
+
+  it("migrates old catalogs with the configured bootstrap owner actor", async () => {
+    const repo = new Repo({
+      storage: new NodeFSStorageAdapter(tmpDir),
+    });
+    const handle = repo.create<Partial<CatalogDocument>>();
+    handle.change((doc) => {
+      doc.version = 1;
+      doc.projects = [];
+    });
+    const markerPath = path.join(tmpDir, "todu-catalog.id");
+    fs.writeFileSync(markerPath, handle.documentId, "utf-8");
+    await repo.flush();
+    await repo.shutdown();
+    await new Promise((r) => setTimeout(r, 50));
+
+    todu = await createTodu({
+      storagePath: tmpDir,
+      bootstrapOwnerActor: { id: createActorId("erik"), displayName: "Erik" },
+    });
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    const migratedCatalog = await readCatalogDocument(tmpDir);
+    expect(migratedCatalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
+    expect(migratedCatalog.ownerActorId).toBe("erik");
     expect(migratedCatalog.settings.schemaVersion).toBe(2);
   });
 });
