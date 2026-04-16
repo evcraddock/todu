@@ -144,7 +144,10 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
     moveTask.mutate({ id: task.id as TaskId, projectId: createProjectId(projectId) });
   };
 
-  const assigneeNames = getActorNames(task.assigneeActorIds, actorMap, task.assignees);
+  const currentProject = projects?.find((project) => project.id === task.projectId);
+  const assigneeNames = getActorNames(task.assigneeActorIds, actorMap, task.assignees, {
+    authorizedActorIds: currentProject?.authorizedAssigneeActorIds,
+  });
   const descriptionApprovalLabel = getApprovalLabel(task.descriptionApproval);
 
   return (

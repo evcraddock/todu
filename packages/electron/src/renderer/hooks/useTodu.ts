@@ -124,8 +124,10 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: async ({ id, input }: { id: ProjectId; input: UpdateProjectInput }) =>
       unwrap(await window.todu.project.update(id, input)),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      queryClient.invalidateQueries({ queryKey: queryKeys.project(id) });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }

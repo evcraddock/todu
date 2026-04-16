@@ -91,6 +91,7 @@ export function ProjectDetail({
   const [editingDescription, setEditingDescription] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("tasks");
+  const [selectedAuthorizedActorId, setSelectedAuthorizedActorId] = useState("");
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
@@ -134,9 +135,60 @@ export function ProjectDetail({
     deleteProject.mutate(project.id as ProjectId, { onSuccess: onBack });
   };
 
-  const authorizedActorNames = getActorNames(project.authorizedAssigneeActorIds, actorMap);
+  const handleAddAuthorizedActor = () => {
+    if (!selectedAuthorizedActorId) return;
+
+    updateProject.mutate({
+      id: project.id as ProjectId,
+      input: {
+        authorizedAssigneeActorIds: [
+          ...project.authorizedAssigneeActorIds,
+          selectedAuthorizedActorId,
+        ],
+      },
+    });
+    setSelectedAuthorizedActorId("");
+  };
+
+  const handleRemoveAuthorizedActor = (actorId: string) => {
+    updateProject.mutate({
+      id: project.id as ProjectId,
+      input: {
+        authorizedAssigneeActorIds: project.authorizedAssigneeActorIds.filter(
+          (id) => id !== actorId,
+        ),
+      },
+    });
+  };
+
+  const authorizedActorNames = getActorNames(project.authorizedAssigneeActorIds, actorMap, [], {
+    includeId: true,
+  });
   const taskCount = tasks?.length ?? 0;
   const displayTasks = searchQuery.length > 0 ? searchResults : tasks;
+  const availableAuthorizedActors = (actors ?? []).filter(
+    (actor) => !actor.archived && !project.authorizedAssigneeActorIds.includes(actor.id),
+  );
+  const staleUnauthorizedAssignees = (tasks ?? []).flatMap((task) => {
+    const unauthorizedActorIds = task.assigneeActorIds.filter(
+      (actorId) => !project.authorizedAssigneeActorIds.includes(actorId),
+    );
+
+    if (unauthorizedActorIds.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        taskId: task.id,
+        title: task.title,
+        assigneeNames: getActorNames(unauthorizedActorIds, actorMap, [], {
+          includeId: true,
+          authorizedActorIds: project.authorizedAssigneeActorIds,
+        }),
+      },
+    ];
+  });
 
   // Keep project filter locked
   const handleFilterChange = (newFilter: TaskFilter) => {
@@ -229,16 +281,59 @@ export function ProjectDetail({
         <div className="detail-meta-cell detail-meta-cell-wide">
           <span className="detail-meta-label">Authorized assignees</span>
           <div className="label-chips">
-            {authorizedActorNames.length > 0 ? (
-              authorizedActorNames.map((actorName) => (
-                <span key={actorName} className="chip chip-label">
-                  {actorName}
+            {project.authorizedAssigneeActorIds.length > 0 ? (
+              project.authorizedAssigneeActorIds.map((actorId, index) => (
+                <span key={actorId} className="chip chip-label">
+                  {authorizedActorNames[index]}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleRemoveAuthorizedActor(actorId)}
+                  >
+                    Remove
+                  </button>
                 </span>
               ))
             ) : (
               <span className="empty-hint">None</span>
             )}
           </div>
+          <div className="settings-key-input-row">
+            <select
+              aria-label="Add authorized actor"
+              className="input inline-select"
+              value={selectedAuthorizedActorId}
+              onChange={(e) => setSelectedAuthorizedActorId(e.target.value)}
+            >
+              <option value="">Select actor</option>
+              {availableAuthorizedActors.map((actor) => (
+                <option key={actor.id} value={actor.id}>
+                  {actor.displayName} ({actor.id})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!selectedAuthorizedActorId}
+              onClick={handleAddAuthorizedActor}
+            >
+              Add
+            </button>
+          </div>
+          {availableAuthorizedActors.length === 0 && (
+            <span className="empty-hint">No active actors available to authorize.</span>
+          )}
+          {staleUnauthorizedAssignees.length > 0 && (
+            <div className="settings-hint">
+              <div>Unauthorized task assignees</div>
+              {staleUnauthorizedAssignees.map((entry) => (
+                <div key={entry.taskId}>
+                  {entry.title}: {entry.assigneeNames.join(", ")}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

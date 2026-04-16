@@ -37,6 +37,11 @@ export function createDaemonIpcHandlers(
   return {
     // ── Actor ─────────────────────────────────────────────────────────────
     "todu:actor:list": () => invokeResult("actor.list"),
+    "todu:actor:create": (_event, input) => invokeResult("actor.create", { input }),
+    "todu:actor:rename": (_event, id, displayName) =>
+      invokeResult("actor.rename", { id, displayName }),
+    "todu:actor:archive": (_event, id) => invokeResult("actor.archive", { id }),
+    "todu:actor:unarchive": (_event, id) => invokeResult("actor.unarchive", { id }),
 
     // ── Project ───────────────────────────────────────────────────────────
     "todu:project:list": (_event, filter) => invokeResult("project.list", { filter }),
