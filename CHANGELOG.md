@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-16
+
+This release introduces the actor-based multi-user foundation across todu. Core storage now migrates legacy assignees and note authors into actor-backed identity, the sync runtime supports both legacy v2 and new v3 provider contracts during the transition window, and the CLI and Electron app now expose actor, authorization, assignee, and approval workflows needed for multi-user task management.
+
+### Added
+- Added the actor-based assignment model in core storage, including catalog actors, owner actor identity, project authorized assignees, and imported-content approval metadata (#392, #395)
+- Added sync-provider API v3 and actor-aware runtime compatibility shims so new core can work with both v2 and v3 plugins during rollout (#396, #397)
+- Added CLI support for actor management, owner actor management, project authorized-assignee management, and explicit approval commands (#406, #407, #408, #409)
+- Added Electron UI for actor management, project authorization, task assignee management, and approval actions in task and comment flows (#410, #411, #412)
+- Added `identity.ownerActor` bootstrap config so fresh catalogs and first-time actor migration can use a configured owner actor ID and display name instead of the default `actor-user` / `user` (#414)
+
+### Changed
+- Legacy task assignees and note authors now migrate to canonical actor IDs on startup, with actor-based storage treated as the source of truth after migration (#394)
+- Core rollout docs and implementation now define a compatibility window where existing v2 sync plugins can continue working while GitHub and Forgejo plugin upgrades move to API v3 (#393, #396, #397)
+
+### Fixed
+- Fixed Electron approval actions to send the correct daemon RPC parameter names so approve buttons work in the running app (#412)
+- Stabilized the release workflow by pinning and passing the Bun version correctly in GitHub Actions (#383, #384)
+
 ## [0.16.1] - 2026-04-11
 
 This release improves dependency maintenance and updates the Electron app’s pi integration to the latest supported library versions.
