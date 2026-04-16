@@ -1,5 +1,11 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { useActors, useCreateNote, useDeleteNote, useNotes } from "../hooks/useTodu.js";
+import {
+  useActors,
+  useApproveNoteContent,
+  useCreateNote,
+  useDeleteNote,
+  useNotes,
+} from "../hooks/useTodu.js";
 import { createActorMap, getActorName, getApprovalLabel } from "../lib/actors.js";
 
 export function CommentThread({
@@ -13,7 +19,9 @@ export function CommentThread({
   const { data: actors } = useActors();
   const createNote = useCreateNote();
   const deleteNote = useDeleteNote();
+  const approveNoteContent = useApproveNoteContent();
   const [newComment, setNewComment] = useState("");
+  const [approvalMessage, setApprovalMessage] = useState("");
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   const handleSubmit = () => {
@@ -27,6 +35,7 @@ export function CommentThread({
   return (
     <div className="comment-thread">
       <h3 className="section-title">Comments</h3>
+      {approvalMessage && <div className="settings-hint">{approvalMessage}</div>}
       {isLoading && <div className="loading-state">Loading comments…</div>}
       {notes && notes.length === 0 && <div className="empty-hint">No comments yet</div>}
       {notes?.map((note) => {
@@ -38,6 +47,24 @@ export function CommentThread({
                 {getActorName(note.authorActorId, actorMap, note.author)}
               </span>
               {approvalLabel && <span className="chip chip-label">{approvalLabel}</span>}
+              {note.contentApproval?.state === "pendingApproval" && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() =>
+                    approveNoteContent.mutate(note.id, {
+                      onSuccess: () => setApprovalMessage("Comment approved."),
+                      onError: (err) =>
+                        setApprovalMessage(
+                          err instanceof Error ? err.message : "Failed to approve comment",
+                        ),
+                    })
+                  }
+                  disabled={approveNoteContent.isPending}
+                >
+                  {approveNoteContent.isPending ? "Approving…" : "Approve"}
+                </button>
+              )}
               <span className="comment-date">{note.createdAt.slice(0, 16).replace("T", " ")}</span>
               <button
                 type="button"

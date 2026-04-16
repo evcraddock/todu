@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { Actor, Note, Project, Task, TaskWithDetail } from "@todu/core/browser";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { Actor, ApprovalItem, Note, Project, Task, TaskWithDetail } from "@todu/core/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "../hooks/useTodu.js";
 import { NoteList } from "./NoteList.js";
@@ -11,6 +11,9 @@ import { TaskDetail } from "./TaskDetail.js";
 
 vi.mock("../hooks/useTodu.js", () => ({
   useActors: vi.fn(),
+  useApprovals: vi.fn(),
+  useApproveNoteContent: vi.fn(),
+  useApproveTaskDescription: vi.fn(),
   useDeleteNote: vi.fn(),
   useDeleteProject: vi.fn(),
   useDeleteTask: vi.fn(),
@@ -106,8 +109,22 @@ function makeNote(overrides: Partial<Note> = {}): Note {
     author: "legacy-reviewer",
     authorActorId: "actor-reviewer" as NonNullable<Note["authorActorId"]>,
     contentApproval: { state: "pendingApproval" },
+    entityType: "task",
+    entityId: "task-1",
     tags: [],
     createdAt: "2026-03-14T15:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeApproval(overrides: Partial<ApprovalItem> = {}): ApprovalItem {
+  return {
+    kind: "taskDescription",
+    state: "pendingApproval",
+    taskId: "task-1" as ApprovalItem["taskId"],
+    taskTitle: "Actor task",
+    projectId: "proj-1" as ApprovalItem["projectId"],
+    contentPreview: "Imported task",
     ...overrides,
   };
 }
@@ -119,8 +136,12 @@ describe("actor-aware renderer views", () => {
   const moveTaskMutate = vi.fn();
   const updateProjectMutate = vi.fn();
   const updateTaskMutate = vi.fn();
+  const approveTaskDescriptionMutate = vi.fn();
+  const approveNoteContentMutate = vi.fn();
+  const onNavigateToEntity = vi.fn();
 
   let actorsData: Actor[];
+  let approvalsData: ApprovalItem[];
   let notesData: Note[];
   let projectData: Project;
   let projectsData: Project[];
@@ -129,11 +150,32 @@ describe("actor-aware renderer views", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    deleteNoteMutate.mockReset();
+    deleteProjectMutate.mockReset();
+    deleteTaskMutate.mockReset();
+    moveTaskMutate.mockReset();
+    updateProjectMutate.mockReset();
+    updateTaskMutate.mockReset();
+    approveTaskDescriptionMutate.mockReset();
+    approveNoteContentMutate.mockReset();
+    onNavigateToEntity.mockReset();
 
     actorsData = [
       { id: "actor-user", displayName: "user" },
       { id: "actor-reviewer", displayName: "Reviewer", archived: true },
       { id: "actor-collab", displayName: "Collaborator" },
+    ];
+    approvalsData = [
+      makeApproval(),
+      makeApproval({
+        kind: "noteContent",
+        noteId: "note-1" as ApprovalItem["noteId"],
+        taskId: undefined,
+        taskTitle: undefined,
+        entityType: "task",
+        entityId: "task-1",
+        contentPreview: "Imported note",
+      }),
     ];
     projectData = makeProject();
     projectsData = [
@@ -161,6 +203,20 @@ describe("actor-aware renderer views", () => {
     vi.mocked(hooks.useActors).mockImplementation(
       () => ({ data: actorsData }) as ReturnType<typeof hooks.useActors>,
     );
+
+    vi.mocked(hooks.useApprovals).mockImplementation(
+      () => ({ data: approvalsData }) as ReturnType<typeof hooks.useApprovals>,
+    );
+
+    vi.mocked(hooks.useApproveTaskDescription).mockReturnValue({
+      mutate: approveTaskDescriptionMutate,
+      isPending: false,
+    } as ReturnType<typeof hooks.useApproveTaskDescription>);
+
+    vi.mocked(hooks.useApproveNoteContent).mockReturnValue({
+      mutate: approveNoteContentMutate,
+      isPending: false,
+    } as ReturnType<typeof hooks.useApproveNoteContent>);
 
     vi.mocked(hooks.useProjects).mockImplementation(
       () => ({ data: projectsData }) as ReturnType<typeof hooks.useProjects>,
@@ -233,7 +289,7 @@ describe("actor-aware renderer views", () => {
     cleanup();
   });
 
-  it("shows archived and unauthorized actor assignees plus approval state in task detail", async () => {
+  it("shows assignees, approval state, and explicit task approval actions in task detail", async () => {
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
 
     expect(screen.getByText("Assignees")).toBeDefined();
@@ -241,6 +297,30 @@ describe("actor-aware renderer views", () => {
     expect(screen.getByText("Reviewer (actor-reviewer, archived, unauthorized)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
     expect(screen.getByText("All authorized active actors are already assigned.")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Approve"));
+
+    expect(approveTaskDescriptionMutate).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  it("shows task approval errors visibly in task detail", async () => {
+    approveTaskDescriptionMutate.mockImplementation((_taskId, options) => {
+      options?.onError?.(new Error("description: already approved"));
+    });
+
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+
+    fireEvent.click(screen.getByText("Approve"));
+
+    await waitFor(() => {
+      expect(screen.getByText("description: already approved")).toBeDefined();
+    });
   });
 
   it("adds actor assignees from the current project's authorized active actors", async () => {
@@ -378,11 +458,35 @@ describe("actor-aware renderer views", () => {
     });
   });
 
-  it("shows actor-based note authors and approval state in note list", async () => {
-    render(<NoteList onCreateNote={() => {}} onNavigateToEntity={() => {}} />);
+  it("shows approval-needed discovery plus explicit note approval actions in note list", async () => {
+    render(<NoteList onCreateNote={() => {}} onNavigateToEntity={onNavigateToEntity} />);
 
+    expect(screen.getByText("Approval Needed (2)")).toBeDefined();
+    expect(screen.getByText("Task description")).toBeDefined();
+    expect(screen.getByText("Note content")).toBeDefined();
     expect(screen.getByText("Reviewer (archived)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
-    expect(screen.getByText("Imported note")).toBeDefined();
+    expect(screen.getAllByText("Imported note").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByText("Approve")[0]);
+    expect(approveTaskDescriptionMutate).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+
+    fireEvent.click(screen.getAllByText("Approve")[1]);
+    expect(approveNoteContentMutate).toHaveBeenCalledWith(
+      "note-1",
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+
+    fireEvent.click(screen.getAllByText("task: Actor task")[0]);
+    expect(onNavigateToEntity).toHaveBeenCalledWith("task", "task-1");
   });
 });

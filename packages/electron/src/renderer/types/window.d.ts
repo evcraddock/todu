@@ -20,6 +20,8 @@ import type {
   Project,
   ProjectFilter,
   ProjectId,
+  ApprovalItem,
+  ApprovalListFilter,
   RecurringFilter,
   RecurringId,
   RecurringTemplate,
@@ -31,6 +33,7 @@ import type {
   TaskWithDetail,
   UpdateHabitInput,
   UpdateLabelInput,
+  UpdateNoteInput,
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
@@ -63,6 +66,12 @@ export interface ToduTaskApi {
   search(query: string): Promise<Result<Task[]>>;
 }
 
+export interface ToduApprovalApi {
+  list(filter?: ApprovalListFilter): Promise<Result<ApprovalItem[]>>;
+  approveTaskDescription(taskId: TaskId): Promise<Result<ApprovalItem>>;
+  approveNoteContent(noteId: NoteId): Promise<Result<ApprovalItem>>;
+}
+
 export interface ToduLabelApi {
   list(): Promise<Result<Label[]>>;
   create(input: CreateLabelInput): Promise<Result<Label>>;
@@ -73,6 +82,7 @@ export interface ToduLabelApi {
 export interface ToduNoteApi {
   list(filter?: NoteFilter): Promise<Result<Note[]>>;
   create(input: CreateNoteInput): Promise<Result<Note>>;
+  update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>>;
   delete(id: NoteId): Promise<Result<void>>;
 }
 
@@ -197,6 +207,7 @@ export interface ToduApi {
   actor: ToduActorApi;
   project: ToduProjectApi;
   task: ToduTaskApi;
+  approval: ToduApprovalApi;
   label: ToduLabelApi;
   note: ToduNoteApi;
   recurring: ToduRecurringApi;

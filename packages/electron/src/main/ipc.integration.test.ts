@@ -66,6 +66,57 @@ describe("createDaemonIpcHandlers", () => {
     });
   });
 
+  it("routes approval IPC handlers to daemon RPC and preserves Result contract", async () => {
+    const daemon = {
+      request: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          value: [{ kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" }],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          value: { kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" },
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          value: { kind: "noteContent", noteId: "note-1", contentPreview: "Imported note" },
+        }),
+    };
+
+    const handlers = createDaemonIpcHandlers({
+      daemon,
+      storagePath: "/tmp/todu-ipc-test",
+    });
+
+    const listResult = await handlers["todu:approval:list"](undefined);
+    const taskResult = await handlers["todu:approval:approve-task-description"](
+      undefined,
+      "task-1",
+    );
+    const noteResult = await handlers["todu:approval:approve-note-content"](undefined, "note-1");
+
+    expect(daemon.request).toHaveBeenNthCalledWith(1, "approval.list", { filter: undefined });
+    expect(daemon.request).toHaveBeenNthCalledWith(2, "approval.approveTaskDescription", {
+      taskId: "task-1",
+    });
+    expect(daemon.request).toHaveBeenNthCalledWith(3, "approval.approveNoteContent", {
+      noteId: "note-1",
+    });
+    expect(listResult).toEqual({
+      ok: true,
+      value: [{ kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" }],
+    });
+    expect(taskResult).toEqual({
+      ok: true,
+      value: { kind: "taskDescription", taskId: "task-1", contentPreview: "Imported task" },
+    });
+    expect(noteResult).toEqual({
+      ok: true,
+      value: { kind: "noteContent", noteId: "note-1", contentPreview: "Imported note" },
+    });
+  });
+
   it("maps daemon NOT_FOUND errors to renderer-consumable not-found Result errors", async () => {
     const daemon = {
       request: vi.fn().mockResolvedValue({
