@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Note, Project, Task, TaskWithDetail } from "@todu/core/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as hooks from "../hooks/useTodu.js";
@@ -92,10 +92,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     name: "Inbox",
     status: "active",
     priority: "medium",
-    authorizedAssigneeActorIds: [
-      "actor-user",
-      "actor-reviewer",
-    ] as Project["authorizedAssigneeActorIds"],
+    authorizedAssigneeActorIds: ["actor-user"] as Project["authorizedAssigneeActorIds"],
     createdAt: "2026-03-01T00:00:00.000Z",
     updatedAt: "2026-03-01T00:00:00.000Z",
     ...overrides,
@@ -131,7 +128,8 @@ beforeEach(() => {
   vi.mocked(hooks.useActors).mockReturnValue({
     data: [
       { id: "actor-user", displayName: "user" },
-      { id: "actor-reviewer", displayName: "Reviewer" },
+      { id: "actor-reviewer", displayName: "Reviewer", archived: true },
+      { id: "actor-collab", displayName: "Collaborator" },
     ],
   } as ReturnType<typeof hooks.useActors>);
 
@@ -174,7 +172,7 @@ beforeEach(() => {
   } as ReturnType<typeof hooks.useDeleteProject>);
 
   vi.mocked(hooks.useTasks).mockReturnValue({
-    data: [],
+    data: [makeTask()],
   } as ReturnType<typeof hooks.useTasks>);
 
   vi.mocked(hooks.useSearchTasks).mockReturnValue({
@@ -198,16 +196,21 @@ afterEach(() => {
 });
 
 describe("actor-aware renderer views", () => {
-  it("shows actor assignees and approval state in task detail", async () => {
+  it("shows archived and unauthorized actor assignees plus approval state in task detail", async () => {
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
 
     expect(screen.getByText("Assignees")).toBeDefined();
     expect(screen.getByText("user")).toBeDefined();
-    expect(screen.getByText("Reviewer")).toBeDefined();
+    expect(screen.getByText("Reviewer (archived, unauthorized)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
   });
 
-  it("shows authorized assignee actors in project detail", async () => {
+  it("shows project authorization controls and stale unauthorized assignees", async () => {
+    const mutate = vi.fn();
+    vi.mocked(hooks.useUpdateProject).mockReturnValue({
+      mutate,
+    } as ReturnType<typeof hooks.useUpdateProject>);
+
     render(
       <ProjectDetail
         projectId="proj-1"
@@ -218,14 +221,38 @@ describe("actor-aware renderer views", () => {
     );
 
     expect(screen.getByText("Authorized assignees")).toBeDefined();
-    expect(screen.getByText("user")).toBeDefined();
-    expect(screen.getByText("Reviewer")).toBeDefined();
+    expect(screen.getByText("user (actor-user)")).toBeDefined();
+    expect(screen.getByText("Unauthorized task assignees")).toBeDefined();
+    expect(
+      screen.getByText("Actor task: Reviewer (actor-reviewer, archived, unauthorized)"),
+    ).toBeDefined();
+
+    fireEvent.change(screen.getByLabelText("Add authorized actor"), {
+      target: { value: "actor-collab" },
+    });
+    fireEvent.click(screen.getByText("Add"));
+
+    expect(mutate).toHaveBeenCalledWith({
+      id: "proj-1",
+      input: {
+        authorizedAssigneeActorIds: ["actor-user", "actor-collab"],
+      },
+    });
+
+    fireEvent.click(screen.getByText("Remove"));
+
+    expect(mutate).toHaveBeenLastCalledWith({
+      id: "proj-1",
+      input: {
+        authorizedAssigneeActorIds: [],
+      },
+    });
   });
 
   it("shows actor-based note authors and approval state in note list", async () => {
     render(<NoteList onCreateNote={() => {}} onNavigateToEntity={() => {}} />);
 
-    expect(screen.getByText("Reviewer")).toBeDefined();
+    expect(screen.getByText("Reviewer (archived)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
     expect(screen.getByText("Imported note")).toBeDefined();
   });

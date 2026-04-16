@@ -2,20 +2,40 @@ import { describe, expect, it, vi } from "vitest";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
 
 describe("createDaemonToduClient", () => {
-  it("routes actor.list to daemon RPC and preserves Result shape", async () => {
-    const request = vi.fn().mockResolvedValue({
-      ok: true,
-      value: [{ id: "actor-user", displayName: "user" }],
-    });
+  it("routes actor methods to daemon RPC and preserves Result shape", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        value: [{ id: "actor-user", displayName: "user" }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { id: "actor-reviewer", displayName: "Reviewer" },
+      });
 
     const client = createDaemonToduClient({ request });
 
-    const result = await client.actor.list();
+    const listResult = await client.actor.list();
+    const createResult = await client.actor.create({
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+    });
 
-    expect(request).toHaveBeenCalledWith("actor.list", {});
-    expect(result).toEqual({
+    expect(request).toHaveBeenNthCalledWith(1, "actor.list", {});
+    expect(request).toHaveBeenNthCalledWith(2, "actor.create", {
+      input: {
+        id: "actor-reviewer",
+        displayName: "Reviewer",
+      },
+    });
+    expect(listResult).toEqual({
       ok: true,
       value: [{ id: "actor-user", displayName: "user" }],
+    });
+    expect(createResult).toEqual({
+      ok: true,
+      value: { id: "actor-reviewer", displayName: "Reviewer" },
     });
   });
 

@@ -74,6 +74,7 @@ make dev-electron
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Dependency maintenance: [docs/dependency-maintenance.md](docs/dependency-maintenance.md)
 - Daemon CLI behavior: [docs/cli-daemon-usage.md](docs/cli-daemon-usage.md)
+- Electron actor and project authorization management: [docs/electron-actor-project-auth.md](docs/electron-actor-project-auth.md)
 
 ## License
 

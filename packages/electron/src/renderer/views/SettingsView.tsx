@@ -1,3 +1,4 @@
+import type { Actor } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { ThemePreference } from "../hooks/useTheme.js";
 import type {
@@ -8,6 +9,35 @@ import type {
   SyncJoinResult,
   SyncStatus,
 } from "../types/window.js";
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function formatToduError(error: unknown): string {
+  if (typeof error !== "object" || error === null || !("type" in error)) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  const typedError = error as {
+    type: string;
+    entity?: string;
+    id?: string;
+    field?: string;
+    message?: string;
+  };
+
+  switch (typedError.type) {
+    case "not-found":
+      return `${typedError.entity ?? "entity"} not found: ${typedError.id ?? "unknown"}`;
+    case "validation":
+      return typedError.message ?? `Invalid ${typedError.field ?? "input"}`;
+    case "storage":
+      return typedError.message ?? "Storage error";
+    default:
+      return typedError.message ?? typedError.type;
+  }
+}
 
 // ============================================================================
 // Component
@@ -26,6 +56,12 @@ export function SettingsView({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [actors, setActors] = useState<Actor[]>([]);
+  const [actorsLoading, setActorsLoading] = useState(true);
+  const [actorError, setActorError] = useState<string | null>(null);
+  const [newActorId, setNewActorId] = useState("");
+  const [newActorName, setNewActorName] = useState("");
+  const [actorDraftNames, setActorDraftNames] = useState<Record<string, string>>({});
 
   // API key input state — one per provider
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
@@ -69,6 +105,28 @@ export function SettingsView({
     });
   }, []);
 
+  const loadActors = useCallback(async () => {
+    setActorsLoading(true);
+
+    try {
+      const result = await window.todu.actor.list();
+      if (!result.ok) {
+        setActorError(formatToduError(result.error));
+        return;
+      }
+
+      setActorError(null);
+      setActors(result.value);
+      setActorDraftNames(
+        Object.fromEntries(result.value.map((actor) => [actor.id, actor.displayName])),
+      );
+    } catch (error) {
+      setActorError(formatToduError(error));
+    } finally {
+      setActorsLoading(false);
+    }
+  }, []);
+
   // Load sync status and catalog ID separately — isolated so a failure
   // here doesn't blank the whole settings page.
   useEffect(() => {
@@ -81,6 +139,10 @@ export function SettingsView({
         // Sync data unavailable — the Sync section simply won't render
       });
   }, []);
+
+  useEffect(() => {
+    void loadActors();
+  }, [loadActors]);
 
   // Load app version separately so a metadata lookup failure does not
   // affect the rest of the settings page.
@@ -205,6 +267,54 @@ export function SettingsView({
     }
   }, []);
 
+  const handleCreateActor = useCallback(async () => {
+    const id = newActorId.trim();
+    const displayName = newActorName.trim();
+    if (!id || !displayName) return;
+
+    const result = await window.todu.actor.create({ id, displayName });
+    if (!result.ok) {
+      setActorError(formatToduError(result.error));
+      return;
+    }
+
+    setNewActorId("");
+    setNewActorName("");
+    await loadActors();
+  }, [loadActors, newActorId, newActorName]);
+
+  const handleRenameActor = useCallback(
+    async (actorId: string) => {
+      const displayName = actorDraftNames[actorId]?.trim();
+      if (!displayName) return;
+
+      const result = await window.todu.actor.rename(actorId, displayName);
+      if (!result.ok) {
+        setActorError(formatToduError(result.error));
+        return;
+      }
+
+      await loadActors();
+    },
+    [actorDraftNames, loadActors],
+  );
+
+  const handleToggleActorArchive = useCallback(
+    async (actor: Actor) => {
+      const result = actor.archived
+        ? await window.todu.actor.unarchive(actor.id)
+        : await window.todu.actor.archive(actor.id);
+
+      if (!result.ok) {
+        setActorError(formatToduError(result.error));
+        return;
+      }
+
+      await loadActors();
+    },
+    [loadActors],
+  );
+
   // ── OAuth handlers ───────────────────────────────────────────────
 
   const handleOAuthLogin = useCallback(async (providerId: string) => {
@@ -303,6 +413,13 @@ export function SettingsView({
 
   // Providers that have a stored key or are currently selected
   const keyProviders = providers.filter((p) => storedKeys[p.id] || p.id === settings.provider);
+  const sortedActors = [...actors].sort((left, right) => {
+    if ((left.archived ?? false) !== (right.archived ?? false)) {
+      return Number(left.archived ?? false) - Number(right.archived ?? false);
+    }
+
+    return left.displayName.localeCompare(right.displayName) || left.id.localeCompare(right.id);
+  });
 
   return (
     <div className="view-container">
@@ -394,6 +511,98 @@ export function SettingsView({
             </span>
           )}
         </div>
+      </div>
+
+      {/* ── Actors ─────────────────────────────────────────────────── */}
+      <div className="settings-section">
+        <h3 className="section-title">Actors</h3>
+        <p className="settings-hint">
+          Manage catalog-wide actors and archived state. Actor IDs remain stable and archived actors
+          stay visible for historical context.
+        </p>
+
+        {actorError && <div className="settings-oauth-error">{actorError}</div>}
+
+        <div className="settings-key-row">
+          <div className="settings-key-header">
+            <span className="settings-key-label">Create actor</span>
+          </div>
+          <div className="settings-key-input-row">
+            <input
+              aria-label="New actor ID"
+              type="text"
+              className="input settings-key-input"
+              placeholder="actor-reviewer"
+              value={newActorId}
+              onChange={(e) => setNewActorId(e.target.value)}
+            />
+            <input
+              aria-label="New actor display name"
+              type="text"
+              className="input settings-key-input"
+              placeholder="Reviewer"
+              value={newActorName}
+              onChange={(e) => setNewActorName(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!newActorId.trim() || !newActorName.trim()}
+              onClick={() => void handleCreateActor()}
+            >
+              Create
+            </button>
+          </div>
+        </div>
+
+        {actorsLoading ? (
+          <div className="loading-state">Loading actors...</div>
+        ) : (
+          sortedActors.map((actor) => {
+            const draftName = actorDraftNames[actor.id] ?? actor.displayName;
+            const renameDisabled = !draftName.trim() || draftName.trim() === actor.displayName;
+
+            return (
+              <div key={actor.id} className="settings-key-row">
+                <div className="settings-key-header">
+                  <span className="settings-key-label">{actor.displayName}</span>
+                  <span
+                    className={`settings-key-status ${actor.archived ? "settings-key-missing" : "settings-key-stored"}`}
+                  >
+                    {actor.archived ? "Archived" : "Active"}
+                  </span>
+                </div>
+                <p className="settings-hint">ID: {actor.id}</p>
+                <div className="settings-key-input-row">
+                  <input
+                    aria-label={`Actor name ${actor.id}`}
+                    type="text"
+                    className="input settings-key-input"
+                    value={draftName}
+                    onChange={(e) =>
+                      setActorDraftNames((prev) => ({ ...prev, [actor.id]: e.target.value }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={renameDisabled}
+                    onClick={() => void handleRenameActor(actor.id)}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${actor.archived ? "btn-primary" : "btn-danger"}`}
+                    onClick={() => void handleToggleActorArchive(actor)}
+                  >
+                    {actor.archived ? "Unarchive" : "Archive"}
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* ── Subscriptions ───────────────────────────────────────────── */}

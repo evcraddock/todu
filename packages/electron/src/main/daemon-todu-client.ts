@@ -6,6 +6,10 @@ import { mapDaemonErrorToToduError } from "./daemon-error-mapping.js";
 interface DaemonBackedToduMethods {
   actor: {
     list(): Promise<Result<unknown, ToduError>>;
+    create(input: unknown): Promise<Result<unknown, ToduError>>;
+    rename(id: string, displayName: string): Promise<Result<unknown, ToduError>>;
+    archive(id: string): Promise<Result<unknown, ToduError>>;
+    unarchive(id: string): Promise<Result<unknown, ToduError>>;
   };
   project: {
     list(filter?: unknown): Promise<Result<unknown, ToduError>>;
@@ -50,6 +54,10 @@ export function createDaemonToduClient(daemon: Pick<DaemonConnectionManager, "re
   const client: DaemonBackedToduMethods = {
     actor: {
       list: () => invoke("actor.list", {}),
+      create: (input) => invoke("actor.create", { input }),
+      rename: (id, displayName) => invoke("actor.rename", { id, displayName }),
+      archive: (id) => invoke("actor.archive", { id }),
+      unarchive: (id) => invoke("actor.unarchive", { id }),
     },
     project: {
       list: (filter) => invoke("project.list", { filter }),

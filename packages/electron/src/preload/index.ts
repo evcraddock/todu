@@ -10,6 +10,11 @@ const api = {
   // ── Actor ──────────────────────────────────────────────────────────
   actor: {
     list: () => ipcRenderer.invoke("todu:actor:list"),
+    create: (input: unknown) => ipcRenderer.invoke("todu:actor:create", input),
+    rename: (id: string, displayName: string) =>
+      ipcRenderer.invoke("todu:actor:rename", id, displayName),
+    archive: (id: string) => ipcRenderer.invoke("todu:actor:archive", id),
+    unarchive: (id: string) => ipcRenderer.invoke("todu:actor:unarchive", id),
   },
 
   // ── Project ────────────────────────────────────────────────────────

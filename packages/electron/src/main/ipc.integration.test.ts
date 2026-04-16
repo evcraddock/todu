@@ -4,10 +4,16 @@ import { createDaemonIpcHandlers, mapDaemonErrorToToduError } from "./ipc.js";
 describe("createDaemonIpcHandlers", () => {
   it("routes actor IPC handlers to daemon RPC and preserves Result contract", async () => {
     const daemon = {
-      request: vi.fn().mockResolvedValue({
-        ok: true,
-        value: [{ id: "actor-user", displayName: "user" }],
-      }),
+      request: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          value: [{ id: "actor-user", displayName: "user" }],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          value: { id: "actor-reviewer", displayName: "Reviewer" },
+        }),
     };
 
     const handlers = createDaemonIpcHandlers({
@@ -15,12 +21,26 @@ describe("createDaemonIpcHandlers", () => {
       storagePath: "/tmp/todu-ipc-test",
     });
 
-    const result = await handlers["todu:actor:list"](undefined);
+    const listResult = await handlers["todu:actor:list"](undefined);
+    const createResult = await handlers["todu:actor:create"](undefined, {
+      id: "actor-reviewer",
+      displayName: "Reviewer",
+    });
 
-    expect(daemon.request).toHaveBeenCalledWith("actor.list", {});
-    expect(result).toEqual({
+    expect(daemon.request).toHaveBeenNthCalledWith(1, "actor.list", {});
+    expect(daemon.request).toHaveBeenNthCalledWith(2, "actor.create", {
+      input: {
+        id: "actor-reviewer",
+        displayName: "Reviewer",
+      },
+    });
+    expect(listResult).toEqual({
       ok: true,
       value: [{ id: "actor-user", displayName: "user" }],
+    });
+    expect(createResult).toEqual({
+      ok: true,
+      value: { id: "actor-reviewer", displayName: "Reviewer" },
     });
   });
 

@@ -39,6 +39,10 @@ import type { UpcomingOccurrence } from "@todu/engine";
 
 export interface ToduActorApi {
   list(): Promise<Result<Actor[]>>;
+  create(input: { id: string; displayName: string }): Promise<Result<Actor>>;
+  rename(id: string, displayName: string): Promise<Result<Actor>>;
+  archive(id: string): Promise<Result<Actor>>;
+  unarchive(id: string): Promise<Result<Actor>>;
 }
 
 export interface ToduProjectApi {
