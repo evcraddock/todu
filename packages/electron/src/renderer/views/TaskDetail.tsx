@@ -20,7 +20,7 @@ import {
   useTask,
   useUpdateTask,
 } from "../hooks/useTodu.js";
-import { createActorMap, getActorNames, getApprovalLabel } from "../lib/actors.js";
+import { createActorMap, getActorName, getActorNames, getApprovalLabel } from "../lib/actors.js";
 
 // ============================================================================
 // Status Shortcuts
@@ -93,6 +93,10 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const [titleValue, setTitleValue] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
+  const [selectedAssigneeActorId, setSelectedAssigneeActorId] = useState("");
+  const [replacementAssigneeActorIds, setReplacementAssigneeActorIds] = useState<
+    Record<string, string>
+  >({});
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
@@ -145,10 +149,73 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   };
 
   const currentProject = projects?.find((project) => project.id === task.projectId);
-  const assigneeNames = getActorNames(task.assigneeActorIds, actorMap, task.assignees, {
-    authorizedActorIds: currentProject?.authorizedAssigneeActorIds,
-  });
+  const authorizedActorIds = currentProject?.authorizedAssigneeActorIds ?? [];
+  const activeAuthorizedActors = (actors ?? []).filter(
+    (actor) => !actor.archived && authorizedActorIds.includes(actor.id),
+  );
+  const addableAssigneeActors = activeAuthorizedActors.filter(
+    (actor) => !task.assigneeActorIds.includes(actor.id),
+  );
+  const assigneeEntries = task.assigneeActorIds.map((actorId) => ({
+    actorId,
+    label: getActorName(actorId, actorMap, undefined, {
+      includeId: true,
+      authorizedActorIds,
+    }),
+    replacementOptions: addableAssigneeActors,
+  }));
+  const legacyAssigneeNames =
+    task.assigneeActorIds.length === 0
+      ? getActorNames(task.assigneeActorIds, actorMap, task.assignees, {
+          authorizedActorIds,
+        })
+      : [];
   const descriptionApprovalLabel = getApprovalLabel(task.descriptionApproval);
+  const validatedSelectedAssigneeActorId = addableAssigneeActors.some(
+    (actor) => actor.id === selectedAssigneeActorId,
+  )
+    ? selectedAssigneeActorId
+    : "";
+
+  const updateAssignees = (assigneeActorIds: string[]) => {
+    updateTask.mutate({
+      id: task.id as TaskId,
+      input: { assigneeActorIds },
+    });
+  };
+
+  const handleAddAssignee = () => {
+    if (!validatedSelectedAssigneeActorId) return;
+
+    updateAssignees([...task.assigneeActorIds, validatedSelectedAssigneeActorId]);
+    setSelectedAssigneeActorId("");
+  };
+
+  const handleRemoveAssignee = (actorId: string) => {
+    updateAssignees(task.assigneeActorIds.filter((currentActorId) => currentActorId !== actorId));
+    setReplacementAssigneeActorIds((prev) => {
+      const next = { ...prev };
+      delete next[actorId];
+      return next;
+    });
+  };
+
+  const handleReplaceAssignee = (actorId: string) => {
+    const replacementActorId = replacementAssigneeActorIds[actorId];
+    const validatedReplacementActorId = addableAssigneeActors.some(
+      (actor) => actor.id === replacementActorId,
+    )
+      ? replacementActorId
+      : "";
+    if (!validatedReplacementActorId) return;
+
+    updateAssignees(
+      task.assigneeActorIds.map((currentActorId) =>
+        currentActorId === actorId ? validatedReplacementActorId : currentActorId,
+      ),
+    );
+    setReplacementAssigneeActorIds((prev) => ({ ...prev, [actorId]: "" }));
+  };
 
   return (
     <div className="view-container">
@@ -268,17 +335,105 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
       <div className="detail-meta-row">
         <div className="detail-meta-cell detail-meta-cell-wide">
           <span className="detail-meta-label">Assignees</span>
-          <div className="label-chips">
-            {assigneeNames.length > 0 ? (
-              assigneeNames.map((assignee) => (
+
+          {assigneeEntries.length > 0 ? (
+            assigneeEntries.map((entry) => (
+              <div key={entry.actorId} className="settings-key-row">
+                <div className="settings-key-header">
+                  <span className="settings-key-label">{entry.label}</span>
+                </div>
+                <div className="settings-key-input-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleRemoveAssignee(entry.actorId)}
+                  >
+                    Remove
+                  </button>
+                  <select
+                    aria-label={`Replace assignee ${entry.actorId}`}
+                    className="input inline-select"
+                    value={
+                      entry.replacementOptions.some(
+                        (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
+                      )
+                        ? (replacementAssigneeActorIds[entry.actorId] ?? "")
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setReplacementAssigneeActorIds((prev) => ({
+                        ...prev,
+                        [entry.actorId]: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Replace with…</option>
+                    {entry.replacementOptions.map((actor) => (
+                      <option key={actor.id} value={actor.id}>
+                        {actor.displayName} ({actor.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={
+                      !entry.replacementOptions.some(
+                        (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
+                      )
+                    }
+                    onClick={() => handleReplaceAssignee(entry.actorId)}
+                  >
+                    Replace
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : legacyAssigneeNames.length > 0 ? (
+            <div className="label-chips">
+              {legacyAssigneeNames.map((assignee) => (
                 <span key={assignee} className="chip chip-label">
                   {assignee}
                 </span>
-              ))
-            ) : (
-              <span className="empty-hint">None</span>
-            )}
+              ))}
+            </div>
+          ) : (
+            <span className="empty-hint">None</span>
+          )}
+
+          <div className="settings-key-input-row">
+            <select
+              aria-label="Add assignee actor"
+              className="input inline-select"
+              value={validatedSelectedAssigneeActorId}
+              onChange={(e) => setSelectedAssigneeActorId(e.target.value)}
+            >
+              <option value="">Add assignee…</option>
+              {addableAssigneeActors.map((actor) => (
+                <option key={actor.id} value={actor.id}>
+                  {actor.displayName} ({actor.id})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!validatedSelectedAssigneeActorId}
+              onClick={handleAddAssignee}
+            >
+              Add
+            </button>
           </div>
+
+          {!currentProject ? (
+            <span className="empty-hint">Task project is unavailable.</span>
+          ) : activeAuthorizedActors.length === 0 ? (
+            <span className="empty-hint">
+              No authorized active actors available for this project.
+            </span>
+          ) : addableAssigneeActors.length === 0 ? (
+            <span className="empty-hint">All authorized active actors are already assigned.</span>
+          ) : null}
         </div>
       </div>
 
