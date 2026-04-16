@@ -80,8 +80,8 @@ export function createDaemonToduClient(daemon: Pick<DaemonConnectionManager, "re
     },
     approval: {
       list: (filter) => invoke("approval.list", { filter }),
-      approveTaskDescription: (taskId) => invoke("approval.approveTaskDescription", { id: taskId }),
-      approveNoteContent: (noteId) => invoke("approval.approveNoteContent", { id: noteId }),
+      approveTaskDescription: (taskId) => invoke("approval.approveTaskDescription", { taskId }),
+      approveNoteContent: (noteId) => invoke("approval.approveNoteContent", { noteId }),
     },
     label: {
       list: () => invoke("label.list", {}),

@@ -62,9 +62,9 @@ export function createDaemonIpcHandlers(
     // ── Approval ──────────────────────────────────────────────────────────
     "todu:approval:list": (_event, filter) => invokeResult("approval.list", { filter }),
     "todu:approval:approve-task-description": (_event, taskId) =>
-      invokeResult("approval.approveTaskDescription", { id: taskId }),
+      invokeResult("approval.approveTaskDescription", { taskId }),
     "todu:approval:approve-note-content": (_event, noteId) =>
-      invokeResult("approval.approveNoteContent", { id: noteId }),
+      invokeResult("approval.approveNoteContent", { noteId }),
 
     // ── Label ─────────────────────────────────────────────────────────────
     "todu:label:list": () => invokeResult("label.list"),

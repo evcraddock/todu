@@ -98,10 +98,10 @@ describe("createDaemonIpcHandlers", () => {
 
     expect(daemon.request).toHaveBeenNthCalledWith(1, "approval.list", { filter: undefined });
     expect(daemon.request).toHaveBeenNthCalledWith(2, "approval.approveTaskDescription", {
-      id: "task-1",
+      taskId: "task-1",
     });
     expect(daemon.request).toHaveBeenNthCalledWith(3, "approval.approveNoteContent", {
-      id: "note-1",
+      noteId: "note-1",
     });
     expect(listResult).toEqual({
       ok: true,
