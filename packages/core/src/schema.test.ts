@@ -38,6 +38,12 @@ describe("schema", () => {
       expect(catalog.ownerActorId).toBe(DEFAULT_OWNER_ACTOR_ID);
     });
 
+    it("creates a catalog with a configured owner actor", () => {
+      const catalog = createEmptyCatalog({ id: createActorId("erik"), displayName: "Erik" });
+      expect(catalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
+      expect(catalog.ownerActorId).toBe("erik");
+    });
+
     it("creates a catalog with empty taskListDocIds", () => {
       const catalog = createEmptyCatalog();
       expect(catalog.taskListDocIds).toEqual({});

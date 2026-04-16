@@ -14,6 +14,22 @@ For always-on daemon startup (recommended), use OS service manager setup from [`
 - Absolute legacy config values under `~/.config/toduai/...` or `.toduai/...` are normalized to `todu` paths when config is loaded.
 - `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
 
+### Bootstrap owner actor config
+
+To override the default migrated owner actor (`actor-user` / `user`), set this in config **before the first startup that creates or migrates the dataset**:
+
+```yaml
+identity:
+  ownerActor:
+    id: erik
+    displayName: Erik
+```
+
+Notes:
+- This applies to fresh catalog creation and the first legacy-to-actor migration.
+- If the dataset is already migrated, changing this config later does not rewrite existing actor IDs.
+- Development remains isolated when you use `make dev`, `make run`, or `make dev-electron`, because those flows point at `.dev/config.yaml` instead of the home config.
+
 ## Start/stop/restart the local daemon
 
 Recommended for persistent operation:

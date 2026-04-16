@@ -1,4 +1,4 @@
-import { resolveRemoteSyncConfig } from "@todu/core";
+import { loadDaemonFileConfig } from "./config.js";
 import { createDaemonLogger, resolveDaemonLogLevelFromEnv } from "./logger.js";
 import { parseDaemonPluginConfigFromEnv, TODU_DAEMON_PLUGIN_CONFIG_ENV } from "./plugin-config.js";
 import { parseDaemonPluginPathsFromEnv, TODU_DAEMON_PLUGIN_PATHS_ENV } from "./plugin-paths.js";
@@ -40,7 +40,8 @@ export async function runDaemonEntrypoint(): Promise<void> {
   );
   const daemonSocketPath =
     process.env[TODU_DAEMON_SOCKET_ENV] ?? process.env[TODUAI_DAEMON_SOCKET_ENV];
-  const remoteSync = resolveRemoteSyncConfig({});
+  const fileConfig = loadDaemonFileConfig();
+  const remoteSync = fileConfig.remoteSync;
   const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);
   const pluginPathsConfig = parseDaemonPluginPathsFromEnv(process.env);
   const pluginConfig = parseDaemonPluginConfigFromEnv(process.env);
@@ -93,6 +94,7 @@ export async function runDaemonEntrypoint(): Promise<void> {
       role: daemonRole,
       socketPath: daemonSocketPath,
       remoteSync: remoteSync ?? undefined,
+      bootstrapOwnerActor: fileConfig.bootstrapOwnerActor ?? undefined,
       logLevel: daemonLogLevel,
       assignedWorkerTypes: assignmentConfig.assignedWorkerTypes,
       syncPluginModulePaths: pluginPathsConfig.modulePaths,

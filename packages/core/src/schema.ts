@@ -1,3 +1,4 @@
+import type { BootstrapOwnerActor } from "./config.js";
 import {
   type Actor,
   type ActorId,
@@ -160,18 +161,25 @@ export interface HabitLogDocument {
 
 export const SCHEMA_VERSION = 2;
 export const DEFAULT_OWNER_ACTOR_ID = createActorId("actor-user");
+export const DEFAULT_OWNER_ACTOR_DISPLAY_NAME = "user";
+export const DEFAULT_OWNER_ACTOR: BootstrapOwnerActor = {
+  id: DEFAULT_OWNER_ACTOR_ID,
+  displayName: DEFAULT_OWNER_ACTOR_DISPLAY_NAME,
+};
 
 // ============================================================================
 // Factory functions
 // ============================================================================
 
-export function createEmptyCatalog(): CatalogDocument {
+export function createEmptyCatalog(
+  ownerActor: BootstrapOwnerActor = DEFAULT_OWNER_ACTOR,
+): CatalogDocument {
   return {
     version: SCHEMA_VERSION,
     projects: [],
     labels: [],
-    actors: [{ id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" }],
-    ownerActorId: DEFAULT_OWNER_ACTOR_ID,
+    actors: [{ id: ownerActor.id, displayName: ownerActor.displayName }],
+    ownerActorId: ownerActor.id,
     taskListDocIds: {},
     notesBucketDocIds: {},
     noteBucketByNoteId: {},

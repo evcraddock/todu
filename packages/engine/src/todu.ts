@@ -3,6 +3,7 @@ import type {
   ActorId,
   ApprovalItem,
   ApprovalListFilter,
+  BootstrapOwnerActor,
   CreateActorInput,
   CreateHabitInput,
   CreateIntegrationBindingInput,
@@ -67,6 +68,9 @@ export interface ToduConfig {
 
   /** Try to connect to a running sync server (used by CLI) */
   syncClient?: boolean;
+
+  /** Optional owner actor bootstrap used for fresh catalogs and pre-actor migration. */
+  bootstrapOwnerActor?: BootstrapOwnerActor;
 
   /**
    * Startup template processing policy.

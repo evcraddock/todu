@@ -41,7 +41,10 @@ async function readCatalogDocument(storagePath: string): Promise<CatalogDocument
 async function seedLegacyNoteIdentityData(
   storagePath: string,
   legacyAuthorsByNoteId: Record<string, string | null | undefined>,
-  owner: { id: string; displayName: string } = {
+  owner: {
+    id: string;
+    displayName: string;
+  } | null = {
     id: DEFAULT_OWNER_ACTOR_ID,
     displayName: "user",
   },
@@ -59,11 +62,16 @@ async function seedLegacyNoteIdentityData(
     catalogHandle.change((doc) => {
       doc.version = 1;
       doc.settings.schemaVersion = 1;
-      doc.actors.splice(0, doc.actors.length, {
-        id: createActorId(owner.id),
-        displayName: owner.displayName,
-      });
-      doc.ownerActorId = createActorId(owner.id);
+      doc.actors.splice(0, doc.actors.length);
+      if (owner) {
+        doc.actors.push({
+          id: createActorId(owner.id),
+          displayName: owner.displayName,
+        });
+        doc.ownerActorId = createActorId(owner.id);
+      } else {
+        delete doc.ownerActorId;
+      }
     });
 
     const bucketDocIds = Object.values(catalogHandle.doc()?.notesBucketDocIds ?? {});
@@ -107,7 +115,7 @@ describe("note namespace", () => {
   });
 
   afterEach(async () => {
-    await todu.close();
+    await todu?.close();
     await new Promise((r) => setTimeout(r, 50));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -360,6 +368,44 @@ describe("note namespace", () => {
       expect(result.value.find((note) => note.id === second.value.id)?.authorActorId).toBe(
         "actor-reviewer",
       );
+    });
+
+    it("maps legacy missing or 'user' note authors to the configured bootstrap owner actor", async () => {
+      const first = await todu.note.create({ content: "Legacy user note" });
+      const second = await todu.note.create({ content: "Legacy missing note" });
+      if (!first.ok || !second.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyNoteIdentityData(
+        tmpDir,
+        {
+          [first.value.id]: "user",
+          [second.value.id]: undefined,
+        },
+        null,
+      );
+
+      todu = await createTodu({
+        storagePath: tmpDir,
+        bootstrapOwnerActor: { id: createActorId("erik"), displayName: "Erik" },
+      });
+
+      const result = await todu.note.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.find((note) => note.id === first.value.id)?.authorActorId).toBe("erik");
+      expect(result.value.find((note) => note.id === second.value.id)?.authorActorId).toBe("erik");
+
+      await todu.close();
+      todu = null;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.ownerActorId).toBe("erik");
+      expect(catalog.actors).toContainEqual({ id: "erik", displayName: "Erik" });
     });
 
     it("filters by entityType", async () => {

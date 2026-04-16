@@ -11,6 +11,7 @@ import {
   LEGACY_DEFAULT_DATA_DIR,
   migrateLegacyDefaultConfigDirectory,
   normalizeConfigPaths,
+  resolveBootstrapOwnerActor,
   resolveConfigPath,
   resolveConfigSources,
   resolveDataDir,
@@ -203,6 +204,59 @@ describe("config resolution", () => {
       );
 
       expect(normalized.data_dir).toBe(path.join(tmpHome, "workspace", ".todu", "data"));
+    });
+  });
+
+  describe("resolveBootstrapOwnerActor", () => {
+    it("returns null when owner bootstrap config is absent", () => {
+      expect(resolveBootstrapOwnerActor({})).toEqual({ ok: true, value: null });
+    });
+
+    it("returns trimmed owner bootstrap config when present", () => {
+      expect(
+        resolveBootstrapOwnerActor({
+          identity: {
+            ownerActor: {
+              id: "  erik  ",
+              displayName: "  Erik  ",
+            },
+          },
+        }),
+      ).toEqual({
+        ok: true,
+        value: {
+          id: "erik",
+          displayName: "Erik",
+        },
+      });
+    });
+
+    it("rejects missing owner actor id", () => {
+      const result = resolveBootstrapOwnerActor({
+        identity: { ownerActor: { displayName: "Erik" } },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toEqual({
+        type: "validation",
+        field: "identity.ownerActor.id",
+        message: "Actor ID must be a non-empty string",
+      });
+    });
+
+    it("rejects missing owner actor display name", () => {
+      const result = resolveBootstrapOwnerActor({
+        identity: { ownerActor: { id: "erik" } },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toEqual({
+        type: "validation",
+        field: "identity.ownerActor.displayName",
+        message: "Actor display name must be a non-empty string",
+      });
     });
   });
 
