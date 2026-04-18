@@ -1872,6 +1872,125 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
+  it("pull imports newer remote assignee removals on the v3 path", async () => {
+    const project = createProject();
+    const existingTask = createTask(project.id, {
+      externalId: "gh-101",
+      assigneeActorIds: [createActorId("actor-octocat")],
+      assignees: ["octocat"],
+      updatedAt: "2026-03-10T09:00:00Z",
+    });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const provider = createV3Provider({
+      pull: vi.fn<SyncProviderV3["pull"]>().mockResolvedValue({
+        tasks: [
+          {
+            externalId: "gh-101",
+            title: "Pulled via v3",
+            assignees: [],
+            updatedAt: "2026-03-10T15:00:00Z",
+          } satisfies ImportedTaskInput,
+        ],
+        comments: [],
+      }),
+    });
+    const todu = createTodu(project, [existingTask], [binding], {
+      actors: [{ id: createActorId("actor-octocat"), displayName: "Octocat" }],
+    });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      providerApiVersion: 3,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.task.update).toHaveBeenCalledWith(
+      existingTask.id,
+      expect.objectContaining({
+        assigneeActorIds: [],
+        assignees: [],
+        updatedAt: "2026-03-10T15:00:00.000Z",
+      }),
+    );
+
+    handle.stop();
+  });
+
+  it("includes updatedAt in v3 push payloads so providers can resolve freshness conflicts", async () => {
+    const project = createProject();
+    const task = createTask(project.id, {
+      externalId: "gh-101",
+      updatedAt: "2026-03-10T15:00:00Z",
+      assigneeActorIds: [createActorId("actor-mapped")],
+    });
+    const binding = createBinding(project.id, {
+      strategy: "push",
+      options: {
+        actorMappings: [
+          {
+            actorId: createActorId("actor-mapped"),
+            externalLogin: "octocat",
+            displayName: "Octocat",
+          },
+        ],
+      },
+    });
+    const provider = createV3Provider();
+    const todu = createTodu(project, [task], [binding], {
+      actors: [{ id: createActorId("actor-mapped"), displayName: "Mapped" }],
+    });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      providerApiVersion: 3,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(provider.push).toHaveBeenCalledWith(
+      binding,
+      [
+        expect.objectContaining({
+          localTaskId: task.id,
+          updatedAt: "2026-03-10T15:00:00Z",
+          assignees: [{ externalLogin: "octocat", displayName: "Octocat" }],
+        }),
+      ],
+      expect.objectContaining({ id: project.id }),
+    );
+
+    handle.stop();
+  });
+
   it("skips unmapped outbound assignees with warnings on the v3 push path", async () => {
     const project = createProject();
     const task = createTask(project.id, {

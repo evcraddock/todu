@@ -1043,6 +1043,7 @@ async function buildPushPayloadsV3(
       labels: taskDetail.labels,
       assignees: buildOutboundV3Assignees(taskDetail, actorState, logger),
       sourceUrl: taskDetail.sourceUrl,
+      updatedAt: taskDetail.updatedAt,
       comments: comments.map((comment) => {
         const exported: ExportedCommentInput = {
           localNoteId: comment.id,

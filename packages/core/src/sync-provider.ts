@@ -102,6 +102,7 @@ export interface ExportedTaskInput {
   labels: string[];
   assignees: ExternalActorRef[];
   sourceUrl?: string;
+  updatedAt: string;
   comments: ExportedCommentInput[];
 }
 
