@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-04-18
+
+Improves sync and actor migration reliability by fixing stale assignee conflict handling and canonicalizing duplicate legacy actor references.
+
+### Fixed
+- Fixed v3 sync freshness handling so newer remote assignee removals can be imported into todu instead of being overwritten by stale local state.
+- Added `updatedAt` to the v3 exported task payload so sync providers can safely compare local and remote freshness before pushing assignee changes.
+- Fixed legacy actor canonicalization so duplicate migrated actor references are rewritten to the canonical actor and owner-name note authors are mapped back to the owner actor.
+
 ## [0.17.0] - 2026-04-16
 
 This release introduces the actor-based multi-user foundation across todu. Core storage now migrates legacy assignees and note authors into actor-backed identity, the sync runtime supports both legacy v2 and new v3 provider contracts during the transition window, and the CLI and Electron app now expose actor, authorization, assignee, and approval workflows needed for multi-user task management.
