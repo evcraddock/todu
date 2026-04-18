@@ -13,9 +13,12 @@ import {
   createEmptyCatalog,
   createNotesDocument,
   DEFAULT_OWNER_ACTOR_ID,
+  type ImportedContentApproval,
+  type IntegrationRegistryDocument,
   type Note,
   type NotesDocument,
   SCHEMA_VERSION,
+  type TaskDetailDocument,
   type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -68,6 +71,89 @@ function createStableLegacyActorId(normalizedName: string, existingActorIds: Set
   return candidate;
 }
 
+function isLegacyActorId(actorId: string): boolean {
+  return actorId.startsWith("actor-legacy-");
+}
+
+function shouldPreferCanonicalActor(
+  ownerActorId: string | undefined,
+  candidateActorId: string,
+  currentActorId: string,
+): boolean {
+  if (candidateActorId === currentActorId) return false;
+  if (candidateActorId === ownerActorId) return true;
+  if (currentActorId === ownerActorId) return false;
+
+  const candidateIsLegacy = isLegacyActorId(candidateActorId);
+  const currentIsLegacy = isLegacyActorId(currentActorId);
+  if (candidateIsLegacy !== currentIsLegacy) {
+    return !candidateIsLegacy;
+  }
+
+  return false;
+}
+
+function buildCanonicalActorIdsByNormalizedName(doc: CatalogDocument): Map<string, string> {
+  const canonicalActorIds = new Map<string, string>();
+
+  for (const actor of doc.actors ?? []) {
+    const normalizedName = normalizeLegacyActorName(actor.displayName);
+    if (!normalizedName) continue;
+
+    const currentActorId = canonicalActorIds.get(normalizedName);
+    if (
+      currentActorId === undefined ||
+      shouldPreferCanonicalActor(doc.ownerActorId, actor.id, currentActorId)
+    ) {
+      canonicalActorIds.set(normalizedName, actor.id);
+    }
+  }
+
+  return canonicalActorIds;
+}
+
+function buildActorCanonicalRewriteMap(doc: CatalogDocument): Map<string, string> {
+  const canonicalActorIds = buildCanonicalActorIdsByNormalizedName(doc);
+  const rewriteMap = new Map<string, string>();
+
+  for (const actor of doc.actors ?? []) {
+    const normalizedName = normalizeLegacyActorName(actor.displayName);
+    if (!normalizedName) continue;
+
+    const canonicalActorId = canonicalActorIds.get(normalizedName);
+    if (canonicalActorId && canonicalActorId !== actor.id) {
+      rewriteMap.set(actor.id, canonicalActorId);
+    }
+  }
+
+  return rewriteMap;
+}
+
+function rewriteActorId<T extends string | undefined>(
+  actorId: T,
+  rewriteMap: ReadonlyMap<string, string>,
+): T {
+  if (actorId === undefined) return actorId;
+  return (rewriteMap.get(actorId) ?? actorId) as T;
+}
+
+function rewriteImportedContentApproval(
+  approval: ImportedContentApproval | undefined,
+  rewriteMap: ReadonlyMap<string, string>,
+): void {
+  if (!approval) return;
+
+  const nextReviewedByActorId = rewriteActorId(approval.reviewedByActorId, rewriteMap);
+  if (nextReviewedByActorId !== approval.reviewedByActorId && nextReviewedByActorId !== undefined) {
+    approval.reviewedByActorId = createActorId(nextReviewedByActorId);
+  }
+
+  const nextSourceActorId = rewriteActorId(approval.sourceActorId, rewriteMap);
+  if (nextSourceActorId !== approval.sourceActorId && nextSourceActorId !== undefined) {
+    approval.sourceActorId = createActorId(nextSourceActorId);
+  }
+}
+
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -113,6 +199,12 @@ function buildLegacyActorRegistry(doc: CatalogDocument): LegacyActorRegistry {
 
   actorIds.add(ownerActorId);
   normalizedNameToActorId.set("user", ownerActorId);
+
+  const ownerActor = (doc.actors ?? []).find((actor) => actor.id === ownerActorId);
+  const ownerNormalizedName = normalizeLegacyActorName(ownerActor?.displayName);
+  if (ownerNormalizedName) {
+    normalizedNameToActorId.set(ownerNormalizedName, ownerActorId);
+  }
 
   return {
     ownerActorId,
@@ -491,6 +583,7 @@ async function loadCatalogById(
     });
     migrateCatalog(handle, bootstrapOwnerActor);
     await migrateLegacyIdentityModel(handle, repo);
+    await repairCanonicalActorReferences(handle, repo);
     return handle;
   } catch {
     throw new Error(
@@ -603,6 +696,110 @@ function migrateCatalog(
         project.authorizedAssigneeActorIds = d.ownerActorId ? [d.ownerActorId] : [];
       }
     }
+  });
+}
+
+async function repairCanonicalActorReferences(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+): Promise<void> {
+  const catalogDoc = catalog.doc();
+  if (!catalogDoc) return;
+
+  const rewriteMap = buildActorCanonicalRewriteMap(catalogDoc);
+  if (rewriteMap.size === 0) return;
+
+  catalog.change((doc) => {
+    for (const project of doc.projects) {
+      if (!project.authorizedAssigneeActorIds) continue;
+
+      const nextAuthorizedActorIds: string[] = [];
+      const seenActorIds = new Set<string>();
+      for (const actorId of project.authorizedAssigneeActorIds) {
+        const nextActorId = rewriteMap.get(actorId) ?? actorId;
+        if (!seenActorIds.has(nextActorId)) {
+          seenActorIds.add(nextActorId);
+          nextAuthorizedActorIds.push(nextActorId);
+        }
+      }
+
+      if (!arraysEqual(project.authorizedAssigneeActorIds, nextAuthorizedActorIds)) {
+        project.authorizedAssigneeActorIds.splice(
+          0,
+          project.authorizedAssigneeActorIds.length,
+          ...nextAuthorizedActorIds.map((actorId) => createActorId(actorId)),
+        );
+      }
+    }
+  });
+
+  const currentCatalog = catalog.doc();
+  for (const docId of Object.values(currentCatalog?.taskListDocIds ?? {})) {
+    const handle = await repo.find<TaskListDocument>(docId as DocumentId);
+    await handle.whenReady();
+    handle.change((doc) => {
+      for (const task of doc.tasks as MutableLegacyTask[]) {
+        if (!task.assigneeActorIds || task.assigneeActorIds.length === 0) continue;
+
+        const nextAssigneeActorIds: string[] = [];
+        const seenActorIds = new Set<string>();
+        for (const actorId of task.assigneeActorIds) {
+          const nextActorId = rewriteMap.get(actorId) ?? actorId;
+          if (!seenActorIds.has(nextActorId)) {
+            seenActorIds.add(nextActorId);
+            nextAssigneeActorIds.push(nextActorId);
+          }
+        }
+
+        if (!arraysEqual(task.assigneeActorIds, nextAssigneeActorIds)) {
+          task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...nextAssigneeActorIds);
+        }
+      }
+    });
+
+    for (const detailDocId of Object.values(handle.doc()?.detailDocIds ?? {})) {
+      const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+      await detailHandle.whenReady();
+      detailHandle.change((doc) => {
+        rewriteImportedContentApproval(doc.descriptionApproval, rewriteMap);
+      });
+    }
+  }
+
+  for (const docId of Object.values(catalog.doc()?.notesBucketDocIds ?? {})) {
+    const handle = await repo.find<NotesDocument>(docId as DocumentId);
+    await handle.whenReady();
+    handle.change((doc) => {
+      for (const note of doc.notes as MutableLegacyNote[]) {
+        const nextAuthorActorId = rewriteActorId(note.authorActorId, rewriteMap);
+        if (nextAuthorActorId !== note.authorActorId) {
+          note.authorActorId = nextAuthorActorId ? createActorId(nextAuthorActorId) : undefined;
+        }
+        rewriteImportedContentApproval(note.contentApproval, rewriteMap);
+      }
+    });
+  }
+
+  const integrationRegistryDocId = catalog.doc()?.integrationRegistryDocId;
+  if (integrationRegistryDocId) {
+    const integrationHandle = await repo.find<IntegrationRegistryDocument>(
+      integrationRegistryDocId as DocumentId,
+    );
+    await integrationHandle.whenReady();
+    integrationHandle.change((doc) => {
+      for (const binding of doc.bindings) {
+        for (const mapping of binding.options?.actorMappings ?? []) {
+          const nextActorId = rewriteActorId(mapping.actorId, rewriteMap);
+          if (nextActorId !== mapping.actorId) {
+            mapping.actorId = createActorId(nextActorId);
+          }
+        }
+      }
+    });
+  }
+
+  catalog.change((doc) => {
+    doc.actors = doc.actors.filter((actor) => !rewriteMap.has(actor.id));
   });
 }
 

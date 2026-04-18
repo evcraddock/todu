@@ -408,6 +408,42 @@ describe("note namespace", () => {
       expect(catalog.actors).toContainEqual({ id: "erik", displayName: "Erik" });
     });
 
+    it("maps legacy note authors that match the owner name to the canonical owner actor", async () => {
+      const created = await todu.note.create({ content: "Canonical owner note" });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await seedLegacyNoteIdentityData(
+        tmpDir,
+        {
+          [created.value.id]: " erik ",
+        },
+        {
+          id: "erik",
+          displayName: "Erik",
+        },
+      );
+
+      todu = await createTodu({
+        storagePath: tmpDir,
+        bootstrapOwnerActor: { id: createActorId("erik"), displayName: "Erik" },
+      });
+
+      const result = await todu.note.list();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.find((note) => note.id === created.value.id)?.authorActorId).toBe("erik");
+
+      await todu.close();
+      todu = null;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const catalog = await readCatalogDocument(tmpDir);
+      expect(catalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
+    });
+
     it("filters by entityType", async () => {
       const task = await todu.task.create({ title: "Test", projectId });
       if (!task.ok) throw new Error("create failed");
