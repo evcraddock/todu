@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-04-19
+
+This release focuses on sync and storage reliability. It improves assignee conflict handling and makes join/storage migration behavior safer and easier to debug.
+
+### Fixed
+- Handle v3 assignee sync conflicts more reliably (#417)
+- Validate join targets using the real repo and remote sync setup when configured
+- Improve catalog load errors with stage-specific failure details
+- Avoid shared default object references during catalog migration
+- Repair canonical actor references with safer in-place actor removal
+
 ## [0.17.1] - 2026-04-18
 
 Improves sync and actor migration reliability by fixing stale assignee conflict handling and canonicalizing duplicate legacy actor references.
