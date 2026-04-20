@@ -577,17 +577,27 @@ async function loadCatalogById(
   mode: "bootstrap" | "join",
   bootstrapOwnerActor?: BootstrapOwnerActor,
 ): Promise<DocHandle<CatalogDocument>> {
+  let stage = "find";
+
   try {
     const handle = await repo.find<CatalogDocument>(docId, {
       signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
     });
+
+    stage = "migrateCatalog";
     migrateCatalog(handle, bootstrapOwnerActor);
+
+    stage = "migrateLegacyIdentityModel";
     await migrateLegacyIdentityModel(handle, repo);
+
+    stage = "repairCanonicalActorReferences";
     await repairCanonicalActorReferences(handle, repo);
+
     return handle;
-  } catch {
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `[storage] ${mode} catalog ${docId} not reachable within ${CATALOG_LOAD_TIMEOUT_MS}ms`,
+      `[storage] ${mode} catalog ${docId} not reachable within ${CATALOG_LOAD_TIMEOUT_MS}ms at ${stage}: ${cause}`,
     );
   }
 }
@@ -664,24 +674,26 @@ function migrateCatalog(
   if (!needsMigration) return;
 
   handle.change((d) => {
-    if (!Array.isArray(d.projects)) d.projects = defaults.projects;
-    if (!Array.isArray(d.labels)) d.labels = defaults.labels;
-    if (!Array.isArray(d.actors) || d.actors.length === 0) d.actors = defaults.actors;
+    if (!Array.isArray(d.projects)) d.projects = structuredClone(defaults.projects);
+    if (!Array.isArray(d.labels)) d.labels = structuredClone(defaults.labels);
+    if (!Array.isArray(d.actors) || d.actors.length === 0)
+      d.actors = structuredClone(defaults.actors);
     if (d.ownerActorId === undefined || d.ownerActorId === null) {
       d.ownerActorId = defaults.ownerActorId;
     }
-    if (!Array.isArray(d.recurringTemplates)) d.recurringTemplates = defaults.recurringTemplates;
-    if (!Array.isArray(d.habits)) d.habits = defaults.habits;
+    if (!Array.isArray(d.recurringTemplates))
+      d.recurringTemplates = structuredClone(defaults.recurringTemplates);
+    if (!Array.isArray(d.habits)) d.habits = structuredClone(defaults.habits);
     if (d.taskListDocIds === undefined || d.taskListDocIds === null)
-      d.taskListDocIds = defaults.taskListDocIds;
+      d.taskListDocIds = structuredClone(defaults.taskListDocIds);
     if (d.habitLogDocIds === undefined || d.habitLogDocIds === null)
-      d.habitLogDocIds = defaults.habitLogDocIds;
+      d.habitLogDocIds = structuredClone(defaults.habitLogDocIds);
     if (d.notesBucketDocIds === undefined || d.notesBucketDocIds === null)
-      d.notesBucketDocIds = defaults.notesBucketDocIds;
+      d.notesBucketDocIds = structuredClone(defaults.notesBucketDocIds);
     if (d.noteBucketByNoteId === undefined || d.noteBucketByNoteId === null)
-      d.noteBucketByNoteId = defaults.noteBucketByNoteId;
+      d.noteBucketByNoteId = structuredClone(defaults.noteBucketByNoteId);
     if (d.integrationStatusDocIds === undefined || d.integrationStatusDocIds === null)
-      d.integrationStatusDocIds = defaults.integrationStatusDocIds;
+      d.integrationStatusDocIds = structuredClone(defaults.integrationStatusDocIds);
     if (d.settings === undefined || d.settings === null) {
       d.settings = { schemaVersion: d.version ?? 1 };
     } else if (d.settings.schemaVersion === undefined || d.settings.schemaVersion === null) {
@@ -799,7 +811,11 @@ async function repairCanonicalActorReferences(
   }
 
   catalog.change((doc) => {
-    doc.actors = doc.actors.filter((actor) => !rewriteMap.has(actor.id));
+    for (let index = doc.actors.length - 1; index >= 0; index -= 1) {
+      if (rewriteMap.has(doc.actors[index].id)) {
+        doc.actors.splice(index, 1);
+      }
+    }
   });
 }
 

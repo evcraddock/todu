@@ -1,4 +1,6 @@
 import type { DocumentId } from "@automerge/automerge-repo";
+import { Repo } from "@automerge/automerge-repo/slim";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type BootstrapOwnerActor,
   err,
@@ -8,6 +10,7 @@ import {
   resolveStoragePath,
 } from "@todu/core";
 import {
+  addRemoteSyncAdapter,
   beginCatalogJoinSwitch,
   createTodu,
   initJoinStorage,
@@ -1097,15 +1100,33 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   }
 
   async function validateJoinTarget(targetCatalogId: string): Promise<void> {
+    const validationRepo = new Repo({
+      storage: new NodeFSStorageAdapter(resolvedConfig.storagePath),
+    });
+
+    if (resolvedConfig.remoteSync) {
+      const validationAdapter = addRemoteSyncAdapter(
+        validationRepo,
+        resolvedConfig.remoteSync.server,
+      );
+      await validationAdapter.whenReady();
+    }
+
     try {
       const validationStorage = await initJoinStorage(
         resolvedConfig.storagePath,
         targetCatalogId as DocumentId,
-        undefined,
+        validationRepo,
         resolvedConfig.bootstrapOwnerActor,
       );
       await validationStorage.close();
     } catch (error) {
+      try {
+        await validationRepo.shutdown();
+      } catch {
+        // Safe to ignore during validation cleanup.
+      }
+
       throw createProtocolError("JOIN_FAILED", "Join validation failed", {
         stage: "validate-reachability",
         targetCatalogId,
