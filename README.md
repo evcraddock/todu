@@ -15,13 +15,13 @@ Desktop releases bundle the local daemon runtime. Launching the packaged app sta
 Install the latest Linux desktop build with AppImage integration and a launcher entry:
 
 ```bash
-curl -fsSL https://github.com/evcraddock/todu/releases/latest/download/install-todu-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-linux.sh | bash
 ```
 
 Install a specific version:
 
 ```bash
-curl -fsSL https://github.com/evcraddock/todu/releases/download/v0.18.0/install-todu-linux.sh | bash -s -- 0.18.0
+curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-linux.sh | bash -s -- 0.18.0
 ```
 
 This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher in `~/.local/share/applications`.
@@ -31,13 +31,13 @@ This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher
 Install the latest macOS desktop build into `/Applications`:
 
 ```bash
-curl -fsSL https://github.com/evcraddock/todu/releases/latest/download/install-todu-mac.sh | bash
+curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-mac.sh | bash
 ```
 
 Install a specific version:
 
 ```bash
-curl -fsSL https://github.com/evcraddock/todu/releases/download/v0.18.0/install-todu-mac.sh | bash -s -- 0.18.0
+curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-mac.sh | bash -s -- 0.18.0
 ```
 
 This downloads the release DMG, mounts it, copies `todu.app` into `/Applications`, and unmounts the DMG.
