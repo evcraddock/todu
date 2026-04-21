@@ -6,6 +6,29 @@ The legacy `todu serve` path has been removed.
 
 For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
+## Desktop companion CLI guidance
+
+The desktop app does not require a separate CLI install for normal use. Packaged desktop releases bundle and manage the local daemon automatically.
+
+Use the CLI as an optional companion for power-user workflows such as:
+
+- checking daemon state (`todu daemon status`)
+- explicit daemon lifecycle control (`todu daemon start|stop|restart`)
+- automation and scripting
+- plugin-oriented local operations
+
+Recommended install paths:
+
+- latest CLI: `npm install -g @todu/cli`
+- CLI version matching desktop app version: `npm install -g @todu/cli@<desktop-version>`
+
+Compatibility expectations:
+
+- Preferred: use a CLI version that matches your installed desktop app version.
+- Desktop app version is shown in Settings and in release notes.
+- CLI and desktop app both use the same default user-local config and data paths, so they target the same local daemon and dataset by default.
+- If needed, you can point the CLI at a different daemon socket with `TODU_DAEMON_SOCKET`.
+
 ## Config/data migration defaults
 
 - Default home config path is now `~/.config/todu/config.yaml`.

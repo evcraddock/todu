@@ -16,17 +16,32 @@ Download the latest desktop release for your platform from GitHub Releases:
 
 Desktop releases bundle the local daemon runtime. Launching the packaged app starts and manages that bundled daemon automatically for normal desktop usage.
 
-### CLI
+### CLI companion (optional)
+
+Most desktop users do **not** need the CLI for normal app usage. The packaged desktop app bundles and manages the local daemon on its own.
+
+Use the CLI when you want power-user workflows like:
+
+- `todu daemon status`
+- `todu daemon start|stop|restart`
+- scripting or automation
+- plugin or daemon-oriented local operations
 
 Prerequisites:
 
 - Node.js 20+
 - npm
 
-Install:
+Install the latest CLI:
 
 ```bash
 npm install -g @todu/cli
+```
+
+Install the CLI version matching a desktop release:
+
+```bash
+npm install -g @todu/cli@<desktop-version>
 ```
 
 Upgrade:
@@ -34,6 +49,12 @@ Upgrade:
 ```bash
 npm install -g @todu/cli@latest
 ```
+
+Compatibility guidance:
+
+- Preferred: keep the CLI version aligned with your desktop app version.
+- The desktop app version is shown in Settings and in release notes.
+- The CLI and desktop app both use the same default user-local config and data paths, so the CLI targets the same local daemon and dataset unless you override paths with env vars.
 
 ### Build from source
 
@@ -94,6 +115,8 @@ If you are working on Electron UI:
 ```bash
 make dev-electron
 ```
+
+For daemon path details and overrides, see [docs/cli-daemon-usage.md](docs/cli-daemon-usage.md).
 
 ## Key docs
 
