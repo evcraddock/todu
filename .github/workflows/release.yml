@@ -349,6 +349,7 @@ jobs:
           }
           publish_package packages/core
           publish_package packages/engine
+          publish_package packages/daemon
           publish_package packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -368,7 +369,15 @@ jobs:
             echo "::error::${pkg}@${VERSION} not found on registry after 5 attempts"
             return 1
           }
+
           verify_package @todu/core
           verify_package @todu/engine
+          verify_package @todu/daemon
           verify_package @todu/cli
-          echo "✅ All packages published at ${VERSION}"
+
+          CLI_WORKSPACE_DEPS=$(node -p 'const pkg=require("./packages/cli/package.json"); Object.keys(pkg.dependencies ?? {}).filter((name) => name.startsWith("@todu/")).join(" ")')
+          for pkg in $CLI_WORKSPACE_DEPS; do
+            verify_package "$pkg"
+          done
+
+          echo "✅ All published CLI workspace dependencies are available at ${VERSION}"
