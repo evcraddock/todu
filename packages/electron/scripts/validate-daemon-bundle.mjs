@@ -5,13 +5,14 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const unpackedDir = args.get("unpacked-dir") ? path.resolve(args.get("unpacked-dir")) : null;
-const appBundle = args.get("app-bundle") ? path.resolve(args.get("app-bundle")) : null;
+const appBundleArg = args.get("app-bundle");
+const appBundle = appBundleArg ? resolveAppBundlePath(path.resolve(appBundleArg)) : null;
 const executableArg = args.get("executable");
 const appPathArg = args.get("app-path");
 const executablePath = executableArg
   ? path.resolve(executableArg)
   : appBundle
-    ? path.join(appBundle, "Contents", "MacOS", "todu")
+    ? resolveMacExecutablePath(appBundle)
     : unpackedDir
       ? resolveExecutablePath(unpackedDir)
       : null;
@@ -32,9 +33,6 @@ if (!executablePath || !appPath) {
 const entrypointPath = path.join(appPath, "dist", "daemon", "entrypoint.js");
 if (!fs.existsSync(executablePath)) {
   throw new Error(`Packaged executable not found: ${executablePath}`);
-}
-if (!fs.existsSync(entrypointPath)) {
-  throw new Error(`Bundled daemon entrypoint not found: ${entrypointPath}`);
 }
 
 const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), "todu-electron-daemon-bundle-"));
@@ -129,13 +127,25 @@ function resolveExecutablePath(unpackedDir) {
     "libvk_swiftshader.so",
     "libvulkan.so.1",
     "vk_swiftshader_icd.json",
+    "resources.pak",
+    "snapshot_blob.bin",
+    "v8_context_snapshot.bin",
+    "vk_swiftshader_icd.json",
   ]);
-  const candidates = fs
-    .readdirSync(unpackedDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
+  const entries = fs.readdirSync(unpackedDir, { withFileTypes: true }).filter((entry) => entry.isFile());
+  const candidates = entries
     .map((entry) => entry.name)
     .filter((name) => !ignoredNames.has(name))
-    .filter((name) => fs.statSync(path.join(unpackedDir, name)).mode & 0o111);
+    .filter((name) => !name.endsWith(".dll"))
+    .filter((name) => !name.endsWith(".pak"))
+    .filter((name) => !name.endsWith(".bin"))
+    .filter((name) => {
+      const fullPath = path.join(unpackedDir, name);
+      if (process.platform === "win32") {
+        return name.endsWith(".exe");
+      }
+      return (fs.statSync(fullPath).mode & 0o111) !== 0;
+    });
 
   if (candidates.length !== 1) {
     throw new Error(
@@ -144,4 +154,86 @@ function resolveExecutablePath(unpackedDir) {
   }
 
   return path.join(unpackedDir, candidates[0]);
+}
+
+function resolveAppBundlePath(appBundlePath) {
+  if (fs.existsSync(appBundlePath)) {
+    return appBundlePath;
+  }
+
+  const searchRoot = findExistingParentDirectory(appBundlePath);
+  if (!searchRoot) {
+    throw new Error(`App bundle search root not found for: ${appBundlePath}`);
+  }
+
+  const bundleName = path.basename(appBundlePath);
+  const bundleStem = path.basename(bundleName, ".app");
+  const candidates = findAppBundles(searchRoot).filter((bundlePath) => {
+    const name = path.basename(bundlePath);
+    return name === bundleName || name.startsWith(bundleStem);
+  });
+
+  if (candidates.length !== 1) {
+    throw new Error(
+      `Expected exactly one app bundle under ${searchRoot} for ${bundleName}, found: ${candidates.join(", ") || "none"}`,
+    );
+  }
+
+  return candidates[0];
+}
+
+function findExistingParentDirectory(targetPath) {
+  let currentPath = targetPath;
+  while (currentPath !== path.dirname(currentPath)) {
+    currentPath = path.dirname(currentPath);
+    if (fs.existsSync(currentPath)) {
+      return currentPath;
+    }
+  }
+  return fs.existsSync(currentPath) ? currentPath : null;
+}
+
+function findAppBundles(rootDir) {
+  const bundles = [];
+  const queue = [rootDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const entryPath = path.join(currentDir, entry.name);
+      if (entry.name.endsWith(".app")) {
+        bundles.push(entryPath);
+        continue;
+      }
+
+      queue.push(entryPath);
+    }
+  }
+
+  return bundles;
+}
+
+function resolveMacExecutablePath(appBundlePath) {
+  const macOsDir = path.join(appBundlePath, "Contents", "MacOS");
+  if (!fs.existsSync(macOsDir)) {
+    throw new Error(`App bundle executable directory not found: ${macOsDir}`);
+  }
+
+  const candidates = fs
+    .readdirSync(macOsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name);
+
+  if (candidates.length !== 1) {
+    throw new Error(
+      `Expected exactly one macOS executable in ${macOsDir}, found: ${candidates.join(", ") || "none"}`,
+    );
+  }
+
+  return path.join(macOsDir, candidates[0]);
 }
