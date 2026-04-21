@@ -8,12 +8,39 @@ todu is a local-first task management project (CLI + Electron) backed by a local
 
 ### Desktop app (recommended on Linux and macOS)
 
-Download the latest desktop release for your platform from GitHub Releases:
-
-- Linux: `.AppImage` or `.deb`
-- macOS: `.dmg`
-
 Desktop releases bundle the local daemon runtime. Launching the packaged app starts and manages that bundled daemon automatically for normal desktop usage.
+
+#### Linux install
+
+Install the latest Linux desktop build with AppImage integration and a launcher entry:
+
+```bash
+curl -fsSL https://github.com/evcraddock/todu/releases/latest/download/install-todu-linux.sh | bash
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://github.com/evcraddock/todu/releases/download/v0.18.0/install-todu-linux.sh | bash -s -- 0.18.0
+```
+
+This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher in `~/.local/share/applications`.
+
+#### macOS install
+
+Install the latest macOS desktop build into `/Applications`:
+
+```bash
+curl -fsSL https://github.com/evcraddock/todu/releases/latest/download/install-todu-mac.sh | bash
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://github.com/evcraddock/todu/releases/download/v0.18.0/install-todu-mac.sh | bash -s -- 0.18.0
+```
+
+This downloads the release DMG, mounts it, copies `todu.app` into `/Applications`, and unmounts the DMG.
 
 Windows desktop packaging is not released yet because the local daemon transport is currently implemented for Unix domain sockets. Windows users should use the CLI companion for now.
 
