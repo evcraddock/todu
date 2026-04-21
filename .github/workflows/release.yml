@@ -193,7 +193,7 @@ jobs:
             dist/installers/mac/**
 
   build-windows:
-    name: Build Windows
+    name: Build Windows CLI
     needs: validate
     runs-on: windows-latest
     steps:
@@ -223,27 +223,11 @@ jobs:
           cp dist/cli/todu-cli-windows-x64.exe dist/cli/todu.exe
         shell: bash
 
-      - name: Build Electron (Windows)
-        run: |
-          make build-electron
-          npm run --workspace=packages/electron dist:win:dir
-          npm run --workspace=packages/electron validate:daemon-bundle:win
-          npm run --workspace=packages/electron dist:win
-        shell: bash
-
       - name: Upload CLI binary
         uses: actions/upload-artifact@v4
         with:
           name: cli-windows
           path: dist/cli/todu-cli-windows-x64.exe
-
-      - name: Upload Electron installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-windows
-          path: |
-            dist/installers/*.exe
-            dist/installers/win-unpacked/**
 
   # ===========================================================================
   # Release: create GitHub Release with all artifacts
