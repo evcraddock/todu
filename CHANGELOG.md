@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-21
+
+This release finishes the desktop-first install flow for todu and stabilizes the release pipeline around that distribution model. Desktop builds now bundle and validate the daemon more robustly, Linux and macOS users get copy-pasteable installer flows, and npm-installed CLI users get a fix for daemon startup through standard global symlink launchers.
+
+### Added
+- Bundled the local daemon into Electron desktop distributions so packaged installs no longer require separate daemon setup (#424)
+- Added Electron-managed daemon lifecycle handling for packaged desktop builds (#425)
+- Added release-time validation for bundled desktop runtime packaging (#426)
+- Added documented CLI companion install guidance for desktop users (#427)
+- Added Linux and macOS desktop installer helper scripts with README copy-paste install flows (#436)
+
+### Changed
+- Added explicit desktop-facing guidance for protocol mismatch and compatibility failures in packaged Electron apps (#428)
+- Expanded bundled-daemon release validation across Linux and macOS release builds and clarified Windows desktop limitations (#428, #430, #431)
+- Clarified README install guidance so helper-script installs use stable script URLs and versioned installs keep working even for older release assets (#437)
+
+### Fixed
+- Repaired release workflow changelog extraction so the GitHub Actions release workflow parses correctly (#429)
+- Fixed packaged-daemon bundle validation across platform-specific release layouts (#430)
+- Published `@todu/daemon` as part of the npm release flow so `npm install -g @todu/cli` succeeds (#433)
+- Fixed CLI daemon direct-mode self-reexec so npm global symlink launchers like `todu` work without requiring a `.js` suffix (#439)
+- Limited Windows releases to the supported CLI path instead of shipping a broken desktop bundle (#431)
+
 ## [0.18.0] - 2026-04-20
 
 This release makes todu much easier to install and use as a desktop app. The desktop builds now bundle and manage the local daemon, the CLI is documented as an optional power-user companion, and release validation now checks the bundled runtime across platforms.
