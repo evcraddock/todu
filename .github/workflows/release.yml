@@ -272,7 +272,7 @@ Release v${VERSION}
 
 ## Install
 - Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
-- CLI: install with `npm install -g @todu/cli`.
+- CLI (optional power-user companion): install the matching version with `npm install -g @todu/cli@${VERSION}` or use `npm install -g @todu/cli` for latest.
 EOF
 )
             fi
@@ -282,7 +282,7 @@ Release v${VERSION}
 
 ## Install
 - Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
-- CLI: install with `npm install -g @todu/cli`.
+- CLI (optional power-user companion): install the matching version with `npm install -g @todu/cli@${VERSION}` or use `npm install -g @todu/cli` for latest.
 EOF
 )
           fi
