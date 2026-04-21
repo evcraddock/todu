@@ -896,15 +896,11 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
 function resolveSelfInvocationArgs(commandArgs: string[]): string[] {
   const scriptPath = process.argv[1];
 
-  if (scriptPath && isNodeScriptEntrypointPath(scriptPath) && isExistingFile(scriptPath)) {
+  if (scriptPath && isExistingFile(scriptPath)) {
     return [scriptPath, ...commandArgs];
   }
 
   return commandArgs;
-}
-
-function isNodeScriptEntrypointPath(filePath: string): boolean {
-  return filePath.endsWith(".js") || filePath.endsWith(".mjs") || filePath.endsWith(".cjs");
 }
 
 function isExistingFile(filePath: string): boolean {
