@@ -42,13 +42,13 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
 
   function runCli(
     args: string[],
-    options: { env?: Record<string, string>; timeoutMs?: number } = {},
+    options: { env?: Record<string, string>; timeoutMs?: number; launcherPath?: string } = {},
   ): {
     status: number;
     stdout: string;
     stderr: string;
   } {
-    const completed = spawnSync(process.execPath, [cliPath, ...args], {
+    const completed = spawnSync(process.execPath, [options.launcherPath ?? cliPath, ...args], {
       cwd: rootDir,
       env: {
         ...process.env,
@@ -144,11 +144,8 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     expect(afterStop.running).toBe(false);
   });
 
-  it("daemon start/stop/restart commands manage daemon in direct mode", async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-lifecycle-test-"));
-    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
-
-    const start = runCli(["daemon", "start"]);
+  async function expectManagedDirectLifecycle(launcherPath?: string): Promise<void> {
+    const start = runCli(["daemon", "start"], { launcherPath });
     expect(start.status).toBe(0);
     expect(start.stdout).toContain("Daemon start: started managed daemon process");
 
@@ -157,25 +154,41 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     await waitForFileContains(stdoutLogPath, '"message":"daemon process started"', 5000);
     expect(fs.existsSync(stderrLogPath)).toBe(true);
 
-    const statusAfterStart = runCli(["--format", "json", "daemon", "status"]);
+    const statusAfterStart = runCli(["--format", "json", "daemon", "status"], { launcherPath });
     expect(statusAfterStart.status).toBe(0);
     expect(JSON.parse(statusAfterStart.stdout).running).toBe(true);
 
-    const restart = runCli(["daemon", "restart"]);
+    const restart = runCli(["daemon", "restart"], { launcherPath });
     expect(restart.status).toBe(0);
     expect(restart.stdout).toContain("Daemon restart: started managed daemon process");
 
-    const statusAfterRestart = runCli(["--format", "json", "daemon", "status"]);
+    const statusAfterRestart = runCli(["--format", "json", "daemon", "status"], { launcherPath });
     expect(statusAfterRestart.status).toBe(0);
     expect(JSON.parse(statusAfterRestart.stdout).running).toBe(true);
 
-    const stop = runCli(["daemon", "stop"]);
+    const stop = runCli(["daemon", "stop"], { launcherPath });
     expect(stop.status).toBe(0);
     expect(stop.stdout).toContain("Daemon stop: stopped managed daemon process");
 
-    const statusAfterStop = runCli(["--format", "json", "daemon", "status"]);
+    const statusAfterStop = runCli(["--format", "json", "daemon", "status"], { launcherPath });
     expect(statusAfterStop.status).toBe(0);
     expect(JSON.parse(statusAfterStop.stdout).running).toBe(false);
+  }
+
+  it("daemon start/stop/restart commands manage daemon in direct mode", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-lifecycle-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+
+    await expectManagedDirectLifecycle();
+  });
+
+  it("daemon start works when invoked through a symlinked launcher without a js suffix", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-symlink-lifecycle-test-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
+    const launcherPath = path.join(tmpDir, "todu");
+    fs.symlinkSync(cliPath, launcherPath);
+
+    await expectManagedDirectLifecycle(launcherPath);
   });
 
   it("daemon start rotates oversized direct log files on startup", async () => {
