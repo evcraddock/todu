@@ -6,15 +6,16 @@ todu is a local-first task management project (CLI + Electron) backed by a local
 
 ## Install
 
-### Desktop app (recommended)
+### Desktop app (recommended on Linux and macOS)
 
 Download the latest desktop release for your platform from GitHub Releases:
 
 - Linux: `.AppImage` or `.deb`
 - macOS: `.dmg`
-- Windows: `.exe`
 
 Desktop releases bundle the local daemon runtime. Launching the packaged app starts and manages that bundled daemon automatically for normal desktop usage.
+
+Windows desktop packaging is not released yet because the local daemon transport is currently implemented for Unix domain sockets. Windows users should use the CLI companion for now.
 
 ### CLI companion (optional)
 
