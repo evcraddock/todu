@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import {
   buildReconnectRefreshEvents,
@@ -14,7 +14,7 @@ import {
   type DaemonConnectionResult,
   resolveDaemonSocketPath,
 } from "./daemon-connection-manager.js";
-import { startBundledDaemonProcess } from "./daemon-runtime.js";
+import { createPackagedDaemonLifecycle } from "./daemon-lifecycle.js";
 import { ensureDaemonReady } from "./daemon-startup.js";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
 import { registerIpcHandlers } from "./ipc.js";
@@ -57,6 +57,16 @@ async function init(): Promise<void> {
   const { storagePath } = loadElectronConfig();
   const socketPath = resolveDaemonSocketPath(storagePath);
 
+  const packagedDaemonLifecycle = app.isPackaged
+    ? createPackagedDaemonLifecycle({
+        appPath: app.getAppPath(),
+        socketPath,
+        onError: (message) => {
+          dialog.showErrorBox("todu daemon error", message);
+        },
+      })
+    : null;
+
   daemonConnectionManager = createDaemonConnectionManager({
     socketPath,
     hooks: {
@@ -74,6 +84,9 @@ async function init(): Promise<void> {
           dispatchRendererEvent(getMainWindow(), event);
         }
       },
+      onReconnectScheduled: (info) => {
+        packagedDaemonLifecycle?.handleReconnectScheduled(info);
+      },
       onEvent: (event) => {
         const rendererEvent = mapDaemonEventToRendererEvent(event);
         if (!rendererEvent) {
@@ -88,17 +101,10 @@ async function init(): Promise<void> {
 
   await ensureDaemonReady(daemonConnectionManager, {
     protocolVersion: DAEMON_PROTOCOL_VERSION,
-    startDaemon: app.isPackaged
-      ? () =>
-          startBundledDaemonProcess({
-            isPackaged: true,
-            appPath: app.getAppPath(),
-            socketPath,
-          })
-      : undefined,
-    unavailableHint: app.isPackaged
-      ? "todu could not start its bundled daemon. Relaunch the app or reinstall it if the problem persists."
-      : "Start it with 'todu daemon start' and relaunch Electron.",
+    startDaemon: packagedDaemonLifecycle?.startIfNeeded,
+    unavailableHint:
+      packagedDaemonLifecycle?.unavailableHint ??
+      "Start it with 'todu daemon start' and relaunch Electron.",
   });
 
   const daemonTodu = createDaemonToduClient(daemonConnectionManager);
@@ -149,7 +155,9 @@ app
   .whenReady()
   .then(init)
   .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
     console.error(error);
+    dialog.showErrorBox("todu startup failed", message);
     app.quit();
   });
 
