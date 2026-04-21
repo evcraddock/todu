@@ -71,6 +71,7 @@ PACKAGES=(
   "package.json"
   "packages/core/package.json"
   "packages/engine/package.json"
+  "packages/daemon/package.json"
   "packages/cli/package.json"
   "packages/electron/package.json"
 )
