@@ -4,7 +4,7 @@ set -euo pipefail
 
 REPO="evcraddock/todu"
 VERSION="${1:-latest}"
-INSTALL_DIR="${HOME}/Applications"
+INSTALL_DIR="${HOME}/.local/bin"
 ICON_DIR="${HOME}/.local/share/icons"
 DESKTOP_DIR="${HOME}/.local/share/applications"
 ARCH=$(uname -m)

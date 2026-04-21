@@ -24,7 +24,7 @@ Install a specific version:
 curl -fsSL https://github.com/evcraddock/todu/releases/download/v0.18.0/install-todu-linux.sh | bash -s -- 0.18.0
 ```
 
-This installs `todu.AppImage` into `~/Applications` and creates a desktop launcher in `~/.local/share/applications`.
+This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher in `~/.local/share/applications`.
 
 #### macOS install
 
