@@ -56,6 +56,30 @@ describe("ensureDaemonReady", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it("surfaces protocol mismatch with actionable guidance", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: false,
+      error: {
+        code: "PROTOCOL_MISMATCH",
+        message: "daemon protocol 2 does not match client protocol 1",
+      },
+    });
+
+    await expect(
+      ensureDaemonReady(
+        { request },
+        {
+          protocolVersion: "1",
+          maxAttempts: 2,
+          retryDelayMs: 0,
+          protocolMismatchHint: "Install matching desktop and CLI versions.",
+        },
+      ),
+    ).rejects.toThrow(
+      "Local daemon is incompatible (PROTOCOL_MISMATCH: daemon protocol 2 does not match client protocol 1). Install matching desktop and CLI versions.",
+    );
+  });
+
   it("surfaces bundled daemon startup failures", async () => {
     const request = vi.fn().mockResolvedValue({
       ok: false,

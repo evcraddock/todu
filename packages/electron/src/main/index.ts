@@ -105,6 +105,9 @@ async function init(): Promise<void> {
     unavailableHint:
       packagedDaemonLifecycle?.unavailableHint ??
       "Start it with 'todu daemon start' and relaunch Electron.",
+    protocolMismatchHint: app.isPackaged
+      ? "The bundled desktop app could not talk to the local daemon because their versions do not match. Reinstall or relaunch todu so the desktop app and daemon are updated together."
+      : "Update todu so the desktop app and local daemon use matching versions.",
   });
 
   const daemonTodu = createDaemonToduClient(daemonConnectionManager);
