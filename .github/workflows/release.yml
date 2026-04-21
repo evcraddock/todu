@@ -46,8 +46,8 @@ jobs:
           VERSION="${TAG#v}"
           echo "Tag: $TAG, Version: $VERSION"
 
-          # Check all package.json versions match
-          for pkg in packages/core packages/engine packages/cli; do
+          # Check all published package.json versions match
+          for pkg in packages/core packages/engine packages/daemon packages/cli; do
             PKG_VERSION=$(node -p "require('./$pkg/package.json').version")
             if [ "$PKG_VERSION" != "$VERSION" ]; then
               echo "::error::Version mismatch: $pkg has $PKG_VERSION, expected $VERSION"
