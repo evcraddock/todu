@@ -183,19 +183,21 @@ version: ## Show current version of all packages
 	@echo "Versions:"
 	@echo "  core:     $$(node -p "require('./packages/core/package.json').version")"
 	@echo "  engine:   $$(node -p "require('./packages/engine/package.json').version")"
+	@echo "  daemon:   $$(node -p "require('./packages/daemon/package.json').version")"
 	@echo "  cli:      $$(node -p "require('./packages/cli/package.json').version")"
 	@echo "  electron: $$(node -p "require('./packages/electron/package.json').version")"
 
 version-check: ## Verify all package versions match, including generated CLI version source
 	@V1=$$(node -p "require('./packages/core/package.json').version") && \
 	V2=$$(node -p "require('./packages/engine/package.json').version") && \
-	V3=$$(node -p "require('./packages/cli/package.json').version") && \
-	V4=$$(node -p "require('./packages/electron/package.json').version") && \
-	V5=$$(node -e "const fs=require('fs'); const src=fs.readFileSync('./packages/cli/src/version.ts','utf8'); const m=src.match(/VERSION = \\\"([^\\\"]+)\\\"/); if (!m) { process.exit(1); } process.stdout.write(m[1]);") && \
-	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ] && [ "$$V4" = "$$V5" ]; then \
+	V3=$$(node -p "require('./packages/daemon/package.json').version") && \
+	V4=$$(node -p "require('./packages/cli/package.json').version") && \
+	V5=$$(node -p "require('./packages/electron/package.json').version") && \
+	V6=$$(node -e "const fs=require('fs'); const src=fs.readFileSync('./packages/cli/src/version.ts','utf8'); const m=src.match(/VERSION = \\\"([^\\\"]+)\\\"/); if (!m) { process.exit(1); } process.stdout.write(m[1]);") && \
+	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ] && [ "$$V4" = "$$V5" ] && [ "$$V5" = "$$V6" ]; then \
 		echo "✅ All versions in sync at $$V1"; \
 	else \
-		echo "❌ Version mismatch: core=$$V1 engine=$$V2 cli=$$V3 electron=$$V4 cli_src=$$V5"; \
+		echo "❌ Version mismatch: core=$$V1 engine=$$V2 daemon=$$V3 cli=$$V4 electron=$$V5 cli_src=$$V6"; \
 		exit 1; \
 	fi
 
