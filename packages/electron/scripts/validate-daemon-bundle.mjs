@@ -5,28 +5,36 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 const unpackedDir = args.get("unpacked-dir") ? path.resolve(args.get("unpacked-dir")) : null;
+const appBundle = args.get("app-bundle") ? path.resolve(args.get("app-bundle")) : null;
 const executableArg = args.get("executable");
 const appPathArg = args.get("app-path");
 const executablePath = executableArg
   ? path.resolve(executableArg)
-  : unpackedDir
-    ? resolveExecutablePath(unpackedDir)
-    : null;
+  : appBundle
+    ? path.join(appBundle, "Contents", "MacOS", "todu")
+    : unpackedDir
+      ? resolveExecutablePath(unpackedDir)
+      : null;
 const appPath = appPathArg
   ? path.resolve(appPathArg)
-  : unpackedDir
-    ? path.join(unpackedDir, "resources", "app.asar")
-    : null;
+  : appBundle
+    ? path.join(appBundle, "Contents", "Resources", "app.asar")
+    : unpackedDir
+      ? path.join(unpackedDir, "resources", "app.asar")
+      : null;
 
 if (!executablePath || !appPath) {
   throw new Error(
-    "Usage: node scripts/validate-daemon-bundle.mjs (--unpacked-dir <path> | --executable <path> --app-path <path>)",
+    "Usage: node scripts/validate-daemon-bundle.mjs (--unpacked-dir <path> | --app-bundle <path> | --executable <path> --app-path <path>)",
   );
 }
 
 const entrypointPath = path.join(appPath, "dist", "daemon", "entrypoint.js");
 if (!fs.existsSync(executablePath)) {
   throw new Error(`Packaged executable not found: ${executablePath}`);
+}
+if (!fs.existsSync(entrypointPath)) {
+  throw new Error(`Bundled daemon entrypoint not found: ${entrypointPath}`);
 }
 
 const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), "todu-electron-daemon-bundle-"));
@@ -120,6 +128,7 @@ function resolveExecutablePath(unpackedDir) {
     "libGLESv2.so",
     "libvk_swiftshader.so",
     "libvulkan.so.1",
+    "vk_swiftshader_icd.json",
   ]);
   const candidates = fs
     .readdirSync(unpackedDir, { withFileTypes: true })

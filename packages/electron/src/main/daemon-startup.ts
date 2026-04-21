@@ -6,6 +6,7 @@ export interface EnsureDaemonReadyOptions {
   retryDelayMs?: number;
   startDaemon?: () => Promise<void>;
   unavailableHint?: string;
+  protocolMismatchHint?: string;
 }
 
 export async function ensureDaemonReady(
@@ -28,6 +29,12 @@ export async function ensureDaemonReady(
     }
 
     lastError = `${hello.error.code}: ${hello.error.message}`;
+
+    if (hello.error.code === "PROTOCOL_MISMATCH") {
+      throw new Error(
+        `Local daemon is incompatible (${lastError}). ${options.protocolMismatchHint ?? "Update todu so the desktop app and local daemon use matching versions."}`,
+      );
+    }
 
     if (!startAttempted && hello.error.code === "DAEMON_UNAVAILABLE" && options.startDaemon) {
       startAttempted = true;

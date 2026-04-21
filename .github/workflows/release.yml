@@ -172,6 +172,8 @@ jobs:
       - name: Build Electron (macOS)
         run: |
           make build-electron
+          npm run --workspace=packages/electron dist:mac:dir
+          npm run --workspace=packages/electron validate:daemon-bundle:mac
           npm run --workspace=packages/electron dist:mac
 
       - name: Upload CLI binaries
@@ -186,7 +188,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-macos
-          path: dist/installers/*.dmg
+          path: |
+            dist/installers/*.dmg
+            dist/installers/mac/**
 
   build-windows:
     name: Build Windows
@@ -222,6 +226,8 @@ jobs:
       - name: Build Electron (Windows)
         run: |
           make build-electron
+          npm run --workspace=packages/electron dist:win:dir
+          npm run --workspace=packages/electron validate:daemon-bundle:win
           npm run --workspace=packages/electron dist:win
         shell: bash
 
@@ -235,7 +241,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-windows
-          path: dist/installers/*.exe
+          path: |
+            dist/installers/*.exe
+            dist/installers/win-unpacked/**
 
   # ===========================================================================
   # Release: create GitHub Release with all artifacts
