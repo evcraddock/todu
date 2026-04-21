@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-20
+
+This release makes todu much easier to install and use as a desktop app. The desktop builds now bundle and manage the local daemon, the CLI is documented as an optional power-user companion, and release validation now checks the bundled runtime across platforms.
+
+### Added
+- Bundled the local daemon into Electron desktop distributions so packaged installs no longer require a separate daemon setup (#424)
+- Added Electron-managed daemon startup and reconnect handling for packaged desktop builds (#425)
+- Added release-time validation for bundled desktop runtime packaging and startup compatibility (#426)
+- Added documented CLI companion install flow with matching-version guidance for desktop users (#427)
+
+### Changed
+- Clarified desktop-first installation guidance and repositioned source builds as a development workflow (#426, #427)
+- Added explicit packaged-app guidance for daemon protocol mismatch and compatibility failures (#428)
+- Expanded bundled-daemon release validation coverage across Linux, macOS, and Windows workflows (#428)
+
 ## [0.17.2] - 2026-04-19
 
 This release focuses on sync and storage reliability. It improves assignee conflict handling and makes join/storage migration behavior safer and easier to debug.
