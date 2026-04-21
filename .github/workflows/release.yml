@@ -274,28 +274,19 @@ jobs:
           if [ -f CHANGELOG.md ]; then
             # Extract content between this version header and the next
             BODY=$(awk "/^## .*${VERSION//./\\.}/ {found=1; next} /^## / {if(found) exit} found {print}" CHANGELOG.md)
-            if [ -z "$BODY" ]; then
-              BODY=$(cat <<EOF
-Release v${VERSION}
-
-## Install
-- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
-- CLI (optional power-user companion): install the matching version with `npm install -g @todu/cli@${VERSION}` or use `npm install -g @todu/cli` for latest.
-EOF
-)
-            fi
-          else
-            BODY=$(cat <<EOF
-Release v${VERSION}
-
-## Install
-- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
-- CLI (optional power-user companion): install the matching version with `npm install -g @todu/cli@${VERSION}` or use `npm install -g @todu/cli` for latest.
-EOF
-)
           fi
+
+          if [ -z "$BODY" ]; then
+            BODY=$(printf '%s\n' \
+              "Release v${VERSION}" \
+              "" \
+              "## Install" \
+              "- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime." \
+              "- CLI (optional power-user companion): install the matching version with npm install -g @todu/cli@${VERSION} or use npm install -g @todu/cli for latest.")
+          fi
+
           # Write to file to preserve newlines
-          echo "$BODY" > release-notes.md
+          printf '%s\n' "$BODY" > release-notes.md
           echo "Changelog extracted:"
           cat release-notes.md
 
