@@ -291,6 +291,11 @@ jobs:
           cp artifacts/electron-macos/*.dmg release-assets/ 2>/dev/null || true
           cp artifacts/electron-windows/*.exe release-assets/ 2>/dev/null || true
 
+          # Desktop installer helpers
+          cp scripts/install-linux.sh release-assets/install-todu-linux.sh
+          cp scripts/install-mac.sh release-assets/install-todu-mac.sh
+          chmod +x release-assets/install-todu-linux.sh release-assets/install-todu-mac.sh
+
           echo "Release assets:"
           ls -lh release-assets/
 
