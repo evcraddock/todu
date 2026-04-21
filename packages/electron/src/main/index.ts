@@ -14,6 +14,7 @@ import {
   type DaemonConnectionResult,
   resolveDaemonSocketPath,
 } from "./daemon-connection-manager.js";
+import { startBundledDaemonProcess } from "./daemon-runtime.js";
 import { ensureDaemonReady } from "./daemon-startup.js";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
 import { registerIpcHandlers } from "./ipc.js";
@@ -54,9 +55,10 @@ function assertRequestOk<T>(
 
 async function init(): Promise<void> {
   const { storagePath } = loadElectronConfig();
+  const socketPath = resolveDaemonSocketPath(storagePath);
 
   daemonConnectionManager = createDaemonConnectionManager({
-    socketPath: resolveDaemonSocketPath(storagePath),
+    socketPath,
     hooks: {
       onConnected: async ({ request }) => {
         const hello = await request("daemon.hello", {
@@ -86,6 +88,17 @@ async function init(): Promise<void> {
 
   await ensureDaemonReady(daemonConnectionManager, {
     protocolVersion: DAEMON_PROTOCOL_VERSION,
+    startDaemon: app.isPackaged
+      ? () =>
+          startBundledDaemonProcess({
+            isPackaged: true,
+            appPath: app.getAppPath(),
+            socketPath,
+          })
+      : undefined,
+    unavailableHint: app.isPackaged
+      ? "todu could not start its bundled daemon. Relaunch the app or reinstall it if the problem persists."
+      : "Start it with 'todu daemon start' and relaunch Electron.",
   });
 
   const daemonTodu = createDaemonToduClient(daemonConnectionManager);

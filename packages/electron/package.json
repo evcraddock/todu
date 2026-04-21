@@ -16,8 +16,10 @@
     "preview": "electron-vite preview",
     "dist": "electron-builder --config electron-builder.yml",
     "dist:linux": "electron-builder --config electron-builder.yml --linux",
+    "dist:linux:dir": "electron-builder --config electron-builder.yml --linux dir",
     "dist:mac": "electron-builder --config electron-builder.yml --mac",
-    "dist:win": "electron-builder --config electron-builder.yml --win"
+    "dist:win": "electron-builder --config electron-builder.yml --win",
+    "validate:daemon-bundle:linux": "node scripts/validate-daemon-bundle.mjs --unpacked-dir ../../dist/installers/linux-unpacked"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.66.1",
