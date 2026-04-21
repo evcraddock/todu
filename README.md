@@ -6,22 +6,49 @@ todu is a local-first task management project (CLI + Electron) backed by a local
 
 ## Install
 
-### Prerequisites
+### Desktop app (recommended)
+
+Download the latest desktop release for your platform from GitHub Releases:
+
+- Linux: `.AppImage` or `.deb`
+- macOS: `.dmg`
+- Windows: `.exe`
+
+Desktop releases bundle the local daemon runtime. Launching the packaged app starts and manages that bundled daemon automatically for normal desktop usage.
+
+### CLI
+
+Prerequisites:
 
 - Node.js 20+
 - npm
-- Bun 1.0+ (only needed for standalone CLI binaries)
+
+Install:
+
+```bash
+npm install -g @todu/cli
+```
+
+Upgrade:
+
+```bash
+npm install -g @todu/cli@latest
+```
 
 ### Build from source
+
+Additional prerequisite for standalone CLI binaries:
+
+- Bun 1.0+
+
+Build workspace packages:
 
 ```bash
 npm install
 make build
 ```
 
-### Install desktop application (Linux/macOS)
-
-From source checkout:
+Build/install desktop app from a source checkout:
 
 ```bash
 make dist

@@ -117,6 +117,8 @@ jobs:
       - name: Build Electron (linux)
         run: |
           make build-electron
+          npm run --workspace=packages/electron dist:linux:dir
+          npm run --workspace=packages/electron validate:daemon-bundle:linux
           npm run --workspace=packages/electron dist:linux -- --linux AppImage deb
 
       - name: Upload CLI binaries
@@ -134,6 +136,7 @@ jobs:
           path: |
             dist/installers/*.AppImage
             dist/installers/*.deb
+            dist/installers/linux-unpacked/**
 
   build-macos:
     name: Build macOS
@@ -264,10 +267,24 @@ jobs:
             # Extract content between this version header and the next
             BODY=$(awk "/^## .*${VERSION//./\\.}/ {found=1; next} /^## / {if(found) exit} found {print}" CHANGELOG.md)
             if [ -z "$BODY" ]; then
-              BODY="Release v${VERSION}"
+              BODY=$(cat <<EOF
+Release v${VERSION}
+
+## Install
+- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
+- CLI: install with `npm install -g @todu/cli`.
+EOF
+)
             fi
           else
-            BODY="Release v${VERSION}"
+            BODY=$(cat <<EOF
+Release v${VERSION}
+
+## Install
+- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime.
+- CLI: install with `npm install -g @todu/cli`.
+EOF
+)
           fi
           # Write to file to preserve newlines
           echo "$BODY" > release-notes.md
