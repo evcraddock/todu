@@ -22,15 +22,19 @@ case "$ARCH" in
 esac
 
 if [[ "$VERSION" == "latest" ]]; then
-  BASE_URL="https://github.com/${REPO}/releases/latest/download"
-  DMG_NAME="todu-mac-${DMG_ARCH}.dmg"
+  TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" | sed 's#/$##' | awk -F/ '{print $NF}')
+  if [[ -z "$TAG" ]]; then
+    echo "error: failed to resolve latest todu release tag"
+    exit 1
+  fi
+  VERSION="${TAG#v}"
 else
   TAG="v${VERSION#v}"
   VERSION="${VERSION#v}"
-  BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
-  DMG_NAME="todu-${VERSION}-mac-${DMG_ARCH}.dmg"
 fi
 
+BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+DMG_NAME="todu-${VERSION}-mac-${DMG_ARCH}.dmg"
 DMG_URL="${BASE_URL}/${DMG_NAME}"
 TMP_DIR=$(mktemp -d)
 DMG_PATH="${TMP_DIR}/${DMG_NAME}"
