@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-21
+
+This release improves first-run setup and installation polish. New users now get an interactive `todu config init` flow for bootstrap identity and optional sync setup, while desktop and CLI install paths are more robust across packaged builds, npm installs, and release tooling.
+
+### Added
+- Added an interactive `todu config init` flow that collects owner identity and optional remote sync configuration during project-local setup (#441)
+- Added desktop installer helper scripts and copy-paste install flows for Linux and macOS users (#436)
+- Added bundled desktop runtime validation and Electron-managed daemon lifecycle support for packaged installs (#424, #425, #426)
+- Added clearer CLI companion install guidance and install-flow validation for desktop users (#427, #428)
+
+### Changed
+- Clarified README install guidance so installer script URLs remain stable across releases (#437)
+
+### Fixed
+- Fixed release workflow changelog extraction so automated releases parse changelog content correctly (#429)
+- Fixed packaged daemon validation across platform-specific release layouts (#430)
+- Fixed Windows release packaging to ship only the supported CLI path instead of a broken desktop bundle (#431)
+- Fixed npm global CLI installs by publishing the daemon package and supporting symlink launcher re-exec paths (#433, #439)
+
 ## [0.19.0] - 2026-04-21
 
 This release finishes the desktop-first install flow for todu and stabilizes the release pipeline around that distribution model. Desktop builds now bundle and validate the daemon more robustly, Linux and macOS users get copy-pasteable installer flows, and npm-installed CLI users get a fix for daemon startup through standard global symlink launchers.
