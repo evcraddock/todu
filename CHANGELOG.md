@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-04-23
+
+This release closes the sync-provider rollout compatibility window. todu now supports the final v3-only plugin contract, removes deprecated v2 host/runtime paths, and updates the canonical docs to match the supported boundary.
+
+### Changed
+- Removed legacy sync-provider API v2 support from core and daemon so supported sync plugins now target a single v3-only host/runtime contract (#443)
+- Removed obsolete internal compatibility helpers and transition-only sync-provider documentation from the rollout period (#443)
+
 ## [0.20.0] - 2026-04-21
 
 This release improves first-run setup and installation polish. New users now get an interactive `todu config init` flow for bootstrap identity and optional sync setup, while desktop and CLI install paths are more robust across packaged builds, npm installs, and release tooling.
