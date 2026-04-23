@@ -2,14 +2,11 @@ import crypto from "node:crypto";
 import {
   type Actor,
   type ActorId,
-  type AnySyncProvider,
   createActorId,
   createProjectId,
   type ExportedCommentInput,
   type ExportedTaskInput,
   type ExternalActorRef,
-  type ExternalComment,
-  type ExternalTask,
   type ImportedCommentInput,
   type ImportedContentApproval,
   type ImportedTaskInput,
@@ -19,14 +16,11 @@ import {
   MAX_NOTE_CONTENT_LENGTH,
   type Note,
   type Project,
-  SYNC_PROVIDER_API_VERSION_V2,
-  SYNC_PROVIDER_API_VERSION_V3,
+  SYNC_PROVIDER_API_VERSION,
   type SyncProviderPushCommentLink,
   type SyncProviderPushTaskLink,
-  type SyncProviderV2,
   type SyncProviderV3,
   type Task,
-  type TaskPushPayload,
   type ToduError,
 } from "@todu/core";
 import type { Todu, ToduWithInternalTools } from "@todu/engine";
@@ -62,7 +56,7 @@ export interface CreateSyncPluginWorkerRuntimeOptions {
   pluginVersion: string;
   modulePath: string;
   authorityId: string;
-  provider: AnySyncProvider;
+  provider: SyncProviderV3;
   providerApiVersion?: number;
   config: SyncPluginExecutionConfig;
   logger: DaemonLogger;
@@ -180,7 +174,7 @@ export function createSyncPluginWorkerRuntime(
   const clearTimeoutFn = options.scheduler?.clearTimeoutFn ?? clearTimeout;
   const now = options.scheduler?.now ?? (() => Date.now());
   const runtimeLogger = options.logger.child(`sync-plugin.${options.pluginName}`);
-  const providerApiVersion = options.providerApiVersion ?? SYNC_PROVIDER_API_VERSION_V2;
+  const providerApiVersion = options.providerApiVersion ?? SYNC_PROVIDER_API_VERSION;
 
   return {
     start() {
@@ -290,93 +284,48 @@ export function createSyncPluginWorkerRuntime(
 
         await ensureInitialized();
 
+        if (providerApiVersion !== SYNC_PROVIDER_API_VERSION) {
+          throw new Error(
+            `unsupported sync provider API version at runtime: ${providerApiVersion}`,
+          );
+        }
+
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
-          if (providerApiVersion === SYNC_PROVIDER_API_VERSION_V2) {
-            const provider = options.provider as SyncProviderV2;
-            const pullResult = await provider.pull(binding, project);
+          const pullResult = await options.provider.pull(binding, project);
 
-            if (pullResult.tasks.length > 0) {
-              const pullStats = await applyPulledTasksV2(
-                activeTodu,
-                actorState,
-                provider,
-                project,
-                pullResult.tasks,
-              );
-              project = pullStats.project;
-            }
-
-            if (pullResult.comments && pullResult.comments.length > 0) {
-              await applyPulledCommentsV2(activeTodu, actorState, project.id, pullResult.comments);
-            }
-          } else if (providerApiVersion === SYNC_PROVIDER_API_VERSION_V3) {
-            const provider = options.provider as SyncProviderV3;
-            const pullResult = await provider.pull(binding, project);
-
-            if (pullResult.tasks.length > 0) {
-              const pullStats = await applyPulledTasksV3(
-                activeTodu,
-                actorState,
-                project,
-                pullResult.tasks,
-              );
-              project = pullStats.project;
-            }
-
-            if (pullResult.comments && pullResult.comments.length > 0) {
-              await applyPulledCommentsV3(activeTodu, actorState, project.id, pullResult.comments);
-            }
-          } else {
-            throw new Error(
-              `unsupported sync provider API version at runtime: ${providerApiVersion}`,
+          if (pullResult.tasks.length > 0) {
+            const pullStats = await applyPulledTasksV3(
+              activeTodu,
+              actorState,
+              project,
+              pullResult.tasks,
             );
+            project = pullStats.project;
+          }
+
+          if (pullResult.comments && pullResult.comments.length > 0) {
+            await applyPulledCommentsV3(activeTodu, actorState, project.id, pullResult.comments);
           }
         }
 
         if (binding.strategy === "push" || binding.strategy === "bidirectional") {
-          if (providerApiVersion === SYNC_PROVIDER_API_VERSION_V2) {
-            const provider = options.provider as SyncProviderV2;
-            const pushPayloads = await buildPushPayloadsV2(
-              activeTodu,
-              actorState,
-              project,
-              runtimeLogger,
-            );
-            const pushResult = await provider.push(binding, pushPayloads, project);
-            if (
-              !pushResult ||
-              !Array.isArray(pushResult.commentLinks) ||
-              !Array.isArray(pushResult.taskLinks)
-            ) {
-              throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
-            }
-
-            await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
-            await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
-          } else if (providerApiVersion === SYNC_PROVIDER_API_VERSION_V3) {
-            const provider = options.provider as SyncProviderV3;
-            const pushPayloads = await buildPushPayloadsV3(
-              activeTodu,
-              actorState,
-              project,
-              runtimeLogger,
-            );
-            const pushResult = await provider.push(binding, pushPayloads, project);
-            if (
-              !pushResult ||
-              !Array.isArray(pushResult.commentLinks) ||
-              !Array.isArray(pushResult.taskLinks)
-            ) {
-              throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
-            }
-
-            await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
-            await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
-          } else {
-            throw new Error(
-              `unsupported sync provider API version at runtime: ${providerApiVersion}`,
-            );
+          const pushPayloads = await buildPushPayloadsV3(
+            activeTodu,
+            actorState,
+            project,
+            runtimeLogger,
+          );
+          const pushResult = await options.provider.push(binding, pushPayloads, project);
+          if (
+            !pushResult ||
+            !Array.isArray(pushResult.commentLinks) ||
+            !Array.isArray(pushResult.taskLinks)
+          ) {
+            throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
           }
+
+          await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
+          await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
         }
 
         if (actorState.mappingsChanged) {
@@ -624,32 +573,6 @@ function getImportedTaskTimestamps(task: RuntimeImportedTask): {
   };
 }
 
-async function applyPulledTasksV2(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  provider: SyncProviderV2,
-  project: Project,
-  tasks: ExternalTask[],
-): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
-  const importedTasks = tasks.map((externalTask) => {
-    const mappedTask = provider.mapToTask(externalTask, project);
-    return {
-      externalId: mappedTask.externalId ?? externalTask.externalId,
-      title: mappedTask.title,
-      description: externalTask.description,
-      status: mappedTask.status,
-      priority: mappedTask.priority,
-      labels: mappedTask.labels,
-      assignees: mappedTask.assignees.map(createV2ExternalActorRef),
-      sourceUrl: mappedTask.sourceUrl ?? externalTask.sourceUrl,
-      createdAt: externalTask.createdAt,
-      updatedAt: externalTask.updatedAt,
-    } satisfies RuntimeImportedTask;
-  });
-
-  return applyImportedTasks(todu, actorState, project, importedTasks);
-}
-
 async function applyPulledTasksV3(
   todu: Todu,
   actorState: SyncBindingActorState,
@@ -822,24 +745,6 @@ async function applyImportedTasks(
   };
 }
 
-async function applyPulledCommentsV2(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  projectId: Project["id"],
-  comments: ExternalComment[],
-): Promise<{ created: number; updated: number; deleted: number }> {
-  const importedComments = comments.map((comment) => ({
-    externalId: comment.externalId,
-    externalTaskId: comment.externalTaskId,
-    body: comment.body,
-    author: comment.author ? createV2ExternalActorRef(comment.author) : undefined,
-    createdAt: comment.createdAt,
-    updatedAt: comment.updatedAt,
-  })) satisfies RuntimeImportedComment[];
-
-  return applyImportedComments(todu, actorState, projectId, importedComments);
-}
-
 async function applyPulledCommentsV3(
   todu: Todu,
   actorState: SyncBindingActorState,
@@ -976,39 +881,6 @@ async function applyImportedComments(
   }
 
   return stats;
-}
-
-async function buildPushPayloadsV2(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  logger: DaemonLogger,
-): Promise<TaskPushPayload[]> {
-  const tasksResult = await todu.task.list({ projectId: project.id });
-  if (!tasksResult.ok) {
-    throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
-  }
-
-  const pushPayloads: TaskPushPayload[] = [];
-  for (const task of tasksResult.value) {
-    const detailResult = await todu.task.get(task.id);
-    const taskDetail = detailResult.ok ? detailResult.value : { ...task, description: undefined };
-
-    const commentsResult = await todu.note.list({
-      entityType: "task",
-      entityId: task.id,
-    });
-    const comments: Note[] = commentsResult.ok ? commentsResult.value : [];
-
-    const mappedAssignees = buildOutboundV2Assignees(taskDetail, actorState, logger);
-    pushPayloads.push({
-      ...taskDetail,
-      assignees: taskDetail.assigneeActorIds.length > 0 ? mappedAssignees : taskDetail.assignees,
-      comments,
-    });
-  }
-
-  return pushPayloads;
 }
 
 async function buildPushPayloadsV3(
@@ -1213,34 +1085,6 @@ async function ensureProjectAuthorizedAssigneeActors(
   return updateResult.value;
 }
 
-function buildOutboundV2Assignees(
-  task: Task,
-  actorState: SyncBindingActorState,
-  logger: DaemonLogger,
-): string[] {
-  const assignees: string[] = [];
-
-  for (const actorId of task.assigneeActorIds) {
-    const mapping = actorState.actorMappings.find((candidate) => candidate.actorId === actorId);
-    const outboundAssignee = mapping ? getOutboundV2Assignee(mapping) : null;
-
-    if (!mapping || !outboundAssignee) {
-      logger.warn("sync plugin skipped unmapped outbound assignee", {
-        bindingId: actorState.binding.id,
-        provider: actorState.binding.provider,
-        taskId: task.id,
-        taskTitle: task.title,
-        actorId,
-      });
-      continue;
-    }
-
-    assignees.push(outboundAssignee);
-  }
-
-  return assignees;
-}
-
 function buildOutboundV3Assignees(
   task: Task,
   actorState: SyncBindingActorState,
@@ -1267,10 +1111,6 @@ function buildOutboundV3Assignees(
   }
 
   return assignees;
-}
-
-function getOutboundV2Assignee(mapping: IntegrationBindingActorMapping): string | null {
-  return mapping.externalLogin ?? mapping.displayName ?? mapping.externalAccountId ?? null;
 }
 
 function getOutboundV3Assignee(mapping: IntegrationBindingActorMapping): ExternalActorRef | null {
@@ -1301,15 +1141,6 @@ function normalizeExternalActorRef(actorRef: ExternalActorRef): ExternalActorRef
       ? { displayName: parseOptionalString(actorRef.displayName)! }
       : {}),
     ...(actorRef.raw !== undefined ? { raw: actorRef.raw } : {}),
-  };
-}
-
-function createV2ExternalActorRef(value: string): ExternalActorRef {
-  const normalizedValue = value.trim();
-  return {
-    externalLogin: normalizedValue,
-    displayName: normalizedValue,
-    raw: value,
   };
 }
 

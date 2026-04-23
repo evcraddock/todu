@@ -256,11 +256,6 @@ export interface TaskWithDetail extends Task {
   descriptionApproval?: ImportedContentApproval;
 }
 
-/** Task with description and comments, used as sync-provider push input */
-export interface TaskPushPayload extends TaskWithDetail {
-  comments: Note[];
-}
-
 // ============================================================================
 // Label entity — stored in catalog document
 // ============================================================================
