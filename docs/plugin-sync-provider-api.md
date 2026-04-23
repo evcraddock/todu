@@ -10,7 +10,7 @@ For generic daemon worker plugins, see `docs/worker-plugin-api.md`.
 
 This document defines the provider execution contract. Shared integration binding desired state is a separate architecture concern owned by core and documented in `docs/architecture/integrations.md`.
 
-Core-owned imported-content approval metadata also remains outside provider-managed state. Task description approval metadata lives with `TaskDetailDocument`, note/comment approval metadata lives with `Note`, and later runtime work is responsible for deriving approval from binding identity, actor identity, and content fingerprint.
+Core-owned imported-content approval metadata also remains outside provider-managed state. Task description approval metadata lives with `TaskDetailDocument`, note/comment approval metadata lives with `Note`, and the host/runtime is responsible for deriving approval from binding identity, actor identity, and content fingerprint.
 
 ## Relationship to generic integration architecture
 
@@ -25,20 +25,20 @@ Instead:
 
 Use local provider configuration for secrets and host-local runtime settings, not for synced integration binding desired state.
 
-## Compatibility Policy
+## Compatibility policy
 
 Compatibility is API-version based.
 
 - Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `3`).
-- Host-supported provider API versions during the rollout window: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `2` and `3`).
+- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
-- Provider API v2 remains a transition contract and will be removed after the compatibility window closes.
+- Provider API v2 compatibility has been removed.
 
 Use `validateSyncProviderRegistration(...)` during plugin load to enforce this gate.
 
-## Manifest Contract
+## Manifest contract
 
 ```ts
 interface SyncProviderManifest {
@@ -54,54 +54,9 @@ Rules:
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
 
-## API v2 contract
-
-API v2 is the legacy string-based provider contract.
-
-```ts
-interface ExternalTask {
-  externalId: string;
-  title: string;
-  description?: string;
-  status?: string;
-  priority?: string;
-  labels?: string[];
-  assignees?: string[];
-  sourceUrl?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  raw?: unknown;
-}
-
-interface ExternalComment {
-  externalId: string;
-  externalTaskId: string;
-  body: string;
-  author?: string;
-  createdAt: string;
-  updatedAt?: string;
-  raw?: unknown;
-}
-
-interface SyncProviderV2 {
-  readonly name: string;
-  readonly version: string;
-  initialize(config: SyncProviderConfig): Promise<void>;
-  shutdown(): Promise<void>;
-  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(binding: IntegrationBinding, tasks: TaskPushPayload[], project: Project): Promise<SyncProviderPushResult>;
-  mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
-}
-```
-
-`TaskPushPayload` extends `TaskWithDetail` with `comments: Note[]`, providing each task's description and attached comments during push.
-
-Use v2 only for compatibility with the existing runtime shim path.
-
 ## API v3 contract
 
-API v3 replaces direct `mapToTask(...)` and `mapFromTask(...)` coupling with normalized import/export payloads and structured external actor references.
+API v3 is the canonical and only supported sync-provider contract.
 
 ```ts
 interface ExternalActorRef {
@@ -153,6 +108,7 @@ interface ExportedTaskInput {
   labels: string[];
   assignees: ExternalActorRef[];
   sourceUrl?: string;
+  updatedAt: string;
   comments: ExportedCommentInput[];
 }
 
@@ -184,18 +140,7 @@ interface SyncProviderV3 {
 
 ## Task and comment sync semantics
 
-### v2 pull behavior
-
-`SyncProviderPullResult.tasks` accepts `ExternalTask[]`. The runtime reconciles pulled tasks within the binding's project by `externalId`.
-
-- Each pulled item is mapped through `mapToTask(external, project)`.
-- When no local task with the same `externalId` exists, the runtime creates a new task in the bound project.
-- When a matching local task exists, the runtime updates it only if the external item is newer by `updatedAt` (falling back to `createdAt` when `updatedAt` is absent).
-- Task deletions are not inferred from pull results in the current implementation.
-
-The runtime persists the pulled task's core fields, including mapped status, priority, labels, assignees, `externalId`, and `sourceUrl`. Task descriptions come from `ExternalTask.description`.
-
-### v3 pull behavior
+### Pull behavior
 
 `SyncProviderPullResultV3.tasks` accepts `ImportedTaskInput[]` and `comments` accepts `ImportedCommentInput[]`.
 
@@ -205,7 +150,7 @@ In v3:
 - providers do not translate directly into local tasks or notes
 - the host/runtime is responsible for actor creation/reuse, binding mapping updates, and approval-state computation
 
-Imported timestamp semantics stay the same across v2 and v3:
+Imported timestamp semantics:
 
 - newly created local tasks preserve external `createdAt` when provided
 - newly created local tasks preserve external `updatedAt` when provided
@@ -246,17 +191,15 @@ The runtime then applies each returned comment link idempotently by attaching th
 
 ### Comment pull path
 
-For v2, pulled comments are `ExternalComment[]` with string `author` values.
+Pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalActorRef`.
 
-For v3, pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalActorRef`.
-
-In both cases, the runtime reconciles pulled comments with local notes using a snapshot model:
+The runtime reconciles pulled comments with local notes using a snapshot model:
 
 - comments with an `externalId` not present locally are created as new notes with a `sync:externalId:<value>` tag
 - comments matching an existing local note are updated if the external `updatedAt` is newer than the local `createdAt`
 - local synced notes whose external IDs are absent from the pull result are deleted
 
-## Load-Time Enforcement
+## Load-time enforcement
 
 At plugin load time, call:
 
@@ -278,7 +221,7 @@ Validation errors use structured codes:
 - `API_VERSION_MISMATCH`
 - `IDENTITY_MISMATCH`
 
-## Daemon Host Configuration
+## Daemon host configuration
 
 Daemon plugin host loads sync plugin modules from configured local module paths.
 
@@ -312,6 +255,6 @@ Retry policy:
 - retry state resets after a successful cycle
 - daemon shutdown stops further scheduling and calls provider `shutdown()`
 
-## Conflict Resolution Baseline
+## Conflict resolution baseline
 
 Provider sync conflict resolution baseline is `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs.

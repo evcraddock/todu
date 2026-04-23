@@ -56,7 +56,7 @@ describe("plugin CLI commands", () => {
     const pluginPath = writePluginModule(tmpDir, "github-plugin.mjs", {
       name: "github",
       version: "1.0.0",
-      apiVersion: 1,
+      apiVersion: 3,
     });
 
     const installOutput = run(`plugin install ${pluginPath}`);
@@ -83,7 +83,7 @@ describe("plugin CLI commands", () => {
       manifest: {
         name: "github",
         version: "1.0.0",
-        apiVersion: 1,
+        apiVersion: 3,
       },
       status: "ok",
     });
@@ -102,7 +102,7 @@ describe("plugin CLI commands", () => {
     const pluginPath = writePluginModule(tmpDir, "forgejo-plugin.mjs", {
       name: "forgejo",
       version: "2.1.0",
-      apiVersion: 1,
+      apiVersion: 3,
     });
 
     run(`plugin install ${pluginPath}`);
@@ -190,7 +190,7 @@ describe("plugin CLI commands", () => {
     const pluginPath = writePluginModule(tmpDir, "config-plugin.mjs", {
       name: "github",
       version: "1.2.3",
-      apiVersion: 1,
+      apiVersion: 3,
     });
 
     run(`plugin install ${pluginPath}`);
@@ -224,27 +224,10 @@ function writePluginModule(
     async initialize() {},
     async shutdown() {},
     async pull() {
-      return { tasks: [] };
+      return { tasks: [], comments: [] };
     },
-    async push() {},
-    mapToTask() {
-      return {
-        id: "task-1",
-        title: "Example",
-        status: "active",
-        priority: "medium",
-        projectId: "project-1",
-        labels: [],
-        assignees: [],
-        createdAt: new Date(0).toISOString(),
-        updatedAt: new Date(0).toISOString(),
-      };
-    },
-    mapFromTask() {
-      return {
-        externalId: "ext-1",
-        title: "Example",
-      };
+    async push() {
+      return { commentLinks: [], taskLinks: [] };
     },
   },
 };`;

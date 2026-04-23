@@ -2,7 +2,13 @@
 
 ## Status
 
-Proposed rollout plan for the assignment and actor model defined in `docs/plans/multi-user-task-assignment.md`.
+Historical rollout plan for the assignment and actor model defined in `docs/plans/multi-user-task-assignment.md`.
+
+Compatibility-window note:
+
+- Both known sync providers are now on API v3.
+- Core host/runtime support for sync-provider API v2 has been removed.
+- This document remains as rollout history and sequencing context.
 
 ## Purpose
 
@@ -404,6 +410,10 @@ This gives time to:
 - no major compatibility regressions remain unresolved
 
 ## Phase 8: legacy removal
+
+### Status
+
+Completed. The compatibility window has ended and core host/runtime support for sync-provider API v2 has been removed.
 
 ### Scope
 

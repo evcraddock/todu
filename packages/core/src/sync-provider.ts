@@ -5,20 +5,14 @@ import {
   ok,
   type Project,
   type Result,
-  type Task,
   type TaskId,
   type TaskPriority,
-  type TaskPushPayload,
   type TaskStatus,
 } from "./types.js";
 
-export const SYNC_PROVIDER_API_VERSION_V2 = 2 as const;
 export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
 export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V3;
-export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
-  SYNC_PROVIDER_API_VERSION_V2,
-  SYNC_PROVIDER_API_VERSION_V3,
-] as const;
+export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [SYNC_PROVIDER_API_VERSION_V3] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
 export type SyncConflictResolutionPolicy = (typeof SYNC_CONFLICT_RESOLUTION_POLICIES)[number];
@@ -27,30 +21,6 @@ export interface SyncProviderManifest {
   name: string;
   version: string;
   apiVersion: number;
-}
-
-export interface ExternalTask {
-  externalId: string;
-  title: string;
-  description?: string;
-  status?: string;
-  priority?: string;
-  labels?: string[];
-  assignees?: string[];
-  sourceUrl?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  raw?: unknown;
-}
-
-export interface ExternalComment {
-  externalId: string;
-  externalTaskId: string;
-  body: string;
-  author?: string;
-  createdAt: string;
-  updatedAt?: string;
-  raw?: unknown;
 }
 
 export interface ExternalActorRef {
@@ -110,11 +80,6 @@ export interface SyncProviderConfig {
   settings: Record<string, unknown>;
 }
 
-export interface SyncProviderPullResult {
-  tasks: ExternalTask[];
-  comments?: ExternalComment[];
-}
-
 export interface SyncProviderPullResultV3 {
   tasks: ImportedTaskInput[];
   comments?: ImportedCommentInput[];
@@ -141,21 +106,6 @@ export interface SyncProviderPushResult {
   taskLinks: SyncProviderPushTaskLink[];
 }
 
-export interface SyncProviderV2 {
-  readonly name: string;
-  readonly version: string;
-  initialize(config: SyncProviderConfig): Promise<void>;
-  shutdown(): Promise<void>;
-  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResult>;
-  push(
-    binding: IntegrationBinding,
-    tasks: TaskPushPayload[],
-    project: Project,
-  ): Promise<SyncProviderPushResult>;
-  mapToTask(external: ExternalTask, project: Project): Task;
-  mapFromTask(task: TaskPushPayload, project: Project): ExternalTask;
-}
-
 export interface SyncProviderV3 {
   readonly name: string;
   readonly version: string;
@@ -169,26 +119,17 @@ export interface SyncProviderV3 {
   ): Promise<SyncProviderPushResult>;
 }
 
-export type SyncProvider = SyncProviderV2;
-export type AnySyncProvider = SyncProviderV2 | SyncProviderV3;
+export type SyncProvider = SyncProviderV3;
+export type AnySyncProvider = SyncProviderV3;
 
-export interface SyncProviderRegistrationV2 {
-  manifest: SyncProviderManifest & {
-    apiVersion: typeof SYNC_PROVIDER_API_VERSION_V2;
-  };
-  provider: SyncProviderV2;
-}
-
-export interface SyncProviderRegistrationV3 {
+export interface SyncProviderRegistration {
   manifest: SyncProviderManifest & {
     apiVersion: typeof SYNC_PROVIDER_API_VERSION_V3;
   };
   provider: SyncProviderV3;
 }
 
-export type AnySyncProviderRegistration = SyncProviderRegistrationV2 | SyncProviderRegistrationV3;
-export type SyncProviderRegistration = AnySyncProviderRegistration;
-export type LegacySyncProviderRegistration = SyncProviderRegistrationV2;
+export type AnySyncProviderRegistration = SyncProviderRegistration;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
   "INVALID_MANIFEST",
@@ -210,15 +151,6 @@ export interface ValidateSyncProviderRegistrationOptions {
   supportedApiVersions?: readonly number[];
 }
 
-const REQUIRED_SYNC_PROVIDER_V2_METHODS = [
-  "initialize",
-  "shutdown",
-  "pull",
-  "push",
-  "mapToTask",
-  "mapFromTask",
-] as const;
-
 const REQUIRED_SYNC_PROVIDER_V3_METHODS = ["initialize", "shutdown", "pull", "push"] as const;
 
 export function isSyncProviderApiVersionCompatible(
@@ -236,15 +168,9 @@ export function isSyncProviderApiVersionCompatible(
   return normalizedSupportedApiVersions.includes(providerApiVersion);
 }
 
-export function isSyncProviderRegistrationV2(
-  registration: AnySyncProviderRegistration,
-): registration is SyncProviderRegistrationV2 {
-  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V2;
-}
-
 export function isSyncProviderRegistrationV3(
   registration: AnySyncProviderRegistration,
-): registration is SyncProviderRegistrationV3 {
+): registration is SyncProviderRegistration {
   return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V3;
 }
 
@@ -315,8 +241,7 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  const requiredMethods = getRequiredSyncProviderMethods(manifestApiVersion);
-  if (!requiredMethods) {
+  if (manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3) {
     return err(
       createSyncProviderValidationError(
         "API_VERSION_MISMATCH",
@@ -376,7 +301,7 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  for (const method of requiredMethods) {
+  for (const method of REQUIRED_SYNC_PROVIDER_V3_METHODS) {
     if (typeof providerRecord[method] !== "function") {
       return err(
         createSyncProviderValidationError(
@@ -391,21 +316,12 @@ export function validateSyncProviderRegistration(
     }
   }
 
-  const normalizedManifest = {
-    name: manifestName,
-    version: manifestVersion,
-    apiVersion: manifestApiVersion,
-  };
-
-  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V2) {
-    return ok({
-      manifest: normalizedManifest as SyncProviderRegistrationV2["manifest"],
-      provider: registration.provider as SyncProviderV2,
-    });
-  }
-
   return ok({
-    manifest: normalizedManifest as SyncProviderRegistrationV3["manifest"],
+    manifest: {
+      name: manifestName,
+      version: manifestVersion,
+      apiVersion: manifestApiVersion as typeof SYNC_PROVIDER_API_VERSION_V3,
+    },
     provider: registration.provider as SyncProviderV3,
   });
 }
@@ -422,18 +338,6 @@ function resolveSupportedApiVersions(
   }
 
   return SYNC_PROVIDER_SUPPORTED_API_VERSIONS;
-}
-
-function getRequiredSyncProviderMethods(apiVersion: number): readonly string[] | null {
-  if (apiVersion === SYNC_PROVIDER_API_VERSION_V2) {
-    return REQUIRED_SYNC_PROVIDER_V2_METHODS;
-  }
-
-  if (apiVersion === SYNC_PROVIDER_API_VERSION_V3) {
-    return REQUIRED_SYNC_PROVIDER_V3_METHODS;
-  }
-
-  return null;
 }
 
 function createApiVersionMismatchDetails(

@@ -5,8 +5,6 @@ import {
   createNoteId,
   createProjectId,
   createTaskId,
-  type ExternalComment,
-  type ExternalTask,
   type ImportedCommentInput,
   type ImportedTaskInput,
   type IntegrationBinding,
@@ -95,7 +93,21 @@ describe("sync-worker-runtime", () => {
     expect(provider.push).toHaveBeenCalledTimes(1);
     expect(provider.push).toHaveBeenCalledWith(
       binding,
-      [{ ...task, description: undefined, comments: [] }],
+      [
+        {
+          localTaskId: task.id,
+          externalId: task.externalId,
+          title: task.title,
+          description: undefined,
+          status: task.status,
+          priority: task.priority,
+          labels: task.labels,
+          assignees: [],
+          sourceUrl: task.sourceUrl,
+          updatedAt: task.updatedAt,
+          comments: [],
+        },
+      ],
       project,
     );
     expect(todu.integration.updateStatus).toHaveBeenCalledTimes(2);
@@ -306,7 +318,7 @@ describe("sync-worker-runtime", () => {
     expect(computeRetryDelayMs(3, resolved.config)).toBe(12_000);
   });
 
-  it("push includes task comments from note.list in each TaskPushPayload", async () => {
+  it("push includes task comments from note.list in each exported task payload", async () => {
     const provider = createProvider();
     const project = createProject();
     const task = createTask(project.id);
@@ -343,7 +355,13 @@ describe("sync-worker-runtime", () => {
     const pushArgs = provider.push.mock.calls[0];
     const pushedTasks = pushArgs[1];
     expect(pushedTasks).toHaveLength(1);
-    expect(pushedTasks[0].comments).toEqual([taskNote]);
+    expect(pushedTasks[0].comments).toEqual([
+      {
+        localNoteId: taskNote.id,
+        body: taskNote.content,
+        createdAt: taskNote.createdAt,
+      },
+    ]);
 
     handle.stop();
   });
@@ -471,21 +489,6 @@ describe("sync-worker-runtime", () => {
           ],
         })
         .mockResolvedValue({ commentLinks: [], taskLinks: [] }),
-      mapToTask: vi
-        .fn<SyncProvider["mapToTask"]>()
-        .mockImplementation((external, activeProject) => ({
-          id: task.id,
-          title: external.title,
-          status: "active",
-          priority: "medium",
-          projectId: activeProject.id,
-          labels: [],
-          assignees: [],
-          externalId: external.externalId,
-          sourceUrl: external.sourceUrl,
-          createdAt: new Date(0).toISOString(),
-          updatedAt: new Date(0).toISOString(),
-        })),
     });
     const todu = createTodu(project, [task], [binding]);
 
@@ -821,11 +824,15 @@ describe("sync-worker-runtime", () => {
   it("pull creates new tasks from pulled external tasks", async () => {
     const project = createProject();
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledTasks: ExternalTask[] = [
+    const pulledTasks: ImportedTaskInput[] = [
       {
         externalId: "gh-101",
         title: "Pulled bug",
         description: "Imported from GitHub",
+        status: "waiting",
+        priority: "high",
+        labels: ["bug"],
+        assignees: [{ externalLogin: "octocat", displayName: "octocat" }],
         sourceUrl: "https://example.com/issues/101",
         createdAt: "2021-04-17T14:30:00Z",
         updatedAt: "2026-03-10T15:00:00Z",
@@ -835,20 +842,6 @@ describe("sync-worker-runtime", () => {
       pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
         tasks: pulledTasks,
       }),
-      mapToTask: vi
-        .fn<SyncProvider["mapToTask"]>()
-        .mockImplementation((external, activeProject) => ({
-          id: createTaskId(`task-${external.externalId}`),
-          title: external.title,
-          status: "waiting",
-          priority: "high",
-          projectId: activeProject.id,
-          labels: ["bug"],
-          assignees: ["octocat"],
-          sourceUrl: external.sourceUrl,
-          createdAt: new Date(0).toISOString(),
-          updatedAt: new Date(0).toISOString(),
-        })),
     });
     const todu = createTodu(project, [], [binding]);
 
@@ -872,11 +865,6 @@ describe("sync-worker-runtime", () => {
     const handle = runtime.start();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(provider.mapToTask).toHaveBeenCalledTimes(1);
-    expect(provider.mapToTask).toHaveBeenCalledWith(
-      pulledTasks[0],
-      expect.objectContaining({ id: project.id }),
-    );
     expect(todu.project.update).toHaveBeenCalledWith(project.id, {
       authorizedAssigneeActorIds: expect.arrayContaining([createActorId("actor-user")]),
     });
@@ -914,11 +902,15 @@ describe("sync-worker-runtime", () => {
       updatedAt: "2026-03-09T10:00:00Z",
     };
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledTasks: ExternalTask[] = [
+    const pulledTasks: ImportedTaskInput[] = [
       {
         externalId: "gh-101",
         title: "Updated pulled bug",
         description: "Updated from GitHub",
+        status: "inprogress",
+        priority: "high",
+        labels: ["bug", "synced"],
+        assignees: [{ externalLogin: "octocat", displayName: "octocat" }],
         sourceUrl: "https://example.com/issues/101",
         updatedAt: "2026-03-10T15:00:00Z",
       },
@@ -927,20 +919,6 @@ describe("sync-worker-runtime", () => {
       pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
         tasks: pulledTasks,
       }),
-      mapToTask: vi
-        .fn<SyncProvider["mapToTask"]>()
-        .mockImplementation((external, activeProject) => ({
-          id: existingTask.id,
-          title: external.title,
-          status: "inprogress",
-          priority: "high",
-          projectId: activeProject.id,
-          labels: ["bug", "synced"],
-          assignees: ["octocat"],
-          sourceUrl: external.sourceUrl,
-          createdAt: existingTask.createdAt,
-          updatedAt: external.updatedAt ?? existingTask.updatedAt,
-        })),
     });
     const todu = createTodu(project, [existingTask], [binding]);
 
@@ -991,11 +969,15 @@ describe("sync-worker-runtime", () => {
   it("pull falls back imported updatedAt to createdAt when missing", async () => {
     const project = createProject();
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledTasks: ExternalTask[] = [
+    const pulledTasks: ImportedTaskInput[] = [
       {
         externalId: "gh-101",
         title: "Pulled bug",
         description: "Imported from GitHub",
+        status: "waiting",
+        priority: "high",
+        labels: ["bug"],
+        assignees: [{ externalLogin: "octocat", displayName: "octocat" }],
         createdAt: "2021-04-17T14:30:00Z",
       },
     ];
@@ -1003,20 +985,6 @@ describe("sync-worker-runtime", () => {
       pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
         tasks: pulledTasks,
       }),
-      mapToTask: vi
-        .fn<SyncProvider["mapToTask"]>()
-        .mockImplementation((external, activeProject) => ({
-          id: createTaskId(`task-${external.externalId}`),
-          title: external.title,
-          status: "waiting",
-          priority: "high",
-          projectId: activeProject.id,
-          labels: ["bug"],
-          assignees: ["octocat"],
-          sourceUrl: external.sourceUrl,
-          createdAt: new Date(0).toISOString(),
-          updatedAt: new Date(0).toISOString(),
-        })),
     });
     const todu = createTodu(project, [], [binding]);
 
@@ -1071,7 +1039,7 @@ describe("sync-worker-runtime", () => {
       updatedAt: "2026-03-10T20:00:00Z",
     };
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledTasks: ExternalTask[] = [
+    const pulledTasks: ImportedTaskInput[] = [
       {
         externalId: "gh-101",
         title: "Older pulled bug",
@@ -1106,7 +1074,6 @@ describe("sync-worker-runtime", () => {
     const handle = runtime.start();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(provider.mapToTask).toHaveBeenCalledTimes(1);
     expect(todu.task.update).not.toHaveBeenCalled();
     expect(todu.task.create).not.toHaveBeenCalled();
 
@@ -1116,7 +1083,7 @@ describe("sync-worker-runtime", () => {
   it("pull fails safely when a pulled task timestamp is invalid", async () => {
     const project = createProject();
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledTasks: ExternalTask[] = [
+    const pulledTasks: ImportedTaskInput[] = [
       {
         externalId: "gh-101",
         title: "Pulled bug",
@@ -1160,12 +1127,12 @@ describe("sync-worker-runtime", () => {
     const project = createProject();
     const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledComments: ExternalComment[] = [
+    const pulledComments: ImportedCommentInput[] = [
       {
         externalId: "gh-comment-1",
         externalTaskId: task.externalId!,
         body: "New comment from GitHub",
-        author: "octocat",
+        author: { externalLogin: "octocat", displayName: "octocat" },
         createdAt: "2026-03-10T10:00:00Z",
       },
     ];
@@ -1229,12 +1196,12 @@ describe("sync-worker-runtime", () => {
       tags: ["sync:externalId:gh-comment-1"],
       createdAt: "2026-03-09T10:00:00Z",
     });
-    const pulledComments: ExternalComment[] = [
+    const pulledComments: ImportedCommentInput[] = [
       {
         externalId: "gh-comment-1",
         externalTaskId: task.externalId!,
         body: "Updated content from GitHub",
-        author: "octocat",
+        author: { externalLogin: "octocat", displayName: "octocat" },
         createdAt: "2026-03-09T10:00:00Z",
         updatedAt: "2026-03-10T15:00:00Z",
       },
@@ -1349,12 +1316,12 @@ describe("sync-worker-runtime", () => {
       tags: ["sync:externalId:gh-comment-1"],
       createdAt: "2026-03-10T20:00:00Z",
     });
-    const pulledComments: ExternalComment[] = [
+    const pulledComments: ImportedCommentInput[] = [
       {
         externalId: "gh-comment-1",
         externalTaskId: task.externalId!,
         body: "Older external content",
-        author: "octocat",
+        author: { externalLogin: "octocat", displayName: "octocat" },
         createdAt: "2026-03-09T10:00:00Z",
         updatedAt: "2026-03-10T12:00:00Z",
       },
@@ -1406,7 +1373,7 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-comment-1",
             externalTaskId: "gh-task-missing",
             body: "Skipped because task is not imported",
-            author: "octocat",
+            author: { externalLogin: "octocat", displayName: "octocat" },
             createdAt: "2026-03-10T10:00:00Z",
           },
         ],
@@ -1546,7 +1513,7 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-comment-1",
             externalTaskId: task.externalId!,
             body: overLimitBody,
-            author: "octocat",
+            author: { externalLogin: "octocat", displayName: "octocat" },
             createdAt: "2026-01-01T00:00:00Z",
           },
         ],
@@ -1602,7 +1569,7 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-comment-1",
             externalTaskId: task.externalId!,
             body: overLimitBody,
-            author: "octocat",
+            author: { externalLogin: "octocat", displayName: "octocat" },
             createdAt: "2026-01-01T00:00:00Z",
             updatedAt: "2026-01-02T00:00:00Z",
           },
@@ -1652,7 +1619,7 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-comment-1",
             externalTaskId: task.externalId!,
             body: atLimitBody,
-            author: "octocat",
+            author: { externalLogin: "octocat", displayName: "octocat" },
             createdAt: "2026-01-01T00:00:00Z",
           },
         ],
@@ -1687,7 +1654,7 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
-  it("reuses trusted actor mappings during v2 pull and skips approval for mapped note authors", async () => {
+  it("reuses trusted actor mappings during pull and skips approval for mapped note authors", async () => {
     const project = createProject();
     const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, {
@@ -1710,6 +1677,7 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-101",
             title: "Pulled bug",
             description: "Imported from GitHub",
+            assignees: [{ externalLogin: "octocat", displayName: "octocat" }],
             createdAt: "2026-01-01T00:00:00Z",
           },
         ],
@@ -1718,23 +1686,10 @@ describe("sync-worker-runtime", () => {
             externalId: "gh-comment-1",
             externalTaskId: task.externalId!,
             body: "Trusted comment",
-            author: "octocat",
+            author: { externalLogin: "octocat", displayName: "octocat" },
             createdAt: "2026-01-01T00:00:00Z",
           },
         ],
-      }),
-      mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockReturnValue({
-        id: createTaskId("task-gh-101"),
-        title: "Pulled bug",
-        status: "active",
-        priority: "medium",
-        projectId: project.id,
-        labels: [],
-        assigneeActorIds: [],
-        assignees: ["octocat"],
-        externalId: "gh-101",
-        createdAt: new Date(0).toISOString(),
-        updatedAt: new Date(0).toISOString(),
       }),
     });
     const todu = createTodu(project, [task], [binding], {
@@ -2064,25 +2019,9 @@ describe("sync-worker-runtime", () => {
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     initialize: vi.fn<SyncProvider["initialize"]>().mockResolvedValue(undefined),
-    pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({ tasks: [] }),
+    pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({ tasks: [], comments: [] }),
     push: vi.fn<SyncProvider["push"]>().mockResolvedValue({ commentLinks: [], taskLinks: [] }),
     shutdown: vi.fn<SyncProvider["shutdown"]>().mockResolvedValue(undefined),
-    mapToTask: vi.fn<SyncProvider["mapToTask"]>().mockImplementation((item) => ({
-      id: createTaskId(String(item.externalId)),
-      title: item.title,
-      status: "active",
-      priority: "medium",
-      projectId: createProject().id,
-      labels: [],
-      assigneeActorIds: [],
-      assignees: [],
-      createdAt: new Date(0).toISOString(),
-      updatedAt: new Date(0).toISOString(),
-    })),
-    mapFromTask: vi.fn<SyncProvider["mapFromTask"]>().mockImplementation((task) => ({
-      externalId: task.id,
-      title: task.title,
-    })),
     name: "github",
     version: "1.0.0",
     ...overrides,
