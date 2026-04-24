@@ -81,6 +81,7 @@ export interface ToduLabelApi {
 
 export interface ToduNoteApi {
   list(filter?: NoteFilter): Promise<Result<Note[]>>;
+  get(id: NoteId): Promise<Result<Note>>;
   create(input: CreateNoteInput): Promise<Result<Note>>;
   update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>>;
   delete(id: NoteId): Promise<Result<void>>;

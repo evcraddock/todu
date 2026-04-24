@@ -66,6 +66,28 @@ describe("createDaemonIpcHandlers", () => {
     });
   });
 
+  it("routes note IPC handlers to daemon RPC and preserves Result contract", async () => {
+    const daemon = {
+      request: vi.fn().mockResolvedValue({
+        ok: true,
+        value: { id: "note-1", content: "Captured" },
+      }),
+    };
+
+    const handlers = createDaemonIpcHandlers({
+      daemon,
+      storagePath: "/tmp/todu-ipc-test",
+    });
+
+    const result = await handlers["todu:note:get"](undefined, "note-1");
+
+    expect(daemon.request).toHaveBeenCalledWith("note.get", { id: "note-1" });
+    expect(result).toEqual({
+      ok: true,
+      value: { id: "note-1", content: "Captured" },
+    });
+  });
+
   it("routes approval IPC handlers to daemon RPC and preserves Result contract", async () => {
     const daemon = {
       request: vi

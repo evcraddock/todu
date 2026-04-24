@@ -36,6 +36,7 @@ interface DaemonBackedToduMethods {
   };
   note: {
     list(filter?: unknown): Promise<Result<unknown, ToduError>>;
+    get(id: string): Promise<Result<unknown, ToduError>>;
     create(input: unknown): Promise<Result<unknown, ToduError>>;
   };
   recurring: {
@@ -89,6 +90,7 @@ export function createDaemonToduClient(daemon: Pick<DaemonConnectionManager, "re
     },
     note: {
       list: (filter) => invoke("note.list", { filter }),
+      get: (id) => invoke("note.get", { id }),
       create: (input) => invoke("note.create", { input }),
     },
     recurring: {

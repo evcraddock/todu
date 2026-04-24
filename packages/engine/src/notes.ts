@@ -485,6 +485,18 @@ export function createNoteNamespace(
       return ok(notes);
     },
 
+    async get(id: NoteId): Promise<Result<Note>> {
+      await ensurePartitionModelReady();
+
+      const location = await findNoteLocation(id);
+      if (!location) return err(notFound("note", id));
+
+      const note = location.handle.doc()?.notes[location.index];
+      if (!note) return err(notFound("note", id));
+
+      return ok(cloneNote(note));
+    },
+
     async update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>> {
       const validationErr = validateUpdateNoteInput(input);
       if (validationErr) return err(validationErr);

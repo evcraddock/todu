@@ -2138,6 +2138,7 @@ function createTodu(
   };
   note: {
     list: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
@@ -2347,6 +2348,12 @@ function createTodu(
     },
   );
 
+  const noteGet = vi.fn().mockImplementation(async (id: string) => {
+    const note = notes.find((candidate) => candidate.id === id);
+    if (!note) return ok(undefined);
+    return ok({ ...note, tags: [...note.tags] });
+  });
+
   const noteCreate = vi
     .fn()
     .mockImplementation(
@@ -2443,6 +2450,7 @@ function createTodu(
       },
       note: {
         list: noteList,
+        get: noteGet,
         create: noteCreate,
         update: noteUpdate,
         delete: noteDelete,
@@ -2465,6 +2473,7 @@ function createTodu(
     },
     note: {
       list: noteList,
+      get: noteGet,
       create: noteCreate,
       update: noteUpdate,
       delete: noteDelete,

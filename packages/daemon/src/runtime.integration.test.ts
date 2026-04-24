@@ -770,6 +770,18 @@ describe("createDaemonRuntime", () => {
       expect.arrayContaining([expect.objectContaining({ id: noteId, content: "Capture context" })]),
     );
 
+    const getNoteResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-get-1",
+      method: "note.get",
+      params: {
+        id: noteId,
+      },
+    });
+
+    expect(getNoteResponse.result).toEqual(
+      expect.objectContaining({ id: noteId, content: "Capture context" }),
+    );
+
     const updateNoteResponse = await sendRequest(runtime.config().socketPath, {
       id: "note-update-1",
       method: "note.update",
@@ -2205,6 +2217,23 @@ describe("createDaemonRuntime", () => {
       details: {
         entity: "project",
         id: "proj-missing",
+      },
+    });
+
+    const missingNoteGetResponse = await sendRequest(runtime.config().socketPath, {
+      id: "note-get-not-found",
+      method: "note.get",
+      params: {
+        id: "note-missing",
+      },
+    });
+
+    expect(missingNoteGetResponse.error).toEqual({
+      code: "NOT_FOUND",
+      message: "note not found: note-missing",
+      details: {
+        entity: "note",
+        id: "note-missing",
       },
     });
 
