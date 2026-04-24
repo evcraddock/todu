@@ -102,6 +102,23 @@ describe("createDaemonToduClient", () => {
     });
   });
 
+  it("routes note.get to daemon RPC and preserves Result shape", async () => {
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      value: { id: "note-1", content: "Captured", tags: [], createdAt: "2026-04-23T00:00:00Z" },
+    });
+
+    const client = createDaemonToduClient({ request });
+
+    const result = await client.note.get("note-1");
+
+    expect(request).toHaveBeenCalledWith("note.get", { id: "note-1" });
+    expect(result).toEqual({
+      ok: true,
+      value: { id: "note-1", content: "Captured", tags: [], createdAt: "2026-04-23T00:00:00Z" },
+    });
+  });
+
   it("maps daemon NOT_FOUND errors to not-found ToduError", async () => {
     const request = vi.fn().mockResolvedValue({
       ok: false,

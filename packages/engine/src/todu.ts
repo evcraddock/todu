@@ -158,6 +158,7 @@ export interface IntegrationNamespace {
 export interface NoteNamespace {
   create(input: CreateNoteInput): Promise<Result<Note>>;
   list(filter?: NoteFilter): Promise<Result<Note[]>>;
+  get(id: NoteId): Promise<Result<Note>>;
   update(id: NoteId, input: UpdateNoteInput): Promise<Result<Note>>;
   delete(id: NoteId): Promise<Result<void>>;
 }
@@ -343,6 +344,7 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
     note: {
       create: stub,
       list: stub,
+      get: stub,
       update: stub,
       delete: stub,
     },

@@ -228,6 +228,10 @@ export function createCoreNamespaceHandlers(
         const filter = getOptionalObjectParam<NoteFilter>(request, "filter");
         return todu.note.list(filter);
       }),
+      get: method(async (request, todu) => {
+        const id = createNoteId(getRequiredStringParam(request, "id"));
+        return todu.note.get(id);
+      }),
       update: method(async (request, todu) => {
         const id = createNoteId(getRequiredStringParam(request, "id"));
         const input = getRequiredObjectParam<UpdateNoteInput>(request, "input");

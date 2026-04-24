@@ -613,6 +613,30 @@ describe("note namespace", () => {
     });
   });
 
+  describe("get", () => {
+    it("returns a note by id", async () => {
+      const created = await todu.note.create({
+        content: "Capture context",
+        author: "agent",
+        tags: ["phase-2"],
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      const result = await todu.note.get(created.value.id);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toEqual(created.value);
+    });
+
+    it("returns NotFound for nonexistent note", async () => {
+      const result = await todu.note.get(createNoteId("note-nope"));
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.type).toBe("not-found");
+      expect(result.error.entity).toBe("note");
+    });
+  });
+
   describe("update", () => {
     it("updates note content", async () => {
       const created = await todu.note.create({ content: "Original" });

@@ -74,6 +74,7 @@ export function createDaemonIpcHandlers(
 
     // ── Note ──────────────────────────────────────────────────────────────
     "todu:note:list": (_event, filter) => invokeResult("note.list", { filter }),
+    "todu:note:get": (_event, id) => invokeResult("note.get", { id }),
     "todu:note:create": (_event, input) => invokeResult("note.create", { input }),
     "todu:note:update": (_event, id, input) => invokeResult("note.update", { id, input }),
     "todu:note:delete": (_event, id) => invokeResult("note.delete", { id }),
