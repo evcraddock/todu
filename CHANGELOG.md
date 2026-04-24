@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-04-23
+
+This release fixes a daemon RPC gap that broke single-note lookups for clients using `note.get`. The daemon now exposes a first-class note detail endpoint with the expected not-found behavior, and the client-facing surfaces in this repo are aligned with that contract.
+
+### Fixed
+- Added first-class daemon RPC support for `note.get` so clients can fetch a single note by ID instead of failing with `METHOD_NOT_FOUND` (#445)
+- Returned proper `NOT_FOUND` errors for missing notes and added regression coverage across engine, daemon RPC, and Electron-facing client layers (#445)
+- Updated local daemon-backed client and renderer type surfaces so note detail lookups stay aligned with the new RPC contract (#445)
+
 ## [0.21.0] - 2026-04-23
 
 This release closes the sync-provider rollout compatibility window. todu now supports the final v3-only plugin contract, removes deprecated v2 host/runtime paths, and updates the canonical docs to match the supported boundary.
