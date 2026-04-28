@@ -104,6 +104,9 @@ const ListTasksParams = Type.Object({
   ),
   projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
   label: Type.Optional(Type.String({ description: "Filter by label" })),
+  search: Type.Optional(
+    Type.String({ description: "Search query to match against task titles and descriptions" }),
+  ),
   dueBefore: Type.Optional(
     Type.String({ description: "Filter tasks due before date (YYYY-MM-DD)" }),
   ),
@@ -189,7 +192,7 @@ const MoveTaskParams = Type.Object({
 });
 
 const SearchTasksParams = Type.Object({
-  query: Type.String({ description: "Search query to match against task titles" }),
+  query: Type.String({ description: "Search query to match against task titles and descriptions" }),
 });
 
 const ListLabelsParams = Type.Object({});
@@ -318,7 +321,7 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     {
       name: "list_tasks",
       description:
-        "List tasks with optional filtering by status, priority, project, label, due date, or updated-at range. Use updatedFrom/updatedTo with status=done for monthly review. Supports sorting.",
+        "List tasks with optional filtering by status, priority, project, label, search query, due date, or updated-at range. Use updatedFrom/updatedTo with status=done for monthly review. Supports sorting.",
       label: "List Tasks",
       parameters: ListTasksParams,
       execute: async (_toolCallId, params) => {
@@ -393,7 +396,7 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
     },
     {
       name: "search_tasks",
-      description: "Search tasks by title.",
+      description: "Search tasks by title and description.",
       label: "Search Tasks",
       parameters: SearchTasksParams,
       execute: async (_toolCallId, { query }) => formatResult(await todu.task.search(query)),

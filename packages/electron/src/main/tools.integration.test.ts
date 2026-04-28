@@ -199,6 +199,23 @@ describe("todu agent tools", () => {
       expect(data[0].title).toBe("Alpha");
       expect(data[1].title).toBe("Bravo");
     });
+
+    it("filters by description search text", async () => {
+      await exec("create_task", {
+        title: "Investigate UI",
+        projectId,
+        description: "Compare popular agent framework options",
+      });
+      await exec("create_task", {
+        title: "Write docs",
+        projectId,
+        description: "Document setup steps",
+      });
+
+      const data = await execJson("list_tasks", { search: "framework" });
+      expect(data).toHaveLength(1);
+      expect(data[0].title).toBe("Investigate UI");
+    });
   });
 
   describe("get_task", () => {
@@ -249,6 +266,23 @@ describe("todu agent tools", () => {
       const data = await execJson("search_tasks", { query: "login" });
       expect(data).toHaveLength(1);
       expect(data[0].title).toBe("Login bug fix");
+    });
+
+    it("finds tasks by description", async () => {
+      await exec("create_task", {
+        title: "Investigate UI",
+        projectId,
+        description: "Compare popular agent framework options",
+      });
+      await exec("create_task", {
+        title: "Write docs",
+        projectId,
+        description: "Document setup steps",
+      });
+
+      const data = await execJson("search_tasks", { query: "framework" });
+      expect(data).toHaveLength(1);
+      expect(data[0].title).toBe("Investigate UI");
     });
 
     it("returns empty for no matches", async () => {

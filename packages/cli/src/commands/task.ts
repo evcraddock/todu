@@ -240,6 +240,7 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
     .option("--status <statuses>", "filter by status (comma-separated)")
     .option("--priority <priority>", "filter by priority")
     .option("--label <label>", "filter by label")
+    .option("--search <query>", "search task titles and descriptions")
     .option("--from <date>", "filter by created-at start (YYYY-MM-DD or ISO-8601)")
     .option("--to <date>", "filter by created-at end (YYYY-MM-DD or ISO-8601)")
     .option("--updated-from <date>", "filter by updated-at start (YYYY-MM-DD or ISO-8601)")
@@ -295,6 +296,7 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
           status,
           priority: opts.priority,
           label: opts.label,
+          search: opts.search,
           createdFrom: opts.from,
           createdTo: opts.to,
           updatedFrom: opts.updatedFrom,
@@ -415,7 +417,7 @@ export function registerTaskCommands(program: Command, invokeDaemon: CliDaemonIn
 
   task
     .command("search <query>")
-    .description("Search tasks by title")
+    .description("Search tasks by title and description")
     .action(async (query) => {
       const result = await invokeDaemon<Task[]>("task.search", { query });
       if (!result.ok) {

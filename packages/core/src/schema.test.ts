@@ -77,6 +77,7 @@ describe("schema", () => {
       expect(doc.projectId).toBe(projectId);
       expect(doc.tasks).toEqual([]);
       expect(doc.detailDocIds).toEqual({});
+      expect(doc.descriptionSearchTextByTaskId).toEqual({});
     });
   });
 

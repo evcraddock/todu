@@ -33,6 +33,36 @@ async function readCatalogDocument(storagePath: string): Promise<CatalogDocument
   }
 }
 
+async function removeDescriptionSearchIndex(
+  storagePath: string,
+  projectId: ProjectId,
+  taskId: TaskId,
+): Promise<void> {
+  const markerPath = path.join(storagePath, "todu-catalog.id");
+  const catalogId = fs.readFileSync(markerPath, "utf-8").trim();
+  const repo = new Repo({
+    storage: new NodeFSStorageAdapter(storagePath),
+  });
+
+  try {
+    const catalogHandle = await repo.find<CatalogDocument>(catalogId);
+    await catalogHandle.whenReady();
+    const taskListDocId = catalogHandle.doc()?.taskListDocIds[projectId];
+    if (!taskListDocId) {
+      throw new Error(`task list not found for project ${projectId}`);
+    }
+
+    const taskListHandle = await repo.find<TaskListDocument>(taskListDocId);
+    await taskListHandle.whenReady();
+    taskListHandle.change((doc) => {
+      delete doc.descriptionSearchTextByTaskId[taskId];
+    });
+    await repo.flush();
+  } finally {
+    await repo.shutdown();
+  }
+}
+
 async function removeTaskArrays(
   storagePath: string,
   projectId: ProjectId,
@@ -729,6 +759,26 @@ describe("task namespace", () => {
       expect(result.value.map((t) => t.title)).toEqual(["Alpha", "Bravo", "Charlie"]);
     });
 
+    it("filters by title and description search text", async () => {
+      await todu.task.create({ title: "Login bug", projectId });
+      await todu.task.create({
+        title: "Investigate UI",
+        projectId,
+        description: "Compare framework options",
+      });
+      await todu.task.create({ title: "Write docs", projectId, description: "Document setup" });
+
+      const titleResult = await todu.task.list({ search: "login" });
+      expect(titleResult.ok).toBe(true);
+      if (!titleResult.ok) return;
+      expect(titleResult.value.map((task) => task.title)).toEqual(["Login bug"]);
+
+      const descriptionResult = await todu.task.list({ search: "framework" });
+      expect(descriptionResult.ok).toBe(true);
+      if (!descriptionResult.ok) return;
+      expect(descriptionResult.value.map((task) => task.title)).toEqual(["Investigate UI"]);
+    });
+
     it("sorts by dueDate descending, missing dates last", async () => {
       await todu.task.create({ title: "Early", projectId, dueDate: "2026-01-01" });
       await todu.task.create({ title: "Late", projectId, dueDate: "2026-12-31" });
@@ -1171,6 +1221,74 @@ describe("task namespace", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value).toHaveLength(1);
+    });
+
+    it("finds tasks by description substring without a title match", async () => {
+      await todu.task.create({
+        title: "Investigate UI",
+        projectId,
+        description: "Compare popular agent framework options",
+      });
+      await todu.task.create({
+        title: "Write docs",
+        projectId,
+        description: "Document setup steps",
+      });
+
+      const result = await todu.task.search("framework");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].title).toBe("Investigate UI");
+    });
+
+    it("updates description search text when descriptions change", async () => {
+      const created = await todu.task.create({
+        title: "Investigate UI",
+        projectId,
+        description: "Compare framework options",
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      const before = await todu.task.search("framework");
+      expect(before.ok).toBe(true);
+      if (!before.ok) return;
+      expect(before.value).toHaveLength(1);
+
+      const update = await todu.task.update(created.value.id, {
+        description: "Document accessibility findings",
+      });
+      expect(update.ok).toBe(true);
+
+      const oldQuery = await todu.task.search("framework");
+      expect(oldQuery.ok).toBe(true);
+      if (!oldQuery.ok) return;
+      expect(oldQuery.value).toHaveLength(0);
+
+      const newQuery = await todu.task.search("accessibility");
+      expect(newQuery.ok).toBe(true);
+      if (!newQuery.ok) return;
+      expect(newQuery.value).toHaveLength(1);
+      expect(newQuery.value[0].id).toBe(created.value.id);
+    });
+
+    it("backfills missing description search text once from detail docs", async () => {
+      const created = await todu.task.create({
+        title: "Investigate UI",
+        projectId,
+        description: "Compare framework options",
+      });
+      if (!created.ok) throw new Error("create failed");
+
+      await todu.close();
+      await removeDescriptionSearchIndex(tmpDir, projectId, created.value.id);
+      todu = await createTodu({ storagePath: tmpDir });
+
+      const result = await todu.task.search("framework");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].id).toBe(created.value.id);
     });
 
     it("returns empty for no matches", async () => {
