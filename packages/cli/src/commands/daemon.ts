@@ -101,11 +101,12 @@ export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemon
     .description("Run local daemon in foreground mode")
     .action(async () => {
       const context = resolveDaemonCommandContext(program);
+      fs.mkdirSync(context.storagePath, { recursive: true });
       const child = spawn(
         process.execPath,
         resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
         {
-          cwd: process.cwd(),
+          cwd: resolveDaemonChildCwd(context),
           stdio: "inherit",
           env: createDaemonChildEnv(context),
         },
@@ -586,7 +587,7 @@ async function executeDirectStart(
       process.execPath,
       resolveSelfInvocationArgs(["daemon", INTERNAL_DAEMON_RUN_SUBCOMMAND]),
       {
-        cwd: process.cwd(),
+        cwd: resolveDaemonChildCwd(context),
         detached: true,
         stdio: ["ignore", stdoutFd, stderrFd],
         env: createDaemonChildEnv(context),
@@ -851,6 +852,11 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
     pluginPathsEnvValue: pluginPaths.value,
     pluginConfigEnvValue: pluginConfig.value,
   };
+}
+
+function resolveDaemonChildCwd(context: DaemonCommandContext): string {
+  // Daemons are long-lived and may host plugins; keep relative-path behavior anchored to todu state, not the caller shell.
+  return context.storagePath;
 }
 
 function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv {

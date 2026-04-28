@@ -127,6 +127,12 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     });
 
     await waitForSocket(socketPath, daemonRunProcess, 7000);
+    const daemonPid = await waitForChildProcessPid(
+      daemonRunProcess.pid,
+      "daemon __run-internal",
+      5000,
+    );
+    expect(resolveProcessCwd(daemonPid)).toBe(fs.realpathSync(tmpDir));
 
     const jsonResult = runCli(["--format", "json", "daemon", "status"]);
     expect(jsonResult.status).toBe(0);
@@ -153,6 +159,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     const stderrLogPath = path.join(tmpDir, "daemon.err.log");
     await waitForFileContains(stdoutLogPath, '"message":"daemon process started"', 5000);
     expect(fs.existsSync(stderrLogPath)).toBe(true);
+    expect(resolveProcessCwd(readManagedDaemonPid(tmpDir))).toBe(fs.realpathSync(tmpDir));
 
     const statusAfterStart = runCli(["--format", "json", "daemon", "status"], { launcherPath });
     expect(statusAfterStart.status).toBe(0);
@@ -161,6 +168,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     const restart = runCli(["daemon", "restart"], { launcherPath });
     expect(restart.status).toBe(0);
     expect(restart.stdout).toContain("Daemon restart: started managed daemon process");
+    expect(resolveProcessCwd(readManagedDaemonPid(tmpDir))).toBe(fs.realpathSync(tmpDir));
 
     const statusAfterRestart = runCli(["--format", "json", "daemon", "status"], { launcherPath });
     expect(statusAfterRestart.status).toBe(0);
@@ -183,7 +191,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
   });
 
   it("daemon start works when invoked through a symlinked launcher without a js suffix", async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-symlink-lifecycle-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-symlink-"));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
     const launcherPath = path.join(tmpDir, "todu");
     fs.symlinkSync(cliPath, launcherPath);
@@ -252,6 +260,17 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
   });
 });
 
+function readManagedDaemonPid(storagePath: string): number {
+  const pidPath = path.join(storagePath, "daemon.pid");
+  const pid = Number.parseInt(fs.readFileSync(pidPath, "utf8").trim(), 10);
+
+  if (!Number.isInteger(pid) || pid < 1) {
+    throw new Error(`Invalid managed daemon pid in ${pidPath}`);
+  }
+
+  return pid;
+}
+
 function stopManagedDaemon(storagePath: string): void {
   const pidPath = path.join(storagePath, "daemon.pid");
 
@@ -290,6 +309,74 @@ function stopManagedDaemon(storagePath: string): void {
   }
 
   fs.rmSync(pidPath, { force: true });
+}
+
+async function waitForChildProcessPid(
+  parentPid: number | undefined,
+  commandSubstring: string,
+  timeoutMs: number,
+): Promise<number> {
+  if (!parentPid) {
+    throw new Error("Parent process pid is unavailable");
+  }
+
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const child = listChildProcesses(parentPid).find((processInfo) =>
+      processInfo.command.includes(commandSubstring),
+    );
+    if (child) {
+      return child.pid;
+    }
+
+    await sleep(50);
+  }
+
+  throw new Error(`Timed out waiting for child process containing: ${commandSubstring}`);
+}
+
+function listChildProcesses(parentPid: number): Array<{ pid: number; command: string }> {
+  const result = spawnSync("ps", ["-axo", "pid=,ppid=,command="], {
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || "failed to list child processes");
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/))
+    .filter((match): match is RegExpMatchArray => match !== null)
+    .map((match) => ({
+      pid: Number.parseInt(match[1], 10),
+      ppid: Number.parseInt(match[2], 10),
+      command: match[3],
+    }))
+    .filter((processInfo) => processInfo.ppid === parentPid)
+    .map((processInfo) => ({ pid: processInfo.pid, command: processInfo.command }));
+}
+
+function resolveProcessCwd(pid: number): string {
+  if (process.platform === "linux") {
+    return fs.realpathSync(fs.readlinkSync(`/proc/${pid}/cwd`));
+  }
+
+  const result = spawnSync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || `failed to resolve cwd for process ${pid}`);
+  }
+
+  const cwdLine = result.stdout.split("\n").find((line) => line.startsWith("n"));
+  if (!cwdLine) {
+    throw new Error(`cwd not found for process ${pid}`);
+  }
+
+  return fs.realpathSync(cwdLine.slice(1));
 }
 
 async function waitForSocket(socketPath: string, processHandle: ChildProcess, timeoutMs: number) {
