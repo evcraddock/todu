@@ -67,10 +67,10 @@ Implementation note:
 
 ### CLI UX
 
-- `toduai sync status` — show daemon/catalog state
-- `toduai sync join <catalogId> --check` — validation only
-- `toduai sync join <catalogId>` — interactive confirmation + join
-- `toduai sync join <catalogId> --yes` — non-interactive mode
+- `todu sync status` — show daemon/catalog state
+- `todu sync join <catalogId> --check` — validation only
+- `todu sync join <catalogId>` — interactive confirmation + join
+- `todu sync join <catalogId> --yes` — non-interactive mode
 
 CLI output should clearly indicate:
 - previous catalog ID
@@ -78,8 +78,8 @@ CLI output should clearly indicate:
 - success or rollback outcome
 
 Implementation note:
-- `toduai sync join <catalogId> --check` calls daemon `sync.join` with `check=true`
-- `toduai sync join <catalogId>` performs validation first, prompts for confirmation, then calls daemon `sync.join`
+- `todu sync join <catalogId> --check` calls daemon `sync.join` with `check=true`
+- `todu sync join <catalogId>` performs validation first, prompts for confirmation, then calls daemon `sync.join`
 - `--yes` skips confirmation for non-interactive flows
 
 ### Daemon join API behavior (Phase 5 implementation)

@@ -24,10 +24,10 @@ Implement the plugin system that enables external integrations. Create GitHub an
    - Plugin lifecycle management
 
 2. **Plugin CLI Commands**
-   - `toduai plugin install <name>`
-   - `toduai plugin list`
-   - `toduai plugin remove <name>`
-   - `toduai plugin config <name>`
+   - `todu plugin install <name>`
+   - `todu plugin list`
+   - `todu plugin remove <name>`
+   - `todu plugin config <name>`
 
 3. **todu-github plugin** (separate repo)
    - Bidirectional sync with GitHub Issues

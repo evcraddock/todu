@@ -33,14 +33,14 @@ describe("CLI version output", { timeout: 30000 }, () => {
     expect(output).toContain("Usage: todu");
   });
 
-  it("publishes both todu and toduai CLI bin entries during the transition", async () => {
+  it("publishes only the todu CLI bin entry", async () => {
     const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8")) as {
       bin: Record<string, string>;
     };
 
     expect(packageJson.bin).toEqual({
       todu: "dist/index.js",
-      toduai: "dist/index.js",
     });
+    expect(packageJson.bin).not.toHaveProperty("toduai");
   });
 });

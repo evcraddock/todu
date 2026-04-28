@@ -514,7 +514,7 @@ Config file at `~/.config/toduai/config.yaml` (default). Covers: data directory,
 
 ### Dev Workflow
 
-For project-specific data isolation, run `toduai config init` in a project directory. This creates `.toduai/config.yaml` + `.toduai/.gitignore`. Tell agents to use `--config .toduai/config.yaml` and they get an isolated data directory.
+For project-specific data isolation, run `todu config init` in a project directory. This creates `.toduai/config.yaml` + `.toduai/.gitignore`. Tell agents to use `--config .toduai/config.yaml` and they get an isolated data directory.
 
 ### Config Behavior
 
@@ -571,7 +571,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 | `@todu/engine` | Recurring templates (CRUD, task generation, skip list, upcoming, early materialization) | ✅ Done |
 | `@todu/engine` | Habits (CRUD, check/uncheck, computed streaks, history) | ✅ Done |
 | `@todu/engine` | Configuration system (`--config` flag, `config init`, resolution order) | ✅ Done |
-| `@todu/cli` | Thin CLI (`toduai`) consuming engine, table/JSON output, color, status shortcuts | ✅ Done |
+| `@todu/cli` | Thin CLI (`todu`) consuming engine, table/JSON output, color, status shortcuts | ✅ Done |
 | Tests | 384 tests across 21 test files (unit + integration + CLI) | ✅ Done |
 
 ### Phase 2: Electron
@@ -609,7 +609,7 @@ Import strategy: relative `.js` imports (no path aliases). `Node16` module resol
 For users of the current todu-api + todu.sh:
 
 1. Export data from todu-api (JSON format)
-2. Run `toduai migrate import ./export.json`
+2. Run `todu migrate import ./export.json`
 3. Configure sync extensions for existing projects
 4. Verify data, then sunset todu-api
 

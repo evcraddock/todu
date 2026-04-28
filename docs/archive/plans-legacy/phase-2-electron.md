@@ -436,7 +436,7 @@ Decisions to make before or during implementation:
 
 2. **Electron build tool** — electron-forge vs electron-vite. electron-vite is newer and integrates Vite natively, which simplifies React HMR. electron-forge is more mature. Evaluate during Slice 1.
 
-3. **Binary name coexistence** — Currently `toduai` is the CLI. Should launching the Electron app be `toduai --gui`, a separate `toduai-app` binary, or just double-click the packaged app? The CLI and Electron share the engine but are separate packages.
+3. **Binary name coexistence** — The CLI command is `todu`. Should launching the Electron app be `todu --gui`, a separate app binary, or just double-click the packaged app? The CLI and Electron share the engine but are separate packages.
 
 4. **Agent conversation persistence** — Should chat history persist across app restarts? If so, store in a new Automerge document or local file? Start without persistence, add later if needed.
 
