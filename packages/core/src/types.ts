@@ -385,6 +385,8 @@ export interface TaskFilter {
   priority?: TaskPriority;
   projectId?: ProjectId;
   label?: string;
+  /** Search query matched against task title and indexed description text. */
+  search?: string;
   createdFrom?: string;
   createdTo?: string;
   dueBefore?: string;

@@ -83,8 +83,8 @@ export interface CatalogDocument {
 
 /**
  * Task list document (one per project).
- * Contains task metadata only — no descriptions or heavy content.
- * Each task is ~200 bytes, so a project with 1000 tasks ≈ 200KB.
+ * Contains task metadata and lightweight search text only — no full descriptions or heavy content.
+ * Each task is ~200 bytes plus a normalized description search excerpt, so searches can avoid loading every detail doc.
  */
 export interface TaskListDocument {
   /** Project this task list belongs to */
@@ -98,6 +98,12 @@ export interface TaskListDocument {
    * Loaded on demand when task.get() is called.
    */
   detailDocIds: Record<string, string>;
+
+  /**
+   * Map of taskId → normalized description text for cheap title+description search.
+   * Backfilled from detail docs when missing and maintained by task description writes.
+   */
+  descriptionSearchTextByTaskId: Record<string, string>;
 }
 
 /**
@@ -198,6 +204,7 @@ export function createTaskListDocument(projectId: ProjectId): TaskListDocument {
     projectId,
     tasks: [],
     detailDocIds: {},
+    descriptionSearchTextByTaskId: {},
   };
 }
 

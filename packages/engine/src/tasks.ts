@@ -111,6 +111,20 @@ export function createTaskNamespace(
     };
   }
 
+  function normalizeTaskSearchText(content: string): string {
+    return content.trim().toLowerCase();
+  }
+
+  function taskMatchesSearch(task: Task, descriptionSearchText: string, query: string): boolean {
+    const normalizedQuery = normalizeTaskSearchText(query);
+    if (normalizedQuery.length === 0) return true;
+
+    return (
+      task.title.toLowerCase().includes(normalizedQuery) ||
+      descriptionSearchText.includes(normalizedQuery)
+    );
+  }
+
   function findMissingActorId(actorIds: readonly string[]): string | null {
     const catalogDoc = catalog.doc();
     if (!catalogDoc) return actorIds[0] ?? null;
@@ -141,6 +155,8 @@ export function createTaskNamespace(
     const needsMigration =
       doc.detailDocIds === undefined ||
       doc.detailDocIds === null ||
+      doc.descriptionSearchTextByTaskId === undefined ||
+      doc.descriptionSearchTextByTaskId === null ||
       tasks.some((task) => task.labels === undefined || task.labels === null) ||
       tasks.some((task) => task.assigneeActorIds === undefined || task.assigneeActorIds === null) ||
       tasks.some((task) => task.assignees === undefined || task.assignees === null);
@@ -150,6 +166,12 @@ export function createTaskNamespace(
     handle.change((d) => {
       if (d.detailDocIds === undefined || d.detailDocIds === null) {
         d.detailDocIds = {};
+      }
+      if (
+        d.descriptionSearchTextByTaskId === undefined ||
+        d.descriptionSearchTextByTaskId === null
+      ) {
+        d.descriptionSearchTextByTaskId = {};
       }
       for (const task of d.tasks) {
         if (task.labels === undefined || task.labels === null) {
@@ -165,9 +187,54 @@ export function createTaskNamespace(
     });
   }
 
+  async function backfillDescriptionSearchIndex(
+    handle: DocHandle<TaskListDocument>,
+  ): Promise<void> {
+    const doc = handle.doc();
+    if (!doc) return;
+
+    const existingTaskIds = new Set(doc.tasks.map((task) => task.id));
+    const updates: Record<string, string | null> = {};
+
+    for (const indexedTaskId of Object.keys(doc.descriptionSearchTextByTaskId)) {
+      if (!existingTaskIds.has(indexedTaskId as TaskId) || !doc.detailDocIds[indexedTaskId]) {
+        updates[indexedTaskId] = null;
+      }
+    }
+
+    for (const [taskId, detailDocId] of Object.entries(doc.detailDocIds)) {
+      if (!existingTaskIds.has(taskId as TaskId)) {
+        updates[taskId] = null;
+        continue;
+      }
+
+      if (doc.descriptionSearchTextByTaskId[taskId] !== undefined) {
+        continue;
+      }
+
+      const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+      const detailDoc = detailHandle.doc();
+      const searchText = detailDoc ? normalizeTaskSearchText(detailDoc.description) : "";
+      updates[taskId] = searchText.length > 0 ? searchText : null;
+    }
+
+    if (Object.keys(updates).length === 0) return;
+
+    handle.change((d) => {
+      for (const [taskId, searchText] of Object.entries(updates)) {
+        if (searchText === null) {
+          delete d.descriptionSearchTextByTaskId[taskId];
+        } else {
+          d.descriptionSearchTextByTaskId[taskId] = searchText;
+        }
+      }
+    });
+  }
+
   async function loadTaskListDoc(docId: string): Promise<DocHandle<TaskListDocument>> {
     const handle = await repo.find<TaskListDocument>(docId as DocumentId);
     migrateTaskListDoc(handle);
+    await backfillDescriptionSearchIndex(handle);
     return handle;
   }
 
@@ -192,6 +259,7 @@ export function createTaskNamespace(
       doc.projectId = template.projectId;
       doc.tasks = template.tasks;
       doc.detailDocIds = template.detailDocIds;
+      doc.descriptionSearchTextByTaskId = template.descriptionSearchTextByTaskId;
     });
 
     // Register in catalog
@@ -310,6 +378,7 @@ export function createTaskNamespace(
 
         listHandle.change((doc) => {
           doc.detailDocIds[id] = detailHandle.documentId;
+          doc.descriptionSearchTextByTaskId[id] = normalizeTaskSearchText(description);
         });
       }
 
@@ -325,6 +394,7 @@ export function createTaskNamespace(
 
       const normalizedFilter = normalizeTaskFilter(filter);
       const allTasks: Task[] = [];
+      const searchQuery = normalizedFilter?.search;
 
       // If filtering by project, only load that project's task list
       const docIds = normalizedFilter?.projectId
@@ -337,6 +407,13 @@ export function createTaskNamespace(
         if (!doc) continue;
 
         for (const task of doc.tasks) {
+          if (
+            searchQuery !== undefined &&
+            !taskMatchesSearch(task, doc.descriptionSearchTextByTaskId[task.id] ?? "", searchQuery)
+          ) {
+            continue;
+          }
+
           allTasks.push(cloneTask(task));
         }
       }
@@ -524,6 +601,14 @@ export function createTaskNamespace(
         const detailDoc = detailHandle.doc();
         description = detailDoc?.description;
         if (detailDoc?.description !== undefined) {
+          const searchText = normalizeTaskSearchText(detailDoc.description);
+          result.listHandle.change((doc) => {
+            if (searchText.length > 0) {
+              doc.descriptionSearchTextByTaskId[id] = searchText;
+            } else {
+              delete doc.descriptionSearchTextByTaskId[id];
+            }
+          });
           descriptionApproval = normalizeContentApproval(
             detailDoc.description,
             detailDoc.descriptionApproval,
@@ -543,6 +628,7 @@ export function createTaskNamespace(
         });
         result.listHandle.change((doc) => {
           doc.detailDocIds[id] = detailHandle.documentId;
+          doc.descriptionSearchTextByTaskId[id] = normalizeTaskSearchText(descriptionText);
         });
         description = descriptionText;
       } else if (input.descriptionApproval !== undefined) {
@@ -576,6 +662,7 @@ export function createTaskNamespace(
       result.listHandle.change((doc) => {
         doc.tasks.splice(result.index, 1);
         delete doc.detailDocIds[id];
+        delete doc.descriptionSearchTextByTaskId[id];
       });
 
       // Detail and comments docs are orphaned — they'll be cleaned up
@@ -608,9 +695,11 @@ export function createTaskNamespace(
       const detailDocId = sourceListDoc?.detailDocIds[id];
 
       // Remove from source task list
+      const sourceDescriptionSearchText = sourceListDoc?.descriptionSearchTextByTaskId[id];
       result.listHandle.change((doc) => {
         doc.tasks.splice(result.index, 1);
         delete doc.detailDocIds[id];
+        delete doc.descriptionSearchTextByTaskId[id];
       });
 
       // Add to target task list
@@ -625,6 +714,9 @@ export function createTaskNamespace(
         doc.tasks.push(cleanTask as Task);
         if (detailDocId) {
           doc.detailDocIds[id] = detailDocId;
+        }
+        if (sourceDescriptionSearchText) {
+          doc.descriptionSearchTextByTaskId[id] = sourceDescriptionSearchText;
         }
       });
 
@@ -650,7 +742,9 @@ export function createTaskNamespace(
       const catalogDoc = catalog.doc();
       if (!catalogDoc) return ok([]);
 
-      const lowerQuery = query.toLowerCase();
+      const lowerQuery = normalizeTaskSearchText(query);
+      if (lowerQuery.length === 0) return ok([]);
+
       const matches: Task[] = [];
 
       for (const docId of Object.values(catalogDoc.taskListDocIds)) {
@@ -659,7 +753,8 @@ export function createTaskNamespace(
         if (!doc) continue;
 
         for (const task of doc.tasks) {
-          if (task.title.toLowerCase().includes(lowerQuery)) {
+          const descriptionSearchText = doc.descriptionSearchTextByTaskId[task.id] ?? "";
+          if (taskMatchesSearch(task, descriptionSearchText, lowerQuery)) {
             matches.push(cloneTask(task));
           }
         }
