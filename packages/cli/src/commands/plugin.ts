@@ -87,6 +87,18 @@ interface PluginModuleShape {
   workerPlugin?: unknown;
 }
 
+const REDACTED_PLUGIN_SETTING = "[redacted]";
+const SENSITIVE_PLUGIN_CONFIG_KEY_TERMS = [
+  "token",
+  "secret",
+  "password",
+  "passwd",
+  "credential",
+  "apikey",
+  "accesskey",
+  "privatekey",
+] as const;
+
 export function registerPluginCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const plugin = program.command("plugin").description("Manage daemon worker plugins");
 
@@ -330,16 +342,17 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
       const existingConfig = readPluginSettings(config, resolvedPlugin.pluginName);
 
       if (!options.set && !options.clear) {
+        const redactedConfig = redactPluginSettings(existingConfig);
         const result: PluginConfigCommandResult = {
           plugin: resolvedPlugin.pluginName,
-          settings: existingConfig,
+          settings: redactedConfig,
         };
 
         if (program.opts().format === "json") {
           console.log(formatJSON(result));
         } else {
           console.log(`Plugin: ${resolvedPlugin.pluginName}`);
-          console.log(`Config: ${formatJSON(existingConfig)}`);
+          console.log(`Config: ${formatJSON(redactedConfig)}`);
         }
         return;
       }
@@ -371,16 +384,17 @@ export function registerPluginCommands(program: Command, invokeDaemon: CliDaemon
       writePluginSettings(config, resolvedPlugin.pluginName, parsedConfig.value);
       saveConfig(config, configPath);
 
+      const redactedConfig = redactPluginSettings(parsedConfig.value);
       const result: PluginConfigCommandResult = {
         plugin: resolvedPlugin.pluginName,
-        settings: parsedConfig.value,
+        settings: redactedConfig,
       };
 
       if (program.opts().format === "json") {
         console.log(formatJSON(result));
       } else {
         console.log(`Plugin config updated: ${resolvedPlugin.pluginName}`);
-        console.log(`Config: ${formatJSON(parsedConfig.value)}`);
+        console.log(`Config: ${formatJSON(redactedConfig)}`);
       }
     });
 }
@@ -412,6 +426,38 @@ function readPluginSettings(config: ToduFileConfig, pluginName: string): Record<
   }
 
   return { ...rawConfig };
+}
+
+function redactPluginSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  const redactedSettings: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(settings)) {
+    redactedSettings[key] = redactPluginConfigValue(key, value);
+  }
+
+  return redactedSettings;
+}
+
+function redactPluginConfigValue(key: string, value: unknown): unknown {
+  if (isSensitivePluginConfigKey(key)) {
+    return REDACTED_PLUGIN_SETTING;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactPluginConfigValue("", item));
+  }
+
+  if (isRecord(value)) {
+    return redactPluginSettings(value);
+  }
+
+  return value;
+}
+
+function isSensitivePluginConfigKey(key: string): boolean {
+  const normalizedKey = key.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+
+  return SENSITIVE_PLUGIN_CONFIG_KEY_TERMS.some((term) => normalizedKey.includes(term));
 }
 
 function writePluginSettings(

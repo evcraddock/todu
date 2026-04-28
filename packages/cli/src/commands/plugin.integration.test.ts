@@ -133,6 +133,45 @@ describe("plugin CLI commands", () => {
     });
   });
 
+  it("redacts sensitive plugin config values in command output", () => {
+    const pluginPath = writePluginModule(tmpDir, "forgejo-plugin.mjs", {
+      name: "forgejo",
+      version: "2.1.0",
+      apiVersion: 3,
+    });
+
+    run(`plugin install ${pluginPath}`);
+
+    const updateOutput = run(
+      'plugin config forgejo --set \'{"repo":"acme/demo","token":"secret-token","nested":{"apiKey":"api-key-secret","label":"safe"},"auth":[{"password":"passw0rd"}]}\'',
+    );
+    expect(updateOutput).toContain("[redacted]");
+    expect(updateOutput).not.toContain("secret-token");
+    expect(updateOutput).not.toContain("api-key-secret");
+    expect(updateOutput).not.toContain("passw0rd");
+
+    const shownConfigJson = run("--format json plugin config forgejo");
+    expect(shownConfigJson).not.toContain("secret-token");
+    expect(shownConfigJson).not.toContain("api-key-secret");
+    expect(shownConfigJson).not.toContain("passw0rd");
+    expect(JSON.parse(shownConfigJson)).toEqual({
+      plugin: "forgejo",
+      settings: {
+        repo: "acme/demo",
+        token: "[redacted]",
+        nested: {
+          apiKey: "[redacted]",
+          label: "safe",
+        },
+        auth: [
+          {
+            password: "[redacted]",
+          },
+        ],
+      },
+    });
+  });
+
   it("fails with actionable error for missing plugin removal", () => {
     const output = run("plugin remove missing-plugin", true);
 
