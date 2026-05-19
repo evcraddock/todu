@@ -23,6 +23,8 @@ interface SyncJoinResult {
   rolledBack: boolean;
 }
 
+type SyncControlAction = "start" | "stop" | "restart";
+
 interface DaemonError {
   code: string;
   message: string;
@@ -63,6 +65,27 @@ export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonIn
           console.log(`Last Sync:    ${status.remote.lastSync}`);
         }
       }
+    });
+
+  sync
+    .command("start")
+    .description("Start remote sync through the local daemon")
+    .action(async () => {
+      await runSyncControl(program, invokeDaemon, "start");
+    });
+
+  sync
+    .command("stop")
+    .description("Stop remote sync through the local daemon")
+    .action(async () => {
+      await runSyncControl(program, invokeDaemon, "stop");
+    });
+
+  sync
+    .command("restart")
+    .description("Restart remote sync through the local daemon")
+    .action(async () => {
+      await runSyncControl(program, invokeDaemon, "restart");
     });
 
   sync
@@ -120,6 +143,51 @@ export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonIn
 
       renderJoinResult(program, joined.value);
     });
+}
+
+async function runSyncControl(
+  program: Command,
+  invokeDaemon: CliDaemonInvoker,
+  action: SyncControlAction,
+): Promise<void> {
+  const methods = action === "restart" ? ["sync.stop", "sync.start"] : [`sync.${action}`];
+
+  for (const method of methods) {
+    const result = await invokeDaemon<void>(method, {});
+    if (!result.ok) {
+      console.error(formatDaemonCommandError(result.error));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const statusResult = await invokeDaemon<SyncStatus>("sync.status", {});
+  if (!statusResult.ok) {
+    console.error(formatDaemonCommandError(statusResult.error));
+    process.exitCode = 1;
+    return;
+  }
+
+  renderControlResult(program, action, statusResult.value);
+}
+
+function renderControlResult(
+  program: Command,
+  action: SyncControlAction,
+  status: SyncStatus,
+): void {
+  const opts = program.opts();
+
+  if (opts.format === "json") {
+    console.log(formatJSON({ action, status }));
+    return;
+  }
+
+  console.log(`Sync ${action}: requested`);
+  console.log(`Remote Sync:  ${status.remote.state}`);
+  if (status.remote.server) {
+    console.log(`Server:       ${status.remote.server}`);
+  }
 }
 
 function renderJoinResult(program: Command, result: SyncJoinResult): void {

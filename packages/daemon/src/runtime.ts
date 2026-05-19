@@ -775,6 +775,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       storagePath: resolvedConfig.storagePath,
       remoteSync: resolvedConfig.remoteSync,
       bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
+      syncLogger: runtimeLogger.child("remote-sync"),
       startupTemplateProcessing: {
         enabled: true,
       },

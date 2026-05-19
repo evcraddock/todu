@@ -65,6 +65,26 @@ describe("sync CLI commands", () => {
     expect(status.remote.state).toBe("disconnected");
   });
 
+  it("sync start requests daemon sync.start and reports status", () => {
+    const output = run("sync start");
+    expect(output).toContain("Sync start: requested");
+    expect(output).toContain("Remote Sync:  disconnected");
+  });
+
+  it("sync stop requests daemon sync.stop and reports status", () => {
+    const output = run("sync stop");
+    expect(output).toContain("Sync stop: requested");
+    expect(output).toContain("Remote Sync:  disconnected");
+  });
+
+  it("sync restart requests daemon sync.stop and sync.start in JSON format", () => {
+    const output = run("sync restart --format json");
+    const result = JSON.parse(output);
+    expect(result.action).toBe("restart");
+    expect(result.status.local.mode).toBe("standalone");
+    expect(result.status.remote.state).toBe("disconnected");
+  });
+
   it("sync join --check validates target via daemon without switching catalog", async () => {
     const initialCatalogId = await readCatalogId(tmpDir);
     const targetCatalogId = alternateCatalogId;

@@ -18,7 +18,7 @@ import { createRecurringNamespace } from "./recurring.js";
 import { createSyncRuntimeActorTools } from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
 import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
-import { addRemoteSyncAdapter, connectSyncClient } from "./sync-client.js";
+import { addRemoteSyncAdapter, connectSyncClient, isSyncServerAvailable } from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import {
@@ -91,6 +91,9 @@ export async function createTodu(
   const resolvedConfig: ToduConfig = {
     storagePath: config.storagePath,
     bootstrapOwnerActor: config.bootstrapOwnerActor,
+    syncLogger: config.syncLogger,
+    remoteSyncWatchdogIntervalMs: config.remoteSyncWatchdogIntervalMs,
+    remoteSyncAvailabilityTimeoutMs: config.remoteSyncAvailabilityTimeoutMs,
   };
 
   await ensureAutomergeWasmInitialized();
@@ -122,7 +125,12 @@ export async function createTodu(
       storage: new NodeFSStorageAdapter(resolvedConfig.storagePath),
     });
     if (config?.remoteSync) {
-      initialRemoteAdapter = addRemoteSyncAdapter(repo, config.remoteSync.server);
+      initialRemoteAdapter = addRemoteSyncAdapter(
+        repo,
+        config.remoteSync.server,
+        undefined,
+        resolvedConfig.syncLogger,
+      );
     }
     storage = await initBootstrapStorage(
       resolvedConfig.storagePath,
@@ -167,12 +175,77 @@ export async function createTodu(
 
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
+  let remoteWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+  let remoteWatchdogRestarting = false;
   // Tracked handler references so we can remove them cleanly on stop
   let remoteHandlers: {
     onPeerCandidate: (_payload: PeerCandidatePayload) => void;
     onPeerDisconnected: (_payload: PeerDisconnectedPayload) => void;
     onClose: () => void;
   } | null = null;
+
+  function setRemoteState(
+    state: SyncStatus["remote"]["state"],
+    options: { forceNotify?: boolean } = {},
+  ): void {
+    if (syncStatus.remote.state === state && !options.forceNotify) return;
+
+    syncStatus.remote.state = state;
+    notifySyncStatusListeners();
+  }
+
+  function isRemoteAdapterConnected(adapter: WebSocketClientAdapter): boolean {
+    const socket = adapter.socket;
+    return Boolean(adapter.remotePeerId && socket && socket.readyState === socket.OPEN);
+  }
+
+  function reconcileRemoteAdapterState(): void {
+    if (!remoteAdapter) return;
+
+    if (isRemoteAdapterConnected(remoteAdapter)) {
+      setRemoteState("connected");
+    }
+  }
+
+  function startRemoteWatchdog(): void {
+    if (!config?.remoteSync || remoteWatchdogTimer) return;
+
+    remoteWatchdogTimer = setInterval(() => {
+      void checkRemoteAdapterHealth();
+    }, config.remoteSyncWatchdogIntervalMs ?? 30_000);
+  }
+
+  function stopRemoteWatchdog(): void {
+    if (!remoteWatchdogTimer) return;
+
+    clearInterval(remoteWatchdogTimer);
+    remoteWatchdogTimer = null;
+  }
+
+  async function checkRemoteAdapterHealth(): Promise<void> {
+    if (!config?.remoteSync || !remoteAdapter || remoteWatchdogRestarting) return;
+
+    reconcileRemoteAdapterState();
+    if (syncStatus.remote.state !== "disconnected") return;
+
+    const available = await isSyncServerAvailable(
+      config.remoteSync.server,
+      config.remoteSyncAvailabilityTimeoutMs ?? 200,
+    );
+    if (!available || !remoteAdapter || syncStatus.remote.state !== "disconnected") return;
+
+    remoteWatchdogRestarting = true;
+    resolvedConfig.syncLogger?.warn("remote sync watchdog restarting stale adapter", {
+      server: config.remoteSync.server,
+    });
+
+    try {
+      stopRemoteAdapter({ manual: false });
+      startRemoteAdapter();
+    } finally {
+      remoteWatchdogRestarting = false;
+    }
+  }
 
   /**
    * Attach a remote sync adapter to the repo and track connection state.
@@ -181,32 +254,46 @@ export async function createTodu(
   function startRemoteAdapter(): void {
     if (!config?.remoteSync || remoteAdapter) return;
 
-    const onPeerCandidate = (_payload: PeerCandidatePayload): void => {
-      syncStatus.remote.state = "connected";
-      notifySyncStatusListeners();
+    const onPeerCandidate = (payload: PeerCandidatePayload): void => {
+      resolvedConfig.syncLogger?.info("remote sync peer connected", {
+        server: config.remoteSync?.server,
+        peerId: payload.peerId,
+      });
+      setRemoteState("connected");
     };
-    const onPeerDisconnected = (_payload: PeerDisconnectedPayload): void => {
-      syncStatus.remote.state = "disconnected";
-      notifySyncStatusListeners();
+    const onPeerDisconnected = (payload: PeerDisconnectedPayload): void => {
+      resolvedConfig.syncLogger?.warn("remote sync peer disconnected", {
+        server: config.remoteSync?.server,
+        peerId: payload.peerId,
+      });
+      setRemoteState("disconnected");
     };
     const onClose = (): void => {
-      syncStatus.remote.state = "disconnected";
-      notifySyncStatusListeners();
+      resolvedConfig.syncLogger?.warn("remote sync adapter closed", {
+        server: config.remoteSync?.server,
+      });
+      setRemoteState("disconnected");
     };
-
     // Reuse the adapter created during init (before catalog load) to avoid
     // a duplicate WebSocket connection. Only create a new one on restart.
     if (initialRemoteAdapter) {
       remoteAdapter = initialRemoteAdapter;
       initialRemoteAdapter = null;
     } else {
-      remoteAdapter = addRemoteSyncAdapter(storage.repo, config.remoteSync.server);
+      remoteAdapter = addRemoteSyncAdapter(
+        storage.repo,
+        config.remoteSync.server,
+        undefined,
+        resolvedConfig.syncLogger,
+      );
     }
     remoteAdapter.on("peer-candidate", onPeerCandidate);
     remoteAdapter.on("peer-disconnected", onPeerDisconnected);
     remoteAdapter.on("close", onClose);
 
     remoteHandlers = { onPeerCandidate, onPeerDisconnected, onClose };
+    reconcileRemoteAdapterState();
+    startRemoteWatchdog();
   }
 
   /**
@@ -218,8 +305,12 @@ export async function createTodu(
    * inside removeNetworkAdapter will throw — that's safe to ignore since
    * the adapter has already been filtered out of the subsystem's adapter list.
    */
-  function stopRemoteAdapter(): void {
+  function stopRemoteAdapter(options: { manual?: boolean } = {}): void {
     if (!remoteAdapter) return;
+
+    if (options.manual !== false) {
+      stopRemoteWatchdog();
+    }
 
     // Remove our listeners before touching the adapter
     if (remoteHandlers) {
@@ -231,8 +322,7 @@ export async function createTodu(
 
     const adapter = remoteAdapter;
     remoteAdapter = null;
-    syncStatus.remote.state = "disconnected";
-    notifySyncStatusListeners();
+    setRemoteState("disconnected", { forceNotify: options.manual !== false });
 
     try {
       // Swallow async WebSocket errors during teardown — the connection may
@@ -273,7 +363,10 @@ export async function createTodu(
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),
     sync: {
-      status: () => syncStatus,
+      status: () => {
+        reconcileRemoteAdapterState();
+        return syncStatus;
+      },
       start: async () => {
         startRemoteAdapter();
       },
@@ -292,6 +385,7 @@ export async function createTodu(
     async close() {
       // Stop remote adapter first to avoid reconnect attempts during shutdown
       stopRemoteAdapter();
+      stopRemoteWatchdog();
       // repo.shutdown() handles disconnecting remaining network adapters.
       await storage.close();
       if (syncServer) {
