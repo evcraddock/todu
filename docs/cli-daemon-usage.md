@@ -466,12 +466,18 @@ If the daemon is healthy, status reports `running: true` and includes daemon hea
 Use daemon-owned join flows from CLI:
 
 ```bash
+todu sync status
+todu sync start
+todu sync stop
+todu sync restart
 todu sync join <catalogId> --check
 todu sync join <catalogId>
 todu sync join <catalogId> --yes
 ```
 
 Behavior:
+- `status` reports local daemon sync mode and remote sync state
+- `start`, `stop`, and `restart` control the daemon-owned remote sync adapter
 - `--check` validates format + reachability only (no catalog switch)
 - default join prompts for confirmation before transactional switch
 - `--yes` skips confirmation for non-interactive automation

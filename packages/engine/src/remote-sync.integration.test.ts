@@ -17,6 +17,8 @@ const RELAY_PORTS = {
   stop: 24402,
   start: 24403,
   noOp: 24404,
+  reconcile: 24405,
+  watchdog: 24406,
 };
 
 /**
@@ -203,6 +205,102 @@ describe("remote sync", () => {
         await todu.sync.start();
         expect(todu.sync.status().remote.state).toBe("connected");
       } finally {
+        if (todu) {
+          await todu.close();
+          todu = null;
+        }
+        await stopRelay(relay, relayDir);
+      }
+    },
+  );
+
+  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
+    "sync.status() reconciles an already-connected adapter after a stale disconnect event",
+    { timeout: 10000 },
+    async () => {
+      const { relay, relayDir } = await startRelay(RELAY_PORTS.reconcile);
+      let connectedAdapter: WebSocketClientAdapter | null = null;
+      const originalPeerCandidate = WebSocketClientAdapter.prototype.peerCandidate;
+      const peerCandidateSpy = vi
+        .spyOn(WebSocketClientAdapter.prototype, "peerCandidate")
+        .mockImplementation(function mockPeerCandidate(
+          this: WebSocketClientAdapter,
+          ...args: Parameters<WebSocketClientAdapter["peerCandidate"]>
+        ) {
+          connectedAdapter = this;
+          return originalPeerCandidate.apply(this, args);
+        });
+
+      try {
+        todu = await createTodu({
+          storagePath: tmpDir,
+          remoteSync: { server: `ws://localhost:${RELAY_PORTS.reconcile}` },
+        });
+
+        await waitForRemoteState(todu, "connected");
+        expect(connectedAdapter).not.toBeNull();
+
+        connectedAdapter?.emit("peer-disconnected", {
+          peerId: connectedAdapter.remotePeerId,
+        });
+        expect(todu.sync.status().remote.state).toBe("connected");
+      } finally {
+        peerCandidateSpy.mockRestore();
+        if (todu) {
+          await todu.close();
+          todu = null;
+        }
+        await stopRelay(relay, relayDir);
+      }
+    },
+  );
+
+  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
+    "watchdog restarts a stale disconnected adapter while the server is reachable",
+    { timeout: 10000 },
+    async () => {
+      const { relay, relayDir } = await startRelay(RELAY_PORTS.watchdog);
+      let connectedAdapter: WebSocketClientAdapter | null = null;
+      const logger = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
+      const originalPeerCandidate = WebSocketClientAdapter.prototype.peerCandidate;
+      const peerCandidateSpy = vi
+        .spyOn(WebSocketClientAdapter.prototype, "peerCandidate")
+        .mockImplementation(function mockPeerCandidate(
+          this: WebSocketClientAdapter,
+          ...args: Parameters<WebSocketClientAdapter["peerCandidate"]>
+        ) {
+          connectedAdapter = this;
+          return originalPeerCandidate.apply(this, args);
+        });
+
+      try {
+        todu = await createTodu({
+          storagePath: tmpDir,
+          remoteSync: { server: `ws://localhost:${RELAY_PORTS.watchdog}` },
+          remoteSyncWatchdogIntervalMs: 20,
+          remoteSyncAvailabilityTimeoutMs: 200,
+          syncLogger: logger,
+        });
+
+        await waitForRemoteState(todu, "connected");
+        expect(connectedAdapter).not.toBeNull();
+
+        const staleAdapter = connectedAdapter;
+        staleAdapter.remotePeerId = undefined;
+        staleAdapter.emit("peer-disconnected", { peerId: "stale-remote" });
+        expect(todu.sync.status().remote.state).toBe("disconnected");
+
+        await waitForRemoteState(todu, "connected");
+        expect(logger.warn).toHaveBeenCalledWith(
+          "remote sync watchdog restarting stale adapter",
+          expect.objectContaining({ server: `ws://localhost:${RELAY_PORTS.watchdog}` }),
+        );
+      } finally {
+        peerCandidateSpy.mockRestore();
         if (todu) {
           await todu.close();
           todu = null;

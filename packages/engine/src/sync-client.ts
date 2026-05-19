@@ -3,6 +3,10 @@ import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websoc
 
 export const DEFAULT_SYNC_URL = "ws://127.0.0.1:24377";
 
+export interface SyncAdapterEventLogger {
+  warn(message: string, context?: Record<string, unknown>): void;
+}
+
 const TRANSIENT_SOCKET_ERROR_CODES = new Set([
   "ECONNREFUSED",
   "ECONNRESET",
@@ -65,17 +69,25 @@ export function addRemoteSyncAdapter(
   repo: Repo,
   url: string,
   retryInterval = 30000,
+  logger?: SyncAdapterEventLogger,
 ): WebSocketClientAdapter {
   const adapter = new WebSocketClientAdapter(url, retryInterval);
-  hardenWebSocketClientAdapterErrors(adapter);
+  hardenWebSocketClientAdapterErrors(adapter, logger);
   repo.networkSubsystem.addNetworkAdapter(adapter);
   return adapter;
 }
 
-export function hardenWebSocketClientAdapterErrors(adapter: WebSocketClientAdapter): void {
+export function hardenWebSocketClientAdapterErrors(
+  adapter: WebSocketClientAdapter,
+  logger?: SyncAdapterEventLogger,
+): void {
   const originalOnError = adapter.onError;
 
   adapter.onError = (event) => {
+    logger?.warn("remote sync adapter error", {
+      error: getErrorMessage(getEventError(event) ?? event),
+    });
+
     try {
       originalOnError(event);
     } catch (error) {
@@ -87,6 +99,14 @@ export function hardenWebSocketClientAdapterErrors(adapter: WebSocketClientAdapt
       throw error;
     }
   };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 function getEventError(event: unknown): unknown {

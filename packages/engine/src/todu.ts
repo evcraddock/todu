@@ -94,6 +94,29 @@ export interface ToduConfig {
    * Use ws://localhost:3030 via `make dev`.
    */
   remoteSync?: RemoteSyncConfig;
+
+  /**
+   * Remote sync watchdog polling interval in milliseconds.
+   *
+   * Defaults to 30 seconds when remote sync is configured.
+   */
+  remoteSyncWatchdogIntervalMs?: number;
+
+  /**
+   * Remote sync watchdog reachability timeout in milliseconds.
+   *
+   * Defaults to 200 milliseconds.
+   */
+  remoteSyncAvailabilityTimeoutMs?: number;
+
+  /**
+   * Optional host logger for remote sync lifecycle events.
+   */
+  syncLogger?: {
+    debug(message: string, context?: Record<string, unknown>): void;
+    info(message: string, context?: Record<string, unknown>): void;
+    warn(message: string, context?: Record<string, unknown>): void;
+  };
 }
 
 // ============================================================================
