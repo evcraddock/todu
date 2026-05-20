@@ -4,6 +4,8 @@ import type {
   ApprovalItem,
   ApprovalListFilter,
   BootstrapOwnerActor,
+  CommentSyncProvenance,
+  CommentSyncProvenanceFilter,
   CreateActorInput,
   CreateHabitInput,
   CreateIntegrationBindingInput,
@@ -49,6 +51,7 @@ import type {
   UpdateProjectInput,
   UpdateRecurringInput,
   UpdateTaskInput,
+  UpsertCommentSyncProvenanceInput,
 } from "@todu/core";
 import type { UpcomingOccurrence } from "./recurring.js";
 
@@ -299,9 +302,16 @@ export interface SyncRuntimeActorTools {
   ensure(input: { id: ActorId; displayName: string }): Promise<Result<Actor>>;
 }
 
+export interface SyncRuntimeCommentProvenanceTools {
+  list(filter?: CommentSyncProvenanceFilter): Promise<Result<CommentSyncProvenance[]>>;
+  upsert(input: UpsertCommentSyncProvenanceInput): Promise<Result<CommentSyncProvenance>>;
+  deleteForNote(noteId: NoteId): Promise<Result<void>>;
+}
+
 export interface ToduInternalTools {
   syncRuntime: {
     actors: SyncRuntimeActorTools;
+    commentProvenance: SyncRuntimeCommentProvenanceTools;
   };
 }
 

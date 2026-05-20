@@ -10,6 +10,7 @@ export type NoteId = string & { readonly __brand: "NoteId" };
 export type HabitId = string & { readonly __brand: "HabitId" };
 export type RecurringId = string & { readonly __brand: "RecurringId" };
 export type IntegrationBindingId = string & { readonly __brand: "IntegrationBindingId" };
+export type CommentSyncProvenanceId = string & { readonly __brand: "CommentSyncProvenanceId" };
 
 export function createTaskId(id: string): TaskId {
   return id as TaskId;
@@ -41,6 +42,10 @@ export function createRecurringId(id: string): RecurringId {
 
 export function createIntegrationBindingId(id: string): IntegrationBindingId {
   return id as IntegrationBindingId;
+}
+
+export function createCommentSyncProvenanceId(id: string): CommentSyncProvenanceId {
+  return id as CommentSyncProvenanceId;
 }
 
 // ============================================================================
@@ -198,6 +203,40 @@ export interface IntegrationBindingActorMapping {
 export interface IntegrationBindingOptions {
   actorMappings?: IntegrationBindingActorMapping[];
   [key: string]: unknown;
+}
+
+export interface CommentSyncProvenance {
+  id: CommentSyncProvenanceId;
+  bindingId: IntegrationBindingId;
+  provider: string;
+  targetKind: string;
+  targetRef: string;
+  localNoteId: NoteId;
+  externalTaskId: string;
+  externalCommentId: string;
+  sourceUrl?: string;
+  lastMirroredAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertCommentSyncProvenanceInput {
+  bindingId: IntegrationBindingId;
+  provider: string;
+  targetKind: string;
+  targetRef: string;
+  localNoteId: NoteId;
+  externalTaskId: string;
+  externalCommentId: string;
+  sourceUrl?: string;
+  lastMirroredAt: string;
+}
+
+export interface CommentSyncProvenanceFilter {
+  bindingId?: IntegrationBindingId;
+  localNoteId?: NoteId;
+  externalTaskId?: string;
+  externalCommentId?: string;
 }
 
 // ============================================================================

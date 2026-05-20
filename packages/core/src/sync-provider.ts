@@ -1,4 +1,5 @@
 import {
+  type CommentSyncProvenance,
   err,
   type IntegrationBinding,
   type NoteId,
@@ -60,6 +61,13 @@ export interface ExportedCommentInput {
   createdAt: string;
   updatedAt?: string;
   sourceUrl?: string;
+  /**
+   * Structured linkage for comments already known to this integration binding.
+   * Providers should use this instead of inspecting user-visible note tags.
+   */
+  provenance?: CommentSyncProvenance;
+  /** @deprecated Use provenance.externalCommentId. Kept during provider rollout. */
+  externalId?: string;
 }
 
 export interface ExportedTaskInput {

@@ -92,8 +92,8 @@ The following remain outside synced core entities:
 - credential references
 - cursors and checkpoints
 - retry and backoff state
-- linkage tables between local and external comments/items
-- loop-prevention bookkeeping
+- provider-local linkage tables for non-comment runtime state
+- loop-prevention bookkeeping except core-owned comment provenance records
 - provider diagnostics and caches
 
 ## Credential provisioning in v1
@@ -123,8 +123,9 @@ Initial storage shape should be:
 
 - one shared integration registry document referenced by the catalog for integration bindings
 - one separate integration binding status document per integration binding for synced operational status
+- one shared comment sync provenance document referenced by the catalog for local note/comment to external comment links
 
-This keeps shared desired state simple while isolating higher-churn status updates per integration binding.
+This keeps shared desired state simple while isolating higher-churn status updates per integration binding. Comment provenance is the narrow exception to provider-local linkage storage: it is core-owned because providers need a stable host API for imported/mirrored comments and because user-visible note tags are not an appropriate internal sync channel.
 
 ## Ownership Boundary
 
@@ -133,7 +134,8 @@ This keeps shared desired state simple while isolating higher-churn status updat
 | Integration binding identity, linked project, target reference, strategy, enabled state | Core synced model | Users must be able to view and manage these from any machine |
 | Credentials, tokens, API secrets | Provider-local runtime storage | Secrets should not sync through Automerge core state |
 | Cursors, checkpoints, retry state | Provider-local runtime storage | Operational internals belong to the executing daemon |
-| Item and comment linkage tables | Provider-local runtime storage | They are provider bookkeeping, not baseline user data |
+| Comment sync provenance | Core synced model | Comment loop prevention must work across providers without user-visible tags or provider CLI lookups |
+| Other item linkage tables and provider cursors | Provider-local runtime storage | They are provider bookkeeping, not baseline user data |
 | Tasks and notes created as sync results | Core entities | They are user-visible product outputs |
 | Plugin logs and diagnostics | Local daemon/plugin runtime | Operational data should remain local and observable |
 

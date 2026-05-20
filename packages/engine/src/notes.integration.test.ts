@@ -319,8 +319,8 @@ describe("note namespace", () => {
       await new Promise((r) => setTimeout(r, 50));
 
       const catalog = await readCatalogDocument(tmpDir);
-      expect(catalog.version).toBe(2);
-      expect(catalog.settings.schemaVersion).toBe(2);
+      expect(catalog.version).toBe(3);
+      expect(catalog.settings.schemaVersion).toBe(3);
       expect(catalog.actors).toEqual([
         { id: DEFAULT_OWNER_ACTOR_ID, displayName: "user" },
         { id: migratedFirst?.authorActorId, displayName: "Alice" },

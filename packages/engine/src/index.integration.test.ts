@@ -3,9 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
-import { type CatalogDocument, createActorId } from "@todu/core";
+import {
+  type CatalogDocument,
+  createActorId,
+  createIntegrationBindingId,
+  createNoteId,
+} from "@todu/core";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Todu } from "./index.js";
+import type { Todu, ToduWithInternalTools } from "./index.js";
 import { createTodu } from "./index.js";
 
 async function readCatalogDocument(storagePath: string): Promise<CatalogDocument> {
@@ -137,6 +142,47 @@ describe("createTodu", () => {
     expect(catalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
   });
 
+  it("persists structured comment sync provenance independently from note tags", async () => {
+    todu = await createTodu({ storagePath: tmpDir });
+    const internalTodu = todu as ToduWithInternalTools;
+    const upsertResult = await internalTodu.__internal.syncRuntime.commentProvenance.upsert({
+      bindingId: createIntegrationBindingId("ibind-1"),
+      provider: "github",
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      localNoteId: createNoteId("note-1"),
+      externalTaskId: "gh-task-1",
+      externalCommentId: "gh-comment-1",
+      lastMirroredAt: "2026-03-10T10:00:00.000Z",
+    });
+    expect(upsertResult.ok).toBe(true);
+
+    await todu.close();
+    todu = null;
+    await new Promise((r) => setTimeout(r, 50));
+
+    todu = await createTodu({ storagePath: tmpDir });
+    const reopenedTodu = todu as ToduWithInternalTools;
+    const listResult = await reopenedTodu.__internal.syncRuntime.commentProvenance.list({
+      bindingId: createIntegrationBindingId("ibind-1"),
+      localNoteId: createNoteId("note-1"),
+    });
+
+    expect(listResult.ok).toBe(true);
+    expect(listResult.ok ? listResult.value : []).toEqual([
+      expect.objectContaining({
+        bindingId: "ibind-1",
+        provider: "github",
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        localNoteId: "note-1",
+        externalTaskId: "gh-task-1",
+        externalCommentId: "gh-comment-1",
+        lastMirroredAt: "2026-03-10T10:00:00.000Z",
+      }),
+    ]);
+  });
+
   it("returns config via config.get()", async () => {
     todu = await createTodu({ storagePath: tmpDir });
     const config = todu.config.get();
@@ -229,7 +275,7 @@ describe("createTodu", () => {
     expect(migratedCatalog.integrationStatusDocIds).toEqual({});
     expect(migratedCatalog.recurringTemplates).toEqual([]);
     expect(migratedCatalog.habits).toEqual([]);
-    expect(migratedCatalog.settings.schemaVersion).toBe(2);
+    expect(migratedCatalog.settings.schemaVersion).toBe(3);
   });
 
   it("migrates old catalogs with the configured bootstrap owner actor", async () => {
@@ -258,6 +304,6 @@ describe("createTodu", () => {
     const migratedCatalog = await readCatalogDocument(tmpDir);
     expect(migratedCatalog.actors).toEqual([{ id: "erik", displayName: "Erik" }]);
     expect(migratedCatalog.ownerActorId).toBe("erik");
-    expect(migratedCatalog.settings.schemaVersion).toBe(2);
+    expect(migratedCatalog.settings.schemaVersion).toBe(3);
   });
 });
