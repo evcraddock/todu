@@ -1,6 +1,6 @@
 {
   "name": "@todu/daemon",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Daemon runtime foundation for todu",
   "type": "module",
   "main": "./dist/index.js",

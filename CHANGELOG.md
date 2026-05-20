@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-05-20
+
+This release replaces tag-based comment sync bookkeeping with structured comment provenance in core. Sync providers can now identify imported and mirrored comments through first-class provenance records instead of inspecting user-visible note tags, while existing GitHub/Forgejo-style plugin behavior remains compatible during migration.
+
+### Added
+- Added core-owned structured comment sync provenance records for binding-scoped local note/comment links, including provider target context, external task/thread IDs, external comment IDs, and last mirrored timestamps (#454)
+- Added provider-facing exported comment provenance so sync plugins can decide whether to skip, create, or update remote comments without `note list` tag lookups (#454)
+
+### Changed
+- Changed imported comment sync to create provenance records instead of requiring new `sync:externalId:*` user-visible note tags for loop prevention (#454)
+- Added lazy compatibility migration for existing comments with legacy `sync:externalId:*` tags while preserving normal user notes unchanged (#454)
+
+### Documentation
+- Documented the comment provenance model, provider migration path, and updated integration ownership boundary (#454)
+
 ## [0.22.0] - 2026-05-19
 
 This release improves task discovery and daemon reliability. Task search now includes descriptions, daemon startup is more stable from CLI-managed launches, legacy `toduai` CLI compatibility has been removed, and remote sync can recover from a wedged adapter without restarting the daemon.
