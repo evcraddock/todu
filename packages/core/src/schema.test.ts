@@ -13,7 +13,7 @@ import { createActorId, createIntegrationBindingId, createProjectId } from "./ty
 
 describe("schema", () => {
   it("exports schema version", () => {
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3);
   });
 
   describe("createEmptyCatalog", () => {

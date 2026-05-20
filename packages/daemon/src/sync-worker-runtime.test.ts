@@ -1,6 +1,8 @@
 import {
   type Actor,
+  type CommentSyncProvenance,
   createActorId,
+  createCommentSyncProvenanceId,
   createIntegrationBindingId,
   createNoteId,
   createProjectId,
@@ -321,7 +323,7 @@ describe("sync-worker-runtime", () => {
   it("push includes task comments from note.list in each exported task payload", async () => {
     const provider = createProvider();
     const project = createProject();
-    const task = createTask(project.id);
+    const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "push" });
     const taskNote = createNote({
       entityType: "task",
@@ -356,11 +358,18 @@ describe("sync-worker-runtime", () => {
     const pushedTasks = pushArgs[1];
     expect(pushedTasks).toHaveLength(1);
     expect(pushedTasks[0].comments).toEqual([
-      {
+      expect.objectContaining({
         localNoteId: taskNote.id,
         body: taskNote.content,
         createdAt: taskNote.createdAt,
-      },
+        externalId: "ext-c1",
+        provenance: expect.objectContaining({
+          bindingId: binding.id,
+          localNoteId: taskNote.id,
+          externalTaskId: task.externalId,
+          externalCommentId: "ext-c1",
+        }),
+      }),
     ]);
 
     handle.stop();
@@ -1177,9 +1186,76 @@ describe("sync-worker-runtime", () => {
         }),
         entityType: "task",
         entityId: task.id,
-        tags: ["sync:externalId:gh-comment-1"],
+        tags: [],
         createdAt: "2026-03-10T10:00:00.000Z",
       }),
+    );
+
+    handle.stop();
+  });
+
+  it("bidirectional sync exposes provenance for newly imported comments before push", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "bidirectional" });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-1",
+            externalTaskId: task.externalId!,
+            body: "Imported comment",
+            createdAt: "2026-03-10T10:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding]);
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: [],
+      }),
+    );
+    expect(provider.push).toHaveBeenCalledWith(
+      binding,
+      [
+        expect.objectContaining({
+          comments: [
+            expect.objectContaining({
+              body: "Imported comment",
+              externalId: "gh-comment-1",
+              provenance: expect.objectContaining({
+                bindingId: binding.id,
+                externalTaskId: task.externalId,
+                externalCommentId: "gh-comment-1",
+              }),
+            }),
+          ],
+        }),
+      ],
+      project,
     );
 
     handle.stop();
@@ -1356,6 +1432,50 @@ describe("sync-worker-runtime", () => {
 
     expect(todu.note.update).not.toHaveBeenCalled();
     expect(todu.note.create).not.toHaveBeenCalled();
+    expect(todu.note.delete).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
+  it("pull does not modify local notes without sync tags or provenance", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const localNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "ordinary user note",
+      tags: [],
+    });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [localNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.update).not.toHaveBeenCalled();
     expect(todu.note.delete).not.toHaveBeenCalled();
 
     handle.stop();
@@ -2112,6 +2232,7 @@ function createNote(overrides: Partial<Note> & { content: string }): Note {
 interface CreateToduOptions {
   notes?: Note[];
   actors?: Actor[];
+  commentProvenance?: CommentSyncProvenance[];
 }
 
 function createTodu(
@@ -2147,6 +2268,7 @@ function createTodu(
 } {
   const tasks: Task[] = [...initialTasks];
   const notes: Note[] = [...(options.notes ?? [])];
+  const commentProvenance: CommentSyncProvenance[] = [...(options.commentProvenance ?? [])];
   const actors: Actor[] = [{ id: createActorId("actor-user"), displayName: "user" }];
   for (const actor of options.actors ?? []) {
     if (!actors.some((candidate) => candidate.id === actor.id)) {
@@ -2409,6 +2531,87 @@ function createTodu(
     return ok(undefined);
   });
 
+  const commentProvenanceList = vi.fn(
+    async (filter?: {
+      bindingId?: string;
+      localNoteId?: string;
+      externalTaskId?: string;
+      externalCommentId?: string;
+    }) => {
+      let filtered = commentProvenance;
+      if (filter?.bindingId !== undefined) {
+        filtered = filtered.filter((record) => record.bindingId === filter.bindingId);
+      }
+      if (filter?.localNoteId !== undefined) {
+        filtered = filtered.filter((record) => record.localNoteId === filter.localNoteId);
+      }
+      if (filter?.externalTaskId !== undefined) {
+        filtered = filtered.filter((record) => record.externalTaskId === filter.externalTaskId);
+      }
+      if (filter?.externalCommentId !== undefined) {
+        filtered = filtered.filter(
+          (record) => record.externalCommentId === filter.externalCommentId,
+        );
+      }
+      return ok(filtered.map((record) => ({ ...record })));
+    },
+  );
+
+  const commentProvenanceUpsert = vi.fn(
+    async (input: {
+      bindingId: IntegrationBinding["id"];
+      provider: string;
+      targetKind: string;
+      targetRef: string;
+      localNoteId: Note["id"];
+      externalTaskId: string;
+      externalCommentId: string;
+      sourceUrl?: string;
+      lastMirroredAt: string;
+    }) => {
+      const existing = commentProvenance.find(
+        (record) =>
+          record.bindingId === input.bindingId && record.localNoteId === input.localNoteId,
+      );
+      if (existing) {
+        existing.provider = input.provider;
+        existing.targetKind = input.targetKind;
+        existing.targetRef = input.targetRef;
+        existing.externalTaskId = input.externalTaskId;
+        existing.externalCommentId = input.externalCommentId;
+        if (input.sourceUrl !== undefined) existing.sourceUrl = input.sourceUrl;
+        existing.lastMirroredAt = input.lastMirroredAt;
+        existing.updatedAt = new Date(0).toISOString();
+        return ok({ ...existing });
+      }
+      const created: CommentSyncProvenance = {
+        id: createCommentSyncProvenanceId(`cprov-${commentProvenance.length + 1}`),
+        bindingId: input.bindingId,
+        provider: input.provider,
+        targetKind: input.targetKind,
+        targetRef: input.targetRef,
+        localNoteId: input.localNoteId,
+        externalTaskId: input.externalTaskId,
+        externalCommentId: input.externalCommentId,
+        ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
+        lastMirroredAt: input.lastMirroredAt,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      };
+      commentProvenance.push(created);
+      return ok({ ...created });
+    },
+  );
+
+  const commentProvenanceDeleteForNote = vi.fn(async (noteId: Note["id"]) => {
+    for (let index = commentProvenance.length - 1; index >= 0; index -= 1) {
+      if (commentProvenance[index].localNoteId === noteId) {
+        commentProvenance.splice(index, 1);
+      }
+    }
+    return ok(undefined);
+  });
+
   const actorList = vi.fn().mockImplementation(async () => ok([...actors]));
   const actorEnsure = vi
     .fn()
@@ -2430,6 +2633,11 @@ function createTodu(
               .fn()
               .mockImplementation(async () => ok(createActorId("actor-user"))),
             ensure: actorEnsure,
+          },
+          commentProvenance: {
+            list: commentProvenanceList,
+            upsert: commentProvenanceUpsert,
+            deleteForNote: commentProvenanceDeleteForNote,
           },
         },
       },

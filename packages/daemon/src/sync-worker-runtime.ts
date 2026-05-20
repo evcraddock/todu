@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {
   type Actor,
   type ActorId,
+  type CommentSyncProvenance,
   createActorId,
   createProjectId,
   type ExportedCommentInput,
@@ -325,7 +326,7 @@ export function createSyncPluginWorkerRuntime(
           }
 
           await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
-          await applyPushCommentLinks(activeTodu, pushResult.commentLinks);
+          await applyPushCommentLinks(activeTodu, actorState, pushResult.commentLinks);
         }
 
         if (actorState.mappingsChanged) {
@@ -460,6 +461,85 @@ function getSyncExternalIdFromNote(note: Note): string | null {
   return externalIdTag.slice(SYNC_EXTERNAL_ID_TAG_PREFIX.length);
 }
 
+async function listCommentProvenance(
+  todu: Todu,
+  filter: {
+    bindingId: IntegrationBinding["id"];
+    localNoteId?: Note["id"];
+    externalTaskId?: string;
+  },
+): Promise<CommentSyncProvenance[]> {
+  const result =
+    await getToduWithInternals(todu).__internal.syncRuntime.commentProvenance.list(filter);
+  if (!result.ok) {
+    throw new Error(`comment provenance list failed: ${formatToduError(result.error)}`);
+  }
+  return result.value;
+}
+
+async function upsertCommentProvenance(
+  todu: Todu,
+  actorState: SyncBindingActorState,
+  input: {
+    localNoteId: Note["id"];
+    externalTaskId: string;
+    externalCommentId: string;
+    sourceUrl?: string;
+    lastMirroredAt: string;
+  },
+): Promise<CommentSyncProvenance> {
+  const result = await getToduWithInternals(todu).__internal.syncRuntime.commentProvenance.upsert({
+    bindingId: actorState.binding.id,
+    provider: actorState.binding.provider,
+    targetKind: actorState.binding.targetKind,
+    targetRef: actorState.binding.targetRef,
+    localNoteId: input.localNoteId,
+    externalTaskId: input.externalTaskId,
+    externalCommentId: input.externalCommentId,
+    ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
+    lastMirroredAt: input.lastMirroredAt,
+  });
+  if (!result.ok) {
+    throw new Error(`comment provenance upsert failed: ${formatToduError(result.error)}`);
+  }
+  return result.value;
+}
+
+async function deleteCommentProvenanceForNote(todu: Todu, noteId: Note["id"]): Promise<void> {
+  const result =
+    await getToduWithInternals(todu).__internal.syncRuntime.commentProvenance.deleteForNote(noteId);
+  if (!result.ok) {
+    throw new Error(`comment provenance delete failed: ${formatToduError(result.error)}`);
+  }
+}
+
+async function resolveExportedCommentProvenance(
+  todu: Todu,
+  actorState: SyncBindingActorState,
+  note: Note,
+  externalTaskId: string | undefined,
+): Promise<CommentSyncProvenance | undefined> {
+  const existing = await listCommentProvenance(todu, {
+    bindingId: actorState.binding.id,
+    localNoteId: note.id,
+  });
+  if (existing[0]) {
+    return existing[0];
+  }
+
+  const legacyExternalId = getSyncExternalIdFromNote(note);
+  if (!legacyExternalId || !externalTaskId) {
+    return undefined;
+  }
+
+  return upsertCommentProvenance(todu, actorState, {
+    localNoteId: note.id,
+    externalTaskId,
+    externalCommentId: legacyExternalId,
+    lastMirroredAt: note.createdAt,
+  });
+}
+
 async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[]): Promise<void> {
   for (const link of links) {
     const taskResult = await todu.task.get(link.localTaskId);
@@ -504,37 +584,76 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
 
 async function applyPushCommentLinks(
   todu: Todu,
+  actorState: SyncBindingActorState,
   links: SyncProviderPushCommentLink[],
 ): Promise<void> {
   for (const link of links) {
-    const notesResult = await todu.note.list({
-      entityType: "task",
-      entityId: link.externalTaskId,
-    });
-    const notes = notesResult.ok ? notesResult.value : [];
-    const note = notes.find((candidate) => candidate.id === link.localNoteId);
+    const noteResult = await todu.note.get(link.localNoteId);
+    const note = noteResult.ok ? noteResult.value : null;
 
-    if (!note) {
+    if (!note || note.entityType !== "task" || !note.entityId) {
       throw new Error(
         `push comment link references missing task note: note=${link.localNoteId} task=${link.externalTaskId}`,
       );
     }
 
-    const existingExternalId = getSyncExternalIdFromNote(note);
-    if (existingExternalId === link.externalCommentId) {
+    const existingProvenance = await listCommentProvenance(todu, {
+      bindingId: actorState.binding.id,
+      localNoteId: note.id,
+    });
+    if (existingProvenance[0]?.externalCommentId === link.externalCommentId) {
       continue;
     }
+    if (
+      existingProvenance[0] &&
+      existingProvenance[0].externalCommentId !== link.externalCommentId
+    ) {
+      throw new Error(
+        `push comment link conflicts with existing note linkage: note=${link.localNoteId} existing=${existingProvenance[0].externalCommentId} next=${link.externalCommentId}`,
+      );
+    }
 
+    const existingExternalId = getSyncExternalIdFromNote(note);
     if (existingExternalId && existingExternalId !== link.externalCommentId) {
       throw new Error(
         `push comment link conflicts with existing note linkage: note=${link.localNoteId} existing=${existingExternalId} next=${link.externalCommentId}`,
       );
     }
 
-    await todu.note.update(note.id, {
-      tags: [...note.tags, createSyncExternalIdTag(link.externalCommentId)],
+    const taskResult = await todu.task.get(note.entityId as Task["id"]);
+    const task = taskResult.ok ? taskResult.value : null;
+    const externalTaskId = task?.externalId ?? link.externalTaskId;
+    const lastMirroredAt =
+      normalizeOptionalTimestamp(link.updatedAt ?? link.createdAt) ?? new Date().toISOString();
+
+    await upsertCommentProvenance(todu, actorState, {
+      localNoteId: note.id,
+      externalTaskId,
+      externalCommentId: link.externalCommentId,
+      ...(link.sourceUrl !== undefined ? { sourceUrl: link.sourceUrl } : {}),
+      lastMirroredAt,
     });
+
+    // Preserve legacy tag compatibility for local-origin comments linked by existing providers.
+    if (!existingExternalId) {
+      await todu.note.update(note.id, {
+        tags: [...note.tags, createSyncExternalIdTag(link.externalCommentId)],
+      });
+    }
   }
+}
+
+function normalizeOptionalTimestamp(value: string | undefined): string | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return null;
+  }
+
+  return timestamp.toISOString();
 }
 
 function normalizeImportedTaskTimestamp(
@@ -777,9 +896,11 @@ async function applyImportedComments(
   }
 
   const localTaskIdByExternalId = new Map<string, Task["id"]>();
+  const externalTaskIdByLocalId = new Map<string, string>();
   for (const task of tasksResult.value) {
     if (task.externalId) {
       localTaskIdByExternalId.set(task.externalId, task.id);
+      externalTaskIdByLocalId.set(task.id, task.externalId);
     }
   }
 
@@ -805,12 +926,38 @@ async function applyImportedComments(
       entityId: taskId,
     });
     const localNotes: Note[] = localNotesResult.ok ? localNotesResult.value : [];
+    const externalTaskId = externalTaskIdByLocalId.get(taskId);
+    if (!externalTaskId) {
+      continue;
+    }
 
+    const localNotesById = new Map(localNotes.map((note) => [note.id, note]));
     const localByExternalId = new Map<string, Note>();
+    const provenanceRecords = await listCommentProvenance(todu, {
+      bindingId: actorState.binding.id,
+      externalTaskId,
+    });
+    for (const provenance of provenanceRecords) {
+      const note = localNotesById.get(provenance.localNoteId);
+      if (note) {
+        localByExternalId.set(provenance.externalCommentId, note);
+      }
+    }
+
     for (const note of localNotes) {
-      const externalId = getSyncExternalIdFromNote(note);
-      if (externalId) {
-        localByExternalId.set(externalId, note);
+      const legacyExternalId = getSyncExternalIdFromNote(note);
+      if (!legacyExternalId) {
+        continue;
+      }
+
+      if (!localByExternalId.has(legacyExternalId)) {
+        const provenance = await upsertCommentProvenance(todu, actorState, {
+          localNoteId: note.id,
+          externalTaskId,
+          externalCommentId: legacyExternalId,
+          lastMirroredAt: note.createdAt,
+        });
+        localByExternalId.set(provenance.externalCommentId, note);
       }
     }
 
@@ -835,7 +982,7 @@ async function applyImportedComments(
           contentApproval: approval,
           entityType: "task",
           entityId: taskId,
-          tags: [createSyncExternalIdTag(pulled.externalId)],
+          tags: [],
           createdAt: normalizeImportedCommentTimestamp(pulled, "createdAt"),
         });
         if (!createResult.ok) {
@@ -843,6 +990,15 @@ async function applyImportedComments(
             `pulled comment create failed: externalId=${pulled.externalId} error=${formatToduError(createResult.error)}`,
           );
         }
+        await upsertCommentProvenance(todu, actorState, {
+          localNoteId: createResult.value.id,
+          externalTaskId: pulled.externalTaskId,
+          externalCommentId: pulled.externalId,
+          lastMirroredAt: normalizeImportedCommentTimestamp(
+            pulled,
+            pulled.updatedAt !== undefined ? "updatedAt" : "createdAt",
+          ),
+        });
         stats.created += 1;
       } else {
         const externalUpdatedAt = normalizeImportedCommentTimestamp(
@@ -864,6 +1020,12 @@ async function applyImportedComments(
           }
           stats.updated += 1;
         }
+        await upsertCommentProvenance(todu, actorState, {
+          localNoteId: localNote.id,
+          externalTaskId: pulled.externalTaskId,
+          externalCommentId: pulled.externalId,
+          lastMirroredAt: externalUpdatedAt,
+        });
       }
     }
 
@@ -875,6 +1037,7 @@ async function applyImportedComments(
             `pulled comment delete failed: note=${note.id} externalId=${externalId} error=${formatToduError(deleteResult.error)}`,
           );
         }
+        await deleteCommentProvenanceForNote(todu, note.id);
         stats.deleted += 1;
       }
     }
@@ -916,14 +1079,26 @@ async function buildPushPayloadsV3(
       assignees: buildOutboundV3Assignees(taskDetail, actorState, logger),
       sourceUrl: taskDetail.sourceUrl,
       updatedAt: taskDetail.updatedAt,
-      comments: comments.map((comment) => {
-        const exported: ExportedCommentInput = {
-          localNoteId: comment.id,
-          body: comment.content,
-          createdAt: comment.createdAt,
-        };
-        return exported;
-      }),
+      comments: await Promise.all(
+        comments.map(async (comment) => {
+          const provenance = await resolveExportedCommentProvenance(
+            todu,
+            actorState,
+            comment,
+            taskDetail.externalId,
+          );
+          const exported: ExportedCommentInput = {
+            localNoteId: comment.id,
+            body: comment.content,
+            createdAt: comment.createdAt,
+            ...(provenance?.sourceUrl !== undefined ? { sourceUrl: provenance.sourceUrl } : {}),
+            ...(provenance !== undefined
+              ? { provenance, externalId: provenance.externalCommentId }
+              : {}),
+          };
+          return exported;
+        }),
+      ),
     });
   }
 
@@ -1281,8 +1456,11 @@ function normalizeImportedCommentTimestamp(
 
 function getToduWithInternals(todu: Todu): ToduWithInternalTools {
   const internalTodu = todu as ToduWithInternalTools;
-  if (!internalTodu.__internal?.syncRuntime?.actors) {
-    throw new Error("daemon sync runtime requires engine syncRuntime actor internals");
+  if (
+    !internalTodu.__internal?.syncRuntime?.actors ||
+    !internalTodu.__internal.syncRuntime.commentProvenance
+  ) {
+    throw new Error("daemon sync runtime requires engine syncRuntime internals");
   }
 
   return internalTodu;

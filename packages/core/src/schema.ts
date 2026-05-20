@@ -2,6 +2,7 @@ import type { BootstrapOwnerActor } from "./config.js";
 import {
   type Actor,
   type ActorId,
+  type CommentSyncProvenance,
   createActorId,
   type Habit,
   type HabitEntry,
@@ -67,6 +68,9 @@ export interface CatalogDocument {
 
   /** Map of integrationBindingId → Automerge document ID for that binding's status doc */
   integrationStatusDocIds: Record<string, string>;
+
+  /** Automerge document ID for structured comment sync provenance records. */
+  commentSyncProvenanceDocId?: string;
 
   /** Habit definitions */
   habits: Habit[];
@@ -150,6 +154,14 @@ export interface IntegrationBindingStatusDocument extends IntegrationBindingStat
 }
 
 /**
+ * Comment sync provenance document (one per dataset).
+ * Stores provider-owned linkage for synced comments independently from user-visible note tags.
+ */
+export interface CommentSyncProvenanceDocument {
+  records: CommentSyncProvenance[];
+}
+
+/**
  * Habit log document (one per habit).
  * Contains check-in entries keyed by date for deterministic multi-device merging.
  */
@@ -165,7 +177,7 @@ export interface HabitLogDocument {
 // Schema version
 // ============================================================================
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const DEFAULT_OWNER_ACTOR_ID = createActorId("actor-user");
 export const DEFAULT_OWNER_ACTOR_DISPLAY_NAME = "user";
 export const DEFAULT_OWNER_ACTOR: BootstrapOwnerActor = {
@@ -229,6 +241,12 @@ export function createNotesDocument(): NotesDocument {
 export function createIntegrationRegistryDocument(): IntegrationRegistryDocument {
   return {
     bindings: [],
+  };
+}
+
+export function createCommentSyncProvenanceDocument(): CommentSyncProvenanceDocument {
+  return {
+    records: [],
   };
 }
 

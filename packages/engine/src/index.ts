@@ -15,7 +15,10 @@ import { createLabelNamespace } from "./labels.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
-import { createSyncRuntimeActorTools } from "./runtime-internals.js";
+import {
+  createSyncRuntimeActorTools,
+  createSyncRuntimeCommentProvenanceTools,
+} from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
 import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
 import { addRemoteSyncAdapter, connectSyncClient, isSyncServerAvailable } from "./sync-client.js";
@@ -351,6 +354,7 @@ export async function createTodu(
     __internal: {
       syncRuntime: {
         actors: createSyncRuntimeActorTools(storage.catalog),
+        commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),
       },
     },
     actor: createActorNamespace(storage.catalog),

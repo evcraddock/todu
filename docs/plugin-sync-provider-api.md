@@ -90,12 +90,27 @@ interface ImportedCommentInput {
   raw?: unknown;
 }
 
+interface CommentSyncProvenance {
+  bindingId: IntegrationBindingId;
+  provider: string;
+  targetKind: string;
+  targetRef: string;
+  localNoteId: NoteId;
+  externalTaskId: string;
+  externalCommentId: string;
+  sourceUrl?: string;
+  lastMirroredAt: string;
+}
+
 interface ExportedCommentInput {
   localNoteId: NoteId;
   body: string;
   createdAt: string;
   updatedAt?: string;
   sourceUrl?: string;
+  provenance?: CommentSyncProvenance;
+  /** @deprecated Use provenance.externalCommentId. */
+  externalId?: string;
 }
 
 interface ExportedTaskInput {
@@ -187,7 +202,7 @@ interface SyncProviderPushResult {
 
 The runtime applies returned `taskLinks` first, writing back task linkage for pushed local tasks so later pull cycles deduplicate by `externalId`. Returning the same task link again is a no-op. Returning a conflicting task link for a task that is already linked to a different external item is treated as a runtime error.
 
-The runtime then applies each returned comment link idempotently by attaching the canonical `sync:externalId:<externalCommentId>` tag to the referenced local note. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error.
+The runtime then applies each returned comment link idempotently by writing structured comment provenance for the referenced local note and integration binding. Returning the same link again is a no-op. Returning a conflicting link for a note that is already linked to a different external comment is treated as a runtime error. During rollout, the runtime may preserve legacy `sync:externalId:<externalCommentId>` tags for local-origin comment links so older providers keep working, but providers should migrate to `ExportedCommentInput.provenance` and stop reading note tags.
 
 ### Comment pull path
 
@@ -195,9 +210,14 @@ Pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalA
 
 The runtime reconciles pulled comments with local notes using a snapshot model:
 
-- comments with an `externalId` not present locally are created as new notes with a `sync:externalId:<value>` tag
+- comments with an `externalId` not present locally are created as new notes and linked through structured comment provenance, not user-visible tags
 - comments matching an existing local note are updated if the external `updatedAt` is newer than the local `createdAt`
 - local synced notes whose external IDs are absent from the pull result are deleted
+- existing notes with legacy `sync:externalId:*` tags are resolved lazily into provenance records when encountered; notes without sync tags are not rewritten by this migration
+
+### Comment provenance migration path
+
+Comment provenance is core-owned sync bookkeeping keyed by local note ID and integration binding. It stores the binding/provider target context, local note ID, external task/thread ID, external comment ID, optional source URL, and last mirrored timestamp. New providers should use `comment.provenance?.externalCommentId` to decide whether to skip, create, update, or delete remote comments. Existing GitHub/Forgejo-style providers that previously called `note list` and inspected `sync:externalId:*` tags can migrate by reading `ExportedTaskInput.comments[].provenance` from the push payload instead; `comment.externalId` is a temporary compatibility alias for `comment.provenance.externalCommentId`.
 
 ## Load-time enforcement
 

@@ -694,6 +694,7 @@ function migrateCatalog(
       d.noteBucketByNoteId = structuredClone(defaults.noteBucketByNoteId);
     if (d.integrationStatusDocIds === undefined || d.integrationStatusDocIds === null)
       d.integrationStatusDocIds = structuredClone(defaults.integrationStatusDocIds);
+    if (d.commentSyncProvenanceDocId === null) delete d.commentSyncProvenanceDocId;
     if (d.settings === undefined || d.settings === null) {
       d.settings = { schemaVersion: d.version ?? 1 };
     } else if (d.settings.schemaVersion === undefined || d.settings.schemaVersion === null) {
