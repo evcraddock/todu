@@ -5,6 +5,7 @@ import {
   type CommentSyncProvenance,
   createActorId,
   createProjectId,
+  type DeletedImportedCommentInput,
   type ExportedCommentInput,
   type ExportedTaskInput,
   type ExternalActorRef,
@@ -96,6 +97,11 @@ interface RuntimeImportedComment {
   author?: ExternalActorRef;
   createdAt: string;
   updatedAt?: string;
+}
+
+interface RuntimeDeletedComment {
+  externalId: string;
+  externalTaskId: string;
 }
 
 export function resolveSyncPluginExecutionConfig(
@@ -304,8 +310,16 @@ export function createSyncPluginWorkerRuntime(
             project = pullStats.project;
           }
 
-          if (pullResult.comments && pullResult.comments.length > 0) {
-            await applyPulledCommentsV3(activeTodu, actorState, project.id, pullResult.comments);
+          const hasPulledCommentChanges =
+            (pullResult.comments?.length ?? 0) > 0 ||
+            (pullResult.deletedComments?.length ?? 0) > 0 ||
+            (pullResult.completeCommentExternalTaskIds?.length ?? 0) > 0;
+          if (hasPulledCommentChanges) {
+            await applyPulledCommentsV3(activeTodu, actorState, project.id, {
+              comments: pullResult.comments ?? [],
+              deletedComments: pullResult.deletedComments ?? [],
+              completeCommentExternalTaskIds: pullResult.completeCommentExternalTaskIds ?? [],
+            });
           }
         }
 
@@ -868,9 +882,13 @@ async function applyPulledCommentsV3(
   todu: Todu,
   actorState: SyncBindingActorState,
   projectId: Project["id"],
-  comments: ImportedCommentInput[],
+  input: {
+    comments: ImportedCommentInput[];
+    deletedComments: DeletedImportedCommentInput[];
+    completeCommentExternalTaskIds: string[];
+  },
 ): Promise<{ created: number; updated: number; deleted: number }> {
-  const importedComments = comments.map((comment) => ({
+  const importedComments = input.comments.map((comment) => ({
     externalId: comment.externalId,
     externalTaskId: comment.externalTaskId,
     body: comment.body,
@@ -878,15 +896,27 @@ async function applyPulledCommentsV3(
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
   })) satisfies RuntimeImportedComment[];
+  const deletedComments = input.deletedComments.map((comment) => ({
+    externalId: comment.externalId,
+    externalTaskId: comment.externalTaskId,
+  })) satisfies RuntimeDeletedComment[];
 
-  return applyImportedComments(todu, actorState, projectId, importedComments);
+  return applyImportedComments(todu, actorState, projectId, {
+    comments: importedComments,
+    deletedComments,
+    completeCommentExternalTaskIds: input.completeCommentExternalTaskIds,
+  });
 }
 
 async function applyImportedComments(
   todu: Todu,
   actorState: SyncBindingActorState,
   projectId: Project["id"],
-  comments: RuntimeImportedComment[],
+  input: {
+    comments: RuntimeImportedComment[];
+    deletedComments: RuntimeDeletedComment[];
+    completeCommentExternalTaskIds: string[];
+  },
 ): Promise<{ created: number; updated: number; deleted: number }> {
   const stats = { created: 0, updated: 0, deleted: 0 };
 
@@ -905,7 +935,11 @@ async function applyImportedComments(
   }
 
   const commentsByTask = new Map<string, RuntimeImportedComment[]>();
-  for (const comment of comments) {
+  const deletedCommentIdsByTask = new Map<string, Set<string>>();
+  const completeTaskIds = new Set<string>();
+  const affectedTaskIds = new Set<string>();
+
+  for (const comment of input.comments) {
     const localTaskId = localTaskIdByExternalId.get(comment.externalTaskId);
     if (!localTaskId) {
       continue;
@@ -917,10 +951,38 @@ async function applyImportedComments(
     } else {
       commentsByTask.set(localTaskId, [comment]);
     }
+    affectedTaskIds.add(localTaskId);
   }
 
-  for (const taskId of commentsByTask.keys()) {
+  for (const comment of input.deletedComments) {
+    const localTaskId = localTaskIdByExternalId.get(comment.externalTaskId);
+    if (!localTaskId) {
+      continue;
+    }
+
+    const existing = deletedCommentIdsByTask.get(localTaskId);
+    if (existing) {
+      existing.add(comment.externalId);
+    } else {
+      deletedCommentIdsByTask.set(localTaskId, new Set([comment.externalId]));
+    }
+    affectedTaskIds.add(localTaskId);
+  }
+
+  for (const externalTaskId of input.completeCommentExternalTaskIds) {
+    const localTaskId = localTaskIdByExternalId.get(externalTaskId);
+    if (!localTaskId) {
+      continue;
+    }
+
+    completeTaskIds.add(localTaskId);
+    affectedTaskIds.add(localTaskId);
+  }
+
+  for (const taskId of affectedTaskIds) {
     const pulledComments = commentsByTask.get(taskId) ?? [];
+    const explicitlyDeletedExternalIds = deletedCommentIdsByTask.get(taskId) ?? new Set<string>();
+    const isCompleteCommentSnapshot = completeTaskIds.has(taskId);
     const localNotesResult = await todu.note.list({
       entityType: "task",
       entityId: taskId,
@@ -1030,16 +1092,21 @@ async function applyImportedComments(
     }
 
     for (const [externalId, note] of localByExternalId) {
-      if (!pulledExternalIds.has(externalId)) {
-        const deleteResult = await todu.note.delete(note.id);
-        if (!deleteResult.ok) {
-          throw new Error(
-            `pulled comment delete failed: note=${note.id} externalId=${externalId} error=${formatToduError(deleteResult.error)}`,
-          );
-        }
-        await deleteCommentProvenanceForNote(todu, note.id);
-        stats.deleted += 1;
+      const shouldDelete =
+        explicitlyDeletedExternalIds.has(externalId) ||
+        (isCompleteCommentSnapshot && !pulledExternalIds.has(externalId));
+      if (!shouldDelete) {
+        continue;
       }
+
+      const deleteResult = await todu.note.delete(note.id);
+      if (!deleteResult.ok) {
+        throw new Error(
+          `pulled comment delete failed: note=${note.id} externalId=${externalId} error=${formatToduError(deleteResult.error)}`,
+        );
+      }
+      await deleteCommentProvenanceForNote(todu, note.id);
+      stats.deleted += 1;
     }
   }
 

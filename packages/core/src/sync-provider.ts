@@ -55,6 +55,13 @@ export interface ImportedCommentInput {
   raw?: unknown;
 }
 
+export interface DeletedImportedCommentInput {
+  externalId: string;
+  externalTaskId: string;
+  deletedAt?: string;
+  raw?: unknown;
+}
+
 export interface ExportedCommentInput {
   localNoteId: NoteId;
   body: string;
@@ -91,6 +98,8 @@ export interface SyncProviderConfig {
 export interface SyncProviderPullResultV3 {
   tasks: ImportedTaskInput[];
   comments?: ImportedCommentInput[];
+  deletedComments?: DeletedImportedCommentInput[];
+  completeCommentExternalTaskIds?: string[];
 }
 
 export interface SyncProviderPushCommentLink {
