@@ -764,7 +764,7 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
-  it("linked local-origin comments later delete remotely through the same local note", async () => {
+  it("linked local-origin comments later delete remotely through explicit tombstones", async () => {
     const project = createProject();
     const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "bidirectional" });
@@ -779,12 +779,12 @@ describe("sync-worker-runtime", () => {
         .mockResolvedValueOnce({ tasks: [], comments: [] })
         .mockResolvedValue({
           tasks: [],
-          comments: [
+          comments: [],
+          deletedComments: [
             {
-              externalId: "gh-comment-other",
+              externalId: "gh-comment-1",
               externalTaskId: task.externalId!,
-              body: "other remote comment",
-              createdAt: "2026-03-10T10:00:00Z",
+              deletedAt: "2026-03-10T10:00:00Z",
             },
           ],
         }),
@@ -1328,15 +1328,15 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
-  it("pull deletes local synced notes absent from pull result", async () => {
+  it("pull preserves local synced notes absent from partial pull result", async () => {
     const project = createProject();
     const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
-    const orphanedNote = createNote({
+    const omittedNote = createNote({
       entityType: "task",
       entityId: task.id,
-      content: "will be deleted",
-      tags: ["sync:externalId:gh-comment-deleted"],
+      content: "omitted from partial pull",
+      tags: ["sync:externalId:gh-comment-omitted"],
     });
     const provider = createProvider({
       pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
@@ -1345,13 +1345,64 @@ describe("sync-worker-runtime", () => {
           {
             externalId: "gh-comment-other",
             externalTaskId: task.externalId!,
-            body: "still exists",
+            body: "changed in partial pull",
             createdAt: "2026-03-10T10:00:00Z",
           },
         ],
       }),
     });
-    const todu = createTodu(project, [task], [binding], { notes: [orphanedNote] });
+    const todu = createTodu(project, [task], [binding], { notes: [omittedNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.delete).not.toHaveBeenCalled();
+    expect(todu.note.create).toHaveBeenCalledTimes(1);
+
+    handle.stop();
+  });
+
+  it("pull deletes local synced notes from explicit comment tombstones", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const deletedNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "will be deleted",
+      tags: ["sync:externalId:gh-comment-deleted"],
+    });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [],
+        deletedComments: [
+          {
+            externalId: "gh-comment-deleted",
+            externalTaskId: task.externalId!,
+            deletedAt: "2026-03-10T10:00:00Z",
+          },
+        ],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [deletedNote] });
 
     const runtime = createSyncPluginWorkerRuntime({
       pluginName: "github",
@@ -1374,8 +1425,59 @@ describe("sync-worker-runtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(todu.note.delete).toHaveBeenCalledTimes(1);
-    expect(todu.note.delete).toHaveBeenCalledWith(orphanedNote.id);
-    // The new comment should be created
+    expect(todu.note.delete).toHaveBeenCalledWith(deletedNote.id);
+
+    handle.stop();
+  });
+
+  it("pull deletes local synced notes absent from complete comment snapshots", async () => {
+    const project = createProject();
+    const task = createTask(project.id, { externalId: "gh-task-1" });
+    const binding = createBinding(project.id, { strategy: "pull" });
+    const deletedNote = createNote({
+      entityType: "task",
+      entityId: task.id,
+      content: "missing from complete snapshot",
+      tags: ["sync:externalId:gh-comment-deleted"],
+    });
+    const provider = createProvider({
+      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+        tasks: [],
+        comments: [
+          {
+            externalId: "gh-comment-other",
+            externalTaskId: task.externalId!,
+            body: "still exists",
+            createdAt: "2026-03-10T10:00:00Z",
+          },
+        ],
+        completeCommentExternalTaskIds: [task.externalId!],
+      }),
+    });
+    const todu = createTodu(project, [task], [binding], { notes: [deletedNote] });
+
+    const runtime = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/plugins/github.js",
+      authorityId: "daemon://authority-1",
+      provider,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        retryInitialMs: 100,
+        retryMaxMs: 800,
+        settings: {},
+      },
+      logger: createLogger(),
+      getTodu: () => todu.instance,
+    });
+
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(todu.note.delete).toHaveBeenCalledTimes(1);
+    expect(todu.note.delete).toHaveBeenCalledWith(deletedNote.id);
     expect(todu.note.create).toHaveBeenCalledTimes(1);
 
     handle.stop();

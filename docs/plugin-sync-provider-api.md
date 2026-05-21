@@ -90,6 +90,20 @@ interface ImportedCommentInput {
   raw?: unknown;
 }
 
+interface DeletedImportedCommentInput {
+  externalId: string;
+  externalTaskId: string;
+  deletedAt?: string;
+  raw?: unknown;
+}
+
+interface SyncProviderPullResultV3 {
+  tasks: ImportedTaskInput[];
+  comments?: ImportedCommentInput[];
+  deletedComments?: DeletedImportedCommentInput[];
+  completeCommentExternalTaskIds?: string[];
+}
+
 interface CommentSyncProvenance {
   bindingId: IntegrationBindingId;
   provider: string;
@@ -157,7 +171,7 @@ interface SyncProviderV3 {
 
 ### Pull behavior
 
-`SyncProviderPullResultV3.tasks` accepts `ImportedTaskInput[]` and `comments` accepts `ImportedCommentInput[]`.
+`SyncProviderPullResultV3.tasks` accepts `ImportedTaskInput[]`. `comments` accepts `ImportedCommentInput[]` and is treated as an upsert/import batch. Comment pulls are partial/incremental by default; omitted comments are unchanged unless the provider also supplies explicit deletion metadata.
 
 In v3:
 
@@ -206,13 +220,14 @@ The runtime then applies each returned comment link idempotently by writing stru
 
 ### Comment pull path
 
-Pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalActorRef`.
+Pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalActorRef`. The runtime treats this array as a partial upsert batch unless the provider opts into deletion semantics.
 
-The runtime reconciles pulled comments with local notes using a snapshot model:
+The runtime reconciles pulled comments with local notes using a partial-by-default model:
 
 - comments with an `externalId` not present locally are created as new notes and linked through structured comment provenance, not user-visible tags
 - comments matching an existing local note are updated if the external `updatedAt` is newer than the local `createdAt`
-- local synced notes whose external IDs are absent from the pull result are deleted
+- local synced notes whose external IDs are absent from a partial pull are preserved
+- local synced notes are deleted only when their external ID appears in `deletedComments`, or when their `externalTaskId` appears in `completeCommentExternalTaskIds` and their external ID is absent from the complete comment snapshot for that task/thread
 - existing notes with legacy `sync:externalId:*` tags are resolved lazily into provenance records when encountered; notes without sync tags are not rewritten by this migration
 
 ### Comment provenance migration path
