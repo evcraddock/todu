@@ -29,9 +29,9 @@ coverage/
 # AI agent config
 .claude/
 
-# Local todu/toduai data
+# Local todu/todu data
 .todu/
-.toduai/
+.todu/
 
 # Dev environment
 data/

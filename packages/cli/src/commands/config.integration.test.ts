@@ -29,7 +29,7 @@ describe("config CLI commands", () => {
         ...process.env,
         TODU_DATA_DIR: "",
         TODU_CONFIG: "",
-        TODUAI_NO_SYNC: "1",
+        TODU_NO_SYNC: "1",
         ...extraEnv,
       },
       input,
@@ -64,26 +64,6 @@ describe("config CLI commands", () => {
     expect(output).toContain(`todu --config ${configPath} task list`);
   });
 
-  it(
-    "config init migrates legacy .toduai directory when .todu is absent",
-    { timeout: 30000 },
-    () => {
-      const legacyDir = path.join(tmpDir, ".toduai");
-      const legacyConfigPath = path.join(legacyDir, "config.yaml");
-      fs.mkdirSync(legacyDir, { recursive: true });
-      fs.writeFileSync(legacyConfigPath, "data_dir: ./data\n", "utf-8");
-
-      const output = run("config init");
-
-      const newDir = path.join(tmpDir, ".todu");
-      const newConfigPath = path.join(newDir, "config.yaml");
-      expect(fs.existsSync(newConfigPath)).toBe(true);
-      expect(fs.existsSync(legacyDir)).toBe(false);
-      expect(output).toContain(`Migrated: ${legacyDir} -> ${newDir}`);
-      expect(output).toContain(`todu --config ${newConfigPath} task list`);
-    },
-  );
-
   it("config show displays resolved config", { timeout: 30000 }, () => {
     run("config init", "actor-erik\nErik\nn\n");
     const configPath = path.join(tmpDir, ".todu", "config.yaml");
@@ -114,7 +94,6 @@ describe("config CLI commands", () => {
     const daemon = await startDaemonForTests(rootDir, dataDir);
     const daemonEnv = {
       TODU_DAEMON_SOCKET: path.join(dataDir, "daemon.sock"),
-      TODUAI_DAEMON_SOCKET: path.join(dataDir, "daemon.sock"),
     };
     try {
       run(`--config ${configPath} project create --name "Dev Project"`, "", daemonEnv);

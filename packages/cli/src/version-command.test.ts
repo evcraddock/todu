@@ -41,6 +41,5 @@ describe("CLI version output", { timeout: 30000 }, () => {
     expect(packageJson.bin).toEqual({
       todu: "dist/index.js",
     });
-    expect(packageJson.bin).not.toHaveProperty("toduai");
   });
 });

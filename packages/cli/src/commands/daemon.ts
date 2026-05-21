@@ -14,17 +14,11 @@ import {
 import {
   resolveDaemonPluginConfig,
   TODU_DAEMON_PLUGIN_CONFIG_ENV,
-  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
 } from "../daemon-plugin-config.js";
-import {
-  resolveDaemonPluginPaths,
-  TODU_DAEMON_PLUGIN_PATHS_ENV,
-  TODUAI_DAEMON_PLUGIN_PATHS_ENV,
-} from "../daemon-plugin-paths.js";
+import { resolveDaemonPluginPaths, TODU_DAEMON_PLUGIN_PATHS_ENV } from "../daemon-plugin-paths.js";
 import {
   resolveDaemonAssignedWorkers,
   TODU_DAEMON_ASSIGNED_WORKERS_ENV,
-  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "../daemon-worker-assignment.js";
 import { formatJSON } from "../format.js";
 
@@ -79,12 +73,11 @@ const DIRECT_STDOUT_LOG_FILENAME = "daemon.out.log";
 const DIRECT_STDERR_LOG_FILENAME = "daemon.err.log";
 const DIRECT_LOG_ROTATION_MAX_BYTES = 10 * 1024 * 1024;
 const DIRECT_LOG_ROTATION_KEEP_COUNT = 2;
-const SYSTEMD_SERVICE_NAME = "toduai-daemon";
-const SYSTEMD_SERVICE_PATH = ".config/systemd/user/toduai-daemon.service";
+const SYSTEMD_SERVICE_NAME = "todu-daemon";
+const SYSTEMD_SERVICE_PATH = ".config/systemd/user/todu-daemon.service";
 const LAUNCHD_LABEL = "com.todu.daemon";
 const LAUNCHD_PLIST_PATH = "Library/LaunchAgents/com.todu.daemon.plist";
 const TODU_DAEMON_LIFECYCLE_MODE_ENV = "TODU_DAEMON_LIFECYCLE_MODE";
-const TODUAI_DAEMON_LIFECYCLE_MODE_ENV = "TODUAI_DAEMON_LIFECYCLE_MODE";
 const INTERNAL_DAEMON_RUN_SUBCOMMAND = "__run-internal";
 const STARTUP_TIMEOUT_MS = 5_000;
 const STOP_TIMEOUT_MS = 5_000;
@@ -866,34 +859,25 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
     TODU_DATA_DIR: context.storagePath,
   };
 
-  delete childEnv.TODUAI_CONFIG;
-  delete childEnv.TODUAI_DATA_DIR;
-
   if (context.remoteSyncServer) {
     childEnv.TODU_SYNC_SERVER = context.remoteSyncServer;
     childEnv.TODU_SYNC_ENABLED = "1";
-    delete childEnv.TODUAI_SYNC_SERVER;
-    delete childEnv.TODUAI_SYNC_ENABLED;
   }
 
   if (context.socketPath) {
     childEnv.TODU_DAEMON_SOCKET = context.socketPath;
-    delete childEnv.TODUAI_DAEMON_SOCKET;
   }
 
   if (context.assignedWorkersEnvValue !== undefined) {
     childEnv[TODU_DAEMON_ASSIGNED_WORKERS_ENV] = context.assignedWorkersEnvValue;
-    delete childEnv[TODUAI_DAEMON_ASSIGNED_WORKERS_ENV];
   }
 
   if (context.pluginPathsEnvValue !== undefined) {
     childEnv[TODU_DAEMON_PLUGIN_PATHS_ENV] = context.pluginPathsEnvValue;
-    delete childEnv[TODUAI_DAEMON_PLUGIN_PATHS_ENV];
   }
 
   if (context.pluginConfigEnvValue !== undefined) {
     childEnv[TODU_DAEMON_PLUGIN_CONFIG_ENV] = context.pluginConfigEnvValue;
-    delete childEnv[TODUAI_DAEMON_PLUGIN_CONFIG_ENV];
   }
 
   return childEnv;
@@ -918,9 +902,7 @@ function isExistingFile(filePath: string): boolean {
 }
 
 function resolveLifecycleMode(): DaemonLifecycleMode {
-  const override =
-    process.env[TODU_DAEMON_LIFECYCLE_MODE_ENV]?.trim() ??
-    process.env[TODUAI_DAEMON_LIFECYCLE_MODE_ENV]?.trim();
+  const override = process.env[TODU_DAEMON_LIFECYCLE_MODE_ENV]?.trim();
 
   if (override && override !== "auto") {
     if (override === "direct" || override === "systemd-user" || override === "launchd") {
@@ -928,7 +910,7 @@ function resolveLifecycleMode(): DaemonLifecycleMode {
     }
 
     throw new Error(
-      `Invalid ${TODU_DAEMON_LIFECYCLE_MODE_ENV}/${TODUAI_DAEMON_LIFECYCLE_MODE_ENV} value: ${override}. Expected auto, direct, systemd-user, or launchd.`,
+      `Invalid ${TODU_DAEMON_LIFECYCLE_MODE_ENV} value: ${override}. Expected auto, direct, systemd-user, or launchd.`,
     );
   }
 

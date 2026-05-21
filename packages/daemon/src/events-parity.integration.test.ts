@@ -7,8 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 
 const RELAY_PORT = 24421;
-const RUN_SYNC_SERVER_TESTS =
-  (process.env.TODU_RUN_SYNC_SERVER_TESTS ?? process.env.TODUAI_RUN_SYNC_SERVER_TESTS) === "1";
+const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
 
 describe("daemon event parity", () => {
   let tmpDir: string;

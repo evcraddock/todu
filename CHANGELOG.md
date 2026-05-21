@@ -35,13 +35,13 @@ This release replaces tag-based comment sync bookkeeping with structured comment
 
 ## [0.22.0] - 2026-05-19
 
-This release improves task discovery and daemon reliability. Task search now includes descriptions, daemon startup is more stable from CLI-managed launches, legacy `toduai` CLI compatibility has been removed, and remote sync can recover from a wedged adapter without restarting the daemon.
+This release improves task discovery and daemon reliability. Task search now includes descriptions, daemon startup is more stable from CLI-managed launches, legacy `todu` CLI compatibility has been removed, and remote sync can recover from a wedged adapter without restarting the daemon.
 
 ### Added
 - Added task description search so task search can match content beyond titles and structured fields (#449)
 
 ### Changed
-- Removed the legacy `toduai` CLI alias and updated remaining environment/documentation references toward the current `todu` naming (#447)
+- Removed the legacy `todu` CLI alias and updated remaining environment/documentation references toward the current `todu` naming (#447)
 
 ### Fixed
 - Made CLI-managed daemon startup use a stable working directory so daemon launches are less sensitive to the caller’s current shell location (#448)
@@ -270,18 +270,18 @@ This release adds first-class created-at date range filtering for notes, making 
 
 ## Rename note
 
-- Historical changelog entries may still reference `toduai` commands or artifact names because they describe behavior as it shipped at the time.
+- Historical changelog entries may still reference `todu` commands or artifact names because they describe behavior as it shipped at the time.
 - Current releases should prefer `todu` by default, with compatibility aliases called out only where they still matter for transition or upgrade behavior.
 
 ## [0.10.0] - 2026-03-17
 
-This release completes the `toduai` -> `todu` transition for the primary user experience. The CLI, app branding, runtime defaults, release assets, and docs now present `todu` as the canonical name, while temporary compatibility aliases remain in place where needed for upgrades.
+This release completes the `todu` -> `todu` transition for the primary user experience. The CLI, app branding, runtime defaults, release assets, and docs now present `todu` as the canonical name, while temporary compatibility aliases remain in place where needed for upgrades.
 
 ### Changed
 
-- The primary CLI and Electron app branding now use `todu` by default, with compatibility aliases such as `toduai` retained where needed during the transition (#353)
-- Default config, data, and runtime paths now prefer `~/.config/todu` and `.todu`, with automatic migration from legacy `toduai` locations and normalization of embedded legacy paths (#354)
-- Release tooling, installer/dev helpers, canonical docs, and integration-test fixtures now default to `todu` / `TODU_*` so shipped artifacts and examples no longer encode stale `toduai` branding assumptions (#355)
+- The primary CLI and Electron app branding now use `todu` by default, with compatibility aliases such as `todu` retained where needed during the transition (#353)
+- Default config, data, and runtime paths now prefer `~/.config/todu` and `.todu`, with automatic migration from legacy `todu` locations and normalization of embedded legacy paths (#354)
+- Release tooling, installer/dev helpers, canonical docs, and integration-test fixtures now default to `todu` / `TODU_*` so shipped artifacts and examples no longer encode stale `todu` branding assumptions (#355)
 
 ## [0.9.3] - 2026-03-17
 
@@ -289,7 +289,7 @@ Patch release eliminating a startup performance regression introduced by the eng
 
 ### Fixed
 
-- Daemon startup no longer eagerly prefetches all sub-documents at init time — with large journal histories this was saturating the storage layer and pushing startup past the 10s health check timeout, causing `toduai daemon start/restart` to always report failure (#348)
+- Daemon startup no longer eagerly prefetches all sub-documents at init time — with large journal histories this was saturating the storage layer and pushing startup past the 10s health check timeout, causing `todu daemon start/restart` to always report failure (#348)
 
 ## [0.9.2] - 2026-03-17
 
@@ -304,7 +304,7 @@ Patch release preventing sync cycle aborts on oversized external content.
 This patch release closes a CLI gap so habit comments can be managed from the terminal as well as from the Electron app.
 
 ### Fixed
-- `toduai note add` and `toduai note list` now support `--habit <id>`, making it possible to add and view habit-attached comments from the CLI using the same underlying capability already available in Electron (#343)
+- `todu note add` and `todu note list` now support `--habit <id>`, making it possible to add and view habit-attached comments from the CLI using the same underlying capability already available in Electron (#343)
 
 ## [0.9.0] - 2026-03-14
 
@@ -314,7 +314,7 @@ This release expands the shared integration model so each binding can carry prov
 - Integration bindings now support an optional per-binding `options` object in shared core state, allowing provider-specific desired-state settings such as bootstrap behavior to be configured at bind time instead of only through local plugin config (#342)
 
 ### Changed
-- The CLI now supports `toduai integration add --options <json>` and `toduai integration update --options <json>`, and detailed integration output shows configured binding options (#342)
+- The CLI now supports `todu integration add --options <json>` and `todu integration update --options <json>`, and detailed integration output shows configured binding options (#342)
 - Plugin/provider docs and integration architecture docs now define binding `options` as shared desired-state only, while keeping secrets and runtime internals local to the authority daemon host (#342)
 
 ## [0.8.0] - 2026-03-14
@@ -324,7 +324,7 @@ This release expands import fidelity and project context across todu. Habits are
 ### Added
 - Habits now belong to projects across the core model, engine, daemon, CLI, and Electron app, making project ownership explicit for habit tracking (#336)
 - The Electron Settings view now shows the running app version so users can verify which build is installed (#338)
-- `toduai note add` now supports `--created-at` for importing backdated journal entries from existing notes or scripts (#339)
+- `todu note add` now supports `--created-at` for importing backdated journal entries from existing notes or scripts (#339)
 
 ### Changed
 - Sync-provider pull now preserves imported task timestamps so newly imported tasks keep external history and existing linked tasks retain stable `createdAt` values across later sync updates (#340)
@@ -461,7 +461,7 @@ This release introduces todu’s first generic external integration control plan
 - Added the core integration binding model, validation rules, and catalog graph support, including a shared integration registry document, per-binding status documents, and one-binding-per-project enforcement (#303).
 - Added engine APIs for creating, listing, updating, deleting, and querying integration bindings and their runtime status (#304).
 - Added daemon protocol support for integration binding CRUD and status queries so integration management works through the daemon surface (#305).
-- Added generic CLI integration management commands under `toduai integration ...` for listing, creating, updating, enabling, disabling, removing, and inspecting integration bindings (#306).
+- Added generic CLI integration management commands under `todu integration ...` for listing, creating, updating, enabling, disabling, removing, and inspecting integration bindings (#306).
 - Added binding-driven sync runtime orchestration so authority daemons enumerate shared integration bindings, execute provider work per binding, and persist per-binding synced status for later observers (#307).
 
 ### Changed

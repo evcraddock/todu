@@ -71,7 +71,7 @@ interface SyncProvider {
 ### Plugin Distribution
 
 - npm packages (`todu-github`, `todu-forgejo`)
-- Installed to `~/.toduai/plugins/`
+- Installed to `~/.todu/plugins/`
 - Version compatibility with @todu/core
 
 ### Sync Behavior

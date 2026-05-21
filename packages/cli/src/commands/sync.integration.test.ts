@@ -38,7 +38,7 @@ describe("sync CLI commands", () => {
     try {
       return execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODU_CONFIG: "", TODUAI_NO_SYNC: "1" },
+        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODU_CONFIG: "", TODU_NO_SYNC: "1" },
         encoding: "utf-8",
         timeout: 15000,
       }).trim();

@@ -10,9 +10,7 @@ import {
 } from "./worker-assignment.js";
 
 const TODU_DAEMON_ROLE_ENV = "TODU_DAEMON_ROLE";
-const TODUAI_DAEMON_ROLE_ENV = "TODUAI_DAEMON_ROLE";
 const TODU_DAEMON_SOCKET_ENV = "TODU_DAEMON_SOCKET";
-const TODUAI_DAEMON_SOCKET_ENV = "TODUAI_DAEMON_SOCKET";
 
 function parseDaemonRole(value: string | undefined): DaemonRole {
   if (!value) {
@@ -20,9 +18,7 @@ function parseDaemonRole(value: string | undefined): DaemonRole {
   }
 
   if (!isDaemonRole(value)) {
-    throw new Error(
-      `Invalid ${TODU_DAEMON_ROLE_ENV}/${TODUAI_DAEMON_ROLE_ENV} value: ${value}. Expected: node or authority`,
-    );
+    throw new Error(`Invalid ${TODU_DAEMON_ROLE_ENV} value: ${value}. Expected: node or authority`);
   }
 
   return value;
@@ -35,11 +31,8 @@ export async function runDaemonEntrypoint(): Promise<void> {
     level: daemonLogLevel,
   });
 
-  const daemonRole = parseDaemonRole(
-    process.env[TODU_DAEMON_ROLE_ENV] ?? process.env[TODUAI_DAEMON_ROLE_ENV],
-  );
-  const daemonSocketPath =
-    process.env[TODU_DAEMON_SOCKET_ENV] ?? process.env[TODUAI_DAEMON_SOCKET_ENV];
+  const daemonRole = parseDaemonRole(process.env[TODU_DAEMON_ROLE_ENV]);
+  const daemonSocketPath = process.env[TODU_DAEMON_SOCKET_ENV];
   const fileConfig = loadDaemonFileConfig();
   const remoteSync = fileConfig.remoteSync;
   const assignmentConfig = parseAssignedWorkerTypesFromEnv(process.env);

@@ -92,7 +92,6 @@ describe("createDaemonLaunchSpec", () => {
           TEST_ENV: "1",
           ELECTRON_RUN_AS_NODE: "1",
           TODU_DAEMON_SOCKET: socketPath,
-          TODUAI_DAEMON_SOCKET: socketPath,
         }),
       }),
     );
@@ -110,7 +109,6 @@ describe("createDaemonLaunchSpec", () => {
       env: {
         ...process.env,
         TODU_CONFIG: "",
-        TODUAI_CONFIG: "",
         TODU_DATA_DIR: storagePath,
       },
     });

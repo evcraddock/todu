@@ -1,5 +1,5 @@
 # Development config — used by make run and make dev-electron
-# Data is stored in .dev/data/ (gitignored) so dev never touches ~/.config/toduai/
+# Data is stored in .dev/data/ (gitignored) so dev never touches ~/.config/todu/
 data_dir: data
 
 sync:

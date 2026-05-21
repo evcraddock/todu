@@ -2,8 +2,6 @@
 
 `todu` now runs in daemon-first mode for task/project/label/note/recurring/habit/sync command groups.
 
-The legacy `todu serve` path has been removed.
-
 For always-on daemon startup (recommended), use OS service manager setup from [`daemon-service-operations.md`](daemon-service-operations.md).
 
 ## Desktop companion CLI guidance
@@ -29,13 +27,11 @@ Compatibility expectations:
 - CLI and desktop app both use the same default user-local config and data paths, so they target the same local daemon and dataset by default.
 - If needed, you can point the CLI at a different daemon socket with `TODU_DAEMON_SOCKET`.
 
-## Config/data migration defaults
+## Config/data defaults
 
-- Default home config path is now `~/.config/todu/config.yaml`.
-- Existing `~/.config/toduai` state is migrated automatically to `~/.config/todu` when the new default path is absent.
-- `todu config init` now creates `.todu/config.yaml` by default and migrates a sibling `.toduai/` directory when present.
-- Absolute legacy config values under `~/.config/toduai/...` or `.toduai/...` are normalized to `todu` paths when config is loaded.
-- `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
+- Default home config path is `~/.config/todu/config.yaml`.
+- `todu config init` creates `.todu/config.yaml` by default.
+- `TODU_*` env vars are the only supported environment overrides.
 
 ### Bootstrap owner actor config
 
@@ -82,10 +78,10 @@ Foreground daemon run (manual/interactive) is still available:
 todu daemon run
 ```
 
-You can also run the daemon binary directly (current compatibility name):
+You can also run the daemon binary directly:
 
 ```bash
-toduai-daemon
+todu-daemon
 ```
 
 For local development from source:
@@ -96,7 +92,7 @@ npm run --workspace=packages/daemon dev
 
 ## Daemon log levels
 
-Set daemon log level via `TODU_LOG_LEVEL` (legacy `TODUAI_LOG_LEVEL` is still accepted during the transition):
+Set daemon log level via `TODU_LOG_LEVEL`:
 
 - `error`
 - `warn`
@@ -121,7 +117,6 @@ By default, CLI connects to:
 Override with:
 
 - `TODU_DAEMON_SOCKET=/path/to/daemon.sock`
-- legacy fallback: `TODUAI_DAEMON_SOCKET=/path/to/daemon.sock`
 
 ## Worker assignment configuration
 
@@ -143,7 +138,6 @@ export TODU_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 
 Notes:
 - Env var overrides config file assignment.
-- Legacy fallback: `TODUAI_DAEMON_ASSIGNED_WORKERS`.
 - Empty assignment (`TODU_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 
@@ -167,7 +161,6 @@ export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plu
 
 Notes:
 - Env var overrides config file plugin paths.
-- Legacy fallback: `TODUAI_DAEMON_PLUGIN_PATHS`.
 - Config file plugin paths are resolved relative to the config file directory.
 - Empty plugin path list (`TODU_DAEMON_PLUGIN_PATHS=""`) disables plugin loading.
 - Duplicate entries are tolerated and logged; first occurrence wins.

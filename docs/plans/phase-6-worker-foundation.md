@@ -78,7 +78,7 @@ Daemon runtime registration/lifecycle entrypoints:
 
 - Assignment config is authoritative in initial model.
 - Config file source: `daemon.workers.assigned`.
-- Env override source: `TODUAI_DAEMON_ASSIGNED_WORKERS` (comma-separated), which takes precedence over file assignment.
+- Env override source: `TODU_DAEMON_ASSIGNED_WORKERS` (comma-separated), which takes precedence over file assignment.
 - Duplicate assignment entries are logged clearly (prevention hardening deferred).
 
 ### Compatibility Behavior

@@ -30,7 +30,7 @@ describe("habit CLI commands", { timeout: 30000 }, () => {
     try {
       return execSync(`node ${cliPath} ${args}`, {
         cwd: rootDir,
-        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODUAI_NO_SYNC: "1" },
+        env: { ...process.env, TODU_DATA_DIR: tmpDir, TODU_NO_SYNC: "1" },
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });

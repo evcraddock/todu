@@ -1,5 +1,4 @@
 export const TODU_DAEMON_PLUGIN_PATHS_ENV = "TODU_DAEMON_PLUGIN_PATHS";
-export const TODUAI_DAEMON_PLUGIN_PATHS_ENV = "TODUAI_DAEMON_PLUGIN_PATHS";
 
 export interface ParsedDaemonPluginPathsEnv {
   modulePaths: string[] | undefined;
@@ -10,7 +9,7 @@ export interface ParsedDaemonPluginPathsEnv {
 export function parseDaemonPluginPathsFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ParsedDaemonPluginPathsEnv {
-  const rawModulePaths = env[TODU_DAEMON_PLUGIN_PATHS_ENV] ?? env[TODUAI_DAEMON_PLUGIN_PATHS_ENV];
+  const rawModulePaths = env[TODU_DAEMON_PLUGIN_PATHS_ENV];
   if (rawModulePaths === undefined) {
     return {
       modulePaths: undefined,

@@ -133,7 +133,7 @@ Every task must include a documentation step in the same PR (or explicitly justi
 - Added daemon lifecycle shell:
   - `createDaemonRuntime` (start/stop/status/config)
   - `startDaemonProcess` (entrypoint lifecycle + signal handling hooks)
-  - `toduai-daemon` entrypoint script for local development runs
+  - `todu-daemon` entrypoint script for local development runs
 - Runtime config/status now represent daemon role (`node` / `authority`).
 - Scope intentionally excludes domain RPC method implementation and CLI/Electron migration.
 
@@ -142,7 +142,7 @@ Every task must include a documentation step in the same PR (or explicitly justi
 - Added UDS transport listener implementation (`createUdsTransport`) in `packages/daemon/src/transport.ts`.
 - Added socket path convention:
   - default socket path: `<storagePath>/daemon.sock`
-  - optional override via runtime config / `TODUAI_DAEMON_SOCKET`
+  - optional override via runtime config / `TODU_DAEMON_SOCKET`
 - Enforced local trust baseline with socket file mode `0600` after bind.
 - Implemented startup safety behavior:
   - detect and remove stale socket files (existing socket path with no active listener)
@@ -224,7 +224,7 @@ Every task must include a documentation step in the same PR (or explicitly justi
 ### 2026-02-22 — Task #1932
 
 - Added bounded per-request execution timeout enforcement in daemon RPC connection handling.
-- Added default timeout cap constant (`DEFAULT_DAEMON_REQUEST_TIMEOUT_MS = 30000`) and runtime configuration support (`requestTimeoutMs`) with optional env override (`TODUAI_DAEMON_REQUEST_TIMEOUT_MS`).
+- Added default timeout cap constant (`DEFAULT_DAEMON_REQUEST_TIMEOUT_MS = 30000`) and runtime configuration support (`requestTimeoutMs`) with optional env override (`TODU_DAEMON_REQUEST_TIMEOUT_MS`).
 - Added structured timeout error behavior on overrun:
   - returns protocol error code `TIMEOUT`
   - includes deterministic details (`method`, `timeoutMs`)

@@ -263,8 +263,7 @@ Daemon plugin host loads sync plugin modules from configured local module paths.
 Resolution order:
 
 1. `TODU_DAEMON_PLUGIN_PATHS` env var (comma-separated module paths)
-2. legacy `TODUAI_DAEMON_PLUGIN_PATHS` env var
-3. `daemon.plugins.paths` in config file (paths resolved relative to config file location)
+2. `daemon.plugins.paths` in config file (paths resolved relative to config file location)
 
 Runtime behavior:
 
@@ -272,7 +271,7 @@ Runtime behavior:
 - Path/config changes apply on daemon restart.
 - Duplicate path entries are tolerated and logged; first occurrence wins.
 
-Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginName>` in config file, `TODU_DAEMON_PLUGIN_CONFIG`, or legacy `TODUAI_DAEMON_PLUGIN_CONFIG` (JSON object). Supported fields:
+Per-plugin scheduler config can be provided via `daemon.plugins.config.<pluginName>` in config file or `TODU_DAEMON_PLUGIN_CONFIG` (JSON object). Supported fields:
 
 - `intervalSeconds`: steady-state cycle interval
 - `retryInitialSeconds` / `retryMaxSeconds`: retry backoff controls

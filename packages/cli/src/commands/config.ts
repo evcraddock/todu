@@ -8,7 +8,6 @@ import { getConfigPath, loadConfig, resolveConfigSources, saveConfig } from "../
 import { formatJSON } from "../format.js";
 
 const DEFAULT_LOCAL_CONFIG_DIR = ".todu";
-const LEGACY_LOCAL_CONFIG_DIR = ".toduai";
 
 export function registerConfigCommands(program: Command): void {
   const config = program.command("config").description("Manage configuration");
@@ -54,16 +53,6 @@ export function registerConfigCommands(program: Command): void {
 
       if (fs.existsSync(configPath)) {
         console.log(`Config already exists: ${configPath}`);
-        return;
-      }
-
-      const migratedFromLegacy = maybeMigrateLegacyProjectConfigDir(dir, opts.dir);
-      if (migratedFromLegacy !== null) {
-        console.log(`Migrated: ${migratedFromLegacy} -> ${dir}`);
-        console.log(`Config available: ${configPath}`);
-        console.log("");
-        console.log("Usage:");
-        console.log(`  todu --config ${configPath} task list`);
         return;
       }
 
@@ -208,21 +197,4 @@ async function promptYesNo(prompts: PromptSession, prompt: string): Promise<bool
 
     console.log("Error: enter y or n");
   }
-}
-
-function maybeMigrateLegacyProjectConfigDir(
-  currentDir: string,
-  requestedDir: string | undefined,
-): string | null {
-  if (requestedDir !== DEFAULT_LOCAL_CONFIG_DIR) {
-    return null;
-  }
-
-  const legacyDir = path.join(path.dirname(currentDir), LEGACY_LOCAL_CONFIG_DIR);
-  if (fs.existsSync(currentDir) || !fs.existsSync(legacyDir)) {
-    return null;
-  }
-
-  fs.renameSync(legacyDir, currentDir);
-  return legacyDir;
 }

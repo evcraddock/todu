@@ -17,10 +17,8 @@ export async function startDaemonForTests(
     env: {
       ...process.env,
       TODU_CONFIG: "",
-      TODUAI_CONFIG: "",
       TODU_DATA_DIR: storagePath,
       TODU_DAEMON_SOCKET: socketPath,
-      TODUAI_DAEMON_SOCKET: socketPath,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

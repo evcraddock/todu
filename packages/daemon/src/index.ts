@@ -11,12 +11,12 @@ export {
 export {
   type ParsedDaemonPluginConfigEnv,
   parseDaemonPluginConfigFromEnv,
-  TODUAI_DAEMON_PLUGIN_CONFIG_ENV,
+  TODU_DAEMON_PLUGIN_CONFIG_ENV,
 } from "./plugin-config.js";
 export {
   type ParsedDaemonPluginPathsEnv,
   parseDaemonPluginPathsFromEnv,
-  TODUAI_DAEMON_PLUGIN_PATHS_ENV,
+  TODU_DAEMON_PLUGIN_PATHS_ENV,
 } from "./plugin-paths.js";
 export {
   type DaemonProcess,
@@ -109,7 +109,7 @@ export {
 export {
   type ParsedWorkerAssignmentEnv,
   parseAssignedWorkerTypesFromEnv,
-  TODUAI_DAEMON_ASSIGNED_WORKERS_ENV,
+  TODU_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "./worker-assignment.js";
 export {
   type CreateWorkerRegistryOptions,

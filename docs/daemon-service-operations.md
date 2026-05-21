@@ -16,13 +16,11 @@ todu daemon status
 todu --format json daemon status
 ```
 
-## Config/data migration defaults
+## Config/data defaults
 
-- Default home config path is now `~/.config/todu/config.yaml`.
-- Existing `~/.config/toduai` state is migrated automatically to `~/.config/todu` when the new default path is absent.
-- Absolute legacy config values under `~/.config/toduai/...` are normalized to `todu` paths when config is loaded.
-- `TODU_*` env vars are primary; legacy `TODUAI_*` env vars remain supported temporarily as fallback.
-- The current compatibility daemon binary/service name remains `toduai-daemon` during the transition.
+- Default home config path is `~/.config/todu/config.yaml`.
+- `TODU_*` env vars are the only supported environment overrides.
+- The daemon binary/service name is `todu-daemon`.
 
 ### Bootstrap owner actor config
 
@@ -47,7 +45,7 @@ After the dataset is already migrated, changing this config later does not rewri
    - `direct`
    it uses that mode.
 2. Otherwise (`auto`, default), CLI prefers service-manager delegation when registration exists:
-   - Linux: `~/.config/systemd/user/toduai-daemon.service`
+   - Linux: `~/.config/systemd/user/todu-daemon.service`
    - macOS: `~/Library/LaunchAgents/com.todu.daemon.plist`
 3. If no service registration is detected, CLI uses direct managed fallback mode.
 
@@ -67,8 +65,6 @@ To force a specific behavior (for scripting/testing):
 export TODU_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
 ```
 
-Legacy fallback: `TODUAI_DAEMON_LIFECYCLE_MODE`.
-
 Daemon logging level is controlled with `TODU_LOG_LEVEL`:
 
 ```bash
@@ -83,15 +79,15 @@ export TODU_LOG_LEVEL=debug  # error | warn | info | debug
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/toduai-daemon.service <<'EOF'
+cat > ~/.config/systemd/user/todu-daemon.service <<'EOF'
 [Unit]
-Description=toduai daemon
+Description=todu daemon
 After=network.target
 
 [Service]
 Type=simple
 Environment=TODU_DATA_DIR=%h/.local/share/todu
-ExecStart=/usr/bin/env toduai-daemon
+ExecStart=/usr/bin/env todu-daemon
 Restart=on-failure
 RestartSec=2
 
@@ -104,17 +100,17 @@ EOF
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now toduai-daemon
+systemctl --user enable --now todu-daemon
 ```
 
 ### 3) Operate service
 
 ```bash
-systemctl --user status toduai-daemon
-systemctl --user restart toduai-daemon
-systemctl --user stop toduai-daemon
-systemctl --user start toduai-daemon
-journalctl --user -u toduai-daemon -f
+systemctl --user status todu-daemon
+systemctl --user restart todu-daemon
+systemctl --user stop todu-daemon
+systemctl --user start todu-daemon
+journalctl --user -u todu-daemon -f
 ```
 
 ### 4) Optional: keep running after logout
@@ -131,7 +127,7 @@ loginctl enable-linger "$USER"
 
 ```bash
 mkdir -p ~/Library/LaunchAgents
-DAEMON_BIN="$(command -v toduai-daemon)"
+DAEMON_BIN="$(command -v todu-daemon)"
 cat > ~/Library/LaunchAgents/com.todu.daemon.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -157,9 +153,9 @@ cat > ~/Library/LaunchAgents/com.todu.daemon.plist <<EOF
     <true/>
 
     <key>StandardOutPath</key>
-    <string>${HOME}/Library/Logs/toduai-daemon.out.log</string>
+    <string>${HOME}/Library/Logs/todu-daemon.out.log</string>
     <key>StandardErrorPath</key>
-    <string>${HOME}/Library/Logs/toduai-daemon.err.log</string>
+    <string>${HOME}/Library/Logs/todu-daemon.err.log</string>
   </dict>
 </plist>
 EOF
@@ -178,7 +174,7 @@ launchctl kickstart -k gui/$(id -u)/com.todu.daemon
 launchctl print gui/$(id -u)/com.todu.daemon
 launchctl kickstart -k gui/$(id -u)/com.todu.daemon
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.todu.daemon.plist
-tail -f ~/Library/Logs/toduai-daemon.out.log ~/Library/Logs/toduai-daemon.err.log
+tail -f ~/Library/Logs/todu-daemon.out.log ~/Library/Logs/todu-daemon.err.log
 ```
 
 ---
@@ -193,16 +189,12 @@ tail -f ~/Library/Logs/toduai-daemon.out.log ~/Library/Logs/toduai-daemon.err.lo
 export TODU_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 ```
 
-Legacy fallback: `TODUAI_DAEMON_ASSIGNED_WORKERS`.
-
 - Sync plugin module paths can be defined in config file under `daemon.plugins.paths`.
 - Sync plugin module path env override (comma-separated module paths):
 
 ```bash
 export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plugins/forgejo/index.js"
 ```
-
-Legacy fallback: `TODUAI_DAEMON_PLUGIN_PATHS`.
 
 - Plugin path resolution order is env first, then config file.
 - Config file plugin paths resolve relative to the config file directory.
@@ -214,15 +206,11 @@ Legacy fallback: `TODUAI_DAEMON_PLUGIN_PATHS`.
 export TODU_DAEMON_PLUGIN_CONFIG='{"github":{"intervalSeconds":300,"retryInitialSeconds":5,"retryMaxSeconds":60,"settings":{"token":"env:GITHUB_TOKEN"}}}'
 ```
 
-Legacy fallback: `TODUAI_DAEMON_PLUGIN_CONFIG`.
-
 - Optional socket override:
 
 ```bash
 export TODU_DAEMON_SOCKET=/custom/path/daemon.sock
 ```
-
-Legacy fallback: `TODUAI_DAEMON_SOCKET`.
 
 If you set a socket override for the daemon service, CLI invocations must use the same override.
 
@@ -232,11 +220,10 @@ If you set a socket override for the daemon service, CLI invocations must use th
 
 - Confirm service status (`systemctl --user status ...` or `launchctl print ...`).
 - Confirm `TODU_DATA_DIR` is what you expect.
-- Legacy fallback is `TODUAI_DATA_DIR`.
 - Confirm socket path matches CLI expectations.
 
 ### Daemon starts but CLI still fails
 
 - Run `todu --format json daemon status` and inspect `reason`/`transport.path`.
-- Check service logs (`journalctl --user -u toduai-daemon -f` or `tail -f` macOS logs).
+- Check service logs (`journalctl --user -u todu-daemon -f` or `tail -f` macOS logs).
 - In direct lifecycle mode, inspect `<data_dir>/daemon.out.log` and `<data_dir>/daemon.err.log`.

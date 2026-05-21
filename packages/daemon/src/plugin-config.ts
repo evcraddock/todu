@@ -1,5 +1,4 @@
 export const TODU_DAEMON_PLUGIN_CONFIG_ENV = "TODU_DAEMON_PLUGIN_CONFIG";
-export const TODUAI_DAEMON_PLUGIN_CONFIG_ENV = "TODUAI_DAEMON_PLUGIN_CONFIG";
 
 export interface ParsedDaemonPluginConfigEnv {
   pluginConfigs: Record<string, Record<string, unknown>> | undefined;
@@ -10,7 +9,7 @@ export interface ParsedDaemonPluginConfigEnv {
 export function parseDaemonPluginConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ParsedDaemonPluginConfigEnv {
-  const rawConfig = env[TODU_DAEMON_PLUGIN_CONFIG_ENV] ?? env[TODUAI_DAEMON_PLUGIN_CONFIG_ENV];
+  const rawConfig = env[TODU_DAEMON_PLUGIN_CONFIG_ENV];
   if (rawConfig === undefined) {
     return {
       pluginConfigs: undefined,

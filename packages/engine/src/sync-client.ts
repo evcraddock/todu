@@ -59,16 +59,18 @@ export async function connectSyncClient(
  *
  * Unlike connectSyncClient(), this does NOT await the connection — the remote
  * server may be temporarily unreachable. The adapter reconnects automatically
- * at the given retryInterval.
+ * Reconnection is owned by Todu's remote watchdog instead of the Automerge
+ * adapter's internal timer. The adapter uses an uncancelled one-shot reconnect
+ * timer on close, which can create zombie sockets after removeNetworkAdapter().
  *
  * Returns the adapter so callers can listen for connection events and remove it.
  *
- * @param retryInterval - Retry interval in ms on disconnect (default: 30s for remote)
+ * @param retryInterval - Adapter retry interval in ms on disconnect (default: 0; watchdog handles reconnect)
  */
 export function addRemoteSyncAdapter(
   repo: Repo,
   url: string,
-  retryInterval = 30000,
+  retryInterval = 0,
   logger?: SyncAdapterEventLogger,
 ): WebSocketClientAdapter {
   const adapter = new WebSocketClientAdapter(url, retryInterval);
@@ -77,11 +79,14 @@ export function addRemoteSyncAdapter(
   return adapter;
 }
 
+const hardenedSockets = new WeakSet<object>();
+
 export function hardenWebSocketClientAdapterErrors(
   adapter: WebSocketClientAdapter,
   logger?: SyncAdapterEventLogger,
 ): void {
   const originalOnError = adapter.onError;
+  const originalConnect = adapter.connect.bind(adapter);
 
   adapter.onError = (event) => {
     logger?.warn("remote sync adapter error", {
@@ -99,6 +104,32 @@ export function hardenWebSocketClientAdapterErrors(
       throw error;
     }
   };
+
+  adapter.connect = (...args: Parameters<WebSocketClientAdapter["connect"]>) => {
+    originalConnect(...args);
+    hardenCurrentWebSocket(adapter);
+  };
+
+  hardenCurrentWebSocket(adapter);
+}
+
+function hardenCurrentWebSocket(adapter: WebSocketClientAdapter): void {
+  const socket = adapter.socket;
+  if (typeof socket !== "object" || socket === null || hardenedSockets.has(socket)) {
+    return;
+  }
+
+  const eventEmitterSocket = socket as {
+    on?: (event: "error", listener: (error: unknown) => void) => void;
+  };
+  if (typeof eventEmitterSocket.on !== "function") {
+    return;
+  }
+
+  hardenedSockets.add(socket);
+  eventEmitterSocket.on("error", () => {
+    // Transient WebSocket errors are surfaced through `onError`; this listener prevents Node from treating an otherwise handled socket error as fatal.
+  });
 }
 
 function getErrorMessage(error: unknown): string {

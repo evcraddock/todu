@@ -53,11 +53,9 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       env: {
         ...process.env,
         TODU_CONFIG: "",
-        TODUAI_CONFIG: "",
         TODU_DAEMON_SOCKET: "",
-        TODUAI_DAEMON_SOCKET: "",
         TODU_DATA_DIR: tmpDir,
-        TODUAI_NO_SYNC: "1",
+        TODU_NO_SYNC: "1",
         TODU_DAEMON_LIFECYCLE_MODE: "direct",
         HOME: homeDir,
         ...(options.env ?? {}),
@@ -116,11 +114,9 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
       env: {
         ...process.env,
         TODU_CONFIG: "",
-        TODUAI_CONFIG: "",
         TODU_DAEMON_SOCKET: "",
-        TODUAI_DAEMON_SOCKET: "",
         TODU_DATA_DIR: tmpDir,
-        TODUAI_NO_SYNC: "1",
+        TODU_NO_SYNC: "1",
         HOME: homeDir,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -246,7 +242,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     const json = JSON.parse(result.stdout);
     expect(json.ok).toBe(false);
     expect(json.message).toContain(
-      "Invalid TODU_DAEMON_LIFECYCLE_MODE/TODUAI_DAEMON_LIFECYCLE_MODE value",
+      "Invalid TODU_DAEMON_LIFECYCLE_MODE/TODU_DAEMON_LIFECYCLE_MODE value",
     );
   });
 

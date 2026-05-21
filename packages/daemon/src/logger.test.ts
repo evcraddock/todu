@@ -4,7 +4,6 @@ import {
   resolveDaemonLogLevel,
   resolveDaemonLogLevelFromEnv,
   TODU_LOG_LEVEL_ENV,
-  TODUAI_LOG_LEVEL_ENV,
 } from "./logger.js";
 
 describe("daemon logger", () => {
@@ -12,17 +11,8 @@ describe("daemon logger", () => {
     expect(resolveDaemonLogLevelFromEnv({})).toBe("info");
   });
 
-  it("prefers TODU_LOG_LEVEL over legacy TODUAI_LOG_LEVEL", () => {
-    expect(
-      resolveDaemonLogLevelFromEnv({
-        [TODU_LOG_LEVEL_ENV]: "warn",
-        [TODUAI_LOG_LEVEL_ENV]: "debug",
-      }),
-    ).toBe("warn");
-  });
-
-  it("falls back to legacy TODUAI_LOG_LEVEL", () => {
-    expect(resolveDaemonLogLevelFromEnv({ [TODUAI_LOG_LEVEL_ENV]: "debug" })).toBe("debug");
+  it("uses TODU_LOG_LEVEL", () => {
+    expect(resolveDaemonLogLevelFromEnv({ [TODU_LOG_LEVEL_ENV]: "debug" })).toBe("debug");
   });
 
   it("parses log level values case-insensitively", () => {

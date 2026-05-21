@@ -19,7 +19,7 @@ Implement the operational layer around worker assignment so daemon-based deploym
 
 1. **Assignment configuration surfaces**
    - Local config file support (`daemon.workers.assigned`)
-   - Environment variable override (`TODUAI_DAEMON_ASSIGNED_WORKERS`)
+   - Environment variable override (`TODU_DAEMON_ASSIGNED_WORKERS`)
 
 2. **CLI operational controls (single daemon target)**
    - View worker assignment and status

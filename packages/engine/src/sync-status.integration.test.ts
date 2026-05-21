@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTodu } from "./index.js";
 
 const TEST_SYNC_PORT = 24398;
-const RUN_SYNC_SERVER_TESTS =
-  (process.env.TODU_RUN_SYNC_SERVER_TESTS ?? process.env.TODUAI_RUN_SYNC_SERVER_TESTS) === "1";
+const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
 
 describe("sync status", () => {
   let tmpDir: string;

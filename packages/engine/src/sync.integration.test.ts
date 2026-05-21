@@ -6,8 +6,7 @@ import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
 const TEST_SYNC_PORT = 24399; // Avoid conflict with real instances on 24377
-const RUN_SYNC_SERVER_TESTS =
-  (process.env.TODU_RUN_SYNC_SERVER_TESTS ?? process.env.TODUAI_RUN_SYNC_SERVER_TESTS) === "1";
+const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
 
 async function waitFor<T>(fn: () => Promise<T>, predicate: (value: T) => boolean): Promise<T> {
   const deadline = Date.now() + 15_000;

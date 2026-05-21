@@ -186,7 +186,7 @@ Every task must include a documentation step in the same PR (or explicitly justi
   - `daemon stop`
   - `daemon restart`
 - Implemented deterministic lifecycle mode selection:
-  - explicit override via `TODUAI_DAEMON_LIFECYCLE_MODE`
+  - explicit override via `TODU_DAEMON_LIFECYCLE_MODE`
   - auto preference for configured service-manager delegation (systemd user unit / launchd agent)
   - safe direct managed fallback when no service registration exists
 - Added direct fallback process management behavior:
@@ -204,7 +204,7 @@ Every task must include a documentation step in the same PR (or explicitly justi
 
 - Added daemon structured logger with level filtering in `packages/daemon/src/logger.ts`.
   - supports `error`, `warn`, `info`, `debug`
-  - runtime config via `TODUAI_LOG_LEVEL`
+  - runtime config via `TODU_LOG_LEVEL`
 - Routed daemon lifecycle/startup/failure logs through structured logger in:
   - `packages/daemon/src/entrypoint.ts`
   - `packages/daemon/src/runtime.ts`

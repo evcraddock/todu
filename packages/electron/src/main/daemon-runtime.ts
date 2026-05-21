@@ -80,7 +80,6 @@ export async function startBundledDaemonProcess(
     env: {
       ...spec.env,
       TODU_DAEMON_SOCKET: options.socketPath,
-      TODUAI_DAEMON_SOCKET: options.socketPath,
     },
     stdio: ["ignore", "ignore", "pipe"],
   });

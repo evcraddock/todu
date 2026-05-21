@@ -7,8 +7,7 @@ import * as engine from "@todu/engine";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 
-const RUN_SYNC_SERVER_TESTS =
-  (process.env.TODU_RUN_SYNC_SERVER_TESTS ?? process.env.TODUAI_RUN_SYNC_SERVER_TESTS) === "1";
+const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
 
 describe("join safety integration", () => {
   const tempDirs: string[] = [];

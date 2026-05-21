@@ -40,7 +40,7 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
 
     const result = await runCli(["sync", "status"], {
       TODU_DATA_DIR: tmpDir,
-      TODUAI_NO_SYNC: "1",
+      TODU_NO_SYNC: "1",
     });
 
     expect(result.status).toBe(1);
@@ -67,7 +67,7 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
       const result = await runCli(["sync", "status"], {
         TODU_DATA_DIR: tmpDir,
         TODU_DAEMON_SOCKET: socketPath,
-        TODUAI_NO_SYNC: "1",
+        TODU_NO_SYNC: "1",
       });
 
       expect(result.status).toBe(1);
@@ -101,7 +101,7 @@ describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () =>
       const result = await runCli(["sync", "status"], {
         TODU_DATA_DIR: tmpDir,
         TODU_DAEMON_SOCKET: socketPath,
-        TODUAI_NO_SYNC: "1",
+        TODU_NO_SYNC: "1",
       });
 
       expect(result.status).toBe(1);
