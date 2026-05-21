@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-05-21
+
+This release fixes comment sync reconciliation for providers that return partial or incremental comment updates. Todu now preserves existing synced comments that are omitted from a delta response and only removes local notes when the provider explicitly reports a deletion or marks a task/thread comment set as complete. It also tightens the contributor workflow so approval requests include a concrete plan first.
+
+### Fixed
+- Preserved local synced comments omitted from partial or incremental provider pulls instead of treating absence from a delta response as remote deletion (#456)
+- Added explicit deletion semantics for provider comment pulls through tombstones and complete task/thread comment snapshots (#456)
+
+### Documentation
+- Updated the contributing workflow to require a concrete, task-specific plan before asking for implementation or release approval
+
 ## [0.23.0] - 2026-05-20
 
 This release replaces tag-based comment sync bookkeeping with structured comment provenance in core. Sync providers can now identify imported and mirrored comments through first-class provenance records instead of inspecting user-visible note tags, while existing GitHub/Forgejo-style plugin behavior remains compatible during migration.
