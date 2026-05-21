@@ -23,6 +23,14 @@ Before starting implementation, prepare one markdown summary. Use the template b
 - [ ] <acceptance criterion 2>
 - [ ] <acceptance criterion 3>
 
+### Concrete plan
+
+1. <specific step 1>
+2. <specific step 2>
+3. <specific step 3>
+
+Ask for approval only after showing this concrete plan. The plan must be specific enough that the reviewer can tell what files, workflows, or release steps will be changed or run.
+
 ### Required workflow checklist (example items from CONTRIBUTING)
 
 - [ ] Work only within task scope.
@@ -93,11 +101,12 @@ PR Pipeline Status
 2. Read relevant files before editing.
 3. Make the smallest change that satisfies the task.
 4. Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
-5. Use the `task-update` skill to set task status to `inprogress` when implementation starts.
-6. If blocked, ambiguous, or conflicting requirements are found, stop and report `BLOCKED` with reason.
-7. Add task comments only via the `task-comment-create` skill.
-8. Do not add manual line breaks in markdown paragraphs.
-9. Summarize changed files and verification results in your handoff.
+5. Show a concrete, task-specific plan before asking the user for approval to implement or release.
+6. Use the `task-update` skill to set task status to `inprogress` when implementation starts.
+7. If blocked, ambiguous, or conflicting requirements are found, stop and report `BLOCKED` with reason.
+8. Add task comments only via the `task-comment-create` skill.
+9. Do not add manual line breaks in markdown paragraphs.
+10. Summarize changed files and verification results in your handoff.
 
 ## Branch and commits
 
