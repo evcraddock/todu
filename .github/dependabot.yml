@@ -67,7 +67,7 @@ updates:
           - patch
       pi-packages:
         patterns:
-          - "@mariozechner/pi-*"
+          - "@earendil-works/pi-*"
         update-types:
           - minor
           - patch
@@ -137,7 +137,7 @@ updates:
           - major
       pi-packages-major:
         patterns:
-          - "@mariozechner/pi-*"
+          - "@earendil-works/pi-*"
         update-types:
           - major
 

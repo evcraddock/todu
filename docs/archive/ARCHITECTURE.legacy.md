@@ -220,8 +220,8 @@ The Electron app includes a lightweight AI agent for planning and organizing. It
 
 | Dependency | Purpose |
 |-----------|---------|
-| `@mariozechner/pi-ai` | Model types, streaming, unified provider API |
-| `@mariozechner/pi-agent-core` | Agent class, tool-call loop, AgentTool types |
+| `@earendil-works/pi-ai` | Model types, streaming, unified provider API |
+| `@earendil-works/pi-agent-core` | Agent class, tool-call loop, AgentTool types |
 | `@sinclair/typebox` | Tool parameter schema definitions |
 
 ### Why Not pi-coding-agent?
@@ -634,7 +634,7 @@ During migration, existing todu-skills continue to work since the CLI remains fu
 
 - [Automerge](https://automerge.org/) — CRDT library
 - [pi-mono](https://github.com/badlogic/pi-mono) — Architecture reference (MIT license)
-- [pi-ai](https://www.npmjs.com/package/@mariozechner/pi-ai) — LLM streaming abstraction
-- [pi-agent-core](https://www.npmjs.com/package/@mariozechner/pi-agent-core) — Agent loop
+- [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai) — LLM streaming abstraction
+- [pi-agent-core](https://www.npmjs.com/package/@earendil-works/pi-agent-core) — Agent loop
 - [todu-api](https://github.com/evcraddock/todu-api) — Current API (being replaced)
 - [todu.sh](https://github.com/evcraddock/todu.sh) — Current CLI (being replaced)

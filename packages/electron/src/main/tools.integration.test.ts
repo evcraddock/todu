@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "@sinclair/typebox";
 import type { ProjectId } from "@todu/core";
 import type { Todu } from "@todu/engine";

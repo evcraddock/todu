@@ -1,4 +1,4 @@
-import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
+import { getOAuthProvider, getOAuthProviders } from "@earendil-works/pi-ai/oauth";
 import { describe, expect, it } from "vitest";
 import { OAUTH_PROVIDER_ALIASES } from "./oauth.js";
 
@@ -59,9 +59,8 @@ describe("OAUTH_PROVIDER_ALIASES", () => {
     expect(OAUTH_PROVIDER_ALIASES.openai).toContain("openai-codex");
   });
 
-  it("maps google to google-gemini-cli and google-antigravity", () => {
-    expect(OAUTH_PROVIDER_ALIASES.google).toContain("google-gemini-cli");
-    expect(OAUTH_PROVIDER_ALIASES.google).toContain("google-antigravity");
+  it("only maps providers with supported OAuth aliases", () => {
+    expect(OAUTH_PROVIDER_ALIASES.google).toBeUndefined();
   });
 
   it("all alias targets are valid OAuth providers", () => {

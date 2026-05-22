@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getModels, getProviders } from "@mariozechner/pi-ai";
+import { getModels, getProviders } from "@earendil-works/pi-ai";
 import { app, ipcMain, safeStorage } from "electron";
 
 // ============================================================================

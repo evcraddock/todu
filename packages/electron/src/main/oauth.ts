@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { OAuthCredentials, OAuthProviderInterface } from "@mariozechner/pi-ai";
-import { getOAuthProvider, getOAuthProviders } from "@mariozechner/pi-ai/oauth";
+import type { OAuthCredentials, OAuthProviderInterface } from "@earendil-works/pi-ai";
+import { getOAuthProvider, getOAuthProviders } from "@earendil-works/pi-ai/oauth";
 import type { BrowserWindow } from "electron";
 import { app, ipcMain, safeStorage, shell } from "electron";
 
@@ -135,7 +135,6 @@ async function getKeyFromOAuthProvider(provider: OAuthProviderInterface): Promis
  */
 export const OAUTH_PROVIDER_ALIASES: Record<string, string[]> = {
   openai: ["openai-codex"],
-  google: ["google-gemini-cli", "google-antigravity"],
 };
 
 /**
