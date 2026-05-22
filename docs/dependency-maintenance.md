@@ -124,9 +124,9 @@ Grouped as `pi-packages`.
 
 Examples:
 
-- `@mariozechner/pi-agent-core`
-- `@mariozechner/pi-ai`
-- any future `@mariozechner/pi-*` package
+- `@earendil-works/pi-agent-core`
+- `@earendil-works/pi-ai`
+- any future `@earendil-works/pi-*` package
 
 Expected handling:
 
