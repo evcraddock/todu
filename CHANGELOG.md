@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-05-23
+
+This release updates Todu's local runtime dependencies to stay compatible with the current sync and Pi agent ecosystems. It upgrades Automerge client packages for remote sync stability and migrates Electron Pi integrations to the current `@earendil-works` package scope.
+
+### Changed
+- Upgraded Automerge and Automerge Repo dependencies used by local remote sync, including a compatibility patch for stale document sync responses.
+- Migrated Electron Pi dependencies from deprecated `@mariozechner/*` packages to current `@earendil-works/*` packages (#460).
+- Updated Electron imports, tests, docs, and Dependabot configuration for the new Pi package scope (#460).
+
+### Fixed
+- Hardened transient WebSocket sync error handling during remote sync reconnect paths.
+
 ## [0.23.1] - 2026-05-21
 
 This release fixes comment sync reconciliation for providers that return partial or incremental comment updates. Todu now preserves existing synced comments that are omitted from a delta response and only removes local notes when the provider explicitly reports a deletion or marks a task/thread comment set as complete. It also tightens the contributor workflow so approval requests include a concrete plan first.
