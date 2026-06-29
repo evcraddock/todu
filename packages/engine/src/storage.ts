@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import type { DocHandle, DocumentId } from "@automerge/automerge-repo/slim";
 import { Repo } from "@automerge/automerge-repo/slim";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type Actor,
   type BootstrapOwnerActor,
@@ -22,6 +21,7 @@ import {
   type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
+import { NodeFSStorageAdapter } from "./nodefs-storage-adapter.js";
 
 // ============================================================================
 // Storage layer — Automerge repo + document management

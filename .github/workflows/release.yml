@@ -343,6 +343,9 @@ jobs:
       - name: Build packages
         run: npm run build
 
+      - name: Verify CLI install deprecations
+        run: npm run verify:cli-install
+
       - name: Publish npm packages
         run: |
           publish_package() {

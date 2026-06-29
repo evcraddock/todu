@@ -19,6 +19,7 @@
     "test:sync-server-integration": "TODU_RUN_SYNC_SERVER_TESTS=1 vitest run --config vitest.all.config.ts packages/daemon/src/events-parity.integration.test.ts packages/daemon/src/join-safety.integration.test.ts packages/engine/src/remote-sync.integration.test.ts packages/engine/src/sync-status.integration.test.ts packages/engine/src/sync.integration.test.ts",
     "test:conformance": "vitest run --config vitest.all.config.ts packages/daemon/src/protocol-conformance.integration.test.ts",
     "test:storage-stability": "node scripts/test-storage-stability.mjs",
+    "verify:cli-install": "node scripts/verify-cli-install-deprecations.mjs",
     "test:watch": "vitest",
     "postinstall": "node scripts/patch-automerge-repo.mjs",
     "check": "biome check --write --error-on-warnings . && npm run typecheck",

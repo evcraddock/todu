@@ -1,6 +1,5 @@
 import type { DocumentId } from "@automerge/automerge-repo";
 import { Repo } from "@automerge/automerge-repo/slim";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type BootstrapOwnerActor,
   err,
@@ -14,6 +13,7 @@ import {
   beginCatalogJoinSwitch,
   createTodu,
   initJoinStorage,
+  NodeFSStorageAdapter,
   registerHabitProcessor,
   type Todu,
 } from "@todu/engine";

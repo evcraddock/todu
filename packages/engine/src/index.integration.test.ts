@@ -2,7 +2,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Repo } from "@automerge/automerge-repo";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   type CatalogDocument,
   createActorId,
@@ -12,6 +11,7 @@ import {
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Todu, ToduWithInternalTools } from "./index.js";
 import { createTodu } from "./index.js";
+import { NodeFSStorageAdapter } from "./nodefs-storage-adapter.js";
 
 async function readCatalogDocument(storagePath: string): Promise<CatalogDocument> {
   const markerPath = path.join(storagePath, "todu-catalog.id");

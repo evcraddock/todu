@@ -4,7 +4,6 @@ import {
   Repo,
 } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -12,6 +11,7 @@ import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
+import { NodeFSStorageAdapter } from "./nodefs-storage-adapter.js";
 import { createNoteNamespace } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
@@ -35,6 +35,7 @@ import {
 
 export type { RemoteSyncConfig } from "@todu/core";
 export { registerHabitProcessor } from "./habits.js";
+export { NodeFSStorageAdapter } from "./nodefs-storage-adapter.js";
 export type { UpcomingOccurrence } from "./recurring.js";
 // Re-export schedule utilities for consumers
 export {
