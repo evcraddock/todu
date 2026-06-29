@@ -22,5 +22,6 @@ Execution order:
 8. `08-comment-modal.md`
 9. `09-events-and-reconnect.md`
 10. `10-workspace-integration.md`
+11. `11-npm-release.md`
 
 Each spec should be implemented in its own PR or focused work session unless the change is demonstrably tiny.

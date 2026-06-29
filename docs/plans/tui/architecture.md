@@ -35,10 +35,12 @@ Both are intended to be thin clients over the local daemon. The TUI should follo
 packages/tui/
   package.json
   tsconfig.json
+  tsconfig.build.json
   src/
     index.tsx
     app/
       App.tsx
+      App.test.tsx
       keymap.ts
       routes.ts
     daemon/
@@ -70,19 +72,27 @@ packages/tui/
       truncate.ts
 ```
 
-The package can expose either:
+The TUI should be a standalone npm-distributed app, similar in shape to `@todu/cli`.
+
+Primary standalone command:
 
 ```bash
 todu-tui
 ```
 
-or be launched from the CLI:
+Install path:
+
+```bash
+npm install -g @todu/tui
+```
+
+The CLI may also expose a convenience wrapper:
 
 ```bash
 todu tui
 ```
 
-Initial preference: add a `todu tui` command that delegates to `@todu/tui`, with an optional `todu-tui` binary later if standalone installation is useful.
+The wrapper must not be the only distribution path. The TUI should be publishable, installable, and runnable as its own package while targeting the same local daemon and user-local dataset.
 
 ## High-Level Topology
 
@@ -476,9 +486,18 @@ Deliverable:
 - Loading/empty/error state refinement.
 - Accessibility pass for low-color terminals.
 
+### Milestone 5: Standalone NPM Release
+
+Deliverable:
+
+- Publishable `@todu/tui` package metadata.
+- Standalone `todu-tui` binary.
+- `npm pack --workspace=@todu/tui` verification.
+- README install and compatibility guidance.
+- Optional `todu tui` wrapper if CLI integration remains useful.
+
 ## Open Questions
 
-- Should the first public entry point be `todu tui`, `todu-tui`, or both?
 - Should the daemon connection manager be extracted before or after the first TUI vertical slice?
 - How much terminal markdown rendering is enough for task descriptions/comments?
 - Should task creation be in the MVP or deferred until triage is solid?

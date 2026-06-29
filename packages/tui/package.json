@@ -1,0 +1,46 @@
+{
+  "name": "@todu/tui",
+  "version": "0.23.2",
+  "description": "TUI for todu task management — keyboard-first task workflows in the terminal",
+  "type": "module",
+  "bin": {
+    "todu-tui": "dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsgo -p tsconfig.build.json && chmod +x dist/index.js",
+    "test": "cd ../.. && vitest run packages/tui/src/**/*.test.tsx packages/tui/src/**/*.test.ts",
+    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+  },
+  "dependencies": {
+    "ink": "^7.1.0",
+    "react": "^19.2.0",
+    "react-devtools-core": "^7.0.1"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evcraddock/todu.git",
+    "directory": "packages/tui"
+  },
+  "license": "MIT",
+  "keywords": [
+    "todu",
+    "task-management",
+    "tui",
+    "terminal",
+    "productivity"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
