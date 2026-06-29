@@ -4,4 +4,5 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-npm run changeset:infer -- "$@"
+git fetch origin main
+npm run release -- "$@"

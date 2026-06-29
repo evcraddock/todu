@@ -14,41 +14,48 @@ Prefer the Changesets npm flow when the user wants to publish packages like `@to
 
 ## NPM package release flow
 
-### 1. Pre-flight
+When the user says "release", do the release work. Do not ask them to manage Changesets.
 
-Verify readiness and stop if any check fails:
+### 1. Inspect changed packages
+
+Fetch the release base and run the inference helper:
 
 ```bash
-git branch --show-current          # normally main, unless adding a changeset in a feature branch
-git status --short                 # must be clean unless intentionally adding a changeset
 git fetch origin main
+npm run release -- --bump patch --summary "Release updated package."
+```
+
+The helper checks what changed and creates the needed changeset:
+
+- On feature branches, it compares the branch with `origin/main` plus working tree changes.
+- On `main`, it compares each package with the commit where that package's current version was set, so it can still find package changes that landed without a changeset.
+- It skips private or ignored workspaces such as `@todu/electron` and `@todu/recurring-worker`.
+
+### 2. Pick the bump yourself
+
+Default to `patch` unless evidence says otherwise:
+
+- `patch` for fixes, small UI changes, docs shipped with a package, and internal implementation changes.
+- `minor` for new backwards-compatible user-facing features.
+- `major` only for intentional breaking API or CLI behavior changes; ask before using it.
+
+If multiple published packages changed, include all changed published packages. If a core/engine change requires dependent package changes, include the affected dependents too. If the helper output is clearly wrong, edit the generated `.changeset/*.md` before committing.
+
+Ask the user only when package impact, bump level, or publish timing is genuinely ambiguous.
+
+### 3. Verify and commit
+
+After adding or confirming the changeset:
+
+```bash
 npm run check:ci
 npm test
 make version-check
 ```
 
-### 2. Infer and add changesets
+Commit the generated `.changeset/*.md` file with the package changes. If the release is being done directly from `main`, open a short PR containing the inferred changeset.
 
-If the current PR changes a published npm package and does not already include a changeset, infer the package list and create the changeset yourself:
-
-```bash
-npm run changeset:infer -- --bump patch --summary "Release updated package."
-```
-
-Rules:
-
-- Use `patch` for fixes, small UI changes, docs shipped with a package, and internal implementation changes.
-- Use `minor` for new backwards-compatible user-facing features.
-- Use `major` only for intentional breaking API or CLI behavior changes, and ask first.
-- If multiple published packages changed, include all changed published packages.
-- If a core/engine change requires dependent package changes, include the affected dependents too.
-- Skip private or ignored workspaces such as `@todu/electron` and `@todu/recurring-worker`.
-- If the helper output is clearly wrong, edit the generated `.changeset/*.md` before committing.
-- Ask the user only when package impact or bump level is genuinely ambiguous.
-
-Commit the generated `.changeset/*.md` file with the PR. Do not tell the user they need to understand or run Changesets manually.
-
-### 3. Version PR
+### 4. Version PR
 
 After changesets land on `main`, the `NPM Release` workflow opens or updates a Changesets version PR. That PR runs:
 
@@ -60,7 +67,7 @@ It bumps only packages named by changesets, updates changelogs, regenerates pack
 
 Review and merge the version PR when ready to publish.
 
-### 4. Publish
+### 5. Publish
 
 When the version PR lands on `main`, the `NPM Release` workflow runs:
 

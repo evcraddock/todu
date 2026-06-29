@@ -9,23 +9,25 @@ Todu uses two release paths:
 
 Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, and `@todu/tui`.
 
-### Add a changeset in feature PRs
+### Release command infers changesets
 
-When a PR should publish an npm package, the release flow should infer and add the changeset. Humans should not need to know Changesets details for normal work.
+For normal package releases, say "release" and let the assistant infer the Changesets details.
+
+The command behind that flow is:
 
 ```bash
-npm run changeset:infer -- --bump patch --summary "Release updated package."
+npm run release -- --bump patch --summary "Release updated package."
 ```
 
 The helper detects changed published workspace packages and skips private/ignored workspaces. For example, a TUI-only change creates a changeset for only `@todu/tui`.
 
-Choose the semantic bump for each selected package:
+Default bump selection:
 
 - `patch` for fixes and small internal changes.
 - `minor` for new backwards-compatible functionality.
 - `major` for breaking changes.
 
-If the inferred package list or bump is wrong, adjust it before committing. Commit the generated `.changeset/*.md` file with the PR.
+If the inferred package list or bump is wrong, the assistant adjusts it before committing. Commit the generated `.changeset/*.md` file with the PR.
 
 ### Version PR
 
