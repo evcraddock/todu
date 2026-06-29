@@ -23,6 +23,7 @@
     { "path": "./packages/engine" },
     { "path": "./packages/recurring-worker" },
     { "path": "./packages/daemon" },
-    { "path": "./packages/cli" }
+    { "path": "./packages/cli" },
+    { "path": "./packages/tui" }
   ]
 }

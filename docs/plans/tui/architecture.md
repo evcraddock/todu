@@ -92,7 +92,7 @@ The CLI may also expose a convenience wrapper:
 todu tui
 ```
 
-The wrapper must not be the only distribution path. The TUI should be publishable, installable, and runnable as its own package while targeting the same local daemon and user-local dataset.
+The wrapper must not be the only distribution path. The TUI should be publishable, installable, and runnable as its own package early so every incremental TUI improvement can ship in an npm version. Initial releases may launch the scaffold UI before daemon-backed screens exist; daemon-backed releases target the same local daemon and user-local dataset.
 
 ## High-Level Topology
 
@@ -493,7 +493,8 @@ Deliverable:
 - Publishable `@todu/tui` package metadata.
 - Standalone `todu-tui` binary.
 - `npm pack --workspace=@todu/tui` verification.
-- README install and compatibility guidance.
+- Release workflow publishes `@todu/tui` alongside other npm packages.
+- README install, compatibility, and incremental-release guidance.
 - Optional `todu tui` wrapper if CLI integration remains useful.
 
 ## Open Questions

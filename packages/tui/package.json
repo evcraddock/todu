@@ -12,8 +12,10 @@
     "dist"
   ],
   "scripts": {
+    "prebuild": "node generate-version.mjs",
     "build": "tsgo -p tsconfig.build.json && chmod +x dist/index.js",
-    "test": "cd ../.. && vitest run packages/tui/src/**/*.test.tsx packages/tui/src/**/*.test.ts",
+    "prepack": "npm run build",
+    "test": "cd ../.. && vitest run $(find packages/tui/src \\( -name '*.test.ts' -o -name '*.test.tsx' \\))",
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
@@ -41,6 +43,6 @@
     "productivity"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

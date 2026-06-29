@@ -7,12 +7,13 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:core && npm run build:engine && npm run build:recurring-worker && npm run build:daemon && npm run build:cli",
+    "build": "npm run build:core && npm run build:engine && npm run build:recurring-worker && npm run build:daemon && npm run build:cli && npm run build:tui",
     "build:core": "npm run --workspace=packages/core build",
     "build:engine": "npm run --workspace=packages/engine build",
     "build:recurring-worker": "npm run --workspace=packages/recurring-worker build",
     "build:daemon": "npm run --workspace=packages/daemon build",
     "build:cli": "npm run --workspace=packages/cli build",
+    "build:tui": "npm run --workspace=packages/tui build",
     "test": "vitest run",
     "test:all": "vitest run --config vitest.all.config.ts",
     "test:integration": "vitest run --config vitest.all.config.ts --include '**/*.integration.test.{ts,tsx}'",
@@ -23,7 +24,7 @@
     "postinstall": "node scripts/patch-automerge-repo.mjs",
     "check": "biome check --write --error-on-warnings . && npm run typecheck",
     "check:ci": "biome check --error-on-warnings . && npm run typecheck",
-    "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/recurring-worker typecheck && npm run --workspace=packages/daemon build && npm run --workspace=packages/cli typecheck",
+    "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/recurring-worker typecheck && npm run --workspace=packages/daemon build && npm run --workspace=packages/cli typecheck && npm run --workspace=packages/tui typecheck",
     "prepare": "husky"
   },
   "devDependencies": {

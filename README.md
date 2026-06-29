@@ -84,6 +84,45 @@ Compatibility guidance:
 - The desktop app version is shown in Settings and in release notes.
 - The CLI and desktop app both use the same default user-local config and data paths, so the CLI targets the same local daemon and dataset unless you override paths with env vars.
 
+### Terminal UI app (early standalone package)
+
+The TUI is published as its own npm app so terminal UI improvements can ship incrementally without waiting for the full desktop or CLI release surface.
+
+Prerequisites:
+
+- Node.js 22+
+- npm
+
+Install the latest TUI:
+
+```bash
+npm install -g @todu/tui
+```
+
+Install the TUI version matching another Todu release:
+
+```bash
+npm install -g @todu/tui@<todu-version>
+```
+
+Upgrade:
+
+```bash
+npm install -g @todu/tui@latest
+```
+
+Run:
+
+```bash
+todu-tui
+```
+
+Compatibility guidance:
+
+- Preferred: keep `@todu/tui`, `@todu/cli`, and the desktop app on the same version.
+- The TUI uses the same local daemon and user-local dataset as the CLI and desktop app once daemon-backed screens are enabled.
+- Early TUI releases may expose only the current scaffold UI while daemon-backed views are added incrementally.
+
 ### Build from source
 
 Additional prerequisite for standalone CLI binaries:
