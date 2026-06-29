@@ -7,7 +7,7 @@ const repoRoot = new URL("..", import.meta.url).pathname;
 
 function parseArgs(argv) {
   const options = {
-    base: "origin/main",
+    base: "auto",
     bump: "patch",
     dryRun: false,
     summary: "Release updated packages.",
@@ -45,19 +45,25 @@ function printHelp() {
   console.log(`Create a Changesets entry from changed workspace package files.
 
 Usage:
-  node scripts/create-inferred-changeset.mjs [--base origin/main] [--bump patch|minor|major] [--summary "..."] [--dry-run]
+  node scripts/create-inferred-changeset.mjs [--base auto|origin/main|<ref>] [--bump patch|minor|major] [--summary "..."] [--dry-run]
 
-Defaults to a patch bump for changed published packages. Private and ignored workspaces are skipped.`);
+Default behavior:
+  - On feature branches, compare with origin/main plus working tree changes.
+  - On main, compare each package with the commit where its current package version was set.
+  - Private and ignored workspaces are skipped.`);
 }
 
-function runGit(args) {
-  const result = spawnSync("git", args, {
+function run(args) {
+  return spawnSync(args[0], args.slice(1), {
     cwd: repoRoot,
     encoding: "utf8",
   });
+}
 
+function gitLines(args) {
+  const result = run(["git", ...args]);
   if (result.status !== 0) {
-    return null;
+    return [];
   }
 
   return result.stdout
@@ -66,8 +72,16 @@ function runGit(args) {
     .filter(Boolean);
 }
 
+function gitLine(args) {
+  return gitLines(args)[0] ?? null;
+}
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function getCurrentBranch() {
+  return gitLine(["branch", "--show-current"]);
 }
 
 function getIgnoredPackages() {
@@ -104,22 +118,68 @@ function getWorkspacePackages() {
     .filter(Boolean);
 }
 
-function getChangedFiles(base) {
-  const files = new Set();
-  const diffs = [
-    ["diff", "--name-only", "--diff-filter=ACMRTUXB", `${base}...HEAD`],
-    ["diff", "--name-only", "--diff-filter=ACMRTUXB"],
-    ["diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB"],
-    ["ls-files", "--others", "--exclude-standard"],
+function getWorkingTreeFiles() {
+  return [
+    ...gitLines(["diff", "--name-only", "--diff-filter=ACMRTUXB"]),
+    ...gitLines(["diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB"]),
+    ...gitLines(["ls-files", "--others", "--exclude-standard"]),
   ];
+}
 
-  for (const args of diffs) {
-    for (const file of runGit(args) ?? []) {
+function getChangedFilesFromBase(base) {
+  return [
+    ...gitLines(["diff", "--name-only", "--diff-filter=ACMRTUXB", `${base}...HEAD`]),
+    ...getWorkingTreeFiles(),
+  ];
+}
+
+function getLastVersionCommit(workspacePackage) {
+  return gitLine([
+    "log",
+    "-G",
+    '"version"\\s*:',
+    "--format=%H",
+    "-n",
+    "1",
+    "--",
+    `${workspacePackage.dir}/package.json`,
+  ]);
+}
+
+function getChangedFilesOnMain(packages) {
+  const files = new Set(getWorkingTreeFiles());
+
+  for (const workspacePackage of packages) {
+    const versionCommit = getLastVersionCommit(workspacePackage);
+    if (!versionCommit) {
+      continue;
+    }
+
+    for (const file of gitLines([
+      "diff",
+      "--name-only",
+      "--diff-filter=ACMRTUXB",
+      `${versionCommit}..HEAD`,
+      "--",
+      workspacePackage.dir,
+    ])) {
       files.add(file);
     }
   }
 
   return [...files];
+}
+
+function getChangedFiles(base, packages) {
+  if (base !== "auto") {
+    return getChangedFilesFromBase(base);
+  }
+
+  if (getCurrentBranch() === "main") {
+    return getChangedFilesOnMain(packages);
+  }
+
+  return getChangedFilesFromBase("origin/main");
 }
 
 function getExistingChangesetPackages() {
@@ -167,7 +227,7 @@ function createChangeset(packages, bump, summary) {
 
 const options = parseArgs(process.argv.slice(2));
 const packages = getWorkspacePackages();
-const changedFiles = getChangedFiles(options.base);
+const changedFiles = [...new Set(getChangedFiles(options.base, packages))];
 const existingChangesetPackages = getExistingChangesetPackages();
 const changedPackages = packages.filter((workspacePackage) =>
   changedFiles.some((file) => file === workspacePackage.dir || file.startsWith(`${workspacePackage.dir}/`)),
@@ -181,26 +241,26 @@ const packagesNeedingChangeset = publishablePackages
   .sort();
 
 if (changedFiles.length === 0) {
-  console.error("No changed files found.");
-  process.exit(1);
+  console.log("No changed files found.");
+  process.exit(0);
 }
 
 if (changedPackages.length === 0) {
-  console.error("No changed workspace packages found.");
-  console.error("Changed files:");
+  console.log("No changed workspace packages found.");
+  console.log("Changed files:");
   for (const file of changedFiles) {
-    console.error(`- ${file}`);
+    console.log(`- ${file}`);
   }
-  process.exit(1);
+  process.exit(0);
 }
 
 const skippedPackages = changedPackages.filter(
   (workspacePackage) => workspacePackage.private || workspacePackage.ignored,
 );
 if (skippedPackages.length > 0) {
-  console.error("Skipped private/ignored packages:");
+  console.log("Skipped private/ignored packages:");
   for (const workspacePackage of skippedPackages) {
-    console.error(`- ${workspacePackage.name}`);
+    console.log(`- ${workspacePackage.name}`);
   }
 }
 
