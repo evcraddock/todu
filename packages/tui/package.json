@@ -19,9 +19,11 @@
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
+    "@todu/core": "*",
     "ink": "^7.1.0",
     "react": "^19.2.0",
-    "react-devtools-core": "^7.0.1"
+    "react-devtools-core": "^7.0.1",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "ink-testing-library": "^4.0.0"
