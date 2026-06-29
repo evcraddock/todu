@@ -27,6 +27,19 @@ Compatibility expectations:
 - CLI and desktop app both use the same default user-local config and data paths, so they target the same local daemon and dataset by default.
 - If needed, you can point the CLI at a different daemon socket with `TODU_DAEMON_SOCKET`.
 
+## Standalone TUI guidance
+
+The terminal UI is distributed as `@todu/tui` and exposes the `todu-tui` command:
+
+```bash
+npm install -g @todu/tui
+todu-tui
+```
+
+Use the same version alignment rule as the CLI: prefer matching `@todu/tui`, `@todu/cli`, and desktop app versions. The TUI is released independently so each incremental terminal UI improvement can be versioned and published as soon as it lands.
+
+Daemon-backed TUI screens use the same local daemon and dataset as the CLI and desktop app. Early scaffold releases may launch before daemon-backed screens exist; once daemon-backed functionality is present, start the daemon first if the TUI reports that it is unavailable.
+
 ## Config/data defaults
 
 - Default home config path is `~/.config/todu/config.yaml`.

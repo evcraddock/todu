@@ -2,11 +2,11 @@
 
 ## Objective
 
-Make the TUI a standalone npm-distributed app with its own release path, similar in shape to `@todu/cli`.
+Make the TUI a standalone npm-distributed app with its own release path early, similar in shape to `@todu/cli`, so every incremental TUI change can ship as an npm version without waiting for the full MVP.
 
 ## Usable Increment
 
-After this spec, users can install and run the TUI as its own npm package, independent of the CLI package, while still connecting to the same local Todu daemon and dataset.
+After this spec, users can install and run the current TUI as its own npm package, independent of the CLI package. The first package may launch the scaffold UI; daemon-backed behavior will ship incrementally in later versions.
 
 ## Scope
 
@@ -14,11 +14,12 @@ Included:
 
 - Configure `@todu/tui` as a publishable package.
 - Expose a standalone binary, recommended `todu-tui`.
-- Keep `todu tui` as an optional convenience wrapper if already implemented, but do not make the TUI depend on the CLI package for distribution.
+- Do not depend on `todu tui` or the full MVP before publishing.
+- Keep `todu tui` as an optional later convenience wrapper if implemented, but do not make the TUI depend on the CLI package for distribution.
 - Ensure package metadata, `files`, `bin`, `main`, `types`, `publishConfig`, and build output match npm publishing expectations.
 - Add or update release scripts/checks so the TUI can be versioned and packed like `@todu/cli`.
 - Verify the package with `npm pack --workspace=@todu/tui`.
-- Document standalone install and upgrade guidance.
+- Document standalone install, upgrade, compatibility, daemon requirements, and the expectation that incremental TUI work can ship in npm versions.
 
 Excluded:
 
@@ -44,7 +45,8 @@ Excluded:
 npm install -g @todu/tui
 ```
 
-- The TUI should clearly report when the local daemon is unavailable and instruct the user to start it.
+- The TUI should launch the current scaffold UI until daemon-backed behavior exists.
+- Once daemon-backed behavior exists, the TUI should clearly report when the local daemon is unavailable and instruct the user to start it.
 - Compatibility guidance should recommend aligning `@todu/tui`, `@todu/cli`, and desktop app versions.
 
 ## Acceptance Criteria
@@ -52,8 +54,8 @@ npm install -g @todu/tui
 - `@todu/tui` has npm-ready package metadata and publish configuration.
 - `npm pack --workspace=@todu/tui` produces a package containing only the expected distributable files.
 - Installing the packed package exposes `todu-tui`.
-- `todu-tui` launches the built TUI and uses the local daemon path.
-- Documentation explains standalone installation, upgrade, and daemon requirements.
+- `todu-tui` launches the built TUI and uses the local daemon path when daemon behavior exists; until then, it launches the current scaffold UI.
+- Documentation explains standalone installation, upgrade, daemon requirements, and incremental release expectations.
 - Release/versioning behavior is aligned with `@todu/cli` where practical.
 
 ## Verification Plan

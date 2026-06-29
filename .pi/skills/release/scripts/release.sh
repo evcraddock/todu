@@ -73,6 +73,7 @@ PACKAGES=(
   "packages/engine/package.json"
   "packages/daemon/package.json"
   "packages/cli/package.json"
+  "packages/tui/package.json"
   "packages/electron/package.json"
 )
 
@@ -99,6 +100,7 @@ done
 
 # --- Step 3: Regenerate tracked version artifacts ---
 node packages/cli/generate-version.mjs
+node packages/tui/generate-version.mjs
 
 # --- Step 4: Commit ---
 git add CHANGELOG.md
@@ -106,6 +108,7 @@ for pkg in "${PACKAGES[@]}"; do
   git add "$pkg"
 done
 git add packages/cli/src/version.ts
+git add packages/tui/src/version.ts
 
 # Check if there are changes to commit
 if git diff --cached --quiet; then
