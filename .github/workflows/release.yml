@@ -30,7 +30,7 @@ jobs:
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Extract and validate version
         id: version
@@ -74,10 +74,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -89,6 +89,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare Electron binary
+        run: node scripts/install-electron-binary.mjs
 
       - name: Check (lint + test)
         env:
@@ -122,7 +125,7 @@ jobs:
           npm run --workspace=packages/electron dist:linux -- --linux AppImage deb
 
       - name: Upload CLI binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cli-linux
           path: |
@@ -130,7 +133,7 @@ jobs:
             dist/cli/todu-cli-linux-arm64
 
       - name: Upload Electron installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: electron-linux
           path: |
@@ -144,10 +147,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -159,6 +162,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare Electron binary
+        run: node scripts/install-electron-binary.mjs
 
       - name: Build CLI binaries (macOS)
         run: |
@@ -177,7 +183,7 @@ jobs:
           npm run --workspace=packages/electron dist:mac
 
       - name: Upload CLI binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cli-macos
           path: |
@@ -185,7 +191,7 @@ jobs:
             dist/cli/todu-cli-darwin-arm64
 
       - name: Upload Electron installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: electron-macos
           path: |
@@ -195,13 +201,13 @@ jobs:
   build-windows:
     name: Build Windows CLI
     needs: validate
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -224,7 +230,7 @@ jobs:
         shell: bash
 
       - name: Upload CLI binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cli-windows
           path: dist/cli/todu-cli-windows-x64.exe
@@ -240,10 +246,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           path: artifacts
 
@@ -306,7 +312,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.1
         with:
           tag_name: v${{ needs.validate.outputs.version }}
           name: todu v${{ needs.validate.outputs.version }}
@@ -323,10 +329,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
