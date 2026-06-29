@@ -1,145 +1,88 @@
 ---
 name: release
-description: Release todu with conversational changelog. Use when user says "release todu", "create a release", "new version", "bump version", "ship it", "cut a release", or similar.
+description: Release todu packages with Changesets or create desktop/binary GitHub releases. Use when user says "release todu", "create a release", "new version", "bump version", "ship it", "cut a release", or similar.
 ---
 
 # Release todu
 
-Guide the release process through conversation. Draft a changelog collaboratively, bump versions, tag, and push to trigger the CI pipeline.
+Todu has two release paths:
 
-## Quick Reference
+1. **NPM package releases** use Changesets and independent package versions.
+2. **Desktop/standalone binary GitHub releases** use the tag-based `Release` workflow.
 
-```bash
-# Release script handles: version bump, commit, tag, push, verify
-# Path relative to this skill directory
-.pi/skills/release/scripts/release.sh <version>  # e.g. 1.2.0
-```
+Prefer the Changesets npm flow when the user wants to publish packages like `@todu/tui`, `@todu/cli`, `@todu/core`, `@todu/engine`, `@todu/daemon`, or `@todu/recurring-worker`.
 
-## Workflow
+## NPM package release flow
 
 ### 1. Pre-flight
 
-Verify readiness — stop and report if any check fails.
+Verify readiness and stop if any check fails:
 
 ```bash
-git branch --show-current          # must be main
+git branch --show-current          # normally main, unless adding a changeset in a feature branch
+git status --short                 # must be clean unless intentionally adding a changeset
 git fetch origin main
-git log origin/main..HEAD --oneline  # must be empty
-gh pr list --state open --json number,title  # warn if any open
-make check-ci                      # lint + typecheck
-make test                          # all tests must pass
-make version-check                 # all packages must match
+npm run check:ci
+npm test
+make version-check
 ```
 
-### 2. Determine current version
+### 2. Add a changeset in feature PRs
+
+If the current PR changes an npm package and does not already include a changeset:
 
 ```bash
-LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+npm run changeset
 ```
 
-If no tags exist, current version is `0.0.0`.
+Select only changed packages. For a TUI-only change, select only `@todu/tui`.
 
-### 3. Gather changes
+Choose semantic bumps:
 
-Collect all changes since the last tag:
+- `patch` for fixes and small internal changes.
+- `minor` for backwards-compatible features.
+- `major` for breaking changes.
+
+Commit the generated `.changeset/*.md` file with the PR.
+
+### 3. Version PR
+
+After changesets land on `main`, the `NPM Release` workflow opens or updates a Changesets version PR. That PR runs:
 
 ```bash
-git log ${LATEST_TAG}..HEAD --oneline --no-merges
-gh pr list --state merged --search "merged:>=$(git log -1 --format=%ci $LATEST_TAG | cut -d' ' -f1)" --json number,title,labels
+npm run version-packages
 ```
 
-Cross-reference task IDs from commit messages (patterns: `#1234`, `Task: #1234`, `Closes #1234`). Look up task titles with `todu task show <id>` for richer context.
+It bumps only packages named by changesets, updates changelogs, regenerates package version sources, and updates `package-lock.json`.
 
-### 4. Recommend version bump
+Review and merge the version PR when ready to publish.
 
-Analyze commit prefixes:
-- `feat!:` or `BREAKING CHANGE:` → **major**
-- `feat:` → **minor**
-- `fix:` → **patch**
+### 4. Publish
 
-Present recommendation with reasoning. User confirms or overrides.
-
-### 5. Draft changelog (conversational)
-
-Generate a draft in Keep a Changelog format, grouped by category:
-
-```markdown
-## [X.Y.Z] - YYYY-MM-DD
-
-Summary paragraph.
-
-### Added
-- Feature description (#PR)
-
-### Fixed
-- Bug fix description (#PR)
-
-### Changed
-- Change description (#PR)
-```
-
-**Be opinionated** — write human-readable descriptions, not raw commit messages. Present the draft and ask for feedback. The user may:
-- Reword entries
-- Combine or split entries
-- Remove trivial entries
-- Add entries not captured by commits
-- Add or edit the summary paragraph
-- Reorder entries
-
-Iterate until the user approves.
-
-### 6. Update CHANGELOG.md
-
-If CHANGELOG.md doesn't exist, create it with the header:
-
-```markdown
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-```
-
-Prepend the approved changelog entry below `## [Unreleased]`.
-
-### 7. Run release script
-
-Once the changelog is finalized:
+When the version PR lands on `main`, the `NPM Release` workflow runs:
 
 ```bash
-.pi/skills/release/scripts/release.sh <version>
+npm run release-packages
 ```
 
-The script handles:
-1. Validate on main with no unpushed commits
-2. Update version in all package.json files (root + packages/*)
-3. Commit CHANGELOG.md + all package.json files
-4. Create annotated tag `v<version>`
-5. Push commit and tag
-6. Verify tag exists on remote
+This builds the workspace and runs `changeset publish`, which publishes only package versions not already on npm.
 
-**Do not run the script until the user has approved the changelog.**
+## Desktop/binary GitHub release flow
 
-### 8. Post-release
+Use this path only when the user explicitly wants desktop installers or standalone CLI binaries from a `v*` GitHub release tag.
 
-After the script succeeds:
+1. Ensure `main` is clean and up to date.
+2. Update `CHANGELOG.md` for the desktop/binary release.
+3. Create and push a `vX.Y.Z` tag through the approved project release process.
+4. The `Release` workflow builds desktop installers and standalone CLI binaries.
 
-```bash
-gh run list --limit 1 --json databaseId,status,event --jq '.[0]'
-```
-
-Report that GitHub Actions is building the release. Optionally wait for completion:
-
-```bash
-gh run watch <run-id>
-```
+The tag-based `Release` workflow no longer publishes npm packages; npm publishing is owned by Changesets.
 
 ## Important
 
-- NEVER force push or use `--force` flags
-- NEVER run the release script without user approval of the changelog
-- The script verifies the tag was pushed — if it fails, read the error
-- If anything fails, stop and report — do not retry blindly
+- Never force push or use `--force` flags.
+- Never publish without user approval.
+- For package releases, do not bump unchanged packages manually.
+- If anything fails, stop and report; do not retry blindly.
+
+See `docs/release.md` for full details.

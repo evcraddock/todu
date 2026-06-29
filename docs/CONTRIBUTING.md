@@ -172,6 +172,9 @@ PR Pipeline Status
 
 | Command | Purpose |
 |---------|---------|
+| `npm run changeset` | Add a package changeset for npm releases |
+| `npm run version-packages` | Apply pending changesets to package versions and generated version sources |
+| `npm run release-packages` | Build and publish changed npm packages through Changesets |
 | `make build` | Build all packages (core → engine → cli) |
 | `make test` | Run unit tests only (fast, no Automerge/storage) |
 | `make test-all` | Run all tests including integration tests |
@@ -197,6 +200,7 @@ make test-sync-server-integration
 
 See also:
 
+- [Release Process](release.md) for Changesets-based npm package releases and tag-based desktop/binary releases
 - [CLI Daemon Usage](cli-daemon-usage.md) for daemon-required CLI behavior
 - [Daemon Service Operations](daemon-service-operations.md) for Linux/macOS service setup and lifecycle commands
 

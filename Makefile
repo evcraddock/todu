@@ -188,20 +188,7 @@ version: ## Show current version of all packages
 	@echo "  tui:      $$(node -p "require('./packages/tui/package.json').version")"
 	@echo "  electron: $$(node -p "require('./packages/electron/package.json').version")"
 
-version-check: ## Verify all package versions match, including generated CLI version source
-	@V1=$$(node -p "require('./packages/core/package.json').version") && \
-	V2=$$(node -p "require('./packages/engine/package.json').version") && \
-	V3=$$(node -p "require('./packages/daemon/package.json').version") && \
-	V4=$$(node -p "require('./packages/cli/package.json').version") && \
-	V5=$$(node -p "require('./packages/tui/package.json').version") && \
-	V6=$$(node -p "require('./packages/electron/package.json').version") && \
-	V7=$$(node -e "const fs=require('fs'); const src=fs.readFileSync('./packages/cli/src/version.ts','utf8'); const m=src.match(/VERSION = \\\"([^\\\"]+)\\\"/); if (!m) { process.exit(1); } process.stdout.write(m[1]);") && \
-	V8=$$(node -e "const fs=require('fs'); const src=fs.readFileSync('./packages/tui/src/version.ts','utf8'); const m=src.match(/VERSION = \\\"([^\\\"]+)\\\"/); if (!m) { process.exit(1); } process.stdout.write(m[1]);") && \
-	if [ "$$V1" = "$$V2" ] && [ "$$V2" = "$$V3" ] && [ "$$V3" = "$$V4" ] && [ "$$V4" = "$$V5" ] && [ "$$V5" = "$$V6" ] && [ "$$V6" = "$$V7" ] && [ "$$V7" = "$$V8" ]; then \
-		echo "✅ All versions in sync at $$V1"; \
-	else \
-		echo "❌ Version mismatch: core=$$V1 engine=$$V2 daemon=$$V3 cli=$$V4 tui=$$V5 electron=$$V6 cli_src=$$V7 tui_src=$$V8"; \
-		exit 1; \
-	fi
+version-check: ## Verify generated package version sources match package.json files
+	node scripts/check-package-versions.mjs
 
 

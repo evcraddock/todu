@@ -20,7 +20,7 @@ env:
 
 jobs:
   # ===========================================================================
-  # Validate: version consistency check
+  # Validate: release tag metadata
   # ===========================================================================
   validate:
     name: Validate
@@ -46,16 +46,6 @@ jobs:
           VERSION="${TAG#v}"
           echo "Tag: $TAG, Version: $VERSION"
 
-          # Check all published package.json versions match
-          for pkg in packages/core packages/engine packages/daemon packages/cli packages/tui; do
-            PKG_VERSION=$(node -p "require('./$pkg/package.json').version")
-            if [ "$PKG_VERSION" != "$VERSION" ]; then
-              echo "::error::Version mismatch: $pkg has $PKG_VERSION, expected $VERSION"
-              exit 1
-            fi
-          done
-
-          echo "✅ All package versions match: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           # Detect pre-release
@@ -319,78 +309,3 @@ jobs:
           body_path: release-notes.md
           prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
           files: release-assets/*
-
-  # ===========================================================================
-  # Publish: npm packages
-  # ===========================================================================
-  publish-npm:
-    name: Publish to npm
-    needs: [validate, build-linux]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v6.4.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build packages
-        run: npm run build
-
-      - name: Publish npm packages
-        run: |
-          publish_package() {
-            local workspace=$1
-            local output
-            if output=$(npm publish --workspace="$workspace" --access public 2>&1); then
-              echo "✅ Published $workspace"
-            elif echo "$output" | grep -q "previously published"; then
-              echo "⏭️  $workspace already published at this version, skipping"
-            else
-              echo "$output" >&2
-              echo "::error::Failed to publish $workspace"
-              return 1
-            fi
-          }
-          publish_package packages/core
-          publish_package packages/engine
-          publish_package packages/daemon
-          publish_package packages/cli
-          publish_package packages/tui
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Verify publish
-        run: |
-          VERSION="${{ needs.validate.outputs.version }}"
-          verify_package() {
-            local pkg=$1
-            for attempt in 1 2 3 4 5; do
-              if npm view "${pkg}@${VERSION}" version 2>/dev/null; then
-                return 0
-              fi
-              echo "Waiting for ${pkg}@${VERSION} to propagate (attempt ${attempt}/5)..."
-              sleep 15
-            done
-            echo "::error::${pkg}@${VERSION} not found on registry after 5 attempts"
-            return 1
-          }
-
-          verify_package @todu/core
-          verify_package @todu/engine
-          verify_package @todu/daemon
-          verify_package @todu/cli
-          verify_package @todu/tui
-
-          CLI_WORKSPACE_DEPS=$(node -p 'const pkg=require("./packages/cli/package.json"); Object.keys(pkg.dependencies ?? {}).filter((name) => name.startsWith("@todu/")).join(" ")')
-          for pkg in $CLI_WORKSPACE_DEPS; do
-            verify_package "$pkg"
-          done
-
-          echo "✅ All published CLI workspace dependencies are available at ${VERSION}"
