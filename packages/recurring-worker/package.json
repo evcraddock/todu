@@ -1,6 +1,7 @@
 {
   "name": "@todu/recurring-worker",
   "version": "0.1.1",
+  "private": true,
   "description": "Standalone recurring automation worker plugin for todu daemon",
   "type": "module",
   "main": "./dist/index.js",

@@ -7,7 +7,7 @@ Todu uses two release paths:
 
 ## NPM package releases with Changesets
 
-Use Changesets for npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, `@todu/recurring-worker`, and `@todu/tui`.
+Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, and `@todu/tui`.
 
 ### Add a changeset in feature PRs
 
@@ -17,7 +17,7 @@ When a PR should publish an npm package, add a changeset before the PR is merged
 npm run changeset
 ```
 
-Select only the packages changed by the PR. For example, a TUI-only change should select only `@todu/tui`.
+Select only the published packages changed by the PR. For example, a TUI-only change should select only `@todu/tui`.
 
 Choose the semantic bump for each selected package:
 
@@ -41,6 +41,10 @@ Review and merge the version PR when ready to publish.
 ### Publish
 
 When the version PR lands on `main`, the `NPM Release` workflow runs `npm run release-packages`, which builds the workspace and publishes only packages with versions that are not already on npm.
+
+## Ignored workspaces
+
+`@todu/electron` and `@todu/recurring-worker` are ignored by Changesets. Add them back to the Changesets publish set only when they have an intentional npm release path.
 
 ## Internal workspace dependencies
 
