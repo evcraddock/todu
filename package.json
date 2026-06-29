@@ -22,6 +22,7 @@
     "test:storage-stability": "node scripts/test-storage-stability.mjs",
     "test:watch": "vitest",
     "changeset": "changeset",
+    "changeset:infer": "node scripts/create-inferred-changeset.mjs",
     "version-packages": "changeset version && node scripts/generate-package-versions.mjs && npm install --package-lock-only --ignore-scripts",
     "release-packages": "npm run build && changeset publish",
     "postinstall": "node scripts/patch-automerge-repo.mjs",
