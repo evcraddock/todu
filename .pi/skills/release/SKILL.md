@@ -10,7 +10,7 @@ Todu has two release paths:
 1. **NPM package releases** use Changesets and independent package versions.
 2. **Desktop/standalone binary GitHub releases** use the tag-based `Release` workflow.
 
-Prefer the Changesets npm flow when the user wants to publish packages like `@todu/tui`, `@todu/cli`, `@todu/core`, `@todu/engine`, `@todu/daemon`, or `@todu/recurring-worker`.
+Prefer the Changesets npm flow when the user wants to publish packages like `@todu/tui`, `@todu/cli`, `@todu/core`, `@todu/engine`, or `@todu/daemon`. The assistant owns Changesets details; do not make the user choose packages unless the inferred scope is ambiguous or risky.
 
 ## NPM package release flow
 
@@ -27,23 +27,26 @@ npm test
 make version-check
 ```
 
-### 2. Add a changeset in feature PRs
+### 2. Infer and add changesets
 
-If the current PR changes an npm package and does not already include a changeset:
+If the current PR changes a published npm package and does not already include a changeset, infer the package list and create the changeset yourself:
 
 ```bash
-npm run changeset
+npm run changeset:infer -- --bump patch --summary "Release updated package."
 ```
 
-Select only changed packages. For a TUI-only change, select only `@todu/tui`.
+Rules:
 
-Choose semantic bumps:
+- Use `patch` for fixes, small UI changes, docs shipped with a package, and internal implementation changes.
+- Use `minor` for new backwards-compatible user-facing features.
+- Use `major` only for intentional breaking API or CLI behavior changes, and ask first.
+- If multiple published packages changed, include all changed published packages.
+- If a core/engine change requires dependent package changes, include the affected dependents too.
+- Skip private or ignored workspaces such as `@todu/electron` and `@todu/recurring-worker`.
+- If the helper output is clearly wrong, edit the generated `.changeset/*.md` before committing.
+- Ask the user only when package impact or bump level is genuinely ambiguous.
 
-- `patch` for fixes and small internal changes.
-- `minor` for backwards-compatible features.
-- `major` for breaking changes.
-
-Commit the generated `.changeset/*.md` file with the PR.
+Commit the generated `.changeset/*.md` file with the PR. Do not tell the user they need to understand or run Changesets manually.
 
 ### 3. Version PR
 
@@ -82,7 +85,8 @@ The tag-based `Release` workflow no longer publishes npm packages; npm publishin
 
 - Never force push or use `--force` flags.
 - Never publish without user approval.
-- For package releases, do not bump unchanged packages manually.
+- For package releases, infer and add the needed changeset; do not ask the user to manage Changesets details.
+- Do not bump unchanged packages manually.
 - If anything fails, stop and report; do not retry blindly.
 
 See `docs/release.md` for full details.

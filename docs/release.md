@@ -11,13 +11,13 @@ Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, 
 
 ### Add a changeset in feature PRs
 
-When a PR should publish an npm package, add a changeset before the PR is merged:
+When a PR should publish an npm package, the release flow should infer and add the changeset. Humans should not need to know Changesets details for normal work.
 
 ```bash
-npm run changeset
+npm run changeset:infer -- --bump patch --summary "Release updated package."
 ```
 
-Select only the published packages changed by the PR. For example, a TUI-only change should select only `@todu/tui`.
+The helper detects changed published workspace packages and skips private/ignored workspaces. For example, a TUI-only change creates a changeset for only `@todu/tui`.
 
 Choose the semantic bump for each selected package:
 
@@ -25,7 +25,7 @@ Choose the semantic bump for each selected package:
 - `minor` for new backwards-compatible functionality.
 - `major` for breaking changes.
 
-Commit the generated `.changeset/*.md` file with the PR.
+If the inferred package list or bump is wrong, adjust it before committing. Commit the generated `.changeset/*.md` file with the PR.
 
 ### Version PR
 
