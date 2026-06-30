@@ -54,7 +54,23 @@ function createFailedSnapshot(): DaemonConnectionSnapshot {
   };
 }
 
+function createFakeTask() {
+  return {
+    id: "task-1",
+    title: "Ship",
+    status: "active",
+    priority: "high",
+    projectId: "project-1",
+    labels: ["tui"],
+    assigneeActorIds: [],
+    assignees: [],
+    createdAt: "2026-06-30T00:00:00.000Z",
+    updatedAt: "2026-06-30T00:00:00.000Z",
+  };
+}
+
 function createFakeClient(): TuiToduClient {
+  const task = createFakeTask();
   return {
     actor: { list: vi.fn().mockResolvedValue([]) },
     project: {
@@ -62,8 +78,8 @@ function createFakeClient(): TuiToduClient {
       get: vi.fn(),
     },
     task: {
-      list: vi.fn().mockResolvedValue([{ id: "task-1", title: "Ship" }]),
-      get: vi.fn(),
+      list: vi.fn().mockResolvedValue([task]),
+      get: vi.fn().mockResolvedValue({ ...task, description: "Ship details" }),
       update: vi.fn(),
       createComment: vi.fn(),
     },
@@ -91,7 +107,7 @@ describe("App", () => {
   it("renders the initial TUI shell with daemon connection guidance", () => {
     const connection = createFakeConnection(createFailedSnapshot());
 
-    const { lastFrame } = render(<App connection={connection} />);
+    const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
 
     expect(lastFrame()).toContain("Todu • Tasks");
     expect(lastFrame()).toContain("View: Tasks");
@@ -109,8 +125,8 @@ describe("App", () => {
       />,
     );
 
+    await waitForFrameText(lastFrame, "Ship");
     expect(lastFrame()).toContain("Tasks");
-    expect(lastFrame()).toContain("Task list placeholder.");
 
     stdin.write("2");
     await waitForFrameText(lastFrame, "Projects placeholder.");
