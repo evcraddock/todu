@@ -5,20 +5,26 @@ import { useEffect, useMemo, useState } from "react";
 import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
 import { TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
+import { describeProjectFilter, type ProjectFilterState } from "../state/project-filter.js";
 import { queryKeys } from "../state/query-keys.js";
 import { getSelectedItem, moveSelection, resolveSelectedId } from "../state/selection.js";
 
 export interface TasksScreenProps {
   client: TuiToduClient;
+  projectFilter: ProjectFilterState;
 }
 
 const visibleTaskStatuses = ["active", "inprogress", "waiting"] as const;
 
-export function TasksScreen({ client }: TasksScreenProps): JSX.Element {
+export function TasksScreen({ client, projectFilter }: TasksScreenProps): JSX.Element {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const taskFilter = {
+    status: [...visibleTaskStatuses],
+    ...(projectFilter.projectId ? { projectId: projectFilter.projectId } : {}),
+  };
   const tasksQuery = useQuery({
-    queryKey: queryKeys.tasks({ status: [...visibleTaskStatuses] }),
-    queryFn: () => client.task.list({ status: [...visibleTaskStatuses] }),
+    queryKey: queryKeys.tasks(taskFilter),
+    queryFn: () => client.task.list(taskFilter),
   });
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects(),
@@ -73,7 +79,9 @@ export function TasksScreen({ client }: TasksScreenProps): JSX.Element {
     return (
       <Box flexDirection="column">
         <Text color="cyan">Tasks</Text>
-        <Text color="gray">No active, in-progress, or waiting tasks.</Text>
+        <Text color="gray">
+          No active, in-progress, or waiting tasks for {describeProjectFilter(projectFilter)}.
+        </Text>
       </Box>
     );
   }

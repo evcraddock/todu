@@ -8,6 +8,7 @@ import type {
   DaemonConnectionSnapshot,
 } from "../daemon/connection.js";
 import type { TuiToduClient } from "../daemon/todu-client.js";
+import { allProjectsFilter } from "../state/project-filter.js";
 import { App } from "./App.js";
 import { applyNavigationAction, createInitialRouteState } from "./keymap.js";
 
@@ -74,7 +75,18 @@ function createFakeClient(): TuiToduClient {
   return {
     actor: { list: vi.fn().mockResolvedValue([]) },
     project: {
-      list: vi.fn().mockResolvedValue([{ id: "project-1", name: "Inbox" }]),
+      list: vi.fn().mockResolvedValue([
+        {
+          id: "project-1",
+          name: "Inbox",
+          description: "Default project",
+          status: "active",
+          priority: "medium",
+          authorizedAssigneeActorIds: [],
+          createdAt: "2026-06-30T00:00:00.000Z",
+          updatedAt: "2026-06-30T00:00:00.000Z",
+        },
+      ]),
       get: vi.fn(),
     },
     task: {
@@ -115,6 +127,7 @@ describe("App", () => {
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Tasks");
     expect(lastFrame()).toContain("q Back/Quit");
+    expect(lastFrame()).toContain("Project: All projects");
   });
 
   it("switches between primary routes", async () => {
@@ -129,13 +142,57 @@ describe("App", () => {
     expect(lastFrame()).toContain("Tasks");
 
     stdin.write("2");
-    await waitForFrameText(lastFrame, "Projects placeholder.");
+    await waitForFrameText(lastFrame, "Project detail");
     expect(lastFrame()).toContain("View: Projects");
 
     stdin.write("3");
     await waitForFrameText(lastFrame, "Data status ready");
     expect(lastFrame()).toContain("Projects: 1");
     expect(lastFrame()).toContain("Tasks: 1");
+  });
+
+  it("selects a project and filters Tasks", async () => {
+    const client = createFakeClient();
+    const { stdin, lastFrame } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+
+    await waitForFrameText(lastFrame, "Ship");
+    stdin.write("2");
+    await waitForFrameText(lastFrame, "Project detail");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "Default project");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Project: Inbox");
+
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledWith({
+        status: ["active", "inprogress", "waiting"],
+        projectId: "project-1",
+      });
+    });
+  });
+
+  it("clears project filter from Projects with a", async () => {
+    const { stdin, lastFrame } = render(
+      <App
+        connection={createFakeConnection(createConnectedSnapshot())}
+        toduClient={createFakeClient()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Ship");
+    stdin.write("2");
+    await waitForFrameText(lastFrame, "Project detail");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "Default project");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Project: Inbox");
+
+    stdin.write("2");
+    await waitForFrameText(lastFrame, "Project detail");
+    stdin.write("a");
+    await waitForFrameText(lastFrame, "Project: All projects");
   });
 
   it("shows help with implemented keys", async () => {
@@ -153,6 +210,9 @@ describe("App", () => {
     expect(lastFrame()).toContain("2      Projects");
     expect(lastFrame()).toContain("3      Data Status");
     expect(lastFrame()).toContain("?      Help");
+    expect(lastFrame()).toContain("j/↓    Down");
+    expect(lastFrame()).toContain("Enter  Select Project");
+    expect(lastFrame()).toContain("a      All Projects");
     expect(lastFrame()).toContain("q      Back/Quit");
     expect(lastFrame()).toContain("Ctrl+C Quit");
   });
@@ -168,12 +228,12 @@ describe("App", () => {
     );
 
     stdin.write("2");
-    await waitForFrameText(lastFrame, "Projects placeholder.");
+    await waitForFrameText(lastFrame, "Project detail");
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
 
     stdin.write("q");
-    await waitForFrameText(lastFrame, "Projects placeholder.");
+    await waitForFrameText(lastFrame, "Project detail");
     expect(onExit).not.toHaveBeenCalled();
 
     stdin.write("q");
@@ -191,7 +251,12 @@ describe("App", () => {
 
   it("renders the frame at narrow widths without wrapping route labels into exceptions", () => {
     const { lastFrame } = render(
-      <AppFrame route="data-status" connection={createConnectedSnapshot()} terminalWidth={24}>
+      <AppFrame
+        route="data-status"
+        connection={createConnectedSnapshot()}
+        projectFilter={allProjectsFilter}
+        terminalWidth={24}
+      >
         <TextFixture />
       </AppFrame>,
     );

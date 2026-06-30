@@ -3,6 +3,7 @@ import { render } from "ink-testing-library";
 import type { JSX, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { type TuiToduClient, TuiToduClientError } from "../daemon/todu-client.js";
+import { allProjectsFilter } from "../state/project-filter.js";
 import { createTuiQueryClient } from "../state/query-client.js";
 import { TasksScreen } from "./TasksScreen.js";
 
@@ -76,7 +77,9 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 describe("TasksScreen", () => {
   it("renders fetched tasks and selected task details", async () => {
     const client = createClient();
-    const { lastFrame } = renderWithQuery(<TasksScreen client={client} />);
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
 
     await waitForFrameText(lastFrame, "First task");
     await waitForFrameText(lastFrame, "Description for First task");
@@ -90,7 +93,9 @@ describe("TasksScreen", () => {
 
   it("moves selection with j/k and arrow keys and updates detail", async () => {
     const client = createClient();
-    const { stdin, lastFrame } = renderWithQuery(<TasksScreen client={client} />);
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
 
     await waitForFrameText(lastFrame, "Description for First task");
 
@@ -111,6 +116,23 @@ describe("TasksScreen", () => {
     expect(lastFrame()).toContain("> [high] [active] First task (todu) #tui");
   });
 
+  it("passes selected project ID to task list filter", async () => {
+    const client = createClient();
+    renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={{ projectId: "project-1", projectName: "todu" }}
+      />,
+    );
+
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledWith({
+        status: ["active", "inprogress", "waiting"],
+        projectId: "project-1",
+      });
+    });
+  });
+
   it("renders empty state", async () => {
     const client = createClient({
       task: {
@@ -120,9 +142,11 @@ describe("TasksScreen", () => {
         createComment: vi.fn(),
       },
     });
-    const { lastFrame } = renderWithQuery(<TasksScreen client={client} />);
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
 
-    await waitForFrameText(lastFrame, "No active, in-progress, or waiting tasks.");
+    await waitForFrameText(lastFrame, "No active, in-progress, or waiting tasks for All projects.");
   });
 
   it("renders user-facing errors", async () => {
@@ -141,7 +165,9 @@ describe("TasksScreen", () => {
         createComment: vi.fn(),
       },
     });
-    const { lastFrame } = renderWithQuery(<TasksScreen client={client} />);
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
 
     await waitForFrameText(lastFrame, "Tasks unavailable");
     expect(lastFrame()).toContain("Daemon unavailable. Start it with: todu daemon start.");

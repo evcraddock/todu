@@ -262,8 +262,10 @@ The current TUI implements these global navigation and task-list movement keys:
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.
 - `Ctrl+C`: Quit immediately.
-- `j` / `Down Arrow`: Move down in the Tasks list.
-- `k` / `Up Arrow`: Move up in the Tasks list.
+- `j` / `Down Arrow`: Move down in the Tasks or Projects list.
+- `k` / `Up Arrow`: Move up in the Tasks or Projects list.
+- `Enter`: Select the focused project and open Tasks filtered by that project.
+- `a`: Clear the project filter and open Tasks for all projects.
 
 ### MVP Task Actions
 
@@ -285,17 +287,18 @@ The current TUI implements these global navigation and task-list movement keys:
    - Sort by priority or updated/due date once due dates exist.
    - Selected task detail pane.
 
-2. **Task detail**
+2. **Projects**
+   - Project list with an `All projects` option.
+   - Selected project summary.
+   - `Enter` opens Tasks filtered by the focused project.
+   - `a` clears the filter and returns to all-project Tasks.
+   - The active project filter is shown in the shell status line.
+
+3. **Task detail**
    - Full title, status, priority, project, labels, assignees.
    - Description rendered as terminal markdown where practical.
    - Recent comments/notes.
    - Status/comment actions.
-
-3. **Projects**
-   - Project list.
-   - Project detail summary.
-   - Filter tasks by selected project.
-   - Create/update can be deferred unless they fall out naturally from shared mutation patterns.
 
 4. **Help / command palette**
    - Discoverable shortcuts.
