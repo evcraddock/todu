@@ -117,5 +117,5 @@ function RouteScreen({ route, connection, toduClient }: RouteScreenProps): JSX.E
     return <HelpScreen />;
   }
 
-  return <TasksScreen />;
+  return connection.state === "connected" ? <TasksScreen client={toduClient} /> : null;
 }

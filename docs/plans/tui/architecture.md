@@ -244,7 +244,7 @@ The TUI should be optimized for fast keyboard workflows.
 ### Navigation Principles
 
 - Default screen: active tasks.
-- `j/k` and arrow keys move selection once a focused list is implemented.
+- `j/k` and arrow keys move selection in the Tasks list.
 - `enter` opens focused detail or toggles pane focus once split-pane task browsing is implemented.
 - `/` starts search/filter input once filtering is implemented.
 - `:` opens command palette once command execution is implemented.
@@ -254,7 +254,7 @@ The TUI should be optimized for fast keyboard workflows.
 
 ### Current Shell Keymap
 
-The initial shell implements only global navigation keys:
+The current TUI implements these global navigation and task-list movement keys:
 
 - `1`: Tasks.
 - `2`: Projects.
@@ -262,6 +262,8 @@ The initial shell implements only global navigation keys:
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.
 - `Ctrl+C`: Quit immediately.
+- `j` / `Down Arrow`: Move down in the Tasks list.
+- `k` / `Up Arrow`: Move up in the Tasks list.
 
 ### MVP Task Actions
 
