@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.23.6
+
+### Patch Changes
+
+- 72c092c: Add TUI task status actions.
+
 ## 0.23.5
 
 ### Patch Changes

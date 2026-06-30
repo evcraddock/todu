@@ -1,6 +1,6 @@
 {
   "name": "@todu/tui",
-  "version": "0.23.5",
+  "version": "0.23.6",
   "description": "TUI for todu task management — keyboard-first task workflows in the terminal",
   "type": "module",
   "bin": {
