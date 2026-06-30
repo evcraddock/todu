@@ -50,7 +50,10 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
         const task = tasks.find((entry) => entry.id === id) ?? tasks[0];
         return Promise.resolve({ ...task, description: `Description for ${task.title}` });
       }),
-      update: vi.fn(),
+      update: vi.fn().mockImplementation((id: string, input: { status: string }) => {
+        const task = tasks.find((entry) => entry.id === id) ?? tasks[0];
+        return Promise.resolve({ ...task, status: input.status });
+      }),
       createComment: vi.fn(),
     },
     note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
@@ -131,6 +134,84 @@ describe("TasksScreen", () => {
         projectId: "project-1",
       });
     });
+  });
+
+  it("updates selected task status without confirmation for non-destructive actions", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("s");
+
+    await waitForFrameText(lastFrame, "Task started: First task");
+    expect(client.task.update).toHaveBeenCalledWith("task-1", { status: "inprogress" });
+  });
+
+  it("requires confirmation before cancelling a task", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("x");
+    await waitForFrameText(lastFrame, "Cancel selected task?");
+    expect(client.task.update).not.toHaveBeenCalled();
+
+    stdin.write("y");
+    await waitForFrameText(lastFrame, "Task cancelled: First task");
+    expect(client.task.update).toHaveBeenCalledWith("task-1", { status: "canceled" });
+  });
+
+  it("can dismiss cancellation confirmation", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("x");
+    await waitForFrameText(lastFrame, "Cancel selected task?");
+    stdin.write("n");
+    await waitForFrameText(lastFrame, "Cancelled task action.");
+    expect(client.task.update).not.toHaveBeenCalled();
+  });
+
+  it("disables status actions while disconnected", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        statusActionsEnabled={false}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("s");
+    await waitForFrameText(lastFrame, "Task actions unavailable while daemon is disconnected.");
+    expect(client.task.update).not.toHaveBeenCalled();
+  });
+
+  it("renders readable mutation errors", async () => {
+    const client = createClient();
+    vi.mocked(client.task.update).mockRejectedValueOnce(
+      new TuiToduClientError({
+        method: "task.update",
+        code: "VALIDATION_ERROR",
+        message: "Cannot update task status",
+        userMessage: "Cannot update task status",
+      }),
+    );
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("w");
+    await waitForFrameText(lastFrame, "Cannot update task status");
   });
 
   it("renders empty state", async () => {
