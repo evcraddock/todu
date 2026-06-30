@@ -6,3 +6,4 @@ cd "$repo_root"
 
 git fetch origin main
 npm run release -- "$@"
+npm run version-packages

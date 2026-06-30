@@ -14,9 +14,9 @@ Prefer the Changesets npm flow when the user wants to publish packages like `@to
 
 ## NPM package release flow
 
-When the user says "release", do the release work. Do not ask them to manage Changesets.
+When the user says "release", do all release preparation locally. Do not ask the user to manage Changesets. CI must publish only; it must not create or update release PRs.
 
-### 1. Inspect changed packages
+### 1. Inspect changed packages and create changesets locally
 
 Fetch the release base and run the inference helper:
 
@@ -39,13 +39,23 @@ Default to `patch` unless evidence says otherwise:
 - `minor` for new backwards-compatible user-facing features.
 - `major` only for intentional breaking API or CLI behavior changes; ask before using it.
 
-If multiple published packages changed, include all changed published packages. If a core/engine change requires dependent package changes, include the affected dependents too. If the helper output is clearly wrong, edit the generated `.changeset/*.md` before committing.
+If multiple published packages changed, include all changed published packages. If a core/engine change requires dependent package changes, include the affected dependents too. If the helper output is clearly wrong, edit the generated `.changeset/*.md` before versioning.
 
 Ask the user only when package impact, bump level, or publish timing is genuinely ambiguous.
 
-### 3. Verify and commit
+### 3. Version locally
 
-After adding or confirming the changeset:
+Run versioning locally after the changesets are correct:
+
+```bash
+npm run version-packages
+```
+
+This bumps only packages named by changesets, updates changelogs, removes consumed `.changeset/*.md` files, regenerates package version sources, and updates `package-lock.json`.
+
+### 4. Verify and open a normal PR
+
+After local versioning:
 
 ```bash
 npm run check:ci
@@ -53,29 +63,17 @@ npm test
 make version-check
 ```
 
-Commit the generated `.changeset/*.md` file with the package changes. If the release is being done directly from `main`, open a short PR containing the inferred changeset.
-
-### 4. Version PR
-
-After changesets land on `main`, the `NPM Release` workflow opens or updates a Changesets version PR. That PR runs:
-
-```bash
-npm run version-packages
-```
-
-It bumps only packages named by changesets, updates changelogs, regenerates package version sources, and updates `package-lock.json`.
-
-Review and merge the version PR when ready to publish.
+Commit the versioned package files, changelogs, generated version sources, lockfile, and consumed changeset removals. Open a normal PR for human review/merge. Do not rely on CI to create this PR.
 
 ### 5. Publish
 
-When the version PR lands on `main`, the `NPM Release` workflow runs:
+When the locally-created version PR lands on `main`, the `NPM Release` workflow runs:
 
 ```bash
 npm run release-packages
 ```
 
-This builds the workspace and runs `changeset publish`, which publishes only package versions not already on npm.
+This builds the workspace and runs `changeset publish`, which publishes only package versions not already on npm. CI should fail or skip if unconsumed `.changeset/*.md` files are present on `main` because that means local versioning was skipped.
 
 ## Desktop/binary GitHub release flow
 

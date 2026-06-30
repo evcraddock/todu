@@ -9,14 +9,22 @@ Todu uses two release paths:
 
 Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, and `@todu/tui`.
 
-### Release command infers changesets
+### Release command infers and versions locally
 
-For normal package releases, say "release" and let the assistant infer the Changesets details.
+For normal package releases, say "release" and let the assistant infer the Changesets details. Release preparation happens locally, not in CI.
 
-The command behind that flow is:
+The assistant should:
+
+1. infer whether any published packages need release changesets,
+2. create or confirm the needed `.changeset/*.md` files,
+3. run local versioning,
+4. open a normal PR containing the version/changelog/lockfile/generated-version changes.
+
+Commands behind that flow:
 
 ```bash
 npm run release -- --bump patch --summary "Release updated package."
+npm run version-packages
 ```
 
 The helper detects changed published workspace packages and skips private/ignored workspaces. For example, a TUI-only change creates a changeset for only `@todu/tui`.
@@ -27,14 +35,15 @@ Default bump selection:
 - `minor` for new backwards-compatible functionality.
 - `major` for breaking changes.
 
-If the inferred package list or bump is wrong, the assistant adjusts it before committing. Commit the generated `.changeset/*.md` file with the PR.
+If the inferred package list or bump is wrong, the assistant adjusts it before running `npm run version-packages`.
 
 ### Version PR
 
-After changes with changesets land on `main`, the `NPM Release` workflow opens or updates a Changesets version PR. That PR:
+The assistant creates the version PR locally. That PR:
 
 - bumps only packages named by changesets,
 - updates package changelogs,
+- removes consumed `.changeset/*.md` files,
 - updates generated version sources for packages that use them,
 - updates `package-lock.json`.
 
@@ -42,7 +51,7 @@ Review and merge the version PR when ready to publish.
 
 ### Publish
 
-When the version PR lands on `main`, the `NPM Release` workflow runs `npm run release-packages`, which builds the workspace and publishes only packages with versions that are not already on npm.
+When the locally-created version PR lands on `main`, the `NPM Release` workflow runs `npm run release-packages`, which builds the workspace and publishes only packages with versions that are not already on npm. CI must not create or update release PRs.
 
 ## Ignored workspaces
 
