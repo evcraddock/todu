@@ -19,6 +19,7 @@
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.21",
     "@todu/core": "*",
     "ink": "^7.1.0",
     "react": "^19.2.0",

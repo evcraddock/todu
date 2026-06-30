@@ -6,16 +6,40 @@ import {
   type DaemonConnection,
   type DaemonConnectionSnapshot,
 } from "../daemon/connection.js";
+import { createTuiToduClient, type TuiToduClient } from "../daemon/todu-client.js";
+import { DataStatusScreen } from "../screens/DataStatusScreen.js";
+import { createTuiQueryClient, TuiQueryProvider } from "../state/query-client.js";
 
 export interface AppProps {
   connection?: DaemonConnection;
+  toduClient?: TuiToduClient;
 }
 
-export function App({ connection: providedConnection }: AppProps = {}): JSX.Element {
+export function App({
+  connection: providedConnection,
+  toduClient: providedToduClient,
+}: AppProps = {}): JSX.Element {
+  const queryClient = useMemo(() => createTuiQueryClient(), []);
+
+  return (
+    <TuiQueryProvider client={queryClient}>
+      <AppContent connection={providedConnection} toduClient={providedToduClient} />
+    </TuiQueryProvider>
+  );
+}
+
+function AppContent({
+  connection: providedConnection,
+  toduClient: providedToduClient,
+}: AppProps): JSX.Element {
   const { exit } = useApp();
   const connection = useMemo(
     () => providedConnection ?? createDaemonConnection(),
     [providedConnection],
+  );
+  const toduClient = useMemo(
+    () => providedToduClient ?? createTuiToduClient(connection),
+    [connection, providedToduClient],
   );
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
@@ -43,6 +67,7 @@ export function App({ connection: providedConnection }: AppProps = {}): JSX.Elem
         todu TUI
       </Text>
       <ConnectionState connection={connectionSnapshot} />
+      {connectionSnapshot.state === "connected" ? <DataStatusScreen client={toduClient} /> : null}
       <Text color="gray">Press q or Ctrl+C to quit.</Text>
     </Box>
   );
