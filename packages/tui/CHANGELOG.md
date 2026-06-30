@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.23.5
+
+### Patch Changes
+
+- Add TUI project filtering.
+
 ## 0.23.4
 
 ### Patch Changes
