@@ -12,6 +12,11 @@ import { DataStatusScreen } from "../screens/DataStatusScreen.js";
 import { HelpScreen } from "../screens/HelpScreen.js";
 import { ProjectsScreen } from "../screens/ProjectsScreen.js";
 import { TasksScreen } from "../screens/TasksScreen.js";
+import {
+  allProjectsFilter,
+  createProjectFilter,
+  type ProjectFilterState,
+} from "../state/project-filter.js";
 import { createTuiQueryClient, TuiQueryProvider } from "../state/query-client.js";
 import {
   applyNavigationAction,
@@ -55,6 +60,7 @@ function AppContent({
     [connection, providedToduClient],
   );
   const [routeState, setRouteState] = useState(createInitialRouteState);
+  const [projectFilter, setProjectFilter] = useState<ProjectFilterState>(allProjectsFilter);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
   );
@@ -87,12 +93,25 @@ function AppContent({
   }, [connection]);
 
   return (
-    <AppFrame route={routeState.route} connection={connectionSnapshot}>
+    <AppFrame
+      route={routeState.route}
+      connection={connectionSnapshot}
+      projectFilter={projectFilter}
+    >
       <ConnectionState connection={connectionSnapshot} />
       <RouteScreen
         route={routeState.route}
         connection={connectionSnapshot}
         toduClient={toduClient}
+        projectFilter={projectFilter}
+        onSelectProject={(project) => {
+          setProjectFilter(createProjectFilter(project));
+          setRouteState({ route: "tasks", previousRoute: "tasks" });
+        }}
+        onSelectAllProjects={() => {
+          setProjectFilter(allProjectsFilter);
+          setRouteState({ route: "tasks", previousRoute: "tasks" });
+        }}
       />
     </AppFrame>
   );
@@ -102,11 +121,28 @@ interface RouteScreenProps {
   route: AppRoute;
   connection: DaemonConnectionSnapshot;
   toduClient: TuiToduClient;
+  projectFilter: ProjectFilterState;
+  onSelectProject: (project: import("@todu/core").Project) => void;
+  onSelectAllProjects: () => void;
 }
 
-function RouteScreen({ route, connection, toduClient }: RouteScreenProps): JSX.Element | null {
+function RouteScreen({
+  route,
+  connection,
+  toduClient,
+  projectFilter,
+  onSelectProject,
+  onSelectAllProjects,
+}: RouteScreenProps): JSX.Element | null {
   if (route === "projects") {
-    return <ProjectsScreen />;
+    return connection.state === "connected" ? (
+      <ProjectsScreen
+        client={toduClient}
+        projectFilter={projectFilter}
+        onSelectProject={onSelectProject}
+        onSelectAllProjects={onSelectAllProjects}
+      />
+    ) : null;
   }
 
   if (route === "data-status") {
@@ -117,5 +153,7 @@ function RouteScreen({ route, connection, toduClient }: RouteScreenProps): JSX.E
     return <HelpScreen />;
   }
 
-  return connection.state === "connected" ? <TasksScreen client={toduClient} /> : null;
+  return connection.state === "connected" ? (
+    <TasksScreen client={toduClient} projectFilter={projectFilter} />
+  ) : null;
 }

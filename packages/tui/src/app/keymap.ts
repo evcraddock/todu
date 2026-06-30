@@ -11,6 +11,10 @@ export const globalKeyBindings: readonly TuiKeyBinding[] = [
   { keys: "3", description: "Data Status" },
   { keys: "?", description: "Help" },
   { keys: "q", description: "Back/Quit" },
+  { keys: "j/↓", description: "Down" },
+  { keys: "k/↑", description: "Up" },
+  { keys: "Enter", description: "Select Project" },
+  { keys: "a", description: "All Projects" },
   { keys: "Ctrl+C", description: "Quit" },
 ] as const;
 
