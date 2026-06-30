@@ -1,5 +1,6 @@
-import { Box, Text, useApp, useInput } from "ink";
+import { useApp, useInput } from "ink";
 import { type JSX, useEffect, useMemo, useState } from "react";
+import { AppFrame } from "../components/AppFrame.js";
 import { ConnectionState } from "../components/ConnectionState.js";
 import {
   createDaemonConnection,
@@ -8,22 +9,33 @@ import {
 } from "../daemon/connection.js";
 import { createTuiToduClient, type TuiToduClient } from "../daemon/todu-client.js";
 import { DataStatusScreen } from "../screens/DataStatusScreen.js";
+import { HelpScreen } from "../screens/HelpScreen.js";
+import { ProjectsScreen } from "../screens/ProjectsScreen.js";
+import { TasksScreen } from "../screens/TasksScreen.js";
 import { createTuiQueryClient, TuiQueryProvider } from "../state/query-client.js";
+import {
+  applyNavigationAction,
+  createInitialRouteState,
+  resolveGlobalKeyAction,
+} from "./keymap.js";
+import type { AppRoute } from "./routes.js";
 
 export interface AppProps {
   connection?: DaemonConnection;
   toduClient?: TuiToduClient;
+  onExit?: () => void;
 }
 
 export function App({
   connection: providedConnection,
   toduClient: providedToduClient,
+  onExit,
 }: AppProps = {}): JSX.Element {
   const queryClient = useMemo(() => createTuiQueryClient(), []);
 
   return (
     <TuiQueryProvider client={queryClient}>
-      <AppContent connection={providedConnection} toduClient={providedToduClient} />
+      <AppContent connection={providedConnection} toduClient={providedToduClient} onExit={onExit} />
     </TuiQueryProvider>
   );
 }
@@ -31,6 +43,7 @@ export function App({
 function AppContent({
   connection: providedConnection,
   toduClient: providedToduClient,
+  onExit,
 }: AppProps): JSX.Element {
   const { exit } = useApp();
   const connection = useMemo(
@@ -41,14 +54,26 @@ function AppContent({
     () => providedToduClient ?? createTuiToduClient(connection),
     [connection, providedToduClient],
   );
+  const [routeState, setRouteState] = useState(createInitialRouteState);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
   );
 
+  const requestExit = (): void => {
+    onExit?.();
+    exit();
+  };
+
   useInput((input, key) => {
-    if (input === "q" || (key.ctrl && input === "c")) {
-      exit();
+    const action = resolveGlobalKeyAction(input, key);
+    const nextState = applyNavigationAction(routeState, action);
+
+    if (nextState === "quit") {
+      requestExit();
+      return;
     }
+
+    setRouteState(nextState);
   });
 
   useEffect(() => {
@@ -62,13 +87,35 @@ function AppContent({
   }, [connection]);
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1}>
-      <Text color="cyan" bold>
-        todu TUI
-      </Text>
+    <AppFrame route={routeState.route} connection={connectionSnapshot}>
       <ConnectionState connection={connectionSnapshot} />
-      {connectionSnapshot.state === "connected" ? <DataStatusScreen client={toduClient} /> : null}
-      <Text color="gray">Press q or Ctrl+C to quit.</Text>
-    </Box>
+      <RouteScreen
+        route={routeState.route}
+        connection={connectionSnapshot}
+        toduClient={toduClient}
+      />
+    </AppFrame>
   );
+}
+
+interface RouteScreenProps {
+  route: AppRoute;
+  connection: DaemonConnectionSnapshot;
+  toduClient: TuiToduClient;
+}
+
+function RouteScreen({ route, connection, toduClient }: RouteScreenProps): JSX.Element | null {
+  if (route === "projects") {
+    return <ProjectsScreen />;
+  }
+
+  if (route === "data-status") {
+    return connection.state === "connected" ? <DataStatusScreen client={toduClient} /> : null;
+  }
+
+  if (route === "help") {
+    return <HelpScreen />;
+  }
+
+  return <TasksScreen />;
 }
