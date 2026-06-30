@@ -266,6 +266,10 @@ The current TUI implements these global navigation and task-list movement keys:
 - `k` / `Up Arrow`: Move up in the Tasks or Projects list.
 - `Enter`: Select the focused project and open Tasks filtered by that project.
 - `a`: Clear the project filter and open Tasks for all projects.
+- `s`: Start the selected task (`inprogress`).
+- `w`: Mark the selected task waiting.
+- `d`: Complete the selected task.
+- `x`: Cancel the selected task after confirmation.
 
 ### MVP Task Actions
 

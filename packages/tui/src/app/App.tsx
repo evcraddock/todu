@@ -154,6 +154,10 @@ function RouteScreen({
   }
 
   return connection.state === "connected" ? (
-    <TasksScreen client={toduClient} projectFilter={projectFilter} />
+    <TasksScreen
+      client={toduClient}
+      projectFilter={projectFilter}
+      statusActionsEnabled={connection.state === "connected"}
+    />
   ) : null;
 }
