@@ -14,11 +14,10 @@ env:
 
 jobs:
   release:
-    name: Version or Publish Packages
+    name: Publish Packages
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
@@ -35,15 +34,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Create version PR or publish changed packages
-        uses: changesets/action@v1
-        with:
-          version: npm run version-packages
-          publish: npm run release-packages
-          title: "chore: version packages"
-          commit: "chore: version packages"
+      - name: Skip when local versioning is pending
+        id: pending-changesets
+        shell: bash
+        run: |
+          shopt -s nullglob
+          changesets=(.changeset/*.md)
+          pending=()
+          for changeset in "${changesets[@]}"; do
+            case "$changeset" in
+              .changeset/README.md) ;;
+              *) pending+=("$changeset") ;;
+            esac
+          done
+
+          if [ "${#pending[@]}" -gt 0 ]; then
+            echo "Versioning is pending and must be done locally before publish."
+            printf 'Pending changesets:\n'
+            printf -- '- %s\n' "${pending[@]}"
+            echo "Run npm run version-packages locally, commit the version changes, and merge that PR to publish."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Publish changed packages
+        if: steps.pending-changesets.outputs.should_publish == 'true'
+        run: npm run release-packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HUSKY: "0"
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
