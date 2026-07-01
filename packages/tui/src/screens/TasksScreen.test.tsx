@@ -37,6 +37,17 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
     createTask(),
     createTask({ id: "task-2", title: "Second task", status: "waiting", priority: "medium" }),
   ];
+  const comments = [
+    {
+      id: "note-1",
+      content: "Existing comment",
+      author: "Erik",
+      entityType: "task",
+      entityId: "task-1",
+      tags: [],
+      createdAt: "2026-06-30T00:01:00.000Z",
+    },
+  ];
 
   return {
     actor: { list: vi.fn().mockResolvedValue([]) },
@@ -54,9 +65,28 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
         const task = tasks.find((entry) => entry.id === id) ?? tasks[0];
         return Promise.resolve({ ...task, status: input.status });
       }),
-      createComment: vi.fn(),
+      createComment: vi.fn().mockImplementation((taskId: string, content: string) => {
+        const note = {
+          id: `note-${comments.length + 1}`,
+          content,
+          author: "Erik",
+          entityType: "task",
+          entityId: taskId,
+          tags: [],
+          createdAt: "2026-06-30T00:02:00.000Z",
+        };
+        comments.push(note);
+        return Promise.resolve(note);
+      }),
     },
-    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    note: {
+      list: vi
+        .fn()
+        .mockImplementation((filter: { entityId?: string } = {}) =>
+          Promise.resolve(comments.filter((comment) => comment.entityId === filter.entityId)),
+        ),
+      create: vi.fn(),
+    },
     sync: {
       status: vi
         .fn()
@@ -92,6 +122,7 @@ describe("TasksScreen", () => {
     expect(lastFrame()).toContain("Second task");
     expect(lastFrame()).toContain("Detail");
     expect(lastFrame()).toContain("Status: active");
+    expect(lastFrame()).toContain("Existing comment");
   });
 
   it("moves selection with j/k and arrow keys and updates detail", async () => {
@@ -212,6 +243,101 @@ describe("TasksScreen", () => {
     await waitForFrameText(lastFrame, "Description for First task");
     stdin.write("w");
     await waitForFrameText(lastFrame, "Cannot update task status");
+  });
+
+  it("opens comment input and submits a non-empty selected-task comment", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("c");
+    await waitForFrameText(lastFrame, "Comment on First task");
+    stdin.write("New task context");
+    await waitForFrameText(lastFrame, "New task context_");
+    stdin.write("\r");
+
+    await waitForFrameText(lastFrame, "Comment added: First task");
+    await waitForFrameText(lastFrame, "New task context");
+    expect(client.task.createComment).toHaveBeenCalledWith("task-1", "New task context");
+  });
+
+  it("rejects empty comments without sending a mutation", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("c");
+    await waitForFrameText(lastFrame, "Comment on First task");
+    stdin.write("   ");
+    stdin.write("\r");
+
+    await waitForFrameText(lastFrame, "Comment cannot be empty.");
+    expect(client.task.createComment).not.toHaveBeenCalled();
+  });
+
+  it("cancels comment input without sending a mutation", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("c");
+    await waitForFrameText(lastFrame, "Comment on First task");
+    stdin.write("Draft comment");
+    stdin.write("\u001B");
+
+    await waitForFrameText(lastFrame, "Cancelled comment.");
+    expect(lastFrame()).not.toContain("Comment on First task");
+    expect(client.task.createComment).not.toHaveBeenCalled();
+  });
+
+  it("reports comment action unavailable when no task is selected", async () => {
+    const client = createClient({
+      task: {
+        list: vi.fn().mockResolvedValue([]),
+        get: vi.fn(),
+        update: vi.fn(),
+        createComment: vi.fn(),
+      },
+    });
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "No active, in-progress, or waiting tasks for All projects.");
+    stdin.write("c");
+
+    await waitForFrameText(lastFrame, "No task selected for comment.");
+    expect(client.task.createComment).not.toHaveBeenCalled();
+  });
+
+  it("renders readable comment mutation errors", async () => {
+    const client = createClient();
+    vi.mocked(client.task.createComment).mockRejectedValueOnce(
+      new TuiToduClientError({
+        method: "note.create",
+        code: "VALIDATION_ERROR",
+        message: "Cannot add comment",
+        userMessage: "Cannot add comment",
+      }),
+    );
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("c");
+    await waitForFrameText(lastFrame, "Comment on First task");
+    stdin.write("New task context");
+    await waitForFrameText(lastFrame, "New task context_");
+    stdin.write("\r");
+
+    await waitForFrameText(lastFrame, "Cannot add comment");
   });
 
   it("renders empty state", async () => {
