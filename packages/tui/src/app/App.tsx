@@ -61,6 +61,7 @@ function AppContent({
   );
   const [routeState, setRouteState] = useState(createInitialRouteState);
   const [projectFilter, setProjectFilter] = useState<ProjectFilterState>(allProjectsFilter);
+  const [globalInputEnabled, setGlobalInputEnabled] = useState(true);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
   );
@@ -70,17 +71,20 @@ function AppContent({
     exit();
   };
 
-  useInput((input, key) => {
-    const action = resolveGlobalKeyAction(input, key);
-    const nextState = applyNavigationAction(routeState, action);
+  useInput(
+    (input, key) => {
+      const action = resolveGlobalKeyAction(input, key);
+      const nextState = applyNavigationAction(routeState, action);
 
-    if (nextState === "quit") {
-      requestExit();
-      return;
-    }
+      if (nextState === "quit") {
+        requestExit();
+        return;
+      }
 
-    setRouteState(nextState);
-  });
+      setRouteState(nextState);
+    },
+    { isActive: globalInputEnabled },
+  );
 
   useEffect(() => {
     const unsubscribe = connection.subscribe(setConnectionSnapshot);
@@ -112,6 +116,7 @@ function AppContent({
           setProjectFilter(allProjectsFilter);
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
+        onGlobalInputEnabledChange={setGlobalInputEnabled}
       />
     </AppFrame>
   );
@@ -124,6 +129,7 @@ interface RouteScreenProps {
   projectFilter: ProjectFilterState;
   onSelectProject: (project: import("@todu/core").Project) => void;
   onSelectAllProjects: () => void;
+  onGlobalInputEnabledChange: (enabled: boolean) => void;
 }
 
 function RouteScreen({
@@ -133,6 +139,7 @@ function RouteScreen({
   projectFilter,
   onSelectProject,
   onSelectAllProjects,
+  onGlobalInputEnabledChange,
 }: RouteScreenProps): JSX.Element | null {
   if (route === "projects") {
     return connection.state === "connected" ? (
@@ -158,6 +165,7 @@ function RouteScreen({
       client={toduClient}
       projectFilter={projectFilter}
       statusActionsEnabled={connection.state === "connected"}
+      onGlobalInputEnabledChange={onGlobalInputEnabledChange}
     />
   ) : null;
 }

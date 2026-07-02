@@ -270,6 +270,7 @@ The current TUI implements these global navigation and task-list movement keys:
 - `w`: Mark the selected task waiting.
 - `d`: Complete the selected task.
 - `x`: Cancel the selected task after confirmation.
+- `c`: Open a focused input to add a comment to the selected task.
 
 ### MVP Task Actions
 
