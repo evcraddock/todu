@@ -316,6 +316,24 @@ describe("TasksScreen", () => {
     expect(client.task.createComment).not.toHaveBeenCalled();
   });
 
+  it("disables comment action while disconnected", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        statusActionsEnabled={false}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for First task");
+    stdin.write("c");
+
+    await waitForFrameText(lastFrame, "Task actions unavailable while daemon is disconnected.");
+    expect(lastFrame()).not.toContain("Comment on First task");
+    expect(client.task.createComment).not.toHaveBeenCalled();
+  });
+
   it("renders readable comment mutation errors", async () => {
     const client = createClient();
     vi.mocked(client.task.createComment).mockRejectedValueOnce(

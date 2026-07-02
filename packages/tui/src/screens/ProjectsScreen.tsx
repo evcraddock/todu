@@ -20,6 +20,7 @@ export interface ProjectsScreenProps {
   projectFilter: ProjectFilterState;
   onSelectProject: (project: Project) => void;
   onSelectAllProjects: () => void;
+  dataQueriesEnabled?: boolean;
 }
 
 export function ProjectsScreen({
@@ -27,6 +28,7 @@ export function ProjectsScreen({
   projectFilter,
   onSelectProject,
   onSelectAllProjects,
+  dataQueriesEnabled = true,
 }: ProjectsScreenProps): JSX.Element {
   const [selectedOptionId, setSelectedOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
@@ -34,6 +36,7 @@ export function ProjectsScreen({
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects(),
     queryFn: () => client.project.list(),
+    enabled: dataQueriesEnabled,
   });
   const projectOptions = useMemo(
     () => createProjectOptions(projectsQuery.data ?? []),

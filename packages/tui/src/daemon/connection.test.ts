@@ -162,6 +162,33 @@ describe("TUI daemon connection", () => {
     vi.useRealTimers();
   });
 
+  it("dispatches daemon event frames to event subscribers", async () => {
+    const socket = new FakeSocket();
+    const events: unknown[] = [];
+    const connection = createDaemonConnection({
+      socketPath: "/tmp/todu.sock",
+      connect: () => socket,
+      requestIdFactory: () => "hello-event",
+    });
+
+    connection.subscribeEvents((event) => events.push(event));
+    connection.start();
+    socket.emit("connect");
+    await flushPromises();
+    sendSuccess(socket, readLastRequest(socket).id, { protocolVersion: DAEMON_PROTOCOL_VERSION });
+    await flushPromises();
+
+    socket.emit(
+      "data",
+      `${JSON.stringify({ event: "data.changed", payload: { type: "catalog" }, ts: "now" })}\n`,
+    );
+    await flushPromises();
+
+    expect(events).toEqual([{ event: "data.changed", payload: { type: "catalog" }, ts: "now" }]);
+
+    connection.stop();
+  });
+
   it("transitions through disconnected to reconnecting when a connected socket closes", async () => {
     vi.useFakeTimers();
     const socket = new FakeSocket();
