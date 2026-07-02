@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.23.8
+
+### Patch Changes
+
+- acb5483: Wire daemon events and reconnect recovery into the TUI.
+
 ## 0.23.7
 
 ### Patch Changes
