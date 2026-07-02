@@ -380,7 +380,7 @@ On `data.changed`:
 On `sync.statusChanged`:
 
 - update sync status query/cache.
-- refresh status line.
+- refresh status line, which shows the current remote sync state.
 
 On reconnect:
 

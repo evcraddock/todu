@@ -50,11 +50,20 @@ export interface DaemonConnectionSnapshot {
 
 export type DaemonConnectionListener = (snapshot: DaemonConnectionSnapshot) => void;
 
+export interface DaemonEventFrame {
+  event: string;
+  payload: unknown;
+  ts?: string;
+}
+
+export type DaemonEventListener = (event: DaemonEventFrame) => void;
+
 export interface DaemonConnection {
   start(): void;
   stop(): void;
   getSnapshot(): DaemonConnectionSnapshot;
   subscribe(listener: DaemonConnectionListener): () => void;
+  subscribeEvents(listener: DaemonEventListener): () => void;
   request<T>(
     method: string,
     params?: Record<string, unknown>,
@@ -119,6 +128,12 @@ interface ProtocolErrorFrame {
   error: DaemonConnectionError;
 }
 
+interface ProtocolEventFrame {
+  event: string;
+  payload: unknown;
+  ts?: string;
+}
+
 export function createDaemonConnection(options: DaemonConnectionOptions = {}): DaemonConnection {
   return new TuiDaemonConnection(options);
 }
@@ -156,6 +171,7 @@ class TuiDaemonConnection implements DaemonConnection {
   private readonly connect: (socketPath: string) => DaemonSocket;
   private readonly requestIdFactory: () => string;
   private readonly listeners = new Set<DaemonConnectionListener>();
+  private readonly eventListeners = new Set<DaemonEventListener>();
 
   private running = false;
   private connecting = false;
@@ -237,6 +253,13 @@ class TuiDaemonConnection implements DaemonConnection {
     listener(this.snapshot);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  subscribeEvents(listener: DaemonEventListener): () => void {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
     };
   }
 
@@ -380,6 +403,7 @@ class TuiDaemonConnection implements DaemonConnection {
     }
 
     if (parsed.kind === "event") {
+      this.dispatchEvent(parsed.value);
       return;
     }
 
@@ -402,6 +426,12 @@ class TuiDaemonConnection implements DaemonConnection {
     }
 
     pending.resolve({ ok: true, value: parsed.value.result });
+  }
+
+  private dispatchEvent(event: DaemonEventFrame): void {
+    for (const listener of this.eventListeners) {
+      listener(event);
+    }
   }
 
   private closeConnection(
@@ -622,7 +652,7 @@ function parseIncomingFrame(
 ):
   | { ok: true; kind: "success"; value: ProtocolSuccessFrame }
   | { ok: true; kind: "error"; value: ProtocolErrorFrame }
-  | { ok: true; kind: "event" }
+  | { ok: true; kind: "event"; value: ProtocolEventFrame }
   | { ok: false; error: DaemonConnectionError } {
   if (!isRecord(frame)) {
     return {
@@ -632,7 +662,15 @@ function parseIncomingFrame(
   }
 
   if (typeof frame.event === "string") {
-    return { ok: true, kind: "event" };
+    return {
+      ok: true,
+      kind: "event",
+      value: {
+        event: frame.event,
+        payload: frame.payload,
+        ts: typeof frame.ts === "string" ? frame.ts : undefined,
+      },
+    };
   }
 
   if (isRecord(frame.error)) {

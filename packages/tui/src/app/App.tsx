@@ -1,5 +1,6 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApp, useInput } from "ink";
-import { type JSX, useEffect, useMemo, useState } from "react";
+import { type JSX, useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "../components/AppFrame.js";
 import { ConnectionState } from "../components/ConnectionState.js";
 import {
@@ -13,11 +14,18 @@ import { HelpScreen } from "../screens/HelpScreen.js";
 import { ProjectsScreen } from "../screens/ProjectsScreen.js";
 import { TasksScreen } from "../screens/TasksScreen.js";
 import {
+  applySyncStatusEvent,
+  invalidateDataChangedQueries,
+  invalidateReconnectQueries,
+  reactiveDaemonEvents,
+} from "../state/event-invalidation.js";
+import {
   allProjectsFilter,
   createProjectFilter,
   type ProjectFilterState,
 } from "../state/project-filter.js";
 import { createTuiQueryClient, TuiQueryProvider } from "../state/query-client.js";
+import { queryKeys } from "../state/query-keys.js";
 import {
   applyNavigationAction,
   createInitialRouteState,
@@ -51,6 +59,7 @@ function AppContent({
   onExit,
 }: AppProps): JSX.Element {
   const { exit } = useApp();
+  const queryClient = useQueryClient();
   const connection = useMemo(
     () => providedConnection ?? createDaemonConnection(),
     [providedConnection],
@@ -65,6 +74,13 @@ function AppContent({
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
   );
+  const [hasConnected, setHasConnected] = useState(connectionSnapshot.state === "connected");
+  const previousConnectionState = useRef(connectionSnapshot.state);
+  const syncStatus = useQuery({
+    queryKey: queryKeys.syncStatus(),
+    queryFn: () => toduClient.sync.status(),
+    enabled: connectionSnapshot.state === "connected",
+  });
 
   const requestExit = (): void => {
     onExit?.();
@@ -96,16 +112,62 @@ function AppContent({
     };
   }, [connection]);
 
+  useEffect(() => {
+    if (connectionSnapshot.state === "connected") {
+      setHasConnected(true);
+    }
+  }, [connectionSnapshot.state]);
+
+  useEffect(() => {
+    const previousState = previousConnectionState.current;
+    previousConnectionState.current = connectionSnapshot.state;
+
+    if (connectionSnapshot.state !== "connected") {
+      return;
+    }
+
+    let active = true;
+    const unsubscribeEvents = connection.subscribeEvents((event) => {
+      if (event.event === "data.changed") {
+        void invalidateDataChangedQueries(queryClient);
+        return;
+      }
+
+      if (event.event === "sync.statusChanged") {
+        applySyncStatusEvent(queryClient, event.payload);
+      }
+    });
+
+    void connection
+      .request<{ subscribed: string[] }>("events.subscribe", { events: [...reactiveDaemonEvents] })
+      .then((result) => {
+        if (!active || !result.ok) {
+          return;
+        }
+
+        if (previousState !== "connected") {
+          void invalidateReconnectQueries(queryClient);
+        }
+      });
+
+    return () => {
+      active = false;
+      unsubscribeEvents();
+    };
+  }, [connection, connectionSnapshot.state, queryClient]);
+
   return (
     <AppFrame
       route={routeState.route}
       connection={connectionSnapshot}
       projectFilter={projectFilter}
+      syncStatus={syncStatus.data}
     >
       <ConnectionState connection={connectionSnapshot} />
       <RouteScreen
         route={routeState.route}
         connection={connectionSnapshot}
+        hasConnected={hasConnected}
         toduClient={toduClient}
         projectFilter={projectFilter}
         onSelectProject={(project) => {
@@ -125,6 +187,7 @@ function AppContent({
 interface RouteScreenProps {
   route: AppRoute;
   connection: DaemonConnectionSnapshot;
+  hasConnected: boolean;
   toduClient: TuiToduClient;
   projectFilter: ProjectFilterState;
   onSelectProject: (project: import("@todu/core").Project) => void;
@@ -135,19 +198,24 @@ interface RouteScreenProps {
 function RouteScreen({
   route,
   connection,
+  hasConnected,
   toduClient,
   projectFilter,
   onSelectProject,
   onSelectAllProjects,
   onGlobalInputEnabledChange,
 }: RouteScreenProps): JSX.Element | null {
+  const dataQueriesEnabled = connection.state === "connected";
+  const canShowDataScreens = dataQueriesEnabled || hasConnected;
+
   if (route === "projects") {
-    return connection.state === "connected" ? (
+    return canShowDataScreens ? (
       <ProjectsScreen
         client={toduClient}
         projectFilter={projectFilter}
         onSelectProject={onSelectProject}
         onSelectAllProjects={onSelectAllProjects}
+        dataQueriesEnabled={dataQueriesEnabled}
       />
     ) : null;
   }
@@ -160,11 +228,12 @@ function RouteScreen({
     return <HelpScreen />;
   }
 
-  return connection.state === "connected" ? (
+  return canShowDataScreens ? (
     <TasksScreen
       client={toduClient}
       projectFilter={projectFilter}
-      statusActionsEnabled={connection.state === "connected"}
+      statusActionsEnabled={dataQueriesEnabled}
+      dataQueriesEnabled={dataQueriesEnabled}
       onGlobalInputEnabledChange={onGlobalInputEnabledChange}
     />
   ) : null;

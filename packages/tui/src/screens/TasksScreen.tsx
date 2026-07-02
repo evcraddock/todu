@@ -19,6 +19,7 @@ export interface TasksScreenProps {
   client: TuiToduClient;
   projectFilter: ProjectFilterState;
   statusActionsEnabled?: boolean;
+  dataQueriesEnabled?: boolean;
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
 }
 
@@ -28,6 +29,7 @@ export function TasksScreen({
   client,
   projectFilter,
   statusActionsEnabled = true,
+  dataQueriesEnabled = true,
   onGlobalInputEnabledChange,
 }: TasksScreenProps): JSX.Element {
   const queryClient = useQueryClient();
@@ -44,22 +46,24 @@ export function TasksScreen({
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks(taskFilter),
     queryFn: () => client.task.list(taskFilter),
+    enabled: dataQueriesEnabled,
   });
   const projectsQuery = useQuery({
     queryKey: queryKeys.projects(),
     queryFn: () => client.project.list(),
+    enabled: dataQueriesEnabled,
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const selectedTask = getSelectedItem(tasks, selectedTaskId);
   const selectedDetailQuery = useQuery({
     queryKey: queryKeys.task(selectedTaskId ?? "none"),
     queryFn: () => client.task.get(selectedTaskId ?? ""),
-    enabled: selectedTaskId !== null,
+    enabled: dataQueriesEnabled && selectedTaskId !== null,
   });
   const commentsQuery = useQuery({
     queryKey: queryKeys.taskComments(selectedTaskId ?? "none"),
     queryFn: () => client.note.list({ entityType: "task", entityId: selectedTaskId ?? "" }),
-    enabled: selectedTaskId !== null,
+    enabled: dataQueriesEnabled && selectedTaskId !== null,
   });
   const statusMutation = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
@@ -102,6 +106,11 @@ export function TasksScreen({
     if (!selectedTask) {
       setCommentModalOpen(false);
       setFeedback({ message: "No task selected for comment.", tone: "error" });
+      return;
+    }
+
+    if (!statusActionsEnabled) {
+      setCommentError("Task actions unavailable while daemon is disconnected.");
       return;
     }
 
@@ -185,6 +194,14 @@ export function TasksScreen({
     }
 
     if (input === "c" && selectedTask) {
+      if (!statusActionsEnabled) {
+        setFeedback({
+          message: "Task actions unavailable while daemon is disconnected.",
+          tone: "error",
+        });
+        return;
+      }
+
       setCommentModalOpen(true);
       setCommentText("");
       setCommentError(null);

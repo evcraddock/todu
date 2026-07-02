@@ -6,23 +6,61 @@ import type {
   DaemonConnection,
   DaemonConnectionListener,
   DaemonConnectionSnapshot,
+  DaemonEventFrame,
+  DaemonEventListener,
 } from "../daemon/connection.js";
 import type { TuiToduClient } from "../daemon/todu-client.js";
 import { allProjectsFilter } from "../state/project-filter.js";
 import { App } from "./App.js";
 import { applyNavigationAction, createInitialRouteState } from "./keymap.js";
 
-function createFakeConnection(snapshot: DaemonConnectionSnapshot): DaemonConnection {
-  return {
-    start: vi.fn(),
-    stop: vi.fn(),
-    getSnapshot: () => snapshot,
-    subscribe: (listener: DaemonConnectionListener) => {
+class FakeConnection implements DaemonConnection {
+  readonly start = vi.fn();
+  readonly stop = vi.fn();
+  readonly request = vi.fn().mockResolvedValue({ ok: true, value: { subscribed: [] } });
+  private snapshot: DaemonConnectionSnapshot;
+  private readonly listeners = new Set<DaemonConnectionListener>();
+  private readonly eventListeners = new Set<DaemonEventListener>();
+
+  constructor(snapshot: DaemonConnectionSnapshot) {
+    this.snapshot = snapshot;
+  }
+
+  getSnapshot(): DaemonConnectionSnapshot {
+    return this.snapshot;
+  }
+
+  subscribe(listener: DaemonConnectionListener): () => void {
+    this.listeners.add(listener);
+    listener(this.snapshot);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  subscribeEvents(listener: DaemonEventListener): () => void {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
+  }
+
+  emitSnapshot(snapshot: DaemonConnectionSnapshot): void {
+    this.snapshot = snapshot;
+    for (const listener of this.listeners) {
       listener(snapshot);
-      return vi.fn();
-    },
-    request: vi.fn(),
-  };
+    }
+  }
+
+  emitEvent(event: DaemonEventFrame): void {
+    for (const listener of this.eventListeners) {
+      listener(event);
+    }
+  }
+}
+
+function createFakeConnection(snapshot: DaemonConnectionSnapshot): FakeConnection {
+  return new FakeConnection(snapshot);
 }
 
 function createConnectedSnapshot(): DaemonConnectionSnapshot {
@@ -213,6 +251,7 @@ describe("App", () => {
     expect(lastFrame()).toContain("j/↓    Down");
     expect(lastFrame()).toContain("Enter  Select Project");
     expect(lastFrame()).toContain("a      All Projects");
+    expect(lastFrame()).toContain("c      Comment");
     expect(lastFrame()).toContain("q      Back/Quit");
     expect(lastFrame()).toContain("Ctrl+C Quit");
   });
@@ -238,6 +277,63 @@ describe("App", () => {
 
     stdin.write("q");
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches active task data when data.changed is received", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const client = createFakeClient();
+    render(<App connection={connection} toduClient={client} />);
+
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledTimes(1);
+    });
+    await vi.waitFor(() => {
+      expect(connection.request).toHaveBeenCalledWith("events.subscribe", {
+        events: ["data.changed", "sync.statusChanged"],
+      });
+    });
+
+    connection.emitEvent({ event: "data.changed", payload: { type: "catalog" } });
+
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("updates sync status line from sync.statusChanged without a full app refresh", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
+
+    await waitForFrameText(lastFrame, "Ship");
+    connection.emitEvent({
+      event: "sync.statusChanged",
+      payload: { local: { mode: "standalone" }, remote: { state: "connected" } },
+    });
+
+    await waitForFrameText(lastFrame, "Sync: connected");
+  });
+
+  it("resubscribes and keeps task data visible across reconnect", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
+
+    await waitForFrameText(lastFrame, "Ship");
+    await vi.waitFor(() => {
+      expect(connection.request).toHaveBeenCalledTimes(1);
+    });
+
+    connection.emitSnapshot({ ...createConnectedSnapshot(), state: "reconnecting", hello: null });
+    await waitForFrameText(lastFrame, "Daemon disconnected; reconnecting");
+    expect(lastFrame()).toContain("Ship");
+
+    connection.emitSnapshot(createConnectedSnapshot());
+
+    await vi.waitFor(() => {
+      expect(connection.request).toHaveBeenCalledTimes(2);
+    });
+    expect(connection.request).toHaveBeenLastCalledWith("events.subscribe", {
+      events: ["data.changed", "sync.statusChanged"],
+    });
   });
 
   it("keeps quit behavior deterministic in the route reducer", () => {
