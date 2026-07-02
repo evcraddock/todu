@@ -86,13 +86,13 @@ Install path:
 npm install -g @todu/tui
 ```
 
-The CLI may also expose a convenience wrapper:
+Convenience CLI wrapper:
 
 ```bash
 todu tui
 ```
 
-The wrapper must not be the only distribution path. The TUI should be publishable, installable, and runnable as its own package early so every incremental TUI improvement can ship in an npm version. Initial releases may launch the scaffold UI before daemon-backed screens exist; daemon-backed releases target the same local daemon and user-local dataset.
+The wrapper launches the standalone TUI entrypoint from an installed `@todu/tui` package, a built workspace `packages/tui/dist/index.js`, or a source-checkout development fallback through `tsx`. The wrapper is not the only distribution path. The TUI remains publishable, installable, and runnable as its own package so every incremental TUI improvement can ship in an npm version. Initial releases may launch the scaffold UI before daemon-backed screens exist; daemon-backed releases target the same local daemon and user-local dataset.
 
 ## High-Level Topology
 

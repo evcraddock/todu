@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/evcraddock/todu/actions/workflows/ci.yml/badge.svg)](https://github.com/evcraddock/todu/actions/workflows/ci.yml)
 
-todu is a local-first task management project (CLI + Electron) backed by a local daemon and Automerge sync.
+todu is a local-first task management project with CLI, terminal UI, and Electron clients backed by a local daemon and Automerge sync.
 
 ## Install
 
@@ -111,11 +111,19 @@ Upgrade:
 npm install -g @todu/tui@latest
 ```
 
-Run:
+Run the standalone TUI command:
 
 ```bash
 todu-tui
 ```
+
+If `@todu/cli` is also installed, you can launch the same TUI through the CLI wrapper:
+
+```bash
+todu tui
+```
+
+From a source checkout, build the workspace first with `npm run build` or run the wrapper from the checkout where `tsx` is installed for development fallback.
 
 Compatibility guidance:
 

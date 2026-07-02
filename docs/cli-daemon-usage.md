@@ -36,6 +36,12 @@ npm install -g @todu/tui
 todu-tui
 ```
 
+If `@todu/cli` is installed too, the CLI exposes a convenience wrapper that launches the same TUI entrypoint:
+
+```bash
+todu tui
+```
+
 Use the same version alignment rule as the CLI: prefer matching `@todu/tui`, `@todu/cli`, and desktop app versions. The TUI is released independently so each incremental terminal UI improvement can be versioned and published as soon as it lands.
 
 Daemon-backed TUI screens use the same local daemon and dataset as the CLI and desktop app. Early scaffold releases may launch before daemon-backed screens exist; once daemon-backed functionality is present, start the daemon first if the TUI reports that it is unavailable.

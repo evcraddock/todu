@@ -175,7 +175,7 @@ PR Pipeline Status
 | `npm run changeset` | Add a package changeset for npm releases |
 | `npm run version-packages` | Apply pending changesets to package versions and generated version sources |
 | `npm run release-packages` | Build and publish changed npm packages through Changesets |
-| `make build` | Build all packages (core → engine → cli) |
+| `make build` | Build all packages (core → engine → recurring-worker → daemon → cli → tui) |
 | `make test` | Run unit tests only (fast, no Automerge/storage) |
 | `make test-all` | Run all tests including integration tests |
 | `make test-integration` | Run integration tests only (Automerge/storage) |
