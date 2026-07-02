@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.23.7
+
+### Patch Changes
+
+- 9a569a2: Add TUI task comment input.
+
 ## 0.23.6
 
 ### Patch Changes
