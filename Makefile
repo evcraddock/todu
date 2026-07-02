@@ -24,7 +24,7 @@ help: ## Show this help
 # Build & Quality
 # =============================================================================
 
-build: node_modules ## Build all packages (core → engine → recurring-worker → daemon → cli)
+build: node_modules ## Build all packages (core → engine → recurring-worker → daemon → cli → tui)
 	npm run build
 
 test: node_modules ## Run unit tests only (fast, no Automerge/storage)
