@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import type { JSX } from "react";
 import { createProjectNameMap, formatTaskRow } from "../../formatting/task.js";
 
-const MAX_VISIBLE_TASKS = 12;
+const DEFAULT_MAX_VISIBLE_TASKS = 12;
 
 export interface TaskListPaneProps {
   tasks: readonly Task[];
@@ -11,6 +11,7 @@ export interface TaskListPaneProps {
   selectedTaskId: string | null;
   width?: string;
   focused?: boolean;
+  maxVisibleTasks?: number;
 }
 
 export function TaskListPane({
@@ -19,9 +20,10 @@ export function TaskListPane({
   selectedTaskId,
   width = "50%",
   focused = true,
+  maxVisibleTasks = DEFAULT_MAX_VISIBLE_TASKS,
 }: TaskListPaneProps): JSX.Element {
   const projectNames = createProjectNameMap(projects);
-  const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, MAX_VISIBLE_TASKS);
+  const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, maxVisibleTasks);
 
   return (
     <Box flexDirection="column" width={width} paddingRight={1}>

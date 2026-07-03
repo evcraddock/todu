@@ -108,47 +108,56 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("TasksScreen", () => {
-  it("renders fetched tasks and selected task details", async () => {
+  it("renders fetched tasks without task details until enter opens detail mode", async () => {
     const client = createClient();
-    const { lastFrame } = renderWithQuery(
+    const { stdin, lastFrame } = renderWithQuery(
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
     await waitForFrameText(lastFrame, "First task");
-    await waitForFrameText(lastFrame, "Description for First task");
 
     expect(lastFrame()).toContain("Projects");
     expect(lastFrame()).toContain("> All Projects");
     expect(lastFrame()).toContain("Tasks (2)");
     expect(lastFrame()).toContain("First task");
     expect(lastFrame()).toContain("Second task");
+    expect(lastFrame()).not.toContain("Detail");
+
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Existing comment");
+
     expect(lastFrame()).toContain("Detail");
     expect(lastFrame()).toContain("Status: active");
     expect(lastFrame()).toContain("Existing comment");
+    expect(lastFrame()).not.toContain("Second task");
+
+    stdin.write("\u001B");
+    await waitForFrameText(lastFrame, "Second task");
+    expect(lastFrame()).not.toContain("Detail");
   });
 
-  it("moves selection with j/k and arrow keys and updates detail", async () => {
+  it("moves task selection with j/k and arrow keys", async () => {
     const client = createClient();
     const { stdin, lastFrame } = renderWithQuery(
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
 
     stdin.write("j");
-    await waitForFrameText(lastFrame, "Description for Second task");
+    await waitForFrameText(lastFrame, "Second task");
     expect(lastFrame()).toContain("Second task");
 
     stdin.write("k");
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     expect(lastFrame()).toContain("First task");
 
     stdin.write("\u001B[B");
-    await waitForFrameText(lastFrame, "Description for Second task");
+    await waitForFrameText(lastFrame, "Second task");
     expect(lastFrame()).toContain("Second task");
 
     stdin.write("\u001B[A");
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     expect(lastFrame()).toContain("First task");
   });
 
@@ -185,19 +194,29 @@ describe("TasksScreen", () => {
     await waitForFrameText(lastFrame, "Inbox task");
     expect(lastFrame()).toContain("Work task");
 
-    stdin.write("p");
+    stdin.write("h");
     await new Promise((resolve) => setTimeout(resolve, 10));
     stdin.write("j");
     await new Promise((resolve) => setTimeout(resolve, 10));
     stdin.write("j");
 
-    await waitForFrameText(lastFrame, "Description for Work task");
+    await waitForFrameText(lastFrame, "Work task");
     expect(lastFrame()).toContain("Work task");
     expect(lastFrame()).not.toContain("Inbox task");
     expect(client.task.list).toHaveBeenCalledWith({
       status: ["active", "inprogress", "waiting"],
       projectId: "project-2",
     });
+
+    stdin.write("\r");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "Work task");
+
+    stdin.write("l");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stdin.write("k");
+    await waitForFrameText(lastFrame, "Work task");
   });
 
   it("passes selected project ID to task list filter", async () => {
@@ -223,7 +242,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("s");
 
     await waitForFrameText(lastFrame, "Task started: First task");
@@ -236,7 +255,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("x");
     await waitForFrameText(lastFrame, "Cancel selected task?");
     expect(client.task.update).not.toHaveBeenCalled();
@@ -252,7 +271,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("x");
     await waitForFrameText(lastFrame, "Cancel selected task?");
     stdin.write("n");
@@ -270,7 +289,7 @@ describe("TasksScreen", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("s");
     await waitForFrameText(lastFrame, "Task actions unavailable while daemon is disconnected.");
     expect(client.task.update).not.toHaveBeenCalled();
@@ -290,7 +309,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("w");
     await waitForFrameText(lastFrame, "Cannot update task status");
   });
@@ -301,7 +320,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
     await waitForFrameText(lastFrame, "Comment on First task");
     stdin.write("New task context");
@@ -309,7 +328,6 @@ describe("TasksScreen", () => {
     stdin.write("\r");
 
     await waitForFrameText(lastFrame, "Comment added: First task");
-    await waitForFrameText(lastFrame, "New task context");
     expect(client.task.createComment).toHaveBeenCalledWith("task-1", "New task context");
   });
 
@@ -319,7 +337,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
     await waitForFrameText(lastFrame, "Comment on First task");
     stdin.write("   ");
@@ -335,7 +353,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
     await waitForFrameText(lastFrame, "Comment on First task");
     stdin.write("Draft comment");
@@ -376,7 +394,7 @@ describe("TasksScreen", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
 
     await waitForFrameText(lastFrame, "Task actions unavailable while daemon is disconnected.");
@@ -398,7 +416,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "Description for First task");
+    await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
     await waitForFrameText(lastFrame, "Comment on First task");
     stdin.write("New task context");

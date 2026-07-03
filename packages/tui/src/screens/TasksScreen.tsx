@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project, TaskStatus } from "@todu/core";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { TextInputModal } from "../components/TextInputModal.js";
 import { ToastLine, type ToastTone } from "../components/ToastLine.js";
 import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
-import { TaskListPane } from "../components/tasks/TaskListPane.js";
+import { getVisibleTaskWindow, TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
 import { normalizeCommentContent } from "../state/comment-actions.js";
 import {
@@ -29,6 +29,11 @@ export interface TasksScreenProps {
 
 const visibleTaskStatuses = ["active", "inprogress", "waiting"] as const;
 const ALL_PROJECTS_OPTION_ID = "__all__";
+const PROJECT_PANE_WIDTH_PERCENT = 0.36;
+const PROJECT_PANE_WIDTH = "36%";
+const TASK_MAIN_PANE_WIDTH = "64%";
+const MIN_PROJECT_LABEL_LENGTH = 8;
+const MIN_VISIBLE_LIST_ITEMS = 6;
 
 type PaneFocus = "projects" | "tasks";
 
@@ -46,11 +51,13 @@ export function TasksScreen({
   onGlobalInputEnabledChange,
 }: TasksScreenProps): JSX.Element {
   const queryClient = useQueryClient();
+  const { stdout } = useStdout();
   const [selectedProjectOptionId, setSelectedProjectOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
   );
   const [focusedPane, setFocusedPane] = useState<PaneFocus>("tasks");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -83,16 +90,18 @@ export function TasksScreen({
     enabled: dataQueriesEnabled,
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
-  const selectedTask = getSelectedItem(tasks, selectedTaskId);
+  const effectiveSelectedTaskId = resolveSelectedId(tasks, selectedTaskId);
+  const selectedTask = getSelectedItem(tasks, effectiveSelectedTaskId);
   const selectedDetailQuery = useQuery({
-    queryKey: queryKeys.task(selectedTaskId ?? "none"),
-    queryFn: () => client.task.get(selectedTaskId ?? ""),
-    enabled: dataQueriesEnabled && selectedTaskId !== null,
+    queryKey: queryKeys.task(effectiveSelectedTaskId ?? "none"),
+    queryFn: () => client.task.get(effectiveSelectedTaskId ?? ""),
+    enabled: dataQueriesEnabled && effectiveSelectedTaskId !== null,
   });
   const commentsQuery = useQuery({
-    queryKey: queryKeys.taskComments(selectedTaskId ?? "none"),
-    queryFn: () => client.note.list({ entityType: "task", entityId: selectedTaskId ?? "" }),
-    enabled: dataQueriesEnabled && selectedTaskId !== null,
+    queryKey: queryKeys.taskComments(effectiveSelectedTaskId ?? "none"),
+    queryFn: () =>
+      client.note.list({ entityType: "task", entityId: effectiveSelectedTaskId ?? "" }),
+    enabled: dataQueriesEnabled && effectiveSelectedTaskId !== null,
   });
   const statusMutation = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
@@ -105,6 +114,7 @@ export function TasksScreen({
 
   useEffect(() => {
     setSelectedProjectOptionId(projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID);
+    setTaskDetailOpen(false);
   }, [projectFilter.projectId]);
 
   useEffect(() => {
@@ -225,17 +235,17 @@ export function TasksScreen({
       return;
     }
 
-    if (input === "\t") {
-      setFocusedPane((current) => (current === "projects" ? "tasks" : "projects"));
+    if (taskDetailOpen && (key.escape || input === "\u001B")) {
+      setTaskDetailOpen(false);
       return;
     }
 
-    if (input === "p" || key.leftArrow) {
+    if (input === "h" || key.leftArrow) {
       setFocusedPane("projects");
       return;
     }
 
-    if (key.rightArrow) {
+    if (input === "l" || key.rightArrow) {
       setFocusedPane("tasks");
       return;
     }
@@ -245,6 +255,7 @@ export function TasksScreen({
         setSelectedProjectOptionId((current) =>
           moveTaskProjectOption(projectOptions, current, "next"),
         );
+        setTaskDetailOpen(false);
         setFeedback(null);
         return;
       }
@@ -253,6 +264,13 @@ export function TasksScreen({
         setSelectedProjectOptionId((current) =>
           moveTaskProjectOption(projectOptions, current, "previous"),
         );
+        setTaskDetailOpen(false);
+        setFeedback(null);
+        return;
+      }
+
+      if (key.return || input === "\r") {
+        setFocusedPane("tasks");
         setFeedback(null);
         return;
       }
@@ -283,12 +301,17 @@ export function TasksScreen({
       return;
     }
 
-    if (focusedPane === "tasks" && (input === "j" || key.downArrow)) {
+    if (focusedPane === "tasks" && !taskDetailOpen && (key.return || input === "\r")) {
+      setTaskDetailOpen(true);
+      return;
+    }
+
+    if (focusedPane === "tasks" && !taskDetailOpen && (input === "j" || key.downArrow)) {
       setSelectedTaskId((current) => moveSelection(tasks, current, "next"));
       return;
     }
 
-    if (focusedPane === "tasks" && (input === "k" || key.upArrow)) {
+    if (focusedPane === "tasks" && !taskDetailOpen && (input === "k" || key.upArrow)) {
       setSelectedTaskId((current) => moveSelection(tasks, current, "previous"));
       return;
     }
@@ -315,6 +338,8 @@ export function TasksScreen({
     void performStatusAction(selectedTask.id, action.status, action.successLabel);
   });
 
+  const maxVisibleListItems = resolveMaxVisibleListItems(stdout.rows);
+  const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
   const error = tasksQuery.error ?? projectsQuery.error;
   if (error) {
     return (
@@ -326,7 +351,25 @@ export function TasksScreen({
   }
 
   if (tasksQuery.isLoading) {
-    return <Text color="yellow">Loading tasks…</Text>;
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row">
+          <ProjectListPane
+            projects={projectOptions}
+            selectedProjectOptionId={selectedProjectOptionId}
+            focused={focusedPane === "projects"}
+            isLoading={projectsQuery.isLoading}
+            maxVisibleProjects={maxVisibleListItems}
+            maxProjectLabelLength={maxProjectLabelLength}
+          />
+          <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH} paddingRight={1}>
+            <Text color={focusedPane === "tasks" ? "cyan" : "gray"}>Tasks • loading…</Text>
+            <Text color="gray">Loading active, in-progress, and waiting tasks…</Text>
+          </Box>
+        </Box>
+        <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
+      </Box>
+    );
   }
 
   if (tasks.length === 0) {
@@ -337,23 +380,17 @@ export function TasksScreen({
             projects={projectOptions}
             selectedProjectOptionId={selectedProjectOptionId}
             focused={focusedPane === "projects"}
+            isLoading={projectsQuery.isLoading}
+            maxVisibleProjects={maxVisibleListItems}
+            maxProjectLabelLength={maxProjectLabelLength}
           />
-          <Box flexDirection="column" width="35%" paddingRight={1}>
+          <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH} paddingRight={1}>
             <Text color={focusedPane === "tasks" ? "cyan" : "gray"}>Tasks (0)</Text>
             <Text color="gray">
               No active, in-progress, or waiting tasks for{" "}
               {describeProjectFilter(selectedProjectFilter)}.
             </Text>
           </Box>
-          <TaskDetailPane
-            task={null}
-            projects={projectsQuery.data}
-            width="40%"
-            isLoadingDetail={false}
-            comments={[]}
-            isLoadingComments={false}
-            error={null}
-          />
         </Box>
         <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
       </Box>
@@ -367,24 +404,32 @@ export function TasksScreen({
           projects={projectOptions}
           selectedProjectOptionId={selectedProjectOptionId}
           focused={focusedPane === "projects"}
+          isLoading={projectsQuery.isLoading}
+          maxVisibleProjects={maxVisibleListItems}
+          maxProjectLabelLength={maxProjectLabelLength}
         />
-        <TaskListPane
-          tasks={tasks}
-          projects={projectsQuery.data}
-          selectedTaskId={selectedTaskId}
-          width="35%"
-          focused={focusedPane === "tasks"}
-        />
-        <TaskDetailPane
-          task={selectedTask}
-          detail={selectedDetailQuery.data}
-          projects={projectsQuery.data}
-          width="40%"
-          isLoadingDetail={selectedDetailQuery.isLoading}
-          comments={commentsQuery.data}
-          isLoadingComments={commentsQuery.isLoading}
-          error={selectedDetailQuery.error ?? commentsQuery.error}
-        />
+        <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH}>
+          <TaskListPane
+            tasks={taskDetailOpen && selectedTask ? [selectedTask] : tasks}
+            projects={projectsQuery.data}
+            selectedTaskId={effectiveSelectedTaskId}
+            width="100%"
+            focused={focusedPane === "tasks"}
+            maxVisibleTasks={maxVisibleListItems}
+          />
+          {taskDetailOpen ? (
+            <TaskDetailPane
+              task={selectedTask}
+              detail={selectedDetailQuery.data}
+              projects={projectsQuery.data}
+              width="100%"
+              isLoadingDetail={selectedDetailQuery.isLoading}
+              comments={commentsQuery.data}
+              isLoadingComments={commentsQuery.isLoading}
+              error={selectedDetailQuery.error ?? commentsQuery.error}
+            />
+          ) : null}
+        </Box>
       </Box>
       {commentModalOpen ? (
         <TextInputModal
@@ -404,17 +449,29 @@ interface ProjectListPaneProps {
   projects: readonly ProjectOption[];
   selectedProjectOptionId: string;
   focused: boolean;
+  isLoading?: boolean;
+  maxVisibleProjects: number;
+  maxProjectLabelLength: number;
 }
 
 function ProjectListPane({
   projects,
   selectedProjectOptionId,
   focused,
+  isLoading = false,
+  maxVisibleProjects,
+  maxProjectLabelLength,
 }: ProjectListPaneProps): JSX.Element {
+  const visibleProjects = getVisibleTaskWindow(
+    projects,
+    selectedProjectOptionId,
+    maxVisibleProjects,
+  );
+
   return (
-    <Box flexDirection="column" width="25%" paddingRight={1}>
-      <Text color={focused ? "cyan" : "gray"}>Projects</Text>
-      {projects.map((option) => {
+    <Box flexDirection="column" width={PROJECT_PANE_WIDTH} paddingRight={1} flexShrink={0}>
+      <Text color={focused ? "cyan" : "gray"}>Projects{isLoading ? " • loading…" : ""}</Text>
+      {visibleProjects.map((option) => {
         const selected = option.id === selectedProjectOptionId;
         return (
           <Text
@@ -423,12 +480,46 @@ function ProjectListPane({
             inverse={selected && focused}
             wrap="truncate-end"
           >
-            {selected ? ">" : " "} {option.label}
+            {selected ? ">" : " "} {truncateProjectLabel(option.label, maxProjectLabelLength)}
           </Text>
         );
       })}
     </Box>
   );
+}
+
+function resolveProjectLabelLength(columns: number | undefined): number {
+  const terminalColumns = columns && columns > 0 ? columns : 80;
+  const appHorizontalPadding = 2;
+  const projectPaneRightPadding = 1;
+  const selectionPrefix = 2;
+  const availableBodyColumns = Math.max(0, terminalColumns - appHorizontalPadding);
+  const projectPaneColumns = Math.floor(availableBodyColumns * PROJECT_PANE_WIDTH_PERCENT);
+
+  return Math.max(
+    MIN_PROJECT_LABEL_LENGTH,
+    projectPaneColumns - projectPaneRightPadding - selectionPrefix,
+  );
+}
+
+function resolveMaxVisibleListItems(rows: number | undefined): number {
+  const terminalRows = rows && rows > 0 ? rows : 24;
+
+  // AppFrame reserves rows for padding, title, status, body margins, and footer.
+  // Each pane also uses one row for its title.
+  return Math.max(MIN_VISIBLE_LIST_ITEMS, terminalRows - 8);
+}
+
+function truncateProjectLabel(label: string, maxLength = 24): string {
+  if (label.length <= maxLength) {
+    return label;
+  }
+
+  if (maxLength <= 3) {
+    return label.slice(0, maxLength);
+  }
+
+  return `${label.slice(0, maxLength - 3)}...`;
 }
 
 function createTaskProjectOptions(projects: readonly Project[]): ProjectOption[] {

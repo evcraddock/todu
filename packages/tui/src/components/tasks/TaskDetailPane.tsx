@@ -28,9 +28,11 @@ export function TaskDetailPane({
   const projectNames = createProjectNameMap(projects);
   const detailTask = detail ?? task;
 
+  const loadingLabel = formatDetailLoadingLabel({ isLoadingDetail, isLoadingComments });
+
   return (
     <Box flexDirection="column" width={width} paddingLeft={1}>
-      <Text color="cyan">Detail</Text>
+      <Text color="cyan">Detail{loadingLabel ? ` • ${loadingLabel}` : ""}</Text>
       {!detailTask ? <Text color="gray">No task selected.</Text> : null}
       {detailTask
         ? formatTaskDetailLines(detailTask, projectNames.get(detailTask.projectId) ?? null).map(
@@ -45,8 +47,6 @@ export function TaskDetailPane({
             ),
           )
         : null}
-      {isLoadingDetail ? <Text color="yellow">Loading detail…</Text> : null}
-      {isLoadingComments ? <Text color="yellow">Loading comments…</Text> : null}
       {comments.length > 0 ? (
         <Box flexDirection="column" marginTop={1}>
           <Text color="cyan">Comments</Text>
@@ -60,4 +60,26 @@ export function TaskDetailPane({
       {error ? <Text color="red">{formatToduClientError(error)}</Text> : null}
     </Box>
   );
+}
+
+function formatDetailLoadingLabel({
+  isLoadingDetail,
+  isLoadingComments,
+}: {
+  isLoadingDetail: boolean;
+  isLoadingComments: boolean;
+}): string | null {
+  if (isLoadingDetail && isLoadingComments) {
+    return "loading detail + comments…";
+  }
+
+  if (isLoadingDetail) {
+    return "loading detail…";
+  }
+
+  if (isLoadingComments) {
+    return "loading comments…";
+  }
+
+  return null;
 }
