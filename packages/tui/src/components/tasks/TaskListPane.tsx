@@ -3,21 +3,31 @@ import { Box, Text } from "ink";
 import type { JSX } from "react";
 import { createProjectNameMap, formatTaskRow } from "../../formatting/task.js";
 
-const MAX_VISIBLE_TASKS = 12;
+const DEFAULT_MAX_VISIBLE_TASKS = 12;
 
 export interface TaskListPaneProps {
   tasks: readonly Task[];
   projects?: readonly Project[];
   selectedTaskId: string | null;
+  width?: string;
+  focused?: boolean;
+  maxVisibleTasks?: number;
 }
 
-export function TaskListPane({ tasks, projects, selectedTaskId }: TaskListPaneProps): JSX.Element {
+export function TaskListPane({
+  tasks,
+  projects,
+  selectedTaskId,
+  width = "50%",
+  focused = true,
+  maxVisibleTasks = DEFAULT_MAX_VISIBLE_TASKS,
+}: TaskListPaneProps): JSX.Element {
   const projectNames = createProjectNameMap(projects);
-  const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, MAX_VISIBLE_TASKS);
+  const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, maxVisibleTasks);
 
   return (
-    <Box flexDirection="column" width="50%" paddingRight={1}>
-      <Text color="cyan">Tasks ({tasks.length})</Text>
+    <Box flexDirection="column" width={width} paddingRight={1}>
+      <Text color={focused ? "cyan" : "gray"}>Tasks ({tasks.length})</Text>
       {visibleTasks.map((task) => {
         const selected = task.id === selectedTaskId;
         const prefix = selected ? ">" : " ";
@@ -25,7 +35,7 @@ export function TaskListPane({ tasks, projects, selectedTaskId }: TaskListPanePr
           <Text
             key={task.id}
             color={selected ? "cyan" : undefined}
-            inverse={selected}
+            inverse={selected && focused}
             wrap="truncate-end"
           >
             {prefix} {formatTaskRow(task, projectNames.get(task.projectId) ?? null)}

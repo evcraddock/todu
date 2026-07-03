@@ -6,17 +6,9 @@ export interface ConnectionStateProps {
   connection: DaemonConnectionSnapshot;
 }
 
-export function ConnectionState({ connection }: ConnectionStateProps): JSX.Element {
+export function ConnectionState({ connection }: ConnectionStateProps): JSX.Element | null {
   if (connection.state === "connected") {
-    return (
-      <Box flexDirection="column">
-        <Text color="green">Daemon connected</Text>
-        <Text color="gray">Handshake: daemon.hello OK</Text>
-        {connection.hello?.daemonVersion ? (
-          <Text color="gray">Daemon version: {connection.hello.daemonVersion}</Text>
-        ) : null}
-      </Box>
-    );
+    return null;
   }
 
   if (connection.state === "connecting") {
