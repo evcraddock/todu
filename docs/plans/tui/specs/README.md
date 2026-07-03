@@ -23,5 +23,6 @@ Execution order:
 9. `09-events-and-reconnect.md`
 10. `10-workspace-integration.md`
 11. `11-npm-release.md`
+12. `12-full-screen-layout-redesign.md`
 
 Each spec should be implemented in its own PR or focused work session unless the change is demonstrably tiny.

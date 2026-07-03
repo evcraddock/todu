@@ -222,6 +222,8 @@ Candidate Electron files to study during implementation:
 
 The TUI should be optimized for fast keyboard workflows.
 
+The original vertical-slice layout below is illustrative. The current target for layout polish is the full-screen viewport design in `docs/plans/tui/specs/12-full-screen-layout-redesign.md`, which uses the full visible terminal area, compact connected-state chrome, full-height route panes, and context-aware footer help.
+
 ### Initial Layout
 
 ```text
