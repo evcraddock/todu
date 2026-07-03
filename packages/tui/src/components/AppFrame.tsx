@@ -14,6 +14,7 @@ export interface AppFrameProps {
   syncStatus?: TuiSyncStatus;
   children: ReactNode;
   terminalWidth?: number;
+  terminalHeight?: number;
 }
 
 export function AppFrame({
@@ -23,13 +24,17 @@ export function AppFrame({
   syncStatus,
   children,
   terminalWidth,
+  terminalHeight,
 }: AppFrameProps): JSX.Element {
   const { stdout } = useStdout();
-  const width = resolveTerminalWidth(terminalWidth ?? stdout.columns);
+  const size = resolveTerminalSize({
+    width: terminalWidth ?? stdout.columns,
+    height: terminalHeight ?? stdout.rows,
+  });
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1} width={width}>
-      <Box flexDirection="row">
+    <Box flexDirection="column" paddingX={1} paddingY={1} width={size.width} height={size.height}>
+      <Box flexDirection="row" height={1} flexShrink={0}>
         <Text color="cyan" bold wrap="truncate-end">
           Todu
         </Text>
@@ -38,20 +43,37 @@ export function AppFrame({
           • {routeLabels[route]}
         </Text>
       </Box>
-      <StatusLine
-        route={route}
-        connection={connection}
-        projectFilter={projectFilter}
-        syncStatus={syncStatus}
-      />
-      <Box flexDirection="column" marginY={1}>
+      <Box height={1} flexShrink={0}>
+        <StatusLine
+          route={route}
+          connection={connection}
+          projectFilter={projectFilter}
+          syncStatus={syncStatus}
+        />
+      </Box>
+      <Box flexDirection="column" flexGrow={1} marginY={1}>
         {children}
       </Box>
-      <HelpBar />
+      <Box height={1} flexShrink={0}>
+        <HelpBar />
+      </Box>
     </Box>
   );
 }
 
-function resolveTerminalWidth(width: number | undefined): number {
-  return width && width > 0 ? width : 80;
+export interface TerminalSizeInput {
+  width: number | undefined;
+  height: number | undefined;
+}
+
+export interface TerminalSize {
+  width: number;
+  height: number;
+}
+
+export function resolveTerminalSize({ width, height }: TerminalSizeInput): TerminalSize {
+  return {
+    width: width && width > 0 ? width : 80,
+    height: height && height > 0 ? height : 24,
+  };
 }
