@@ -12,6 +12,7 @@ export interface TaskDetailPaneProps {
   comments?: readonly Note[];
   isLoadingComments?: boolean;
   error: unknown;
+  width?: string;
 }
 
 export function TaskDetailPane({
@@ -22,12 +23,13 @@ export function TaskDetailPane({
   comments = [],
   isLoadingComments = false,
   error,
+  width = "50%",
 }: TaskDetailPaneProps): JSX.Element {
   const projectNames = createProjectNameMap(projects);
   const detailTask = detail ?? task;
 
   return (
-    <Box flexDirection="column" width="50%" paddingLeft={1}>
+    <Box flexDirection="column" width={width} paddingLeft={1}>
       <Text color="cyan">Detail</Text>
       {!detailTask ? <Text color="gray">No task selected.</Text> : null}
       {detailTask

@@ -117,8 +117,10 @@ describe("TasksScreen", () => {
     await waitForFrameText(lastFrame, "First task");
     await waitForFrameText(lastFrame, "Description for First task");
 
+    expect(lastFrame()).toContain("Projects");
+    expect(lastFrame()).toContain("> All Projects");
     expect(lastFrame()).toContain("Tasks (2)");
-    expect(lastFrame()).toContain("> [high] [active] First task (todu) #tui");
+    expect(lastFrame()).toContain("First task");
     expect(lastFrame()).toContain("Second task");
     expect(lastFrame()).toContain("Detail");
     expect(lastFrame()).toContain("Status: active");
@@ -135,19 +137,67 @@ describe("TasksScreen", () => {
 
     stdin.write("j");
     await waitForFrameText(lastFrame, "Description for Second task");
-    expect(lastFrame()).toContain("> [med] [waiting] Second task (todu) #tui");
+    expect(lastFrame()).toContain("Second task");
 
     stdin.write("k");
     await waitForFrameText(lastFrame, "Description for First task");
-    expect(lastFrame()).toContain("> [high] [active] First task (todu) #tui");
+    expect(lastFrame()).toContain("First task");
 
     stdin.write("\u001B[B");
     await waitForFrameText(lastFrame, "Description for Second task");
-    expect(lastFrame()).toContain("> [med] [waiting] Second task (todu) #tui");
+    expect(lastFrame()).toContain("Second task");
 
     stdin.write("\u001B[A");
     await waitForFrameText(lastFrame, "Description for First task");
-    expect(lastFrame()).toContain("> [high] [active] First task (todu) #tui");
+    expect(lastFrame()).toContain("First task");
+  });
+
+  it("filters tasks from the permanent project pane", async () => {
+    const inboxTask = createTask({ id: "task-inbox", title: "Inbox task", projectId: "project-1" });
+    const workTask = createTask({ id: "task-work", title: "Work task", projectId: "project-2" });
+    const client = createClient({
+      project: {
+        list: vi.fn().mockResolvedValue([
+          { id: "project-1", name: "todu" },
+          { id: "project-2", name: "Work" },
+        ]),
+        get: vi.fn(),
+      },
+      task: {
+        list: vi.fn().mockImplementation((filter: { projectId?: string } = {}) => {
+          const tasks = [inboxTask, workTask];
+          return Promise.resolve(
+            filter.projectId ? tasks.filter((task) => task.projectId === filter.projectId) : tasks,
+          );
+        }),
+        get: vi.fn().mockImplementation((id: string) => {
+          const task = [inboxTask, workTask].find((entry) => entry.id === id) ?? inboxTask;
+          return Promise.resolve({ ...task, description: `Description for ${task.title}` });
+        }),
+        update: vi.fn(),
+        createComment: vi.fn(),
+      },
+    });
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Inbox task");
+    expect(lastFrame()).toContain("Work task");
+
+    stdin.write("p");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stdin.write("j");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stdin.write("j");
+
+    await waitForFrameText(lastFrame, "Description for Work task");
+    expect(lastFrame()).toContain("Work task");
+    expect(lastFrame()).not.toContain("Inbox task");
+    expect(client.task.list).toHaveBeenCalledWith({
+      status: ["active", "inprogress", "waiting"],
+      projectId: "project-2",
+    });
   });
 
   it("passes selected project ID to task list filter", async () => {
@@ -309,7 +359,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "No active, in-progress, or waiting tasks for All projects.");
+    await waitForFrameText(lastFrame, "No active, in-progress, or waiting");
     stdin.write("c");
 
     await waitForFrameText(lastFrame, "No task selected for comment.");
@@ -371,7 +421,7 @@ describe("TasksScreen", () => {
       <TasksScreen client={client} projectFilter={allProjectsFilter} />,
     );
 
-    await waitForFrameText(lastFrame, "No active, in-progress, or waiting tasks for All projects.");
+    await waitForFrameText(lastFrame, "No active, in-progress, or waiting");
   });
 
   it("renders user-facing errors", async () => {

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TaskStatus } from "@todu/core";
+import type { Project, TaskStatus } from "@todu/core";
 import { Box, Text, useInput } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +10,11 @@ import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
 import { TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
 import { normalizeCommentContent } from "../state/comment-actions.js";
-import { describeProjectFilter, type ProjectFilterState } from "../state/project-filter.js";
+import {
+  allProjectsFilter,
+  describeProjectFilter,
+  type ProjectFilterState,
+} from "../state/project-filter.js";
 import { queryKeys } from "../state/query-keys.js";
 import { getSelectedItem, moveSelection, resolveSelectedId } from "../state/selection.js";
 import { resolveTaskStatusAction, taskStatusActions } from "../state/task-actions.js";
@@ -24,6 +28,15 @@ export interface TasksScreenProps {
 }
 
 const visibleTaskStatuses = ["active", "inprogress", "waiting"] as const;
+const ALL_PROJECTS_OPTION_ID = "__all__";
+
+type PaneFocus = "projects" | "tasks";
+
+interface ProjectOption {
+  id: string;
+  label: string;
+  project: Project | null;
+}
 
 export function TasksScreen({
   client,
@@ -33,24 +46,40 @@ export function TasksScreen({
   onGlobalInputEnabledChange,
 }: TasksScreenProps): JSX.Element {
   const queryClient = useQueryClient();
+  const [selectedProjectOptionId, setSelectedProjectOptionId] = useState<string>(
+    projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
+  );
+  const [focusedPane, setFocusedPane] = useState<PaneFocus>("tasks");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects(),
+    queryFn: () => client.project.list(),
+    enabled: dataQueriesEnabled,
+  });
+  const projectOptions = useMemo(
+    () => createTaskProjectOptions(projectsQuery.data ?? []),
+    [projectsQuery.data],
+  );
+  const selectedProjectOption =
+    projectOptions.find((option) => option.id === selectedProjectOptionId) ?? projectOptions[0];
+  const selectedProjectFilter: ProjectFilterState = selectedProjectOption?.project
+    ? {
+        projectId: selectedProjectOption.project.id,
+        projectName: selectedProjectOption.project.name,
+      }
+    : allProjectsFilter;
   const taskFilter = {
     status: [...visibleTaskStatuses],
-    ...(projectFilter.projectId ? { projectId: projectFilter.projectId } : {}),
+    ...(selectedProjectFilter.projectId ? { projectId: selectedProjectFilter.projectId } : {}),
   };
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks(taskFilter),
     queryFn: () => client.task.list(taskFilter),
-    enabled: dataQueriesEnabled,
-  });
-  const projectsQuery = useQuery({
-    queryKey: queryKeys.projects(),
-    queryFn: () => client.project.list(),
     enabled: dataQueriesEnabled,
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
@@ -73,6 +102,18 @@ export function TasksScreen({
     mutationFn: ({ taskId, content }: { taskId: string; content: string }) =>
       client.task.createComment(taskId, content),
   });
+
+  useEffect(() => {
+    setSelectedProjectOptionId(projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID);
+  }, [projectFilter.projectId]);
+
+  useEffect(() => {
+    if (!projectsQuery.data) {
+      return;
+    }
+
+    setSelectedProjectOptionId((current) => resolveTaskProjectOptionId(projectOptions, current));
+  }, [projectOptions, projectsQuery.data]);
 
   useEffect(() => {
     if (!tasksQuery.data) {
@@ -184,6 +225,39 @@ export function TasksScreen({
       return;
     }
 
+    if (input === "\t") {
+      setFocusedPane((current) => (current === "projects" ? "tasks" : "projects"));
+      return;
+    }
+
+    if (input === "p" || key.leftArrow) {
+      setFocusedPane("projects");
+      return;
+    }
+
+    if (key.rightArrow) {
+      setFocusedPane("tasks");
+      return;
+    }
+
+    if (focusedPane === "projects") {
+      if (input === "j" || key.downArrow) {
+        setSelectedProjectOptionId((current) =>
+          moveTaskProjectOption(projectOptions, current, "next"),
+        );
+        setFeedback(null);
+        return;
+      }
+
+      if (input === "k" || key.upArrow) {
+        setSelectedProjectOptionId((current) =>
+          moveTaskProjectOption(projectOptions, current, "previous"),
+        );
+        setFeedback(null);
+        return;
+      }
+    }
+
     if (input === "c" && !selectedTask) {
       setFeedback({ message: "No task selected for comment.", tone: "error" });
       return;
@@ -209,12 +283,12 @@ export function TasksScreen({
       return;
     }
 
-    if (input === "j" || key.downArrow) {
+    if (focusedPane === "tasks" && (input === "j" || key.downArrow)) {
       setSelectedTaskId((current) => moveSelection(tasks, current, "next"));
       return;
     }
 
-    if (input === "k" || key.upArrow) {
+    if (focusedPane === "tasks" && (input === "k" || key.upArrow)) {
       setSelectedTaskId((current) => moveSelection(tasks, current, "previous"));
       return;
     }
@@ -258,10 +332,29 @@ export function TasksScreen({
   if (tasks.length === 0) {
     return (
       <Box flexDirection="column">
-        <Text color="cyan">Tasks</Text>
-        <Text color="gray">
-          No active, in-progress, or waiting tasks for {describeProjectFilter(projectFilter)}.
-        </Text>
+        <Box flexDirection="row">
+          <ProjectListPane
+            projects={projectOptions}
+            selectedProjectOptionId={selectedProjectOptionId}
+            focused={focusedPane === "projects"}
+          />
+          <Box flexDirection="column" width="35%" paddingRight={1}>
+            <Text color={focusedPane === "tasks" ? "cyan" : "gray"}>Tasks (0)</Text>
+            <Text color="gray">
+              No active, in-progress, or waiting tasks for{" "}
+              {describeProjectFilter(selectedProjectFilter)}.
+            </Text>
+          </Box>
+          <TaskDetailPane
+            task={null}
+            projects={projectsQuery.data}
+            width="40%"
+            isLoadingDetail={false}
+            comments={[]}
+            isLoadingComments={false}
+            error={null}
+          />
+        </Box>
         <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
       </Box>
     );
@@ -270,11 +363,23 @@ export function TasksScreen({
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
-        <TaskListPane tasks={tasks} projects={projectsQuery.data} selectedTaskId={selectedTaskId} />
+        <ProjectListPane
+          projects={projectOptions}
+          selectedProjectOptionId={selectedProjectOptionId}
+          focused={focusedPane === "projects"}
+        />
+        <TaskListPane
+          tasks={tasks}
+          projects={projectsQuery.data}
+          selectedTaskId={selectedTaskId}
+          width="35%"
+          focused={focusedPane === "tasks"}
+        />
         <TaskDetailPane
           task={selectedTask}
           detail={selectedDetailQuery.data}
           projects={projectsQuery.data}
+          width="40%"
           isLoadingDetail={selectedDetailQuery.isLoading}
           comments={commentsQuery.data}
           isLoadingComments={commentsQuery.isLoading}
@@ -293,4 +398,71 @@ export function TasksScreen({
       <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
     </Box>
   );
+}
+
+interface ProjectListPaneProps {
+  projects: readonly ProjectOption[];
+  selectedProjectOptionId: string;
+  focused: boolean;
+}
+
+function ProjectListPane({
+  projects,
+  selectedProjectOptionId,
+  focused,
+}: ProjectListPaneProps): JSX.Element {
+  return (
+    <Box flexDirection="column" width="25%" paddingRight={1}>
+      <Text color={focused ? "cyan" : "gray"}>Projects</Text>
+      {projects.map((option) => {
+        const selected = option.id === selectedProjectOptionId;
+        return (
+          <Text
+            key={option.id}
+            color={selected ? "cyan" : undefined}
+            inverse={selected && focused}
+            wrap="truncate-end"
+          >
+            {selected ? ">" : " "} {option.label}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
+function createTaskProjectOptions(projects: readonly Project[]): ProjectOption[] {
+  return [
+    { id: ALL_PROJECTS_OPTION_ID, label: "All Projects", project: null },
+    ...projects.map((project) => ({ id: project.id, label: project.name, project })),
+  ];
+}
+
+function resolveTaskProjectOptionId(
+  options: readonly ProjectOption[],
+  currentOptionId: string,
+): string {
+  if (options.some((option) => option.id === currentOptionId)) {
+    return currentOptionId;
+  }
+
+  return options[0]?.id ?? ALL_PROJECTS_OPTION_ID;
+}
+
+function moveTaskProjectOption(
+  options: readonly ProjectOption[],
+  currentOptionId: string,
+  direction: "next" | "previous",
+): string {
+  if (options.length === 0) {
+    return ALL_PROJECTS_OPTION_ID;
+  }
+
+  const currentIndex = Math.max(
+    0,
+    options.findIndex((option) => option.id === currentOptionId),
+  );
+  const delta = direction === "next" ? 1 : -1;
+  const nextIndex = Math.max(0, Math.min(options.length - 1, currentIndex + delta));
+  return options[nextIndex]?.id ?? ALL_PROJECTS_OPTION_ID;
 }
