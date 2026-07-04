@@ -2,6 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { DocumentId } from "@automerge/automerge-repo";
+import {
+  createActorId,
+  createProjectId,
+  createTaskId,
+  createTaskListDocument,
+  type TaskListDocument,
+} from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { beginCatalogJoinSwitch, initBootstrapStorage, initJoinStorage } from "./storage.js";
 
@@ -96,5 +103,70 @@ describe("storage bootstrap/join boundaries", () => {
 
     tx.rollback();
     expect(fs.existsSync(markerPath)).toBe(false);
+  });
+
+  it("bootstrap tolerates missing task detail docs during canonical actor repair", async () => {
+    const storage = await initBootstrapStorage(tmpDir);
+    const projectId = createProjectId("proj-repair");
+    const taskId = createTaskId("task-missing-detail");
+    const legacyActorId = createActorId("actor-legacy-alice");
+    const canonicalActorId = createActorId("actor-alice");
+    const now = "2026-07-04T12:00:00.000Z";
+
+    const taskListHandle = storage.repo.create<TaskListDocument>();
+    taskListHandle.change((doc) => {
+      const template = createTaskListDocument(projectId);
+      doc.projectId = template.projectId;
+      doc.tasks = [
+        {
+          id: taskId,
+          title: "Task with missing detail doc",
+          status: "done",
+          priority: "medium",
+          projectId,
+          labels: [],
+          assigneeActorIds: [legacyActorId],
+          assignees: [],
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
+      doc.detailDocIds = {
+        [taskId]: UNREACHABLE_CATALOG_ID,
+      };
+      doc.descriptionSearchTextByTaskId = {};
+    });
+
+    storage.catalog.change((doc) => {
+      doc.actors.push(
+        { id: legacyActorId, displayName: "Alice" },
+        { id: canonicalActorId, displayName: "Alice" },
+      );
+      doc.projects.push({
+        id: projectId,
+        name: "Repair Project",
+        status: "active",
+        priority: "medium",
+        authorizedAssigneeActorIds: [legacyActorId],
+        createdAt: now,
+        updatedAt: now,
+      });
+      doc.taskListDocIds[projectId] = taskListHandle.documentId;
+    });
+
+    await storage.close();
+
+    const reloaded = await initBootstrapStorage(tmpDir);
+    const project = reloaded.catalog
+      .doc()
+      ?.projects.find((candidate) => candidate.id === projectId);
+    expect(project?.authorizedAssigneeActorIds).toEqual([canonicalActorId]);
+
+    const reloadedTaskList = await reloaded.repo.find<TaskListDocument>(taskListHandle.documentId);
+    await reloadedTaskList.whenReady();
+    expect(reloadedTaskList.doc()?.tasks[0].assigneeActorIds).toEqual([legacyActorId]);
+    expect(reloadedTaskList.doc()?.detailDocIds[taskId]).toBe(UNREACHABLE_CATALOG_ID);
+
+    await reloaded.close();
   });
 });
