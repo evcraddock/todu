@@ -1,5 +1,12 @@
 # @todu/tui
 
+## 0.23.9
+
+### Patch Changes
+
+- 3fc53d8: Make the TUI frame use the full terminal viewport height and width.
+- 1bafcc3: Add a permanent project pane to the TUI tasks view.
+
 ## 0.23.8
 
 ### Patch Changes
