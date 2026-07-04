@@ -13,12 +13,9 @@ import {
   createEmptyCatalog,
   createNotesDocument,
   DEFAULT_OWNER_ACTOR_ID,
-  type ImportedContentApproval,
-  type IntegrationRegistryDocument,
   type Note,
   type NotesDocument,
   SCHEMA_VERSION,
-  type TaskDetailDocument,
   type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -127,31 +124,6 @@ function buildActorCanonicalRewriteMap(doc: CatalogDocument): Map<string, string
   }
 
   return rewriteMap;
-}
-
-function rewriteActorId<T extends string | undefined>(
-  actorId: T,
-  rewriteMap: ReadonlyMap<string, string>,
-): T {
-  if (actorId === undefined) return actorId;
-  return (rewriteMap.get(actorId) ?? actorId) as T;
-}
-
-function rewriteImportedContentApproval(
-  approval: ImportedContentApproval | undefined,
-  rewriteMap: ReadonlyMap<string, string>,
-): void {
-  if (!approval) return;
-
-  const nextReviewedByActorId = rewriteActorId(approval.reviewedByActorId, rewriteMap);
-  if (nextReviewedByActorId !== approval.reviewedByActorId && nextReviewedByActorId !== undefined) {
-    approval.reviewedByActorId = createActorId(nextReviewedByActorId);
-  }
-
-  const nextSourceActorId = rewriteActorId(approval.sourceActorId, rewriteMap);
-  if (nextSourceActorId !== approval.sourceActorId && nextSourceActorId !== undefined) {
-    approval.sourceActorId = createActorId(nextSourceActorId);
-  }
 }
 
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
@@ -591,7 +563,7 @@ async function loadCatalogById(
     await migrateLegacyIdentityModel(handle, repo);
 
     stage = "repairCanonicalActorReferences";
-    await repairCanonicalActorReferences(handle, repo);
+    await repairCanonicalActorReferences(handle);
 
     return handle;
   } catch (error) {
@@ -712,10 +684,7 @@ function migrateCatalog(
   });
 }
 
-async function repairCanonicalActorReferences(
-  catalog: DocHandle<CatalogDocument>,
-  repo: Repo,
-): Promise<void> {
+async function repairCanonicalActorReferences(catalog: DocHandle<CatalogDocument>): Promise<void> {
   const catalogDoc = catalog.doc();
   if (!catalogDoc) return;
 
@@ -746,78 +715,8 @@ async function repairCanonicalActorReferences(
     }
   });
 
-  const currentCatalog = catalog.doc();
-  for (const docId of Object.values(currentCatalog?.taskListDocIds ?? {})) {
-    const handle = await repo.find<TaskListDocument>(docId as DocumentId);
-    await handle.whenReady();
-    handle.change((doc) => {
-      for (const task of doc.tasks as MutableLegacyTask[]) {
-        if (!task.assigneeActorIds || task.assigneeActorIds.length === 0) continue;
-
-        const nextAssigneeActorIds: string[] = [];
-        const seenActorIds = new Set<string>();
-        for (const actorId of task.assigneeActorIds) {
-          const nextActorId = rewriteMap.get(actorId) ?? actorId;
-          if (!seenActorIds.has(nextActorId)) {
-            seenActorIds.add(nextActorId);
-            nextAssigneeActorIds.push(nextActorId);
-          }
-        }
-
-        if (!arraysEqual(task.assigneeActorIds, nextAssigneeActorIds)) {
-          task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...nextAssigneeActorIds);
-        }
-      }
-    });
-
-    for (const detailDocId of Object.values(handle.doc()?.detailDocIds ?? {})) {
-      const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
-      await detailHandle.whenReady();
-      detailHandle.change((doc) => {
-        rewriteImportedContentApproval(doc.descriptionApproval, rewriteMap);
-      });
-    }
-  }
-
-  for (const docId of Object.values(catalog.doc()?.notesBucketDocIds ?? {})) {
-    const handle = await repo.find<NotesDocument>(docId as DocumentId);
-    await handle.whenReady();
-    handle.change((doc) => {
-      for (const note of doc.notes as MutableLegacyNote[]) {
-        const nextAuthorActorId = rewriteActorId(note.authorActorId, rewriteMap);
-        if (nextAuthorActorId !== note.authorActorId) {
-          note.authorActorId = nextAuthorActorId ? createActorId(nextAuthorActorId) : undefined;
-        }
-        rewriteImportedContentApproval(note.contentApproval, rewriteMap);
-      }
-    });
-  }
-
-  const integrationRegistryDocId = catalog.doc()?.integrationRegistryDocId;
-  if (integrationRegistryDocId) {
-    const integrationHandle = await repo.find<IntegrationRegistryDocument>(
-      integrationRegistryDocId as DocumentId,
-    );
-    await integrationHandle.whenReady();
-    integrationHandle.change((doc) => {
-      for (const binding of doc.bindings) {
-        for (const mapping of binding.options?.actorMappings ?? []) {
-          const nextActorId = rewriteActorId(mapping.actorId, rewriteMap);
-          if (nextActorId !== mapping.actorId) {
-            mapping.actorId = createActorId(nextActorId);
-          }
-        }
-      }
-    });
-  }
-
-  catalog.change((doc) => {
-    for (let index = doc.actors.length - 1; index >= 0; index -= 1) {
-      if (rewriteMap.has(doc.actors[index].id)) {
-        doc.actors.splice(index, 1);
-      }
-    }
-  });
+  // Do not scan task list, task detail, note bucket, or integration documents during daemon startup.
+  // Those documents can be large or absent until sync catches up, and blocking here prevents the daemon from starting.
 }
 
 async function migrateLegacyIdentityModel(
