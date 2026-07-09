@@ -1,7 +1,8 @@
 import type { Project, Task } from "@todu/core";
-import { Box, Text } from "ink";
+import { Text } from "ink";
 import type { JSX } from "react";
 import { createProjectNameMap, formatTaskRow } from "../../formatting/task.js";
+import { Pane } from "../Pane.js";
 
 const DEFAULT_MAX_VISIBLE_TASKS = 12;
 
@@ -26,8 +27,7 @@ export function TaskListPane({
   const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, maxVisibleTasks);
 
   return (
-    <Box flexDirection="column" width={width} paddingRight={1}>
-      <Text color={focused ? "cyan" : "gray"}>Tasks ({tasks.length})</Text>
+    <Pane title={`Tasks (${tasks.length})`} width={width} focused={focused}>
       {visibleTasks.map((task) => {
         const selected = task.id === selectedTaskId;
         const prefix = selected ? ">" : " ";
@@ -42,7 +42,7 @@ export function TaskListPane({
           </Text>
         );
       })}
-    </Box>
+    </Pane>
   );
 }
 

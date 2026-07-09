@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import type { JSX } from "react";
 import { formatToduClientError } from "../../daemon/todu-client.js";
 import { createProjectNameMap, formatTaskDetailLines } from "../../formatting/task.js";
+import { Pane } from "../Pane.js";
 
 export interface TaskDetailPaneProps {
   task: Task | null;
@@ -31,8 +32,7 @@ export function TaskDetailPane({
   const loadingLabel = formatDetailLoadingLabel({ isLoadingDetail, isLoadingComments });
 
   return (
-    <Box flexDirection="column" width={width} paddingLeft={1}>
-      <Text color="cyan">Detail{loadingLabel ? ` • ${loadingLabel}` : ""}</Text>
+    <Pane title={`Detail${loadingLabel ? ` • ${loadingLabel}` : ""}`} width={width}>
       {!detailTask ? <Text color="gray">No task selected.</Text> : null}
       {detailTask
         ? formatTaskDetailLines(detailTask, projectNames.get(detailTask.projectId) ?? null).map(
@@ -58,7 +58,7 @@ export function TaskDetailPane({
         </Box>
       ) : null}
       {error ? <Text color="red">{formatToduClientError(error)}</Text> : null}
-    </Box>
+    </Pane>
   );
 }
 

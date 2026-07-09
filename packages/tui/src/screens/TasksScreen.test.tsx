@@ -116,6 +116,8 @@ describe("TasksScreen", () => {
 
     await waitForFrameText(lastFrame, "First task");
 
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("└");
     expect(lastFrame()).toContain("Projects");
     expect(lastFrame()).toContain("> All Projects");
     expect(lastFrame()).toContain("Tasks (2)");
@@ -426,6 +428,25 @@ describe("TasksScreen", () => {
     await waitForFrameText(lastFrame, "Cannot add comment");
   });
 
+  it("renders loading state inside the pane layout", async () => {
+    const client = createClient({
+      task: {
+        list: vi.fn().mockImplementation(() => new Promise(() => {})),
+        get: vi.fn(),
+        update: vi.fn(),
+        createComment: vi.fn(),
+      },
+    });
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+    );
+
+    await waitForFrameText(lastFrame, "Tasks • loading…");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Projects");
+    expect(lastFrame()).toContain("Loading active, in-progress, and waiting tasks…");
+  });
+
   it("renders empty state", async () => {
     const client = createClient({
       task: {
@@ -440,6 +461,8 @@ describe("TasksScreen", () => {
     );
 
     await waitForFrameText(lastFrame, "No active, in-progress, or waiting");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Tasks (0)");
   });
 
   it("renders user-facing errors", async () => {
@@ -463,6 +486,8 @@ describe("TasksScreen", () => {
     );
 
     await waitForFrameText(lastFrame, "Tasks unavailable");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Projects");
     expect(lastFrame()).toContain("Daemon unavailable. Start it with: todu daemon start.");
   });
 });

@@ -4,6 +4,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Pane } from "../components/Pane.js";
 import { TextInputModal } from "../components/TextInputModal.js";
 import { ToastLine, type ToastTone } from "../components/ToastLine.js";
 import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
@@ -343,17 +344,8 @@ export function TasksScreen({
   const error = tasksQuery.error ?? projectsQuery.error;
   if (error) {
     return (
-      <Box flexDirection="column">
-        <Text color="red">Tasks unavailable</Text>
-        <Text color="gray">{formatToduClientError(error)}</Text>
-      </Box>
-    );
-  }
-
-  if (tasksQuery.isLoading) {
-    return (
-      <Box flexDirection="column">
-        <Box flexDirection="row">
+      <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="row" flexGrow={1}>
           <ProjectListPane
             projects={projectOptions}
             selectedProjectOptionId={selectedProjectOptionId}
@@ -362,10 +354,41 @@ export function TasksScreen({
             maxVisibleProjects={maxVisibleListItems}
             maxProjectLabelLength={maxProjectLabelLength}
           />
-          <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH} paddingRight={1}>
-            <Text color={focusedPane === "tasks" ? "cyan" : "gray"}>Tasks • loading…</Text>
+          <Pane
+            title="Tasks unavailable"
+            width={TASK_MAIN_PANE_WIDTH}
+            focused={focusedPane === "tasks"}
+          >
+            <Text color="red">Tasks unavailable</Text>
+            <Text color="gray" wrap="truncate-end">
+              {formatToduClientError(error)}
+            </Text>
+          </Pane>
+        </Box>
+        <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
+      </Box>
+    );
+  }
+
+  if (tasksQuery.isLoading) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="row" flexGrow={1}>
+          <ProjectListPane
+            projects={projectOptions}
+            selectedProjectOptionId={selectedProjectOptionId}
+            focused={focusedPane === "projects"}
+            isLoading={projectsQuery.isLoading}
+            maxVisibleProjects={maxVisibleListItems}
+            maxProjectLabelLength={maxProjectLabelLength}
+          />
+          <Pane
+            title="Tasks • loading…"
+            width={TASK_MAIN_PANE_WIDTH}
+            focused={focusedPane === "tasks"}
+          >
             <Text color="gray">Loading active, in-progress, and waiting tasks…</Text>
-          </Box>
+          </Pane>
         </Box>
         <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
       </Box>
@@ -374,8 +397,8 @@ export function TasksScreen({
 
   if (tasks.length === 0) {
     return (
-      <Box flexDirection="column">
-        <Box flexDirection="row">
+      <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="row" flexGrow={1}>
           <ProjectListPane
             projects={projectOptions}
             selectedProjectOptionId={selectedProjectOptionId}
@@ -384,13 +407,12 @@ export function TasksScreen({
             maxVisibleProjects={maxVisibleListItems}
             maxProjectLabelLength={maxProjectLabelLength}
           />
-          <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH} paddingRight={1}>
-            <Text color={focusedPane === "tasks" ? "cyan" : "gray"}>Tasks (0)</Text>
+          <Pane title="Tasks (0)" width={TASK_MAIN_PANE_WIDTH} focused={focusedPane === "tasks"}>
             <Text color="gray">
               No active, in-progress, or waiting tasks for{" "}
               {describeProjectFilter(selectedProjectFilter)}.
             </Text>
-          </Box>
+          </Pane>
         </Box>
         <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
       </Box>
@@ -398,8 +420,8 @@ export function TasksScreen({
   }
 
   return (
-    <Box flexDirection="column">
-      <Box flexDirection="row">
+    <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="row" flexGrow={1}>
         <ProjectListPane
           projects={projectOptions}
           selectedProjectOptionId={selectedProjectOptionId}
@@ -469,8 +491,11 @@ function ProjectListPane({
   );
 
   return (
-    <Box flexDirection="column" width={PROJECT_PANE_WIDTH} paddingRight={1} flexShrink={0}>
-      <Text color={focused ? "cyan" : "gray"}>Projects{isLoading ? " • loading…" : ""}</Text>
+    <Pane
+      title={`Projects${isLoading ? " • loading…" : ""}`}
+      width={PROJECT_PANE_WIDTH}
+      focused={focused}
+    >
       {visibleProjects.map((option) => {
         const selected = option.id === selectedProjectOptionId;
         return (
@@ -484,7 +509,7 @@ function ProjectListPane({
           </Text>
         );
       })}
-    </Box>
+    </Pane>
   );
 }
 
@@ -506,8 +531,8 @@ function resolveMaxVisibleListItems(rows: number | undefined): number {
   const terminalRows = rows && rows > 0 ? rows : 24;
 
   // AppFrame reserves rows for padding, title, status, body margins, and footer.
-  // Each pane also uses one row for its title.
-  return Math.max(MIN_VISIBLE_LIST_ITEMS, terminalRows - 8);
+  // Bordered panes reserve rows for borders and title.
+  return Math.max(MIN_VISIBLE_LIST_ITEMS, terminalRows - 10);
 }
 
 function truncateProjectLabel(label: string, maxLength = 24): string {
