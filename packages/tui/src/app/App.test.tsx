@@ -161,11 +161,28 @@ describe("App", () => {
 
     expect(lastFrame()).toContain("Todu • Tasks");
     expect(lastFrame()).toContain("View: Tasks");
+    expect(lastFrame()).toContain("Daemon: unavailable");
     expect(lastFrame()).toContain("Daemon unavailable");
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Tasks");
     expect(lastFrame()).toContain("q Back/Quit");
     expect(lastFrame()).toContain("Project: All projects");
+  });
+
+  it("shows connected daemon status without body handshake diagnostics", async () => {
+    const { lastFrame } = render(
+      <App
+        connection={createFakeConnection(createConnectedSnapshot())}
+        toduClient={createFakeClient()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Ship");
+
+    expect(lastFrame()).toContain("Daemon: connected (dev)");
+    expect(lastFrame()).not.toContain("Daemon connected");
+    expect(lastFrame()).not.toContain("Handshake: daemon.hello OK");
+    expect(lastFrame()).not.toContain("Daemon version:");
   });
 
   it("switches between primary routes", async () => {
@@ -324,6 +341,7 @@ describe("App", () => {
 
     connection.emitSnapshot({ ...createConnectedSnapshot(), state: "reconnecting", hello: null });
     await waitForFrameText(lastFrame, "Daemon disconnected; reconnecting");
+    expect(lastFrame()).toContain("Daemon: reconnecting");
     expect(lastFrame()).toContain("Ship");
 
     connection.emitSnapshot(createConnectedSnapshot());
