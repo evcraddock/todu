@@ -87,6 +87,8 @@ describe("ProjectsScreen", () => {
 
     await waitForFrameText(lastFrame, "Projects (2)");
 
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("└");
     expect(lastFrame()).toContain("> All projects");
     expect(lastFrame()).toContain("Inbox");
     expect(lastFrame()).toContain("Work");
@@ -132,6 +134,25 @@ describe("ProjectsScreen", () => {
     expect(onSelectAllProjects).toHaveBeenCalledTimes(1);
   });
 
+  it("renders loading state inside the pane layout", async () => {
+    const client = createClient({
+      project: { list: vi.fn().mockImplementation(() => new Promise(() => {})), get: vi.fn() },
+    });
+    const { lastFrame } = renderWithQuery(
+      <ProjectsScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        onSelectProject={vi.fn()}
+        onSelectAllProjects={vi.fn()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Projects • loading…");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Loading projects…");
+    expect(lastFrame()).toContain("Project details will appear after projects load.");
+  });
+
   it("renders empty state", async () => {
     const client = createClient({
       project: { list: vi.fn().mockResolvedValue([]), get: vi.fn() },
@@ -146,6 +167,8 @@ describe("ProjectsScreen", () => {
     );
 
     await waitForFrameText(lastFrame, "No projects available.");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Project detail");
   });
 
   it("renders user-facing errors", async () => {
@@ -172,6 +195,8 @@ describe("ProjectsScreen", () => {
     );
 
     await waitForFrameText(lastFrame, "Projects unavailable");
+    expect(lastFrame()).toContain("┌");
+    expect(lastFrame()).toContain("Project detail");
     expect(lastFrame()).toContain("Daemon unavailable. Start it with: todu daemon start.");
   });
 });
