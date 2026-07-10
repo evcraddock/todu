@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
 import { getVisibleTaskWindow } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
+import { formatListWindowIndicator, type ListWindow } from "../state/list-window.js";
 import type { ProjectFilterState } from "../state/project-filter.js";
 import { queryKeys } from "../state/query-keys.js";
 
@@ -14,7 +15,7 @@ const PROJECT_LIST_PANE_WIDTH_PERCENT = 0.4;
 const PROJECT_LIST_PANE_WIDTH = "40%";
 const PROJECT_DETAIL_PANE_WIDTH = "60%";
 const MIN_PROJECT_LABEL_LENGTH = 8;
-const MIN_VISIBLE_PROJECTS = 6;
+const MIN_VISIBLE_PROJECTS = 1;
 
 interface ProjectOption {
   id: string;
@@ -54,7 +55,7 @@ export function ProjectsScreen({
     projectOptions.find((option) => option.id === selectedOptionId) ?? projectOptions[0];
   const maxVisibleProjects = resolveMaxVisibleProjects(stdout.rows);
   const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
-  const visibleProjects = getVisibleTaskWindow(
+  const projectWindow = getVisibleTaskWindow(
     projectOptions,
     selectedOption?.id ?? selectedOptionId,
     maxVisibleProjects,
@@ -103,7 +104,7 @@ export function ProjectsScreen({
         <ProjectListContent
           error={projectsQuery.error}
           isLoading={projectsQuery.isLoading}
-          projects={visibleProjects}
+          projectWindow={projectWindow}
           selectedOptionId={selectedOption?.id ?? selectedOptionId}
           maxProjectLabelLength={maxProjectLabelLength}
         />
@@ -124,13 +125,13 @@ export function ProjectsScreen({
 function ProjectListContent({
   error,
   isLoading,
-  projects,
+  projectWindow,
   selectedOptionId,
   maxProjectLabelLength,
 }: {
   error: unknown;
   isLoading: boolean;
-  projects: readonly ProjectOption[];
+  projectWindow: ListWindow<ProjectOption>;
   selectedOptionId: string;
   maxProjectLabelLength: number;
 }): JSX.Element {
@@ -149,7 +150,7 @@ function ProjectListContent({
     return <Text color="gray">Loading projects…</Text>;
   }
 
-  if (projects.length === 1 && projects[0]?.id === ALL_PROJECTS_OPTION_ID) {
+  if (projectWindow.total === 1 && projectWindow.items[0]?.id === ALL_PROJECTS_OPTION_ID) {
     return (
       <Box flexDirection="column">
         <Text color="gray">No projects available.</Text>
@@ -158,9 +159,13 @@ function ProjectListContent({
     );
   }
 
+  const aboveIndicator = formatListWindowIndicator(projectWindow, "above");
+  const belowIndicator = formatListWindowIndicator(projectWindow, "below");
+
   return (
     <Box flexDirection="column">
-      {projects.map((option) => {
+      {aboveIndicator ? <Text color="gray">{aboveIndicator}</Text> : null}
+      {projectWindow.items.map((option) => {
         const selected = option.id === selectedOptionId;
         return (
           <Text
@@ -173,6 +178,7 @@ function ProjectListContent({
           </Text>
         );
       })}
+      {belowIndicator ? <Text color="gray">{belowIndicator}</Text> : null}
     </Box>
   );
 }
@@ -252,8 +258,8 @@ function resolveMaxVisibleProjects(rows: number | undefined): number {
   const terminalRows = rows && rows > 0 ? rows : 24;
 
   // AppFrame reserves rows for padding, title, status, body margins, and footer.
-  // The pane reserves rows for borders and title.
-  return Math.max(MIN_VISIBLE_PROJECTS, terminalRows - 10);
+  // Bordered panes and potential above/below indicators reserve four more rows.
+  return Math.max(MIN_VISIBLE_PROJECTS, terminalRows - 12);
 }
 
 function truncateProjectLabel(label: string, maxLength = 24): string {

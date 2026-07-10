@@ -11,6 +11,7 @@ import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
 import { getVisibleTaskWindow, TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
 import { normalizeCommentContent } from "../state/comment-actions.js";
+import { formatListWindowIndicator } from "../state/list-window.js";
 import {
   allProjectsFilter,
   describeProjectFilter,
@@ -34,7 +35,7 @@ const PROJECT_PANE_WIDTH_PERCENT = 0.36;
 const PROJECT_PANE_WIDTH = "36%";
 const TASK_MAIN_PANE_WIDTH = "64%";
 const MIN_PROJECT_LABEL_LENGTH = 8;
-const MIN_VISIBLE_LIST_ITEMS = 6;
+const MIN_VISIBLE_LIST_ITEMS = 1;
 
 type PaneFocus = "projects" | "tasks";
 
@@ -484,11 +485,9 @@ function ProjectListPane({
   maxVisibleProjects,
   maxProjectLabelLength,
 }: ProjectListPaneProps): JSX.Element {
-  const visibleProjects = getVisibleTaskWindow(
-    projects,
-    selectedProjectOptionId,
-    maxVisibleProjects,
-  );
+  const projectWindow = getVisibleTaskWindow(projects, selectedProjectOptionId, maxVisibleProjects);
+  const aboveIndicator = formatListWindowIndicator(projectWindow, "above");
+  const belowIndicator = formatListWindowIndicator(projectWindow, "below");
 
   return (
     <Pane
@@ -496,7 +495,8 @@ function ProjectListPane({
       width={PROJECT_PANE_WIDTH}
       focused={focused}
     >
-      {visibleProjects.map((option) => {
+      {aboveIndicator ? <Text color="gray">{aboveIndicator}</Text> : null}
+      {projectWindow.items.map((option) => {
         const selected = option.id === selectedProjectOptionId;
         return (
           <Text
@@ -509,6 +509,7 @@ function ProjectListPane({
           </Text>
         );
       })}
+      {belowIndicator ? <Text color="gray">{belowIndicator}</Text> : null}
     </Pane>
   );
 }
@@ -531,8 +532,8 @@ function resolveMaxVisibleListItems(rows: number | undefined): number {
   const terminalRows = rows && rows > 0 ? rows : 24;
 
   // AppFrame reserves rows for padding, title, status, body margins, and footer.
-  // Bordered panes reserve rows for borders and title.
-  return Math.max(MIN_VISIBLE_LIST_ITEMS, terminalRows - 10);
+  // Bordered panes and potential above/below indicators reserve four more rows.
+  return Math.max(MIN_VISIBLE_LIST_ITEMS, terminalRows - 12);
 }
 
 function truncateProjectLabel(label: string, maxLength = 24): string {
