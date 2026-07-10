@@ -2,6 +2,11 @@ import type { Project, Task } from "@todu/core";
 import { Text } from "ink";
 import type { JSX } from "react";
 import { createProjectNameMap, formatTaskRow } from "../../formatting/task.js";
+import {
+  formatListWindowIndicator,
+  getVisibleListWindow,
+  type ListWindow,
+} from "../../state/list-window.js";
 import { Pane } from "../Pane.js";
 
 const DEFAULT_MAX_VISIBLE_TASKS = 12;
@@ -24,11 +29,14 @@ export function TaskListPane({
   maxVisibleTasks = DEFAULT_MAX_VISIBLE_TASKS,
 }: TaskListPaneProps): JSX.Element {
   const projectNames = createProjectNameMap(projects);
-  const visibleTasks = getVisibleTaskWindow(tasks, selectedTaskId, maxVisibleTasks);
+  const taskWindow = getVisibleListWindow(tasks, selectedTaskId, maxVisibleTasks);
+  const aboveIndicator = formatListWindowIndicator(taskWindow, "above");
+  const belowIndicator = formatListWindowIndicator(taskWindow, "below");
 
   return (
     <Pane title={`Tasks (${tasks.length})`} width={width} focused={focused}>
-      {visibleTasks.map((task) => {
+      {aboveIndicator ? <Text color="gray">{aboveIndicator}</Text> : null}
+      {taskWindow.items.map((task) => {
         const selected = task.id === selectedTaskId;
         const prefix = selected ? ">" : " ";
         return (
@@ -42,6 +50,7 @@ export function TaskListPane({
           </Text>
         );
       })}
+      {belowIndicator ? <Text color="gray">{belowIndicator}</Text> : null}
     </Pane>
   );
 }
@@ -50,19 +59,6 @@ export function getVisibleTaskWindow<T extends { id: string }>(
   tasks: readonly T[],
   selectedTaskId: string | null,
   maxVisible: number,
-): readonly T[] {
-  if (tasks.length <= maxVisible) {
-    return tasks;
-  }
-
-  const selectedIndex = selectedTaskId
-    ? Math.max(
-        0,
-        tasks.findIndex((task) => task.id === selectedTaskId),
-      )
-    : 0;
-  const halfWindow = Math.floor(maxVisible / 2);
-  const start = Math.min(Math.max(0, selectedIndex - halfWindow), tasks.length - maxVisible);
-
-  return tasks.slice(start, start + maxVisible);
+): ListWindow<T> {
+  return getVisibleListWindow(tasks, selectedTaskId, maxVisible);
 }

@@ -117,6 +117,32 @@ describe("ProjectsScreen", () => {
     expect(onSelectProject).toHaveBeenCalledWith(expect.objectContaining({ id: "project-1" }));
   });
 
+  it("windows long project lists and keeps the selected project visible", async () => {
+    const projects = Array.from({ length: 15 }, (_, index) =>
+      createProject({ id: `project-${index + 1}`, name: `Project ${index + 1}` }),
+    );
+    const client = createClient({
+      project: { list: vi.fn().mockResolvedValue(projects), get: vi.fn() },
+    });
+    const { stdin, lastFrame } = renderWithQuery(
+      <ProjectsScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        onSelectProject={vi.fn()}
+        onSelectAllProjects={vi.fn()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "↓ 4 more");
+    for (let index = 0; index < 8; index += 1) {
+      stdin.write("j");
+    }
+
+    await waitForFrameText(lastFrame, "> Project 8");
+    expect(lastFrame()).toContain("↑ 2 more");
+    expect(lastFrame()).toContain("↓ 2 more");
+  });
+
   it("clears to all projects with a", async () => {
     const onSelectAllProjects = vi.fn();
     const { stdin, lastFrame } = renderWithQuery(
