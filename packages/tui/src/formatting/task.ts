@@ -21,26 +21,21 @@ export function formatTaskRow(task: Task, projectName: string | null, maxTitleLe
   return parts.join(" ");
 }
 
-export function formatTaskDetailLines(
+export function formatTaskMetadata(
   task: TaskWithDetail | Task,
   projectName: string | null,
-): string[] {
-  const lines = [
-    task.title,
-    `Status: ${formatTaskStatus(task.status)}`,
-    `Priority: ${formatTaskPriority(task.priority)}`,
-    `Project: ${projectName ?? task.projectId}`,
+): string {
+  const metadata = [
+    formatTaskStatus(task.status),
+    formatTaskPriority(task.priority),
+    projectName ?? task.projectId,
   ];
 
   if (task.labels.length > 0) {
-    lines.push(`Labels: ${task.labels.map((label) => `#${label}`).join(" ")}`);
+    metadata.push(task.labels.map((label) => `#${label}`).join(" "));
   }
 
-  if ("description" in task && task.description?.trim()) {
-    lines.push("", "Description", task.description.trim());
-  }
-
-  return lines;
+  return metadata.join(" • ");
 }
 
 export function createProjectNameMap(

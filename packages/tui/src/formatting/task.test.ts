@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTaskDetailLines, formatTaskRow } from "./task.js";
+import { formatTaskMetadata, formatTaskRow } from "./task.js";
 
 const task = {
   id: "task-1",
@@ -21,16 +21,7 @@ describe("task formatting", () => {
     );
   });
 
-  it("formats selected task details", () => {
-    expect(formatTaskDetailLines({ ...task, description: "Read-only browsing." }, "todu")).toEqual([
-      "Ship the TUI task read model",
-      "Status: doing",
-      "Priority: med",
-      "Project: todu",
-      "Labels: #tui #spec",
-      "",
-      "Description",
-      "Read-only browsing.",
-    ]);
+  it("formats compact task metadata", () => {
+    expect(formatTaskMetadata(task, "todu")).toBe("doing • med • todu • #tui #spec");
   });
 });
