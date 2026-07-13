@@ -32,6 +32,7 @@ export interface TasksScreenProps {
 const visibleTaskStatuses = ["active", "inprogress", "waiting"] as const;
 const ALL_PROJECTS_OPTION_ID = "__all__";
 const PROJECT_PANE_WIDTH_PERCENT = 0.36;
+const TASK_MAIN_PANE_WIDTH_PERCENT = 0.64;
 const PROJECT_PANE_WIDTH = "36%";
 const TASK_MAIN_PANE_WIDTH = "64%";
 const MIN_PROJECT_LABEL_LENGTH = 8;
@@ -342,6 +343,8 @@ export function TasksScreen({
 
   const maxVisibleListItems = resolveMaxVisibleListItems(stdout.rows);
   const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
+  const detailContentWidth = resolveDetailContentWidth(stdout.columns);
+  const detailContentRows = resolveDetailContentRows(stdout.rows);
   const error = tasksQuery.error ?? projectsQuery.error;
   if (error) {
     return (
@@ -450,6 +453,9 @@ export function TasksScreen({
               comments={commentsQuery.data}
               isLoadingComments={commentsQuery.isLoading}
               error={selectedDetailQuery.error ?? commentsQuery.error}
+              maxContentWidth={detailContentWidth}
+              maxContentRows={detailContentRows}
+              scrollEnabled={!commentModalOpen && !confirmCancel}
             />
           ) : null}
         </Box>
@@ -512,6 +518,23 @@ function ProjectListPane({
       {belowIndicator ? <Text color="gray">{belowIndicator}</Text> : null}
     </Pane>
   );
+}
+
+function resolveDetailContentWidth(columns: number | undefined): number {
+  const terminalColumns = columns && columns > 0 ? columns : 80;
+  const appHorizontalPadding = 2;
+  const paneBorderAndPadding = 4;
+  const availableBodyColumns = Math.max(0, terminalColumns - appHorizontalPadding);
+  const taskPaneColumns = Math.floor(availableBodyColumns * TASK_MAIN_PANE_WIDTH_PERCENT);
+
+  return Math.max(8, taskPaneColumns - paneBorderAndPadding);
+}
+
+function resolveDetailContentRows(rows: number | undefined): number {
+  const terminalRows = rows && rows > 0 ? rows : 24;
+
+  // Reserve AppFrame rows, the selected-task pane, and detail pane chrome.
+  return Math.max(6, terminalRows - 15);
 }
 
 function resolveProjectLabelLength(columns: number | undefined): number {

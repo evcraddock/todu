@@ -128,8 +128,8 @@ describe("TasksScreen", () => {
     stdin.write("\r");
     await waitForFrameText(lastFrame, "Existing comment");
 
-    expect(lastFrame()).toContain("Detail");
-    expect(lastFrame()).toContain("Status: active");
+    expect(lastFrame()).toContain("Task detail");
+    expect(lastFrame()).toContain("active • high • todu • #tui");
     expect(lastFrame()).toContain("Existing comment");
     expect(lastFrame()).not.toContain("Second task");
 
