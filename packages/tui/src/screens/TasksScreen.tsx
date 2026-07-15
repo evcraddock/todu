@@ -435,6 +435,7 @@ export function TasksScreen({
           title="Filter tasks"
           statusOptions={taskStatusOptions}
           initialFilter={taskListFilter}
+          defaultFilter={defaultTaskListFilter}
           onApply={(filter) => {
             onTaskListFilterChange?.(filter);
             setFilterModalTarget(null);
@@ -452,6 +453,7 @@ export function TasksScreen({
           title="Filter projects"
           statusOptions={projectStatusOptions}
           initialFilter={projectListFilter}
+          defaultFilter={defaultProjectListFilter}
           onApply={(filter) => {
             onProjectListFilterChange?.(filter);
             setFilterModalTarget(null);

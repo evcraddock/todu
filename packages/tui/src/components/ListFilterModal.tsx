@@ -21,6 +21,7 @@ export interface ListFilterModalProps<Status extends string> {
   title: string;
   statusOptions: readonly FilterStatusOption<Status>[];
   initialFilter: ListFilterDraft<Status>;
+  defaultFilter?: ListFilterDraft<Status>;
   onApply: (filter: ListFilterDraft<Status>) => void;
   onCancel: () => void;
 }
@@ -29,6 +30,7 @@ export function ListFilterModal<Status extends string>({
   title,
   statusOptions,
   initialFilter,
+  defaultFilter,
   onApply,
   onCancel,
 }: ListFilterModalProps<Status>): JSX.Element {
@@ -49,7 +51,7 @@ export function ListFilterModal<Status extends string>({
     }
 
     if (input === "r") {
-      setDraft(initialFilter);
+      setDraft(defaultFilter ?? initialFilter);
       return;
     }
 

@@ -19,6 +19,7 @@ describe("ListFilterModal", () => {
         title="Filter tasks"
         statusOptions={statuses}
         initialFilter={{ statuses: ["active"] }}
+        defaultFilter={{ statuses: ["active"] }}
         onApply={onApply}
         onCancel={vi.fn()}
       />,
@@ -36,5 +37,25 @@ describe("ListFilterModal", () => {
     stdin.write("\r");
 
     expect(onApply).toHaveBeenCalledWith({ statuses: ["active", "done"], priority: "high" });
+  });
+
+  it("resets to the supplied default draft", async () => {
+    const onApply = vi.fn();
+    const { stdin } = render(
+      <ListFilterModal
+        title="Filter tasks"
+        statusOptions={statuses}
+        initialFilter={{ statuses: ["done"], priority: "high" }}
+        defaultFilter={{ statuses: ["active"] }}
+        onApply={onApply}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    stdin.write("r");
+    await flushInput();
+    stdin.write("\r");
+
+    expect(onApply).toHaveBeenCalledWith({ statuses: ["active"] });
   });
 });

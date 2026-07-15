@@ -149,6 +149,7 @@ export function ProjectsScreen({
           title="Filter projects"
           statusOptions={projectStatusOptions}
           initialFilter={listFilter}
+          defaultFilter={defaultProjectListFilter}
           onApply={(filter) => {
             onListFilterChange?.(filter);
             setFilterModalOpen(false);
