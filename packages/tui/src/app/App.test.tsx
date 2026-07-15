@@ -159,14 +159,12 @@ describe("App", () => {
 
     const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
 
-    expect(lastFrame()).toContain("Todu • Tasks");
-    expect(lastFrame()).toContain("View: Tasks");
-    expect(lastFrame()).toContain("Daemon: unavailable");
+    expect(lastFrame()).toContain("Tasks");
+    expect(lastFrame()).toContain("Open · Any priority · All Projects");
     expect(lastFrame()).toContain("Daemon unavailable");
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Tasks");
     expect(lastFrame()).toContain("q Back/Quit");
-    expect(lastFrame()).toContain("Project: All projects");
   });
 
   it("shows connected daemon status without body handshake diagnostics", async () => {
@@ -179,7 +177,8 @@ describe("App", () => {
 
     await waitForFrameText(lastFrame, "Ship");
 
-    expect(lastFrame()).toContain("Daemon: connected (dev)");
+    expect(lastFrame()).toContain("Open · Any priority · All Projects");
+    expect(lastFrame()).not.toContain("Daemon: connected");
     expect(lastFrame()).not.toContain("Daemon connected");
     expect(lastFrame()).not.toContain("Handshake: daemon.hello OK");
     expect(lastFrame()).not.toContain("Daemon version:");
@@ -198,7 +197,8 @@ describe("App", () => {
 
     stdin.write("2");
     await waitForFrameText(lastFrame, "Project detail");
-    expect(lastFrame()).toContain("View: Projects");
+    expect(lastFrame()).toContain("Projects");
+    expect(lastFrame()).toContain("Open · Any priority · All Projects");
 
     stdin.write("3");
     await waitForFrameText(lastFrame, "Data status ready");
@@ -218,8 +218,28 @@ describe("App", () => {
     stdin.write("j");
     await waitForFrameText(lastFrame, "Default project");
     stdin.write("\r");
-    await waitForFrameText(lastFrame, "Project: Inbox");
+    await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
 
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledWith({
+        status: ["active", "inprogress", "waiting"],
+        projectId: "project-1",
+      });
+    });
+  });
+
+  it("updates the header filter from permanent Tasks-pane project selection", async () => {
+    const client = createFakeClient();
+    const { stdin, lastFrame } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+
+    await waitForFrameText(lastFrame, "Ship");
+    stdin.write("h");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    stdin.write("j");
+
+    await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
     await vi.waitFor(() => {
       expect(client.task.list).toHaveBeenCalledWith({
         status: ["active", "inprogress", "waiting"],
@@ -242,12 +262,12 @@ describe("App", () => {
     stdin.write("j");
     await waitForFrameText(lastFrame, "Default project");
     stdin.write("\r");
-    await waitForFrameText(lastFrame, "Project: Inbox");
+    await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
 
     stdin.write("2");
     await waitForFrameText(lastFrame, "Project detail");
     stdin.write("a");
-    await waitForFrameText(lastFrame, "Project: All projects");
+    await waitForFrameText(lastFrame, "Open · Any priority · All Projects");
   });
 
   it("shows help with implemented keys", async () => {
@@ -317,19 +337,6 @@ describe("App", () => {
     });
   });
 
-  it("updates sync status line from sync.statusChanged without a full app refresh", async () => {
-    const connection = createFakeConnection(createConnectedSnapshot());
-    const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
-
-    await waitForFrameText(lastFrame, "Ship");
-    connection.emitEvent({
-      event: "sync.statusChanged",
-      payload: { local: { mode: "standalone" }, remote: { state: "connected" } },
-    });
-
-    await waitForFrameText(lastFrame, "Sync: connected");
-  });
-
   it("resubscribes and keeps task data visible across reconnect", async () => {
     const connection = createFakeConnection(createConnectedSnapshot());
     const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
@@ -341,7 +348,6 @@ describe("App", () => {
 
     connection.emitSnapshot({ ...createConnectedSnapshot(), state: "reconnecting", hello: null });
     await waitForFrameText(lastFrame, "Daemon disconnected; reconnecting");
-    expect(lastFrame()).toContain("Daemon: reconnecting");
     expect(lastFrame()).toContain("Ship");
 
     connection.emitSnapshot(createConnectedSnapshot());
@@ -367,16 +373,15 @@ describe("App", () => {
     const { lastFrame } = render(
       <AppFrame
         route="data-status"
-        connection={createConnectedSnapshot()}
-        projectFilter={allProjectsFilter}
+        taskFilter={{ projectFilter: allProjectsFilter }}
         terminalWidth={24}
       >
         <TextFixture />
       </AppFrame>,
     );
 
-    expect(lastFrame()).toContain("Todu");
-    expect(lastFrame()).toContain("View: Data Status");
+    expect(lastFrame()).toContain("Data Status");
+    expect(lastFrame()).toContain("Open");
     expect(lastFrame()).toContain("fixture");
   });
 });

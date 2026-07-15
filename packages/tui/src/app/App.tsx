@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp, useInput } from "ink";
-import { type JSX, useEffect, useMemo, useRef, useState } from "react";
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "../components/AppFrame.js";
 import { ConnectionState } from "../components/ConnectionState.js";
 import {
@@ -25,7 +25,7 @@ import {
   type ProjectFilterState,
 } from "../state/project-filter.js";
 import { createTuiQueryClient, TuiQueryProvider } from "../state/query-client.js";
-import { queryKeys } from "../state/query-keys.js";
+import type { TuiTaskFilterState } from "../state/task-filter.js";
 import {
   applyNavigationAction,
   createInitialRouteState,
@@ -70,22 +70,21 @@ function AppContent({
   );
   const [routeState, setRouteState] = useState(createInitialRouteState);
   const [projectFilter, setProjectFilter] = useState<ProjectFilterState>(allProjectsFilter);
+  const taskFilter = useMemo<TuiTaskFilterState>(() => ({ projectFilter }), [projectFilter]);
   const [globalInputEnabled, setGlobalInputEnabled] = useState(true);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
   );
   const [hasConnected, setHasConnected] = useState(connectionSnapshot.state === "connected");
   const previousConnectionState = useRef(connectionSnapshot.state);
-  const syncStatus = useQuery({
-    queryKey: queryKeys.syncStatus(),
-    queryFn: () => toduClient.sync.status(),
-    enabled: connectionSnapshot.state === "connected",
-  });
-
   const requestExit = (): void => {
     onExit?.();
     exit();
   };
+
+  const updateProjectFilter = useCallback((nextFilter: ProjectFilterState): void => {
+    setProjectFilter(nextFilter);
+  }, []);
 
   useInput(
     (input, key) => {
@@ -157,12 +156,7 @@ function AppContent({
   }, [connection, connectionSnapshot.state, queryClient]);
 
   return (
-    <AppFrame
-      route={routeState.route}
-      connection={connectionSnapshot}
-      projectFilter={projectFilter}
-      syncStatus={syncStatus.data}
-    >
+    <AppFrame route={routeState.route} taskFilter={taskFilter}>
       <ConnectionState connection={connectionSnapshot} />
       <RouteScreen
         route={routeState.route}
@@ -171,13 +165,14 @@ function AppContent({
         toduClient={toduClient}
         projectFilter={projectFilter}
         onSelectProject={(project) => {
-          setProjectFilter(createProjectFilter(project));
+          updateProjectFilter(createProjectFilter(project));
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
         onSelectAllProjects={() => {
-          setProjectFilter(allProjectsFilter);
+          updateProjectFilter(allProjectsFilter);
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
+        onTaskProjectFilterChange={updateProjectFilter}
         onGlobalInputEnabledChange={setGlobalInputEnabled}
       />
     </AppFrame>
@@ -192,6 +187,7 @@ interface RouteScreenProps {
   projectFilter: ProjectFilterState;
   onSelectProject: (project: import("@todu/core").Project) => void;
   onSelectAllProjects: () => void;
+  onTaskProjectFilterChange: (filter: ProjectFilterState) => void;
   onGlobalInputEnabledChange: (enabled: boolean) => void;
 }
 
@@ -203,6 +199,7 @@ function RouteScreen({
   projectFilter,
   onSelectProject,
   onSelectAllProjects,
+  onTaskProjectFilterChange,
   onGlobalInputEnabledChange,
 }: RouteScreenProps): JSX.Element | null {
   const dataQueriesEnabled = connection.state === "connected";
@@ -235,6 +232,7 @@ function RouteScreen({
       statusActionsEnabled={dataQueriesEnabled}
       dataQueriesEnabled={dataQueriesEnabled}
       onGlobalInputEnabledChange={onGlobalInputEnabledChange}
+      onProjectFilterChange={onTaskProjectFilterChange}
     />
   ) : null;
 }

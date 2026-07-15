@@ -21,20 +21,7 @@ describe("AppFrame", () => {
     const { lastFrame } = render(
       <AppFrame
         route="tasks"
-        connection={{
-          state: "connected",
-          socketPath: "/tmp/todu.sock",
-          hello: {
-            protocolVersion: 1,
-            daemonVersion: "dev",
-            pid: 123,
-            capabilities: [],
-          },
-          error: null,
-          reconnectAttempt: 0,
-          reconnectDelayMs: null,
-        }}
-        projectFilter={allProjectsFilter}
+        taskFilter={{ projectFilter: allProjectsFilter }}
         terminalWidth={60}
         terminalHeight={12}
       >
@@ -42,8 +29,8 @@ describe("AppFrame", () => {
       </AppFrame>,
     );
 
-    expect(lastFrame()).toContain("Todu • Tasks");
-    expect(lastFrame()).toContain("View: Tasks");
+    expect(lastFrame()).toContain("Tasks");
+    expect(lastFrame()).toContain("Open · Any priority · All Projects");
     expect(lastFrame()).toContain("body content");
     expect(lastFrame()).toContain("1 Tasks");
   });
