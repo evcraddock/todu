@@ -99,6 +99,26 @@ describe("TaskDetailPane", () => {
     expect(lastFrame()).toContain("↑ 1 lines");
   });
 
+  it("wraps formatted Markdown spans within narrow content widths", () => {
+    const lines = createTaskDetailLines({
+      task: createTask({
+        description: "**Important Markdown** [documentation](https://example.com)",
+      }),
+      projectName: "todu",
+      comments: [],
+      maxContentWidth: 12,
+    });
+    const descriptionLines = lines.filter((line) => /^description-\d+$/.test(line.id));
+
+    expect(descriptionLines.every((line) => line.text.length <= 12)).toBe(true);
+    expect(descriptionLines.flatMap((line) => line.spans ?? []).some((span) => span.bold)).toBe(
+      true,
+    );
+    expect(
+      descriptionLines.flatMap((line) => line.spans ?? []).some((span) => span.color === "cyan"),
+    ).toBe(true);
+  });
+
   it("wraps all detail text within narrow content widths", () => {
     const description = "A description that should stay readable without horizontal clipping.";
     const lines = createTaskDetailLines({
