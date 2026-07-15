@@ -164,7 +164,11 @@ describe("App", () => {
     expect(lastFrame()).toContain("Daemon unavailable");
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Tasks");
-    expect(lastFrame()).toContain("q Back/Quit");
+    expect(lastFrame()).toContain("2 Projects");
+    expect(lastFrame()).toContain("3 Data Status");
+    expect(lastFrame()).toContain("↑↓ Select");
+    expect(lastFrame()).toContain("← Projects");
+    expect(lastFrame()).toContain("Enter Details");
   });
 
   it("shows connected daemon status without body handshake diagnostics", async () => {
@@ -199,10 +203,15 @@ describe("App", () => {
     await waitForFrameText(lastFrame, "Project detail");
     expect(lastFrame()).toContain("Projects");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
+    expect(lastFrame()).toContain("↑↓ Select");
+    expect(lastFrame()).toContain("Enter Open Tasks");
+    expect(lastFrame()).toContain("a All Projects");
 
     stdin.write("3");
     await waitForFrameText(lastFrame, "Data status ready");
     expect(lastFrame()).toContain("Projects: 1");
+    expect(lastFrame()).toContain("? Help");
+    expect(lastFrame()).toContain("q Quit");
     expect(lastFrame()).toContain("Tasks: 1");
   });
 
@@ -281,16 +290,42 @@ describe("App", () => {
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
 
-    expect(lastFrame()).toContain("1      Tasks");
-    expect(lastFrame()).toContain("2      Projects");
-    expect(lastFrame()).toContain("3      Data Status");
+    expect(lastFrame()).toContain("1/2/3  Tasks/Projects/Data Status");
     expect(lastFrame()).toContain("?      Help");
     expect(lastFrame()).toContain("j/↓    Down");
-    expect(lastFrame()).toContain("Enter  Select Project");
+    expect(lastFrame()).toContain("Enter  Select/Open/Submit");
+    expect(lastFrame()).toContain("Esc    Back/Cancel");
     expect(lastFrame()).toContain("a      All Projects");
     expect(lastFrame()).toContain("c      Comment");
+    expect(lastFrame()).toContain("y/n    Confirm/Cancel");
     expect(lastFrame()).toContain("q      Back/Quit");
     expect(lastFrame()).toContain("Ctrl+C Quit");
+  });
+
+  it("updates the footer for comment and cancellation modals", async () => {
+    const { stdin, lastFrame } = render(
+      <App
+        connection={createFakeConnection(createConnectedSnapshot())}
+        toduClient={createFakeClient()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Ship");
+    stdin.write("c");
+    await waitForFrameText(lastFrame, "Comment on Ship");
+    expect(lastFrame()).toContain("Enter Submit");
+    expect(lastFrame()).toContain("Esc Cancel");
+
+    stdin.write("\u001B");
+    await waitForFrameText(lastFrame, "Cancelled comment.");
+    await waitForFrameText(lastFrame, "↑↓ Select");
+    expect(lastFrame()).toContain("← Projects");
+    expect(lastFrame()).toContain("Enter Details");
+
+    stdin.write("x");
+    await waitForFrameText(lastFrame, "Cancel selected task?");
+    expect(lastFrame()).toContain("y Confirm");
+    expect(lastFrame()).toContain("n/Esc Cancel");
   });
 
   it("backs out of help before quitting from a root route", async () => {
@@ -374,6 +409,7 @@ describe("App", () => {
       <AppFrame
         route="data-status"
         taskFilter={{ projectFilter: allProjectsFilter }}
+        footerContext="data-status"
         terminalWidth={24}
       >
         <TextFixture />
