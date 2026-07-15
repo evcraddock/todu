@@ -1,5 +1,17 @@
 # @todu/tui
 
+## 0.23.10
+
+### Patch Changes
+
+- 51ef4f6: Show concise context-aware footer shortcuts and move route navigation into the TUI header.
+- 7ffb47e: Improve task detail hierarchy with bounded descriptions and comments.
+- 2366587: Add bordered full-height pane layouts for Tasks and Projects screens.
+- d69eb2f: Show current view and task-filter summary in the TUI header.
+- e31561b: Add context-aware task and project list filter modals.
+- 4c56d0e: Render supported Markdown in task detail descriptions and comments.
+- 090a9eb: Add viewport-aware task and project list windows with scroll indicators.
+
 ## 0.23.9
 
 ### Patch Changes
