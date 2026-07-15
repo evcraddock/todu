@@ -52,10 +52,31 @@ describe("TaskDetailPane", () => {
     expect(frame).toContain("Metadata");
     expect(frame).toContain("doing • med • todu • #tui #layout");
     expect(frame).toContain("Comments");
+    expect(frame).toContain("Erik:");
     expect(frame).toContain("Erik: Comment 1 provides additional");
     expect(frame).toContain("implementation context.");
     expect(frame.indexOf("Description")).toBeLessThan(frame.indexOf("Metadata"));
     expect(frame.indexOf("Metadata")).toBeLessThan(frame.indexOf("Comments"));
+  });
+
+  it("renders supported Markdown in descriptions and comments", () => {
+    const markdown =
+      "# Heading\n- **bold** and *italic* with `code`\n[Docs](https://example.com)\n<div>literal</div>";
+    const comment = createComment(1);
+    comment.content = "> ~~quoted~~ comment";
+    const lines = createTaskDetailLines({
+      task: createTask({ description: markdown }),
+      projectName: "todu",
+      comments: [comment],
+      maxContentWidth: 80,
+    });
+
+    expect(lines.some((line) => line.text === "Heading" && line.bold)).toBe(true);
+    expect(lines.some((line) => line.text.includes("• bold and italic with code"))).toBe(true);
+    expect(lines.some((line) => line.text.includes("Docs <https://example.com>"))).toBe(true);
+    expect(lines.some((line) => line.text === "<div>literal</div>")).toBe(true);
+    expect(lines.some((line) => line.text.includes("│ quoted comment"))).toBe(true);
+    expect(lines.flatMap((line) => line.spans ?? []).some((span) => span.strikethrough)).toBe(true);
   });
 
   it("scrolls long description and comment content instead of clipping it", async () => {
@@ -76,6 +97,26 @@ describe("TaskDetailPane", () => {
     stdin.write("j");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(lastFrame()).toContain("↑ 1 lines");
+  });
+
+  it("wraps formatted Markdown spans within narrow content widths", () => {
+    const lines = createTaskDetailLines({
+      task: createTask({
+        description: "**Important Markdown** [documentation](https://example.com)",
+      }),
+      projectName: "todu",
+      comments: [],
+      maxContentWidth: 12,
+    });
+    const descriptionLines = lines.filter((line) => /^description-\d+$/.test(line.id));
+
+    expect(descriptionLines.every((line) => line.text.length <= 12)).toBe(true);
+    expect(descriptionLines.flatMap((line) => line.spans ?? []).some((span) => span.bold)).toBe(
+      true,
+    );
+    expect(
+      descriptionLines.flatMap((line) => line.spans ?? []).some((span) => span.color === "cyan"),
+    ).toBe(true);
   });
 
   it("wraps all detail text within narrow content widths", () => {
