@@ -1,17 +1,13 @@
 import { Box, Text, useStdout } from "ink";
 import type { JSX, ReactNode } from "react";
 import { type AppRoute, routeLabels } from "../app/routes.js";
-import type { DaemonConnectionSnapshot } from "../daemon/connection.js";
-import type { TuiSyncStatus } from "../daemon/todu-client.js";
-import type { ProjectFilterState } from "../state/project-filter.js";
+import type { TuiTaskFilterState } from "../state/task-filter.js";
+import { formatTaskFilterSummary } from "../state/task-filter.js";
 import { HelpBar } from "./HelpBar.js";
-import { StatusLine } from "./StatusLine.js";
 
 export interface AppFrameProps {
   route: AppRoute;
-  connection: DaemonConnectionSnapshot;
-  projectFilter: ProjectFilterState;
-  syncStatus?: TuiSyncStatus;
+  taskFilter: TuiTaskFilterState;
   children: ReactNode;
   terminalWidth?: number;
   terminalHeight?: number;
@@ -19,9 +15,7 @@ export interface AppFrameProps {
 
 export function AppFrame({
   route,
-  connection,
-  projectFilter,
-  syncStatus,
+  taskFilter,
   children,
   terminalWidth,
   terminalHeight,
@@ -34,22 +28,15 @@ export function AppFrame({
 
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1} width={size.width} height={size.height}>
-      <Box flexDirection="row" height={1} flexShrink={0}>
+      <Box height={1} flexShrink={0}>
         <Text color="cyan" bold wrap="truncate-end">
-          Todu
-        </Text>
-        <Text color="gray" wrap="truncate-end">
-          {" "}
-          • {routeLabels[route]}
+          {routeLabels[route]}
         </Text>
       </Box>
       <Box height={1} flexShrink={0}>
-        <StatusLine
-          route={route}
-          connection={connection}
-          projectFilter={projectFilter}
-          syncStatus={syncStatus}
-        />
+        <Text color="white" wrap="truncate-end">
+          {formatTaskFilterSummary(taskFilter)}
+        </Text>
       </Box>
       <Box flexDirection="column" flexGrow={1} marginY={1}>
         {children}

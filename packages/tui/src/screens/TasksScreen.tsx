@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Project, TaskStatus } from "@todu/core";
+import type { Project, TaskPriority, TaskStatus } from "@todu/core";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -20,16 +20,18 @@ import {
 import { queryKeys } from "../state/query-keys.js";
 import { getSelectedItem, moveSelection, resolveSelectedId } from "../state/selection.js";
 import { resolveTaskStatusAction, taskStatusActions } from "../state/task-actions.js";
+import { createOpenTaskFilter } from "../state/task-filter.js";
 
 export interface TasksScreenProps {
   client: TuiToduClient;
   projectFilter: ProjectFilterState;
+  priority?: TaskPriority;
   statusActionsEnabled?: boolean;
   dataQueriesEnabled?: boolean;
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
+  onProjectFilterChange?: (filter: ProjectFilterState) => void;
 }
 
-const visibleTaskStatuses = ["active", "inprogress", "waiting"] as const;
 const ALL_PROJECTS_OPTION_ID = "__all__";
 const PROJECT_PANE_WIDTH_PERCENT = 0.36;
 const TASK_MAIN_PANE_WIDTH_PERCENT = 0.64;
@@ -49,9 +51,11 @@ interface ProjectOption {
 export function TasksScreen({
   client,
   projectFilter,
+  priority,
   statusActionsEnabled = true,
   dataQueriesEnabled = true,
   onGlobalInputEnabledChange,
+  onProjectFilterChange,
 }: TasksScreenProps): JSX.Element {
   const queryClient = useQueryClient();
   const { stdout } = useStdout();
@@ -77,16 +81,8 @@ export function TasksScreen({
   );
   const selectedProjectOption =
     projectOptions.find((option) => option.id === selectedProjectOptionId) ?? projectOptions[0];
-  const selectedProjectFilter: ProjectFilterState = selectedProjectOption?.project
-    ? {
-        projectId: selectedProjectOption.project.id,
-        projectName: selectedProjectOption.project.name,
-      }
-    : allProjectsFilter;
-  const taskFilter = {
-    status: [...visibleTaskStatuses],
-    ...(selectedProjectFilter.projectId ? { projectId: selectedProjectFilter.projectId } : {}),
-  };
+  const selectedProjectFilter = projectFilterFromOption(selectedProjectOption);
+  const taskFilter = createOpenTaskFilter({ projectFilter: selectedProjectFilter, priority });
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks(taskFilter),
     queryFn: () => client.task.list(taskFilter),
@@ -255,8 +251,16 @@ export function TasksScreen({
 
     if (focusedPane === "projects") {
       if (input === "j" || key.downArrow) {
-        setSelectedProjectOptionId((current) =>
-          moveTaskProjectOption(projectOptions, current, "next"),
+        const nextProjectOptionId = moveTaskProjectOption(
+          projectOptions,
+          selectedProjectOptionId,
+          "next",
+        );
+        setSelectedProjectOptionId(nextProjectOptionId);
+        onProjectFilterChange?.(
+          projectFilterFromOption(
+            projectOptions.find((option) => option.id === nextProjectOptionId),
+          ),
         );
         setTaskDetailOpen(false);
         setFeedback(null);
@@ -264,8 +268,16 @@ export function TasksScreen({
       }
 
       if (input === "k" || key.upArrow) {
-        setSelectedProjectOptionId((current) =>
-          moveTaskProjectOption(projectOptions, current, "previous"),
+        const nextProjectOptionId = moveTaskProjectOption(
+          projectOptions,
+          selectedProjectOptionId,
+          "previous",
+        );
+        setSelectedProjectOptionId(nextProjectOptionId);
+        onProjectFilterChange?.(
+          projectFilterFromOption(
+            projectOptions.find((option) => option.id === nextProjectOptionId),
+          ),
         );
         setTaskDetailOpen(false);
         setFeedback(null);
@@ -569,6 +581,15 @@ function truncateProjectLabel(label: string, maxLength = 24): string {
   }
 
   return `${label.slice(0, maxLength - 3)}...`;
+}
+
+function projectFilterFromOption(option: ProjectOption | undefined): ProjectFilterState {
+  return option?.project
+    ? {
+        projectId: option.project.id,
+        projectName: option.project.name,
+      }
+    : allProjectsFilter;
 }
 
 function createTaskProjectOptions(projects: readonly Project[]): ProjectOption[] {
