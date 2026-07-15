@@ -3,6 +3,7 @@ import { Text, useInput } from "ink";
 import type { JSX } from "react";
 import { useEffect, useState } from "react";
 import { formatToduClientError } from "../../daemon/todu-client.js";
+import { type MarkdownSpan, renderMarkdownLines } from "../../formatting/markdown.js";
 import { createProjectNameMap, formatTaskMetadata } from "../../formatting/task.js";
 import { Pane } from "../Pane.js";
 
@@ -25,6 +26,7 @@ export interface TaskDetailLine {
   text: string;
   color: "cyan" | "gray" | "white";
   bold?: boolean;
+  spans?: readonly MarkdownSpan[];
 }
 
 export function TaskDetailPane({
@@ -90,7 +92,17 @@ export function TaskDetailPane({
       {scrollOffset > 0 ? <Text color="gray">↑ {scrollOffset} lines</Text> : null}
       {visibleLines.map((line) => (
         <Text key={line.id} color={line.color} bold={line.bold} wrap="wrap">
-          {line.text}
+          {line.spans?.map((span) => (
+            <Text
+              key={`${line.id}-${span.text}-${span.color ?? "default"}-${span.bold ?? false}-${span.italic ?? false}-${span.strikethrough ?? false}`}
+              color={span.color}
+              bold={span.bold}
+              italic={span.italic}
+              strikethrough={span.strikethrough}
+            >
+              {span.text}
+            </Text>
+          )) ?? line.text}
         </Text>
       ))}
       {hiddenBelow > 0 ? <Text color="gray">↓ {hiddenBelow} lines</Text> : null}
@@ -114,12 +126,9 @@ export function createTaskDetailLines({
   const lines: TaskDetailLine[] = [
     ...createWrappedLines("title", task.title, contentWidth, "white", true),
     { id: "description-heading", text: "Description", color: "cyan" },
-    ...createWrappedLines(
-      "description",
-      description || "No description.",
-      contentWidth,
-      description ? "white" : "gray",
-    ),
+    ...(description
+      ? createMarkdownDetailLines("description", description, contentWidth)
+      : createWrappedLines("description", "No description.", contentWidth, "gray")),
     { id: "metadata-heading", text: "Metadata", color: "cyan" },
     ...createWrappedLines("metadata", formatTaskMetadata(task, projectName), contentWidth, "gray"),
     { id: "comments-heading", text: "Comments", color: "cyan" },
@@ -131,11 +140,43 @@ export function createTaskDetailLines({
   }
 
   for (const comment of comments) {
-    const label = comment.author ? `${comment.author}: ${comment.content}` : comment.content;
-    lines.push(...createWrappedLines(`comment-${comment.id}`, label, contentWidth, "white"));
+    const isBlockMarkdown = /^(?:\s*>|\s*#{1,6}\s|\s*[-*+]\s|\s*\d+[.)]\s|\s*```)/.test(
+      comment.content,
+    );
+    if (comment.author && isBlockMarkdown) {
+      lines.push(
+        ...createWrappedLines(
+          `comment-${comment.id}-author`,
+          `${comment.author}:`,
+          contentWidth,
+          "gray",
+        ),
+      );
+      lines.push(
+        ...createMarkdownDetailLines(`comment-${comment.id}`, comment.content, contentWidth),
+      );
+      continue;
+    }
+
+    const content = comment.author ? `${comment.author}: ${comment.content}` : comment.content;
+    lines.push(...createMarkdownDetailLines(`comment-${comment.id}`, content, contentWidth));
   }
 
   return lines;
+}
+
+function createMarkdownDetailLines(
+  id: string,
+  markdown: string,
+  maxWidth: number,
+): readonly TaskDetailLine[] {
+  return renderMarkdownLines({ id, markdown, maxWidth }).map((line) => ({
+    id: line.id,
+    text: line.text,
+    spans: line.spans,
+    color: line.color,
+    bold: line.bold,
+  }));
 }
 
 function createWrappedLines(
