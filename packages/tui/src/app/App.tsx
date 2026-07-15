@@ -29,7 +29,9 @@ import type { TuiTaskFilterState } from "../state/task-filter.js";
 import {
   applyNavigationAction,
   createInitialRouteState,
+  type FooterContext,
   resolveGlobalKeyAction,
+  type TasksFooterContext,
 } from "./keymap.js";
 import type { AppRoute } from "./routes.js";
 
@@ -71,6 +73,7 @@ function AppContent({
   const [routeState, setRouteState] = useState(createInitialRouteState);
   const [projectFilter, setProjectFilter] = useState<ProjectFilterState>(allProjectsFilter);
   const taskFilter = useMemo<TuiTaskFilterState>(() => ({ projectFilter }), [projectFilter]);
+  const [tasksFooterContext, setTasksFooterContext] = useState<TasksFooterContext>("tasks-list");
   const [globalInputEnabled, setGlobalInputEnabled] = useState(true);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
@@ -155,8 +158,10 @@ function AppContent({
     };
   }, [connection, connectionSnapshot.state, queryClient]);
 
+  const footerContext = resolveFooterContext(routeState.route, tasksFooterContext);
+
   return (
-    <AppFrame route={routeState.route} taskFilter={taskFilter}>
+    <AppFrame route={routeState.route} taskFilter={taskFilter} footerContext={footerContext}>
       <ConnectionState connection={connectionSnapshot} />
       <RouteScreen
         route={routeState.route}
@@ -173,6 +178,7 @@ function AppContent({
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
         onTaskProjectFilterChange={updateProjectFilter}
+        onTasksFooterContextChange={setTasksFooterContext}
         onGlobalInputEnabledChange={setGlobalInputEnabled}
       />
     </AppFrame>
@@ -188,6 +194,7 @@ interface RouteScreenProps {
   onSelectProject: (project: import("@todu/core").Project) => void;
   onSelectAllProjects: () => void;
   onTaskProjectFilterChange: (filter: ProjectFilterState) => void;
+  onTasksFooterContextChange: (context: TasksFooterContext) => void;
   onGlobalInputEnabledChange: (enabled: boolean) => void;
 }
 
@@ -200,6 +207,7 @@ function RouteScreen({
   onSelectProject,
   onSelectAllProjects,
   onTaskProjectFilterChange,
+  onTasksFooterContextChange,
   onGlobalInputEnabledChange,
 }: RouteScreenProps): JSX.Element | null {
   const dataQueriesEnabled = connection.state === "connected";
@@ -233,6 +241,18 @@ function RouteScreen({
       dataQueriesEnabled={dataQueriesEnabled}
       onGlobalInputEnabledChange={onGlobalInputEnabledChange}
       onProjectFilterChange={onTaskProjectFilterChange}
+      onFooterContextChange={onTasksFooterContextChange}
     />
   ) : null;
+}
+
+function resolveFooterContext(
+  route: AppRoute,
+  tasksFooterContext: TasksFooterContext,
+): FooterContext {
+  if (route === "tasks") {
+    return tasksFooterContext;
+  }
+
+  return route;
 }

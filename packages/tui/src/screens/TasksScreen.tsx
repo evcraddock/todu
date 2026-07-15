@@ -3,6 +3,7 @@ import type { Project, TaskPriority, TaskStatus } from "@todu/core";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { TasksFooterContext } from "../app/keymap.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { Pane } from "../components/Pane.js";
 import { TextInputModal } from "../components/TextInputModal.js";
@@ -30,6 +31,7 @@ export interface TasksScreenProps {
   dataQueriesEnabled?: boolean;
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
   onProjectFilterChange?: (filter: ProjectFilterState) => void;
+  onFooterContextChange?: (context: TasksFooterContext) => void;
 }
 
 const ALL_PROJECTS_OPTION_ID = "__all__";
@@ -56,6 +58,7 @@ export function TasksScreen({
   dataQueriesEnabled = true,
   onGlobalInputEnabledChange,
   onProjectFilterChange,
+  onFooterContextChange,
 }: TasksScreenProps): JSX.Element {
   const queryClient = useQueryClient();
   const { stdout } = useStdout();
@@ -133,9 +136,19 @@ export function TasksScreen({
   }, [tasksQuery.data]);
 
   useEffect(() => {
-    onGlobalInputEnabledChange?.(!commentModalOpen);
+    onGlobalInputEnabledChange?.(!commentModalOpen && !confirmCancel);
     return () => onGlobalInputEnabledChange?.(true);
-  }, [commentModalOpen, onGlobalInputEnabledChange]);
+  }, [commentModalOpen, confirmCancel, onGlobalInputEnabledChange]);
+
+  const footerContext = resolveTasksFooterContext({
+    commentModalOpen,
+    confirmCancel,
+    focusedPane,
+    taskDetailOpen,
+  });
+  useEffect(() => {
+    onFooterContextChange?.(footerContext);
+  }, [footerContext, onFooterContextChange]);
 
   const performStatusAction = async (
     taskId: string,
@@ -581,6 +594,32 @@ function truncateProjectLabel(label: string, maxLength = 24): string {
   }
 
   return `${label.slice(0, maxLength - 3)}...`;
+}
+
+function resolveTasksFooterContext({
+  commentModalOpen,
+  confirmCancel,
+  focusedPane,
+  taskDetailOpen,
+}: {
+  commentModalOpen: boolean;
+  confirmCancel: boolean;
+  focusedPane: PaneFocus;
+  taskDetailOpen: boolean;
+}): TasksFooterContext {
+  if (commentModalOpen) {
+    return "comment-modal";
+  }
+
+  if (confirmCancel) {
+    return "cancel-confirmation";
+  }
+
+  if (taskDetailOpen) {
+    return "task-detail";
+  }
+
+  return focusedPane === "projects" ? "tasks-projects" : "tasks-list";
 }
 
 function projectFilterFromOption(option: ProjectOption | undefined): ProjectFilterState {

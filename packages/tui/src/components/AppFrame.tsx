@@ -1,5 +1,6 @@
 import { Box, Text, useStdout } from "ink";
 import type { JSX, ReactNode } from "react";
+import { type FooterContext, primaryRouteKeyBindings } from "../app/keymap.js";
 import { type AppRoute, routeLabels } from "../app/routes.js";
 import type { TuiTaskFilterState } from "../state/task-filter.js";
 import { formatTaskFilterSummary } from "../state/task-filter.js";
@@ -8,6 +9,7 @@ import { HelpBar } from "./HelpBar.js";
 export interface AppFrameProps {
   route: AppRoute;
   taskFilter: TuiTaskFilterState;
+  footerContext: FooterContext;
   children: ReactNode;
   terminalWidth?: number;
   terminalHeight?: number;
@@ -16,6 +18,7 @@ export interface AppFrameProps {
 export function AppFrame({
   route,
   taskFilter,
+  footerContext,
   children,
   terminalWidth,
   terminalHeight,
@@ -38,11 +41,18 @@ export function AppFrame({
           {formatTaskFilterSummary(taskFilter)}
         </Text>
       </Box>
+      <Box height={1} flexShrink={0}>
+        <Text color="gray" wrap="truncate-end">
+          {primaryRouteKeyBindings
+            .map((binding) => `${binding.keys} ${binding.description}`)
+            .join("  •  ")}
+        </Text>
+      </Box>
       <Box flexDirection="column" flexGrow={1} marginY={1}>
         {children}
       </Box>
       <Box height={1} flexShrink={0}>
-        <HelpBar />
+        <HelpBar context={footerContext} />
       </Box>
     </Box>
   );

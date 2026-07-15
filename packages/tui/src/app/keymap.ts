@@ -5,23 +5,82 @@ export interface TuiKeyBinding {
   description: string;
 }
 
-export const globalKeyBindings: readonly TuiKeyBinding[] = [
+export const primaryRouteKeyBindings: readonly TuiKeyBinding[] = [
   { keys: "1", description: "Tasks" },
   { keys: "2", description: "Projects" },
   { keys: "3", description: "Data Status" },
+] as const;
+
+export const globalKeyBindings: readonly TuiKeyBinding[] = [
+  { keys: "1/2/3", description: "Tasks/Projects/Data Status" },
   { keys: "?", description: "Help" },
   { keys: "q", description: "Back/Quit" },
   { keys: "j/↓", description: "Down" },
   { keys: "k/↑", description: "Up" },
-  { keys: "Enter", description: "Select Project" },
+  { keys: "Enter", description: "Select/Open/Submit" },
+  { keys: "Esc", description: "Back/Cancel" },
   { keys: "s", description: "Start" },
   { keys: "w", description: "Wait" },
   { keys: "d", description: "Done" },
   { keys: "x", description: "Cancel" },
   { keys: "c", description: "Comment" },
   { keys: "a", description: "All Projects" },
+  { keys: "y/n", description: "Confirm/Cancel" },
   { keys: "Ctrl+C", description: "Quit" },
 ] as const;
+
+export type TasksFooterContext =
+  | "tasks-list"
+  | "tasks-projects"
+  | "task-detail"
+  | "comment-modal"
+  | "cancel-confirmation";
+
+export type FooterContext = TasksFooterContext | "projects" | "data-status" | "help";
+
+export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBinding[]>> = {
+  "tasks-list": [
+    { keys: "↑↓", description: "Select" },
+    { keys: "←", description: "Projects" },
+    { keys: "Enter", description: "Details" },
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  "tasks-projects": [
+    { keys: "↑↓", description: "Select" },
+    { keys: "→", description: "Tasks" },
+    { keys: "Enter", description: "Focus" },
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  "task-detail": [
+    { keys: "↑↓", description: "Scroll" },
+    { keys: "Esc", description: "Back" },
+    { keys: "s", description: "Start" },
+    { keys: "d", description: "Done" },
+    { keys: "?", description: "Help" },
+  ],
+  projects: [
+    { keys: "↑↓", description: "Select" },
+    { keys: "Enter", description: "Open Tasks" },
+    { keys: "a", description: "All Projects" },
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  "data-status": [
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  help: [{ keys: "q", description: "Back" }],
+  "comment-modal": [
+    { keys: "Enter", description: "Submit" },
+    { keys: "Esc", description: "Cancel" },
+  ],
+  "cancel-confirmation": [
+    { keys: "y", description: "Confirm" },
+    { keys: "n/Esc", description: "Cancel" },
+  ],
+};
 
 export type AppKeyAction =
   | { type: "navigate"; route: PrimaryAppRoute }

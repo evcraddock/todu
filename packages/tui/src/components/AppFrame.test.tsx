@@ -22,6 +22,7 @@ describe("AppFrame", () => {
       <AppFrame
         route="tasks"
         taskFilter={{ projectFilter: allProjectsFilter }}
+        footerContext="tasks-list"
         terminalWidth={60}
         terminalHeight={12}
       >
@@ -31,7 +32,12 @@ describe("AppFrame", () => {
 
     expect(lastFrame()).toContain("Tasks");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
-    expect(lastFrame()).toContain("body content");
     expect(lastFrame()).toContain("1 Tasks");
+    expect(lastFrame()).toContain("2 Projects");
+    expect(lastFrame()).toContain("3 Data Status");
+    expect(lastFrame()).toContain("body content");
+    expect(lastFrame()).toContain("↑↓ Select");
+    expect(lastFrame()).toContain("← Projects");
+    expect(lastFrame()).toContain("Enter Details");
   });
 });
