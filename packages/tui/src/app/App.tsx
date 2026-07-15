@@ -20,6 +20,12 @@ import {
   reactiveDaemonEvents,
 } from "../state/event-invalidation.js";
 import {
+  defaultProjectListFilter,
+  defaultTaskListFilter,
+  type ProjectListFilterState,
+  type TaskListFilterState,
+} from "../state/list-filter.js";
+import {
   allProjectsFilter,
   createProjectFilter,
   type ProjectFilterState,
@@ -72,7 +78,13 @@ function AppContent({
   );
   const [routeState, setRouteState] = useState(createInitialRouteState);
   const [projectFilter, setProjectFilter] = useState<ProjectFilterState>(allProjectsFilter);
-  const taskFilter = useMemo<TuiTaskFilterState>(() => ({ projectFilter }), [projectFilter]);
+  const [taskListFilter, setTaskListFilter] = useState<TaskListFilterState>(defaultTaskListFilter);
+  const [projectListFilter, setProjectListFilter] =
+    useState<ProjectListFilterState>(defaultProjectListFilter);
+  const taskFilter = useMemo<TuiTaskFilterState>(
+    () => ({ projectFilter, ...taskListFilter }),
+    [projectFilter, taskListFilter],
+  );
   const [tasksFooterContext, setTasksFooterContext] = useState<TasksFooterContext>("tasks-list");
   const [globalInputEnabled, setGlobalInputEnabled] = useState(true);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
@@ -169,6 +181,10 @@ function AppContent({
         hasConnected={hasConnected}
         toduClient={toduClient}
         projectFilter={projectFilter}
+        taskListFilter={taskListFilter}
+        projectListFilter={projectListFilter}
+        onTaskListFilterChange={setTaskListFilter}
+        onProjectListFilterChange={setProjectListFilter}
         onSelectProject={(project) => {
           updateProjectFilter(createProjectFilter(project));
           setRouteState({ route: "tasks", previousRoute: "tasks" });
@@ -191,6 +207,10 @@ interface RouteScreenProps {
   hasConnected: boolean;
   toduClient: TuiToduClient;
   projectFilter: ProjectFilterState;
+  taskListFilter: TaskListFilterState;
+  projectListFilter: ProjectListFilterState;
+  onTaskListFilterChange: (filter: TaskListFilterState) => void;
+  onProjectListFilterChange: (filter: ProjectListFilterState) => void;
   onSelectProject: (project: import("@todu/core").Project) => void;
   onSelectAllProjects: () => void;
   onTaskProjectFilterChange: (filter: ProjectFilterState) => void;
@@ -204,6 +224,10 @@ function RouteScreen({
   hasConnected,
   toduClient,
   projectFilter,
+  taskListFilter,
+  projectListFilter,
+  onTaskListFilterChange,
+  onProjectListFilterChange,
   onSelectProject,
   onSelectAllProjects,
   onTaskProjectFilterChange,
@@ -218,8 +242,11 @@ function RouteScreen({
       <ProjectsScreen
         client={toduClient}
         projectFilter={projectFilter}
+        listFilter={projectListFilter}
+        onListFilterChange={onProjectListFilterChange}
         onSelectProject={onSelectProject}
         onSelectAllProjects={onSelectAllProjects}
+        onGlobalInputEnabledChange={onGlobalInputEnabledChange}
         dataQueriesEnabled={dataQueriesEnabled}
       />
     ) : null;
@@ -237,6 +264,10 @@ function RouteScreen({
     <TasksScreen
       client={toduClient}
       projectFilter={projectFilter}
+      taskListFilter={taskListFilter}
+      projectListFilter={projectListFilter}
+      onTaskListFilterChange={onTaskListFilterChange}
+      onProjectListFilterChange={onProjectListFilterChange}
       statusActionsEnabled={dataQueriesEnabled}
       dataQueriesEnabled={dataQueriesEnabled}
       onGlobalInputEnabledChange={onGlobalInputEnabledChange}

@@ -3,9 +3,17 @@ import type { Project } from "@todu/core";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { ListFilterModal } from "../components/ListFilterModal.js";
 import { Pane } from "../components/Pane.js";
 import { getVisibleTaskWindow } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
+import {
+  createProjectListQuery,
+  defaultProjectListFilter,
+  formatProjectListFilter,
+  matchesPriority,
+  type ProjectListFilterState,
+} from "../state/list-filter.js";
 import { formatListWindowIndicator, type ListWindow } from "../state/list-window.js";
 import type { ProjectFilterState } from "../state/project-filter.js";
 import { queryKeys } from "../state/query-keys.js";
@@ -17,6 +25,12 @@ const PROJECT_DETAIL_PANE_WIDTH = "60%";
 const MIN_PROJECT_LABEL_LENGTH = 8;
 const MIN_VISIBLE_PROJECTS = 1;
 
+const projectStatusOptions = [
+  { value: "active", label: "Active" },
+  { value: "done", label: "Done" },
+  { value: "canceled", label: "Canceled" },
+] as const;
+
 interface ProjectOption {
   id: string;
   label: string;
@@ -26,30 +40,44 @@ interface ProjectOption {
 export interface ProjectsScreenProps {
   client: TuiToduClient;
   projectFilter: ProjectFilterState;
+  listFilter?: ProjectListFilterState;
+  onListFilterChange?: (filter: ProjectListFilterState) => void;
   onSelectProject: (project: Project) => void;
   onSelectAllProjects: () => void;
+  onGlobalInputEnabledChange?: (enabled: boolean) => void;
   dataQueriesEnabled?: boolean;
 }
 
 export function ProjectsScreen({
   client,
   projectFilter,
+  listFilter: listFilterProp,
+  onListFilterChange,
   onSelectProject,
   onSelectAllProjects,
+  onGlobalInputEnabledChange,
   dataQueriesEnabled = true,
 }: ProjectsScreenProps): JSX.Element {
+  const listFilter = listFilterProp ?? defaultProjectListFilter;
   const { stdout } = useStdout();
   const [selectedOptionId, setSelectedOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
   );
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const projectListQuery = createProjectListQuery(listFilter);
   const projectsQuery = useQuery({
-    queryKey: queryKeys.projects(),
-    queryFn: () => client.project.list(),
+    queryKey: queryKeys.projects(projectListQuery),
+    queryFn: () => client.project.list(projectListQuery),
     enabled: dataQueriesEnabled,
   });
   const projectOptions = useMemo(
-    () => createProjectOptions(projectsQuery.data ?? []),
-    [projectsQuery.data],
+    () =>
+      createProjectOptions(
+        (projectsQuery.data ?? []).filter((project) =>
+          matchesPriority(project.priority, listFilter),
+        ),
+      ),
+    [listFilter, projectsQuery.data],
   );
   const selectedOption =
     projectOptions.find((option) => option.id === selectedOptionId) ?? projectOptions[0];
@@ -62,6 +90,11 @@ export function ProjectsScreen({
   );
 
   useEffect(() => {
+    onGlobalInputEnabledChange?.(!filterModalOpen);
+    return () => onGlobalInputEnabledChange?.(true);
+  }, [filterModalOpen, onGlobalInputEnabledChange]);
+
+  useEffect(() => {
     if (!projectsQuery.data) {
       return;
     }
@@ -70,6 +103,15 @@ export function ProjectsScreen({
   }, [projectOptions, projectsQuery.data]);
 
   useInput((input, key) => {
+    if (filterModalOpen) {
+      return;
+    }
+
+    if (key.ctrl && input === "f") {
+      setFilterModalOpen(true);
+      return;
+    }
+
     if (input === "a") {
       onSelectAllProjects();
       return;
@@ -96,7 +138,27 @@ export function ProjectsScreen({
   });
 
   const projectCount = projectsQuery.data?.length ?? 0;
-  const listTitle = projectsQuery.isLoading ? "Projects • loading…" : `Projects (${projectCount})`;
+  const listTitle = projectsQuery.isLoading
+    ? "Projects • loading…"
+    : `Projects (${projectCount}) • ${formatProjectListFilter(listFilter)}`;
+
+  if (filterModalOpen) {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <ListFilterModal
+          title="Filter projects"
+          statusOptions={projectStatusOptions}
+          initialFilter={listFilter}
+          defaultFilter={defaultProjectListFilter}
+          onApply={(filter) => {
+            onListFilterChange?.(filter);
+            setFilterModalOpen(false);
+          }}
+          onCancel={() => setFilterModalOpen(false)}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="row" flexGrow={1}>
@@ -118,6 +180,18 @@ export function ProjectsScreen({
           isEmpty={!projectsQuery.isLoading && !projectsQuery.error && projectCount === 0}
         />
       </Pane>
+      {filterModalOpen ? (
+        <ListFilterModal
+          title="Filter projects"
+          statusOptions={projectStatusOptions}
+          initialFilter={listFilter}
+          onApply={(filter) => {
+            onListFilterChange?.(filter);
+            setFilterModalOpen(false);
+          }}
+          onCancel={() => setFilterModalOpen(false)}
+        />
+      ) : null}
     </Box>
   );
 }

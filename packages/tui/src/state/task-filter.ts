@@ -1,33 +1,49 @@
 import type { TaskFilter, TaskPriority, TaskStatus } from "@todu/core";
+import {
+  createTaskListQuery,
+  defaultTaskListFilter,
+  formatPriorityFilter,
+  formatTaskStatusFilter,
+} from "./list-filter.js";
 import type { ProjectFilterState } from "./project-filter.js";
 
-export const openTaskStatuses = [
-  "active",
-  "inprogress",
-  "waiting",
-] as const satisfies readonly TaskStatus[];
+export const openTaskStatuses = defaultTaskListFilter.statuses;
 
 export interface TuiTaskFilterState {
   projectFilter: ProjectFilterState;
+  statuses?: readonly TaskStatus[];
   priority?: TaskPriority;
+  includeHigherPriorities?: boolean;
 }
 
-export function createOpenTaskFilter({ projectFilter, priority }: TuiTaskFilterState): TaskFilter {
-  return {
-    status: [...openTaskStatuses],
-    ...(priority ? { priority } : {}),
-    ...(projectFilter.projectId ? { projectId: projectFilter.projectId } : {}),
-  };
+export function createTaskFilter({
+  projectFilter,
+  statuses,
+  priority,
+  includeHigherPriorities,
+}: TuiTaskFilterState): TaskFilter {
+  return createTaskListQuery(projectFilter, {
+    statuses: statuses ?? defaultTaskListFilter.statuses,
+    priority,
+    includeHigherPriorities,
+  });
 }
 
-export function formatTaskFilterSummary({ projectFilter, priority }: TuiTaskFilterState): string {
-  return `Open · ${formatPriorityFilter(priority)} · ${projectFilter.projectName ?? "All Projects"}`;
+export function createOpenTaskFilter({
+  projectFilter,
+  priority,
+}: Omit<TuiTaskFilterState, "statuses">): TaskFilter {
+  return createTaskFilter({ projectFilter, priority });
 }
 
-function formatPriorityFilter(priority: TaskPriority | undefined): string {
-  if (!priority) {
-    return "Any priority";
-  }
-
-  return `${priority[0]?.toUpperCase()}${priority.slice(1)} priority`;
+export function formatTaskFilterSummary({
+  projectFilter,
+  statuses = defaultTaskListFilter.statuses,
+  priority,
+  includeHigherPriorities,
+}: TuiTaskFilterState): string {
+  return `${formatTaskStatusFilter(statuses)} · ${formatPriorityFilter(
+    priority,
+    includeHigherPriorities,
+  )} · ${projectFilter.projectName ?? "All Projects"}`;
 }
