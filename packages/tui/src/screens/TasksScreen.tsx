@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Project, TaskPriority, TaskStatus } from "@todu/core";
+import type { Project, TaskStatus } from "@todu/core";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { TasksFooterContext } from "../app/keymap.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { ListFilterModal } from "../components/ListFilterModal.js";
 import { Pane } from "../components/Pane.js";
 import { TextInputModal } from "../components/TextInputModal.js";
 import { ToastLine, type ToastTone } from "../components/ToastLine.js";
@@ -12,6 +13,16 @@ import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
 import { getVisibleTaskWindow, TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
 import { normalizeCommentContent } from "../state/comment-actions.js";
+import {
+  createProjectListQuery,
+  createTaskListQuery,
+  defaultProjectListFilter,
+  defaultTaskListFilter,
+  formatProjectListFilter,
+  matchesPriority,
+  type ProjectListFilterState,
+  type TaskListFilterState,
+} from "../state/list-filter.js";
 import { formatListWindowIndicator } from "../state/list-window.js";
 import {
   allProjectsFilter,
@@ -21,12 +32,14 @@ import {
 import { queryKeys } from "../state/query-keys.js";
 import { getSelectedItem, moveSelection, resolveSelectedId } from "../state/selection.js";
 import { resolveTaskStatusAction, taskStatusActions } from "../state/task-actions.js";
-import { createOpenTaskFilter } from "../state/task-filter.js";
 
 export interface TasksScreenProps {
   client: TuiToduClient;
   projectFilter: ProjectFilterState;
-  priority?: TaskPriority;
+  taskListFilter?: TaskListFilterState;
+  projectListFilter?: ProjectListFilterState;
+  onTaskListFilterChange?: (filter: TaskListFilterState) => void;
+  onProjectListFilterChange?: (filter: ProjectListFilterState) => void;
   statusActionsEnabled?: boolean;
   dataQueriesEnabled?: boolean;
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
@@ -44,6 +57,20 @@ const MIN_VISIBLE_LIST_ITEMS = 1;
 
 type PaneFocus = "projects" | "tasks";
 
+const taskStatusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inprogress", label: "In Progress" },
+  { value: "waiting", label: "Waiting" },
+  { value: "done", label: "Done" },
+  { value: "canceled", label: "Canceled" },
+] as const;
+
+const projectStatusOptions = [
+  { value: "active", label: "Active" },
+  { value: "done", label: "Done" },
+  { value: "canceled", label: "Canceled" },
+] as const;
+
 interface ProjectOption {
   id: string;
   label: string;
@@ -53,13 +80,18 @@ interface ProjectOption {
 export function TasksScreen({
   client,
   projectFilter,
-  priority,
+  taskListFilter: taskListFilterProp,
+  projectListFilter: projectListFilterProp,
+  onTaskListFilterChange,
+  onProjectListFilterChange,
   statusActionsEnabled = true,
   dataQueriesEnabled = true,
   onGlobalInputEnabledChange,
   onProjectFilterChange,
   onFooterContextChange,
 }: TasksScreenProps): JSX.Element {
+  const taskListFilter = taskListFilterProp ?? defaultTaskListFilter;
+  const projectListFilter = projectListFilterProp ?? defaultProjectListFilter;
   const queryClient = useQueryClient();
   const { stdout } = useStdout();
   const [selectedProjectOptionId, setSelectedProjectOptionId] = useState<string>(
@@ -73,25 +105,35 @@ export function TasksScreen({
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const [filterModalTarget, setFilterModalTarget] = useState<PaneFocus | null>(null);
+  const projectListQuery = createProjectListQuery(projectListFilter);
   const projectsQuery = useQuery({
-    queryKey: queryKeys.projects(),
-    queryFn: () => client.project.list(),
+    queryKey: queryKeys.projects(projectListQuery),
+    queryFn: () => client.project.list(projectListQuery),
     enabled: dataQueriesEnabled,
   });
   const projectOptions = useMemo(
-    () => createTaskProjectOptions(projectsQuery.data ?? []),
-    [projectsQuery.data],
+    () =>
+      createTaskProjectOptions(
+        (projectsQuery.data ?? []).filter((project) =>
+          matchesPriority(project.priority, projectListFilter),
+        ),
+      ),
+    [projectListFilter, projectsQuery.data],
   );
   const selectedProjectOption =
     projectOptions.find((option) => option.id === selectedProjectOptionId) ?? projectOptions[0];
   const selectedProjectFilter = projectFilterFromOption(selectedProjectOption);
-  const taskFilter = createOpenTaskFilter({ projectFilter: selectedProjectFilter, priority });
+  const taskFilter = createTaskListQuery(selectedProjectFilter, taskListFilter);
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks(taskFilter),
     queryFn: () => client.task.list(taskFilter),
     enabled: dataQueriesEnabled,
   });
-  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const tasks = useMemo(
+    () => (tasksQuery.data ?? []).filter((task) => matchesPriority(task.priority, taskListFilter)),
+    [taskListFilter, tasksQuery.data],
+  );
   const effectiveSelectedTaskId = resolveSelectedId(tasks, selectedTaskId);
   const selectedTask = getSelectedItem(tasks, effectiveSelectedTaskId);
   const selectedDetailQuery = useQuery({
@@ -128,6 +170,16 @@ export function TasksScreen({
   }, [projectOptions, projectsQuery.data]);
 
   useEffect(() => {
+    if (
+      projectFilter.projectId &&
+      projectsQuery.data &&
+      !projectOptions.some((option) => option.project?.id === projectFilter.projectId)
+    ) {
+      onProjectFilterChange?.(allProjectsFilter);
+    }
+  }, [onProjectFilterChange, projectFilter.projectId, projectOptions, projectsQuery.data]);
+
+  useEffect(() => {
     if (!tasksQuery.data) {
       return;
     }
@@ -136,13 +188,14 @@ export function TasksScreen({
   }, [tasksQuery.data]);
 
   useEffect(() => {
-    onGlobalInputEnabledChange?.(!commentModalOpen && !confirmCancel);
+    onGlobalInputEnabledChange?.(!commentModalOpen && !confirmCancel && !filterModalTarget);
     return () => onGlobalInputEnabledChange?.(true);
-  }, [commentModalOpen, confirmCancel, onGlobalInputEnabledChange]);
+  }, [commentModalOpen, confirmCancel, filterModalTarget, onGlobalInputEnabledChange]);
 
   const footerContext = resolveTasksFooterContext({
     commentModalOpen,
     confirmCancel,
+    filterModalTarget,
     focusedPane,
     taskDetailOpen,
   });
@@ -206,6 +259,10 @@ export function TasksScreen({
   };
 
   useInput((input, key) => {
+    if (filterModalTarget) {
+      return;
+    }
+
     if (commentModalOpen) {
       if (key.escape) {
         closeCommentModal();
@@ -244,6 +301,11 @@ export function TasksScreen({
         setConfirmCancel(false);
         setFeedback({ message: "Cancelled task action.", tone: "info" });
       }
+      return;
+    }
+
+    if (key.ctrl && input === "f" && !taskDetailOpen) {
+      setFilterModalTarget(focusedPane);
       return;
     }
 
@@ -366,6 +428,40 @@ export function TasksScreen({
     void performStatusAction(selectedTask.id, action.status, action.successLabel);
   });
 
+  if (filterModalTarget === "tasks") {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <ListFilterModal
+          title="Filter tasks"
+          statusOptions={taskStatusOptions}
+          initialFilter={taskListFilter}
+          onApply={(filter) => {
+            onTaskListFilterChange?.(filter);
+            setFilterModalTarget(null);
+          }}
+          onCancel={() => setFilterModalTarget(null)}
+        />
+      </Box>
+    );
+  }
+
+  if (filterModalTarget === "projects") {
+    return (
+      <Box flexDirection="column" flexGrow={1}>
+        <ListFilterModal
+          title="Filter projects"
+          statusOptions={projectStatusOptions}
+          initialFilter={projectListFilter}
+          onApply={(filter) => {
+            onProjectListFilterChange?.(filter);
+            setFilterModalTarget(null);
+          }}
+          onCancel={() => setFilterModalTarget(null)}
+        />
+      </Box>
+    );
+  }
+
   const maxVisibleListItems = resolveMaxVisibleListItems(stdout.rows);
   const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
   const detailContentWidth = resolveDetailContentWidth(stdout.columns);
@@ -382,6 +478,7 @@ export function TasksScreen({
             isLoading={projectsQuery.isLoading}
             maxVisibleProjects={maxVisibleListItems}
             maxProjectLabelLength={maxProjectLabelLength}
+            listFilter={projectListFilter}
           />
           <Pane
             title="Tasks unavailable"
@@ -410,6 +507,7 @@ export function TasksScreen({
             isLoading={projectsQuery.isLoading}
             maxVisibleProjects={maxVisibleListItems}
             maxProjectLabelLength={maxProjectLabelLength}
+            listFilter={projectListFilter}
           />
           <Pane
             title="Tasks • loading…"
@@ -435,6 +533,7 @@ export function TasksScreen({
             isLoading={projectsQuery.isLoading}
             maxVisibleProjects={maxVisibleListItems}
             maxProjectLabelLength={maxProjectLabelLength}
+            listFilter={projectListFilter}
           />
           <Pane title="Tasks (0)" width={TASK_MAIN_PANE_WIDTH} focused={focusedPane === "tasks"}>
             <Text color="gray">
@@ -458,6 +557,7 @@ export function TasksScreen({
           isLoading={projectsQuery.isLoading}
           maxVisibleProjects={maxVisibleListItems}
           maxProjectLabelLength={maxProjectLabelLength}
+          listFilter={projectListFilter}
         />
         <Box flexDirection="column" width={TASK_MAIN_PANE_WIDTH}>
           <TaskListPane
@@ -485,6 +585,30 @@ export function TasksScreen({
           ) : null}
         </Box>
       </Box>
+      {filterModalTarget === "tasks" ? (
+        <ListFilterModal
+          title="Filter tasks"
+          statusOptions={taskStatusOptions}
+          initialFilter={taskListFilter}
+          onApply={(filter) => {
+            onTaskListFilterChange?.(filter);
+            setFilterModalTarget(null);
+          }}
+          onCancel={() => setFilterModalTarget(null)}
+        />
+      ) : null}
+      {filterModalTarget === "projects" ? (
+        <ListFilterModal
+          title="Filter projects"
+          statusOptions={projectStatusOptions}
+          initialFilter={projectListFilter}
+          onApply={(filter) => {
+            onProjectListFilterChange?.(filter);
+            setFilterModalTarget(null);
+          }}
+          onCancel={() => setFilterModalTarget(null)}
+        />
+      ) : null}
       {commentModalOpen ? (
         <TextInputModal
           title={selectedTask ? `Comment on ${selectedTask.title}` : "Comment"}
@@ -506,6 +630,7 @@ interface ProjectListPaneProps {
   isLoading?: boolean;
   maxVisibleProjects: number;
   maxProjectLabelLength: number;
+  listFilter: ProjectListFilterState;
 }
 
 function ProjectListPane({
@@ -515,6 +640,7 @@ function ProjectListPane({
   isLoading = false,
   maxVisibleProjects,
   maxProjectLabelLength,
+  listFilter,
 }: ProjectListPaneProps): JSX.Element {
   const projectWindow = getVisibleTaskWindow(projects, selectedProjectOptionId, maxVisibleProjects);
   const aboveIndicator = formatListWindowIndicator(projectWindow, "above");
@@ -522,7 +648,7 @@ function ProjectListPane({
 
   return (
     <Pane
-      title={`Projects${isLoading ? " • loading…" : ""}`}
+      title={`Projects • ${formatProjectListFilter(listFilter)}${isLoading ? " • loading…" : ""}`}
       width={PROJECT_PANE_WIDTH}
       focused={focused}
     >
@@ -599,14 +725,20 @@ function truncateProjectLabel(label: string, maxLength = 24): string {
 function resolveTasksFooterContext({
   commentModalOpen,
   confirmCancel,
+  filterModalTarget,
   focusedPane,
   taskDetailOpen,
 }: {
   commentModalOpen: boolean;
   confirmCancel: boolean;
+  filterModalTarget: PaneFocus | null;
   focusedPane: PaneFocus;
   taskDetailOpen: boolean;
 }): TasksFooterContext {
+  if (filterModalTarget) {
+    return "filter-modal";
+  }
+
   if (commentModalOpen) {
     return "comment-modal";
   }

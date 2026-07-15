@@ -12,6 +12,7 @@ describe("HelpBar", () => {
     ["help", ["q Back"]],
     ["comment-modal", ["Enter Submit", "Esc Cancel"]],
     ["cancel-confirmation", ["y Confirm", "n/Esc Cancel"]],
+    ["filter-modal", ["↑↓ Select", "Space Toggle", "←→ Priority", "Enter Apply"]],
   ] as const)("shows concise %s shortcuts", (context, expected) => {
     const { lastFrame } = render(<HelpBar context={context} />);
 
