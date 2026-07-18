@@ -130,7 +130,12 @@ export function createTaskDetailLines({
       ? createMarkdownDetailLines("description", description, contentWidth)
       : createWrappedLines("description", "No description.", contentWidth, "gray")),
     { id: "metadata-heading", text: "Metadata", color: "cyan" },
-    ...createWrappedLines("metadata", formatTaskMetadata(task, projectName), contentWidth, "gray"),
+    ...createWrappedLines(
+      "metadata",
+      `ID: ${task.id} • ${formatTaskMetadata(task, projectName)}`,
+      contentWidth,
+      "gray",
+    ),
     { id: "comments-heading", text: "Comments", color: "cyan" },
   ];
 

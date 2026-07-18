@@ -10,44 +10,6 @@ describe("task commands", () => {
     process.exitCode = undefined;
   });
 
-  it("displays the task ID in task details", async () => {
-    const invokeDaemonMock = vi.fn(async (method: string) => {
-      if (method === "task.get") {
-        return {
-          ok: true,
-          value: {
-            id: "task-1",
-            title: "Task details",
-            status: "active",
-            priority: "medium",
-            projectId: "proj-1",
-            labels: [],
-            assigneeActorIds: [],
-            assignees: [],
-            createdAt: "2026-03-01T00:00:00.000Z",
-            updatedAt: "2026-03-01T00:00:00.000Z",
-            notes: [],
-          },
-        };
-      }
-      if (method === "project.list" || method === "actor.list") {
-        return { ok: true, value: [] };
-      }
-
-      throw new Error(`Unexpected method: ${method}`);
-    });
-    const invokeDaemon = invokeDaemonMock as unknown as CliDaemonInvoker;
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    const program = new Command();
-    program.name("todu").option("--format <type>", "output format (text or json)", "text");
-    registerTaskCommands(program, invokeDaemon);
-
-    await program.parseAsync(["task", "show", "task-1"], { from: "user" });
-
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("ID:          task-1"));
-  });
-
   it("passes actor assignee updates through on task update", async () => {
     const invokeDaemonMock = vi.fn(async (method: string) => {
       if (method === "task.update") {

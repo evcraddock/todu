@@ -50,6 +50,7 @@ describe("TaskDetailPane", () => {
     expect(frame).toContain("Implement a clear task detail hierarchy");
     expect(frame).toContain("Description");
     expect(frame).toContain("Metadata");
+    expect(frame).toContain("ID: task-1");
     expect(frame).toContain("doing • med • todu • #tui #layout");
     expect(frame).toContain("Comments");
     expect(frame).toContain("Erik:");
