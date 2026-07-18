@@ -56,8 +56,8 @@ describe("TaskDetailPane", () => {
     expect(frame).toContain("Erik:");
     expect(frame).toContain("Erik: Comment 1 provides additional");
     expect(frame).toContain("implementation context.");
-    expect(frame.indexOf("Description")).toBeLessThan(frame.indexOf("Metadata"));
-    expect(frame.indexOf("Metadata")).toBeLessThan(frame.indexOf("Comments"));
+    expect(frame.indexOf("Metadata")).toBeLessThan(frame.indexOf("Description"));
+    expect(frame.indexOf("Description")).toBeLessThan(frame.indexOf("Comments"));
   });
 
   it("renders supported Markdown in descriptions and comments", () => {
