@@ -125,12 +125,17 @@ export function createTaskDetailLines({
   const description = "description" in task ? (task.description?.trim() ?? "") : "";
   const lines: TaskDetailLine[] = [
     ...createWrappedLines("title", task.title, contentWidth, "white", true),
+    { id: "metadata-heading", text: "Metadata", color: "cyan" },
+    ...createWrappedLines(
+      "metadata",
+      `ID: ${task.id} • ${formatTaskMetadata(task, projectName)}`,
+      contentWidth,
+      "gray",
+    ),
     { id: "description-heading", text: "Description", color: "cyan" },
     ...(description
       ? createMarkdownDetailLines("description", description, contentWidth)
       : createWrappedLines("description", "No description.", contentWidth, "gray")),
-    { id: "metadata-heading", text: "Metadata", color: "cyan" },
-    ...createWrappedLines("metadata", formatTaskMetadata(task, projectName), contentWidth, "gray"),
     { id: "comments-heading", text: "Comments", color: "cyan" },
   ];
 

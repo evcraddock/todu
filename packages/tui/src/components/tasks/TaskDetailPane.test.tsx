@@ -50,13 +50,14 @@ describe("TaskDetailPane", () => {
     expect(frame).toContain("Implement a clear task detail hierarchy");
     expect(frame).toContain("Description");
     expect(frame).toContain("Metadata");
+    expect(frame).toContain("ID: task-1");
     expect(frame).toContain("doing • med • todu • #tui #layout");
     expect(frame).toContain("Comments");
     expect(frame).toContain("Erik:");
     expect(frame).toContain("Erik: Comment 1 provides additional");
     expect(frame).toContain("implementation context.");
-    expect(frame.indexOf("Description")).toBeLessThan(frame.indexOf("Metadata"));
-    expect(frame.indexOf("Metadata")).toBeLessThan(frame.indexOf("Comments"));
+    expect(frame.indexOf("Metadata")).toBeLessThan(frame.indexOf("Description"));
+    expect(frame.indexOf("Description")).toBeLessThan(frame.indexOf("Comments"));
   });
 
   it("renders supported Markdown in descriptions and comments", () => {
