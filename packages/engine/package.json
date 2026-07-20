@@ -19,7 +19,7 @@
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
-    "@automerge/automerge": "3.2.6",
+    "@automerge/automerge": "3.3.2",
     "@automerge/automerge-repo": "2.5.6",
     "@automerge/automerge-repo-network-websocket": "2.5.6",
     "@automerge/automerge-repo-storage-nodefs": "2.5.6",
