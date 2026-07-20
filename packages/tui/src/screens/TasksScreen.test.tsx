@@ -86,6 +86,7 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
           Promise.resolve(comments.filter((comment) => comment.entityId === filter.entityId)),
         ),
       create: vi.fn(),
+      update: vi.fn(),
     },
     habit: { list: vi.fn().mockResolvedValue([]), check: vi.fn(), uncheck: vi.fn() },
     sync: {

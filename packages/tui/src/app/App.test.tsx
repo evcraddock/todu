@@ -133,7 +133,7 @@ function createFakeClient(): TuiToduClient {
       update: vi.fn(),
       createComment: vi.fn(),
     },
-    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn() },
     habit: {
       list: vi.fn().mockImplementation((filter = {}) =>
         Promise.resolve(
@@ -233,6 +233,8 @@ describe("App", () => {
     stdin.write("3");
     await waitForFrameText(lastFrame, "No journal entries this week.");
     expect(lastFrame()).toContain("Journal");
+    expect(lastFrame()).toContain("j/k/↑↓ Select");
+    expect(lastFrame()).toContain("Enter Edit");
     expect(lastFrame()).toContain("Shift+H/L Previous/Next Week");
     expect(lastFrame()).toContain("n New Entry");
 

@@ -1,35 +1,47 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Note, NoteFilter } from "@todu/core";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import type { JSX } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
 import { ToastLine, type ToastTone } from "../components/ToastLine.js";
+import { getVisibleTaskWindow } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
 import { composeJournalEntry, normalizeCommentContent } from "../state/comment-actions.js";
 import { createJournalWeek, moveJournalWeek } from "../state/journal-week.js";
+import { formatListWindowIndicator } from "../state/list-window.js";
 import { queryKeys } from "../state/query-keys.js";
+import { getSelectedItem, moveSelection, resolveSelectedId } from "../state/selection.js";
+
+const MIN_VISIBLE_ENTRIES = 1;
 
 export interface JournalScreenProps {
   client: TuiToduClient;
   dataQueriesEnabled?: boolean;
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
-  composeEntry?: () => string | null;
+  composeEntry?: (initialContent: string) => string | null;
   initialDate?: Date;
   timezone?: string;
+}
+
+interface SaveEntryInput {
+  entry: Note | null;
+  content: string;
 }
 
 export function JournalScreen({
   client,
   dataQueriesEnabled = true,
   onGlobalInputEnabledChange,
-  composeEntry = composeJournalEntry,
+  composeEntry = defaultComposeEntry,
   initialDate,
   timezone = resolveLocalTimezone(),
 }: JournalScreenProps): JSX.Element {
   const queryClient = useQueryClient();
   const { suspendTerminal } = useApp();
+  const { stdout } = useStdout();
   const [selectedDate, setSelectedDate] = useState(() => initialDate ?? new Date());
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const week = useMemo(() => createJournalWeek(selectedDate), [selectedDate]);
   const filter = useMemo<NoteFilter>(
@@ -53,11 +65,24 @@ export function JournalScreen({
       ),
     [entriesQuery.data],
   );
-  const createMutation = useMutation({
-    mutationFn: (content: string) => client.note.create({ content }),
+  const effectiveSelectedEntryId = resolveSelectedId(entries, selectedEntryId);
+  const selectedEntry = getSelectedItem(entries, effectiveSelectedEntryId);
+  const entryWindow = getVisibleTaskWindow(
+    entries,
+    effectiveSelectedEntryId,
+    resolveMaxVisibleEntries(stdout.rows),
+  );
+  const saveMutation = useMutation({
+    mutationFn: ({ entry, content }: SaveEntryInput) =>
+      entry ? client.note.update(entry.id, { content }) : client.note.create({ content }),
   });
 
-  const openEntryEditor = async (): Promise<void> => {
+  useEffect(() => {
+    if (!entriesQuery.data) return;
+    setSelectedEntryId((current) => resolveSelectedId(entries, current));
+  }, [entries, entriesQuery.data]);
+
+  const openEntryEditor = async (entry: Note | null): Promise<void> => {
     if (!dataQueriesEnabled) {
       setFeedback({
         message: "Journal actions unavailable while daemon is disconnected.",
@@ -70,7 +95,7 @@ export function JournalScreen({
     try {
       let composedContent: string | null = null;
       await suspendTerminal(() => {
-        composedContent = composeEntry();
+        composedContent = composeEntry(entry?.content ?? "");
       });
       const content = normalizeCommentContent(composedContent ?? "");
       if (!content) {
@@ -78,8 +103,19 @@ export function JournalScreen({
         return;
       }
 
-      await createMutation.mutateAsync(content);
-      setFeedback({ message: "Journal entry added.", tone: "success" });
+      const savedEntry = await saveMutation.mutateAsync({ entry, content });
+      queryClient.setQueryData<Note[]>(queryKeys.notes(filter), (current = []) =>
+        entry
+          ? current.map((currentEntry) =>
+              currentEntry.id === savedEntry.id ? savedEntry : currentEntry,
+            )
+          : [...current, savedEntry],
+      );
+      setSelectedEntryId(savedEntry.id);
+      setFeedback({
+        message: entry ? "Journal entry updated." : "Journal entry added.",
+        tone: "success",
+      });
       await queryClient.invalidateQueries({ queryKey: ["notes"] });
     } catch (error) {
       setFeedback({ message: formatToduClientError(error), tone: "error" });
@@ -100,18 +136,32 @@ export function JournalScreen({
       setFeedback(null);
       return;
     }
-    if (key.ctrl || key.shift || createMutation.isPending) {
+    if (key.ctrl || key.shift || saveMutation.isPending) return;
+
+    if (input === "j" || key.downArrow) {
+      setSelectedEntryId((current) => moveSelection(entries, current, "next"));
+      return;
+    }
+    if (input === "k" || key.upArrow) {
+      setSelectedEntryId((current) => moveSelection(entries, current, "previous"));
       return;
     }
     if (input === "n") {
       setFeedback(null);
-      void openEntryEditor();
+      void openEntryEditor(null);
+      return;
+    }
+    if ((key.return || input === "\r") && selectedEntry) {
+      setFeedback(null);
+      void openEntryEditor(selectedEntry);
     }
   });
 
   const title = entriesQuery.isLoading
     ? `Week • ${week.label} • loading…`
     : `Week • ${week.label} • ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`;
+  const aboveIndicator = formatListWindowIndicator(entryWindow, "above");
+  const belowIndicator = formatListWindowIndicator(entryWindow, "below");
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -128,18 +178,36 @@ export function JournalScreen({
         {!entriesQuery.error && !entriesQuery.isLoading && entries.length === 0 ? (
           <Text color="gray">No journal entries this week.</Text>
         ) : null}
+        {!entriesQuery.error && !entriesQuery.isLoading && aboveIndicator ? (
+          <Text color="gray">{aboveIndicator}</Text>
+        ) : null}
         {!entriesQuery.error && !entriesQuery.isLoading
-          ? entries.map((entry) => (
-              <Box key={entry.id} flexDirection="column" marginBottom={1}>
-                <Text color="cyan">{formatJournalEntryDate(entry, timezone)}</Text>
-                <Text>{entry.content}</Text>
-              </Box>
-            ))
+          ? entryWindow.items.map((entry) => {
+              const selected = entry.id === effectiveSelectedEntryId;
+              return (
+                <Text
+                  key={entry.id}
+                  color={selected ? "cyan" : undefined}
+                  inverse={selected}
+                  wrap="truncate-end"
+                >
+                  {selected ? ">" : " "} {formatJournalEntryDate(entry, timezone)}{" "}
+                  {formatEntryPreview(entry)}
+                </Text>
+              );
+            })
           : null}
+        {!entriesQuery.error && !entriesQuery.isLoading && belowIndicator ? (
+          <Text color="gray">{belowIndicator}</Text>
+        ) : null}
       </Pane>
       <ToastLine message={feedback?.message ?? null} tone={feedback?.tone ?? "info"} />
     </Box>
   );
+}
+
+function defaultComposeEntry(initialContent: string): string | null {
+  return composeJournalEntry({ initialContent });
 }
 
 function resolveLocalTimezone(): string {
@@ -155,4 +223,18 @@ function formatJournalEntryDate(entry: Note, timezone: string): string {
     minute: "2-digit",
     timeZone: timezone,
   }).format(new Date(entry.createdAt));
+}
+
+function formatEntryPreview(entry: Note): string {
+  return (
+    entry.content
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? "(empty)"
+  );
+}
+
+function resolveMaxVisibleEntries(rows: number | undefined): number {
+  const terminalRows = rows && rows > 0 ? rows : 24;
+  return Math.max(MIN_VISIBLE_ENTRIES, terminalRows - 11);
 }

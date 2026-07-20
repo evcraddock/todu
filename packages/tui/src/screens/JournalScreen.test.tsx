@@ -15,6 +15,23 @@ function renderWithQuery(children: ReactNode): ReturnType<typeof render> {
 }
 
 function createClient(): TuiToduClient {
+  const entries = [
+    {
+      id: "note-1",
+      content: "Started the journal\nThis full body stays hidden in the list.",
+      author: "Erik",
+      tags: [],
+      createdAt: "2026-07-22T15:30:00.000Z",
+    },
+    {
+      id: "note-2",
+      content: "Second reflection",
+      author: "Erik",
+      tags: [],
+      createdAt: "2026-07-23T15:30:00.000Z",
+    },
+  ];
+
   return {
     actor: { list: vi.fn().mockResolvedValue([]) },
     project: { list: vi.fn().mockResolvedValue([]), get: vi.fn() },
@@ -25,22 +42,20 @@ function createClient(): TuiToduClient {
       createComment: vi.fn(),
     },
     note: {
-      list: vi.fn().mockResolvedValue([
-        {
-          id: "note-1",
-          content: "Started the journal",
-          author: "Erik",
-          tags: [],
-          createdAt: "2026-07-22T15:30:00.000Z",
-        },
-      ]),
+      list: vi.fn().mockResolvedValue(entries),
       create: vi.fn().mockResolvedValue({
-        id: "note-2",
+        id: "note-3",
         content: "New reflection",
         author: "Erik",
         tags: [],
-        createdAt: "2026-07-22T16:00:00.000Z",
+        createdAt: "2026-07-24T16:00:00.000Z",
       }),
+      update: vi.fn().mockImplementation((id: string, input: { content?: string }) =>
+        Promise.resolve({
+          ...entries.find((entry) => entry.id === id),
+          content: input.content ?? "",
+        }),
+      ),
     },
     habit: { list: vi.fn().mockResolvedValue([]), check: vi.fn(), uncheck: vi.fn() },
     sync: {
@@ -60,7 +75,7 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("JournalScreen", () => {
-  it("lists standalone entries for the selected Sunday-through-Saturday week", async () => {
+  it("lists concise rows for the selected Sunday-through-Saturday week", async () => {
     const client = createClient();
     const { lastFrame } = renderWithQuery(
       <JournalScreen
@@ -72,6 +87,8 @@ describe("JournalScreen", () => {
 
     await waitForFrameText(lastFrame, "Started the journal");
     expect(lastFrame()).toContain("Jul 19 – Jul 25, 2026");
+    expect(lastFrame()).toContain("> Wed, Jul 22");
+    expect(lastFrame()).not.toContain("This full body stays hidden in the list.");
     expect(client.note.list).toHaveBeenCalledWith({
       journal: true,
       createdFrom: "2026-07-19",
@@ -107,7 +124,29 @@ describe("JournalScreen", () => {
     await waitForFrameText(lastFrame, "Started the journal");
     stdin.write("n");
     await waitForFrameText(lastFrame, "Journal entry added.");
-    expect(composeEntry).toHaveBeenCalledOnce();
+    expect(composeEntry).toHaveBeenCalledWith("");
     expect(client.note.create).toHaveBeenCalledWith({ content: "New reflection" });
+  });
+
+  it("selects an entry and updates it through the terminal editor", async () => {
+    const client = createClient();
+    const composeEntry = vi.fn().mockReturnValue("Updated second reflection");
+    const { stdin, lastFrame } = renderWithQuery(
+      <JournalScreen
+        client={client}
+        initialDate={new Date(2026, 6, 22, 12)}
+        composeEntry={composeEntry}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "> Wed, Jul 22");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "> Thu, Jul 23");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Journal entry updated.");
+    expect(composeEntry).toHaveBeenCalledWith("Second reflection");
+    expect(client.note.update).toHaveBeenCalledWith("note-2", {
+      content: "Updated second reflection",
+    });
   });
 });

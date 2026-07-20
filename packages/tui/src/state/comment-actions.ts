@@ -18,6 +18,7 @@ interface EditorProcessResult {
 
 export interface ComposeTaskCommentOptions {
   env?: NodeJS.ProcessEnv;
+  initialContent?: string;
   spawnEditor?: (command: string, args: readonly string[]) => EditorProcessResult;
 }
 
@@ -55,6 +56,7 @@ function composeEditorContent({
   temporaryPrefix,
   fileName,
   env = process.env,
+  initialContent = "",
   spawnEditor = defaultSpawnEditor,
 }: ComposeEditorContentOptions): string | null {
   const configuredEditor = env.VISUAL?.trim() || env.EDITOR?.trim();
@@ -74,7 +76,7 @@ function composeEditorContent({
   try {
     temporaryDirectory = mkdtempSync(join(tmpdir(), temporaryPrefix));
     const contentPath = join(temporaryDirectory, fileName);
-    writeFileSync(contentPath, "", { encoding: "utf8", mode: 0o600 });
+    writeFileSync(contentPath, initialContent, { encoding: "utf8", mode: 0o600 });
 
     const result = spawnEditor(command, [...editorArgs, contentPath]);
     if (result.error) {

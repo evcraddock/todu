@@ -93,6 +93,8 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
     { keys: "q", description: "Quit" },
   ],
   journal: [
+    { keys: "j/k/↑↓", description: "Select" },
+    { keys: "Enter", description: "Edit" },
     { keys: "Shift+H/L", description: "Previous/Next Week" },
     { keys: "n", description: "New Entry" },
     { keys: "?", description: "Help" },

@@ -15,6 +15,7 @@ import type {
   TaskId,
   TaskSortOptions,
   TaskWithDetail,
+  UpdateNoteInput,
   UpdateTaskInput,
 } from "@todu/core";
 import type { DaemonConnection, DaemonConnectionError } from "./connection.js";
@@ -47,6 +48,7 @@ export interface TuiToduClient {
   note: {
     list(filter?: NoteFilter): Promise<Note[]>;
     create(input: CreateNoteInput): Promise<Note>;
+    update(id: string, input: UpdateNoteInput): Promise<Note>;
   };
   habit: {
     list(filter?: HabitFilter): Promise<Habit[]>;
@@ -108,6 +110,7 @@ export function createTuiToduClient(daemon: Pick<DaemonConnection, "request">): 
     note: {
       list: (filter) => invoke<Note[]>("note.list", { filter }),
       create: (input) => invoke<Note>("note.create", { input }),
+      update: (id, input) => invoke<Note>("note.update", { id, input }),
     },
     habit: {
       list: (filter) => invoke<Habit[]>("habit.list", { filter }),
