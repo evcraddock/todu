@@ -191,8 +191,7 @@ export function JournalScreen({
                   inverse={selected}
                   wrap="truncate-end"
                 >
-                  {selected ? ">" : " "} {formatJournalEntryDate(entry, timezone)}{" "}
-                  {formatEntryPreview(entry)}
+                  {selected ? ">" : " "} {formatJournalEntryDate(entry, timezone)}
                 </Text>
               );
             })
@@ -223,15 +222,6 @@ function formatJournalEntryDate(entry: Note, timezone: string): string {
     minute: "2-digit",
     timeZone: timezone,
   }).format(new Date(entry.createdAt));
-}
-
-function formatEntryPreview(entry: Note): string {
-  return (
-    entry.content
-      .split(/\r?\n/)
-      .find((line) => line.trim().length > 0)
-      ?.trim() ?? "(empty)"
-  );
 }
 
 function resolveMaxVisibleEntries(rows: number | undefined): number {

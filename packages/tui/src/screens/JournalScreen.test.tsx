@@ -75,7 +75,7 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("JournalScreen", () => {
-  it("lists concise rows for the selected Sunday-through-Saturday week", async () => {
+  it("lists date-and-time-only rows for the selected Sunday-through-Saturday week", async () => {
     const client = createClient();
     const { lastFrame } = renderWithQuery(
       <JournalScreen
@@ -85,10 +85,11 @@ describe("JournalScreen", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Started the journal");
+    await waitForFrameText(lastFrame, "> Wed, Jul 22");
     expect(lastFrame()).toContain("Jul 19 – Jul 25, 2026");
-    expect(lastFrame()).toContain("> Wed, Jul 22");
+    expect(lastFrame()).not.toContain("Started the journal");
     expect(lastFrame()).not.toContain("This full body stays hidden in the list.");
+    expect(lastFrame()).not.toContain("Second reflection");
     expect(client.note.list).toHaveBeenCalledWith({
       journal: true,
       createdFrom: "2026-07-19",
@@ -121,7 +122,7 @@ describe("JournalScreen", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Started the journal");
+    await waitForFrameText(lastFrame, "> Wed, Jul 22");
     stdin.write("n");
     await waitForFrameText(lastFrame, "Journal entry added.");
     expect(composeEntry).toHaveBeenCalledWith("");
