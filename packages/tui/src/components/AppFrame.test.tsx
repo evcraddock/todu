@@ -32,10 +32,11 @@ describe("AppFrame", () => {
 
     expect(lastFrame()).toContain("Tasks");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
-    expect(lastFrame()).toContain("1 Habits");
-    expect(lastFrame()).toContain("2 Tasks");
-    expect(lastFrame()).toContain("3 Projects");
-    expect(lastFrame()).toContain("4 Data Status");
+    expect(lastFrame()).toContain("1 Home");
+    expect(lastFrame()).toContain("2 Habits");
+    expect(lastFrame()).toContain("3 Tasks");
+    expect(lastFrame()).toContain("4 Projects");
+    expect(lastFrame()).toContain("5 Data Status");
     expect(lastFrame()).toContain("body content");
     expect(lastFrame()).toContain("↑↓ Select");
     expect(lastFrame()).toContain("← Projects");

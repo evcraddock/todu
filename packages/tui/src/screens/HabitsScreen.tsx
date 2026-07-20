@@ -48,8 +48,11 @@ export function HabitsScreen({
   );
   const effectiveSelectedHabitId = resolveSelectedId(habits, selectedHabitId);
   const selectedHabit = getSelectedItem(habits, effectiveSelectedHabitId);
-  const maxVisibleHabits = resolveMaxVisibleHabits(stdout.rows);
-  const habitWindow = getVisibleTaskWindow(habits, effectiveSelectedHabitId, maxVisibleHabits);
+  const habitWindow = getVisibleTaskWindow(
+    habits,
+    effectiveSelectedHabitId,
+    resolveMaxVisibleHabits(stdout.rows),
+  );
   const toggleMutation = useMutation({
     mutationFn: ({ habit, completed }: { habit: Habit; completed: boolean }) =>
       completed ? client.habit.uncheck(habit.id) : client.habit.check(habit.id),
