@@ -1,5 +1,13 @@
 # @todu/tui
 
+## 0.24.0
+
+### Minor Changes
+
+- c12f2eb: Open the configured terminal editor when composing task comments.
+- 6ba0065: Add an interactive habits section with today's check-in state and keyboard toggling.
+- 5ee2c02: Add a Home summary for current and waiting tasks while keeping interactive habits on their own route.
+
 ## 0.23.10
 
 ### Patch Changes
