@@ -147,6 +147,24 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "> Waiting");
   });
 
+  it("does not toggle a habit when Ctrl+J is pressed in the Habits section", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(<HomeScreen client={client} today="2026-07-20" />);
+
+    await waitForFrameText(lastFrame, "Habits (2)");
+    stdin.write("\n");
+    await waitForFrameText(lastFrame, "> Next");
+    stdin.write("\n");
+    await waitForFrameText(lastFrame, "> Waiting");
+    stdin.write("\n");
+    await waitForFrameText(lastFrame, "> Habits");
+    stdin.write("\n");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(client.habit.check).not.toHaveBeenCalled();
+    expect(client.habit.uncheck).not.toHaveBeenCalled();
+  });
+
   it("preserves habit navigation and Enter or Space toggling", async () => {
     const client = createClient();
     const { stdin, lastFrame } = renderWithQuery(<HomeScreen client={client} today="2026-07-20" />);
