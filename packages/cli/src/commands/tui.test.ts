@@ -79,6 +79,17 @@ describe("tui command", () => {
     expect(target).toBeNull();
   });
 
+  it("launches the TUI when todu runs without arguments", async () => {
+    const program = new Command();
+    const launch = vi.fn<(_: readonly string[]) => Promise<number>>().mockResolvedValue(0);
+
+    program.name("todu");
+    registerTuiCommand(program, launch);
+    await program.parseAsync([], { from: "user" });
+
+    expect(launch).toHaveBeenCalledWith([]);
+  });
+
   it("registers todu tui and forwards arguments to the launcher", async () => {
     const program = new Command();
     const launch = vi.fn<(_: readonly string[]) => Promise<number>>().mockResolvedValue(0);
