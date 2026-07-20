@@ -7,13 +7,14 @@ export interface TuiKeyBinding {
 
 export const primaryRouteKeyBindings: readonly TuiKeyBinding[] = [
   { keys: "1", description: "Home" },
-  { keys: "2", description: "Tasks" },
-  { keys: "3", description: "Projects" },
-  { keys: "4", description: "Data Status" },
+  { keys: "2", description: "Habits" },
+  { keys: "3", description: "Tasks" },
+  { keys: "4", description: "Projects" },
+  { keys: "5", description: "Data Status" },
 ] as const;
 
 export const globalKeyBindings: readonly TuiKeyBinding[] = [
-  { keys: "1/2/3/4", description: "Home/Tasks/Projects/Data Status" },
+  { keys: "1/2/3/4/5", description: "Home/Habits/Tasks/Projects/Data Status" },
   { keys: "?", description: "Help" },
   { keys: "q", description: "Back/Quit" },
   { keys: "j/↓", description: "Down" },
@@ -38,7 +39,13 @@ export type TasksFooterContext =
   | "cancel-confirmation"
   | "filter-modal";
 
-export type FooterContext = TasksFooterContext | "projects" | "home" | "data-status" | "help";
+export type FooterContext =
+  | TasksFooterContext
+  | "projects"
+  | "home"
+  | "habits"
+  | "data-status"
+  | "help";
 
 export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBinding[]>> = {
   "tasks-list": [
@@ -72,9 +79,14 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
     { keys: "q", description: "Quit" },
   ],
   home: [
-    { keys: "Ctrl+J/K", description: "Section" },
-    { keys: "↑↓", description: "Select habit" },
-    { keys: "Enter/Space", description: "Toggle habit" },
+    { keys: "Shift+J/K", description: "Section" },
+    { keys: "j/k/↑↓", description: "Select item" },
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  habits: [
+    { keys: "j/k/↑↓", description: "Select" },
+    { keys: "Enter/Space", description: "Toggle" },
     { keys: "?", description: "Help" },
     { keys: "q", description: "Quit" },
   ],
@@ -123,14 +135,18 @@ export function resolveGlobalKeyAction(input: string, key: AppKeyboardKey): AppK
   }
 
   if (input === "2") {
-    return { type: "navigate", route: "tasks" };
+    return { type: "navigate", route: "habits" };
   }
 
   if (input === "3") {
-    return { type: "navigate", route: "projects" };
+    return { type: "navigate", route: "tasks" };
   }
 
   if (input === "4") {
+    return { type: "navigate", route: "projects" };
+  }
+
+  if (input === "5") {
     return { type: "navigate", route: "data-status" };
   }
 

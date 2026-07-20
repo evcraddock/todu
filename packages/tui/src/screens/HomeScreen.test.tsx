@@ -105,8 +105,8 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("HomeScreen", () => {
-  it("renders Now, Next, Waiting, and Habits with the expected content", async () => {
-    const { stdin, lastFrame } = renderWithQuery(
+  it("renders Now, Next, and Waiting without habits", async () => {
+    const { lastFrame } = renderWithQuery(
       <HomeScreen client={createClient()} today="2026-07-20" />,
     );
 
@@ -114,76 +114,71 @@ describe("HomeScreen", () => {
     expect(lastFrame()).toContain("> Now (2)");
     expect(lastFrame()).toContain("Due today");
     expect(lastFrame()).toContain("Next (2)");
-    expect(lastFrame()).toContain("Waiting (1)");
-    expect(lastFrame()).toContain("Habits (2)");
-
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "Plan next");
+    expect(lastFrame()).toContain("Plan next");
     expect(lastFrame()).toContain("Due in two days");
-
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "Waiting on review");
-
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "[ ] Meditate");
-    expect(lastFrame()).toContain("[x] Stretch");
+    expect(lastFrame()).toContain("Waiting (1)");
+    expect(lastFrame()).toContain("Waiting on review");
+    expect(lastFrame()).not.toContain("Habits");
   });
 
-  it("switches section focus with Ctrl+J and Ctrl+K", async () => {
+  it("switches section focus with Shift+J and Shift+K", async () => {
     const { stdin, lastFrame } = renderWithQuery(
       <HomeScreen client={createClient()} today="2026-07-20" />,
     );
 
     await waitForFrameText(lastFrame, "> Now");
-    stdin.write("\n");
+    stdin.write("J");
     await waitForFrameText(lastFrame, "> Next");
-    stdin.write("\n");
+    stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Habits");
-    stdin.write("\n");
-    expect(lastFrame()).toContain("> Habits");
-    stdin.write("\u000b");
-    await waitForFrameText(lastFrame, "> Waiting");
+    stdin.write("J");
+    expect(lastFrame()).toContain("> Waiting");
+    stdin.write("K");
+    await waitForFrameText(lastFrame, "> Next");
   });
 
-  it("does not toggle a habit when Ctrl+J is pressed in the Habits section", async () => {
-    const client = createClient();
-    const { stdin, lastFrame } = renderWithQuery(<HomeScreen client={client} today="2026-07-20" />);
+  it("moves between items in the focused task section with j/k or arrow keys", async () => {
+    const { stdin, lastFrame } = renderWithQuery(
+      <HomeScreen client={createClient()} today="2026-07-20" />,
+    );
 
-    await waitForFrameText(lastFrame, "Habits (2)");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Next");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Waiting");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Habits");
-    stdin.write("\n");
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(client.habit.check).not.toHaveBeenCalled();
-    expect(client.habit.uncheck).not.toHaveBeenCalled();
-  });
-
-  it("preserves habit navigation and Enter or Space toggling", async () => {
-    const client = createClient();
-    const { stdin, lastFrame } = renderWithQuery(<HomeScreen client={client} today="2026-07-20" />);
-
-    await waitForFrameText(lastFrame, "Habits (2)");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Next");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Waiting");
-    stdin.write("\n");
-    await waitForFrameText(lastFrame, "> Habits");
-    stdin.write("\r");
-    await waitForFrameText(lastFrame, "[x] Meditate");
-    expect(client.habit.check).toHaveBeenCalledWith("hab-1");
-
+    await waitForFrameText(lastFrame, "> • Work now");
     stdin.write("j");
-    await waitForFrameText(lastFrame, "> [x] Stretch");
-    stdin.write(" ");
-    await waitForFrameText(lastFrame, "> [ ] Stretch");
-    expect(client.habit.uncheck).toHaveBeenCalledWith("hab-2");
+    await waitForFrameText(lastFrame, "> • Due today");
+    stdin.write("\u001B[A");
+    await waitForFrameText(lastFrame, "> • Work now");
+    stdin.write("\u001B[B");
+    await waitForFrameText(lastFrame, "> • Due today");
+
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> • Plan next");
+    stdin.write("k");
+    expect(lastFrame()).toContain("> • Plan next");
+  });
+
+  it("scrolls the whole Home view to keep the focused item visible", async () => {
+    const client = createClient();
+    const tasks = Array.from({ length: 14 }, (_, index) =>
+      createTask({
+        id: `task-now-${index + 1}`,
+        title: `Now task ${index + 1}`,
+        status: "inprogress",
+      }),
+    );
+    vi.mocked(client.task.list).mockResolvedValue(tasks);
+    const { stdin, lastFrame } = renderWithQuery(<HomeScreen client={client} today="2026-07-20" />);
+
+    await waitForFrameText(lastFrame, "Now task 1");
+    expect(lastFrame()).not.toContain("Waiting (0)");
+    for (let index = 0; index < 11; index += 1) {
+      stdin.write("j");
+    }
+    await waitForFrameText(lastFrame, "> • Now task 12");
+    expect(lastFrame()).not.toMatch(/• Now task 1\s+│/);
+
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Next (0)");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Waiting (0)");
   });
 });

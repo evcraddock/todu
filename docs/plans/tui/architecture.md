@@ -257,15 +257,16 @@ The TUI should be optimized for fast keyboard workflows.
 The current TUI implements these global navigation and task-list movement keys:
 
 - `1`: Home (the default startup screen).
-- `2`: Tasks.
-- `3`: Projects.
-- `4`: Data Status.
+- `2`: Habits.
+- `3`: Tasks.
+- `4`: Projects.
+- `5`: Data Status.
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.
 - `Ctrl+C`: Quit immediately.
-- `Ctrl+J` / `Ctrl+K`: Move focus between Home sections.
-- `j` / `Down Arrow`: Move down in the Tasks, Projects, or focused Home Habits list.
-- `k` / `Up Arrow`: Move up in the Tasks, Projects, or focused Home Habits list.
+- `Shift+J` / `Shift+K`: Move focus between Home sections.
+- `j` / `Down Arrow`: Move down in the Tasks, Projects, or focused Home section.
+- `k` / `Up Arrow`: Move up in the Tasks, Projects, or focused Home section.
 - `Enter`: Select the focused project and open Tasks filtered by that project, or toggle the focused habit's check-in.
 - `Space`: Toggle the focused habit's check-in.
 - `a`: Clear the project filter and open Tasks for all projects.
@@ -289,35 +290,39 @@ The current TUI implements these global navigation and task-list movement keys:
 ### MVP Screens
 
 1. **Home**
-   - Now, Next, Waiting, and Habits summary sections.
-   - `Ctrl+J` / `Ctrl+K` moves focus between sections.
-   - The Habits section preserves active habit checkboxes, `j` / `k` and arrow-key selection, and `Enter` / `Space` toggling.
+   - Now, Next, and Waiting summary sections.
+   - All section items form one scrollable Home view; navigation keeps the focused item visible.
+   - `Shift+J` / `Shift+K` moves focus between sections.
+   - `j` / `k` and arrow keys select items within the focused section.
 
-2. **Tasks**
+2. **Habits**
+   - Preserves active habit checkboxes, `j` / `k` and arrow-key selection, and `Enter` / `Space` toggling.
+
+3. **Tasks**
    - Active/in-progress/waiting task list.
    - Project filter.
    - Search filter.
    - Sort by priority or updated/due date once due dates exist.
    - Selected task detail pane.
 
-3. **Projects**
+4. **Projects**
    - Project list with an `All projects` option.
    - Selected project summary.
    - `Enter` opens Tasks filtered by the focused project.
    - `a` clears the filter and returns to all-project Tasks.
    - The active project filter is shown in the shell status line.
 
-4. **Task detail**
+5. **Task detail**
    - Full title, status, priority, project, labels, assignees.
    - Description rendered as terminal markdown where practical.
    - Recent comments/notes.
    - Status/comment actions.
 
-5. **Help / command palette**
+6. **Help / command palette**
    - Discoverable shortcuts.
    - Command execution for less common actions.
 
-6. **Connection/error screen**
+7. **Connection/error screen**
    - Shows daemon unavailable, reconnecting, protocol mismatch, or timeout.
    - Gives command guidance such as `todu daemon start`.
 

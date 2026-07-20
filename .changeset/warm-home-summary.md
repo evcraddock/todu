@@ -2,4 +2,4 @@
 "@todu/tui": minor
 ---
 
-Replace the standalone Habits screen with a Home summary for current tasks, waiting work, and interactive habits.
+Add a Home summary for current and waiting tasks while keeping interactive habits on their own route.

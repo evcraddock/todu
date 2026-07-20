@@ -10,6 +10,7 @@ import {
 } from "../daemon/connection.js";
 import { createTuiToduClient, type TuiToduClient } from "../daemon/todu-client.js";
 import { DataStatusScreen } from "../screens/DataStatusScreen.js";
+import { HabitsScreen } from "../screens/HabitsScreen.js";
 import { HelpScreen } from "../screens/HelpScreen.js";
 import { HomeScreen } from "../screens/HomeScreen.js";
 import { ProjectsScreen } from "../screens/ProjectsScreen.js";
@@ -256,6 +257,12 @@ function RouteScreen({
   if (route === "home") {
     return canShowDataScreens ? (
       <HomeScreen client={toduClient} dataQueriesEnabled={dataQueriesEnabled} />
+    ) : null;
+  }
+
+  if (route === "habits") {
+    return canShowDataScreens ? (
+      <HabitsScreen client={toduClient} dataQueriesEnabled={dataQueriesEnabled} />
     ) : null;
   }
 
