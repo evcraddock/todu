@@ -1,18 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Project, TaskStatus } from "@todu/core";
-import { Box, Text, useInput, useStdout } from "ink";
+import type { Project, Task, TaskStatus } from "@todu/core";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { TasksFooterContext } from "../app/keymap.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { ListFilterModal } from "../components/ListFilterModal.js";
 import { Pane } from "../components/Pane.js";
-import { TextInputModal } from "../components/TextInputModal.js";
 import { ToastLine, type ToastTone } from "../components/ToastLine.js";
 import { TaskDetailPane } from "../components/tasks/TaskDetailPane.js";
 import { getVisibleTaskWindow, TaskListPane } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
-import { normalizeCommentContent } from "../state/comment-actions.js";
+import { composeTaskComment, normalizeCommentContent } from "../state/comment-actions.js";
 import {
   createProjectListQuery,
   createTaskListQuery,
@@ -45,6 +44,7 @@ export interface TasksScreenProps {
   onGlobalInputEnabledChange?: (enabled: boolean) => void;
   onProjectFilterChange?: (filter: ProjectFilterState) => void;
   onFooterContextChange?: (context: TasksFooterContext) => void;
+  composeComment?: () => string | null;
 }
 
 const ALL_PROJECTS_OPTION_ID = "__all__";
@@ -89,10 +89,12 @@ export function TasksScreen({
   onGlobalInputEnabledChange,
   onProjectFilterChange,
   onFooterContextChange,
+  composeComment = composeTaskComment,
 }: TasksScreenProps): JSX.Element {
   const taskListFilter = taskListFilterProp ?? defaultTaskListFilter;
   const projectListFilter = projectListFilterProp ?? defaultProjectListFilter;
   const queryClient = useQueryClient();
+  const { suspendTerminal } = useApp();
   const { stdout } = useStdout();
   const [selectedProjectOptionId, setSelectedProjectOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
@@ -101,9 +103,6 @@ export function TasksScreen({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [taskDetailOpen, setTaskDetailOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [commentModalOpen, setCommentModalOpen] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [commentError, setCommentError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [filterModalTarget, setFilterModalTarget] = useState<PaneFocus | null>(null);
   const projectListQuery = createProjectListQuery(projectListFilter);
@@ -188,12 +187,11 @@ export function TasksScreen({
   }, [tasksQuery.data]);
 
   useEffect(() => {
-    onGlobalInputEnabledChange?.(!commentModalOpen && !confirmCancel && !filterModalTarget);
+    onGlobalInputEnabledChange?.(!confirmCancel && !filterModalTarget);
     return () => onGlobalInputEnabledChange?.(true);
-  }, [commentModalOpen, confirmCancel, filterModalTarget, onGlobalInputEnabledChange]);
+  }, [confirmCancel, filterModalTarget, onGlobalInputEnabledChange]);
 
   const footerContext = resolveTasksFooterContext({
-    commentModalOpen,
     confirmCancel,
     filterModalTarget,
     focusedPane,
@@ -218,72 +216,43 @@ export function TasksScreen({
     }
   };
 
-  const submitComment = async (): Promise<void> => {
-    if (!selectedTask) {
-      setCommentModalOpen(false);
-      setFeedback({ message: "No task selected for comment.", tone: "error" });
-      return;
-    }
-
-    if (!statusActionsEnabled) {
-      setCommentError("Task actions unavailable while daemon is disconnected.");
-      return;
-    }
-
-    const content = normalizeCommentContent(commentText);
-    if (!content) {
-      setCommentError("Comment cannot be empty.");
-      return;
-    }
-
+  const submitComment = async (task: Task, content: string): Promise<void> => {
     try {
-      await commentMutation.mutateAsync({ taskId: selectedTask.id, content });
-      setCommentModalOpen(false);
-      setCommentText("");
-      setCommentError(null);
-      setFeedback({ message: `Comment added: ${selectedTask.title}`, tone: "success" });
+      await commentMutation.mutateAsync({ taskId: task.id, content });
+      setFeedback({ message: `Comment added: ${task.title}`, tone: "success" });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.task(selectedTask.id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.taskComments(selectedTask.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.task(task.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.taskComments(task.id) }),
       ]);
     } catch (error) {
-      setCommentError(formatToduClientError(error));
+      setFeedback({ message: formatToduClientError(error), tone: "error" });
     }
   };
 
-  const closeCommentModal = (): void => {
-    setCommentModalOpen(false);
-    setCommentText("");
-    setCommentError(null);
-    setFeedback({ message: "Cancelled comment.", tone: "info" });
+  const openCommentEditor = async (task: Task): Promise<void> => {
+    onGlobalInputEnabledChange?.(false);
+
+    try {
+      let composedContent: string | null = null;
+      await suspendTerminal(() => {
+        composedContent = composeComment();
+      });
+      const content = normalizeCommentContent(composedContent ?? "");
+      if (!content) {
+        setFeedback({ message: "Cancelled comment.", tone: "info" });
+        return;
+      }
+
+      await submitComment(task, content);
+    } catch (error) {
+      setFeedback({ message: formatToduClientError(error), tone: "error" });
+    } finally {
+      onGlobalInputEnabledChange?.(true);
+    }
   };
 
   useInput((input, key) => {
     if (filterModalTarget) {
-      return;
-    }
-
-    if (commentModalOpen) {
-      if (key.escape) {
-        closeCommentModal();
-        return;
-      }
-
-      if (key.return) {
-        void submitComment();
-        return;
-      }
-
-      if (key.backspace || key.delete) {
-        setCommentText((current) => current.slice(0, -1));
-        setCommentError(null);
-        return;
-      }
-
-      if (!key.ctrl && !key.meta && input.length > 0) {
-        setCommentText((current) => `${current}${input}`);
-        setCommentError(null);
-      }
       return;
     }
 
@@ -384,10 +353,8 @@ export function TasksScreen({
         return;
       }
 
-      setCommentModalOpen(true);
-      setCommentText("");
-      setCommentError(null);
       setFeedback(null);
+      void openCommentEditor(selectedTask);
       return;
     }
 
@@ -582,7 +549,7 @@ export function TasksScreen({
               error={selectedDetailQuery.error ?? commentsQuery.error}
               maxContentWidth={detailContentWidth}
               maxContentRows={detailContentRows}
-              scrollEnabled={!commentModalOpen && !confirmCancel}
+              scrollEnabled={!confirmCancel}
             />
           ) : null}
         </Box>
@@ -609,14 +576,6 @@ export function TasksScreen({
             setFilterModalTarget(null);
           }}
           onCancel={() => setFilterModalTarget(null)}
-        />
-      ) : null}
-      {commentModalOpen ? (
-        <TextInputModal
-          title={selectedTask ? `Comment on ${selectedTask.title}` : "Comment"}
-          value={commentText}
-          placeholder="Write a task comment…"
-          error={commentError}
         />
       ) : null}
       {confirmCancel ? <ConfirmDialog message="Cancel selected task?" /> : null}
@@ -725,13 +684,11 @@ function truncateProjectLabel(label: string, maxLength = 24): string {
 }
 
 function resolveTasksFooterContext({
-  commentModalOpen,
   confirmCancel,
   filterModalTarget,
   focusedPane,
   taskDetailOpen,
 }: {
-  commentModalOpen: boolean;
   confirmCancel: boolean;
   filterModalTarget: PaneFocus | null;
   focusedPane: PaneFocus;
@@ -739,10 +696,6 @@ function resolveTasksFooterContext({
 }): TasksFooterContext {
   if (filterModalTarget) {
     return "filter-modal";
-  }
-
-  if (commentModalOpen) {
-    return "comment-modal";
   }
 
   if (confirmCancel) {

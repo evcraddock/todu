@@ -316,53 +316,39 @@ describe("TasksScreen", () => {
     await waitForFrameText(lastFrame, "Cannot update task status");
   });
 
-  it("opens comment input and submits a non-empty selected-task comment", async () => {
+  it("launches the comment editor and submits its non-empty content", async () => {
     const client = createClient();
+    const composeComment = vi.fn().mockReturnValue("New task context");
     const { stdin, lastFrame } = renderWithQuery(
-      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        composeComment={composeComment}
+      />,
     );
 
     await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
-    await waitForFrameText(lastFrame, "Comment on First task");
-    stdin.write("New task context");
-    await waitForFrameText(lastFrame, "New task context_");
-    stdin.write("\r");
 
     await waitForFrameText(lastFrame, "Comment added: First task");
+    expect(composeComment).toHaveBeenCalledOnce();
     expect(client.task.createComment).toHaveBeenCalledWith("task-1", "New task context");
   });
 
-  it("rejects empty comments without sending a mutation", async () => {
+  it("treats empty editor content as cancellation without sending a mutation", async () => {
     const client = createClient();
     const { stdin, lastFrame } = renderWithQuery(
-      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        composeComment={() => "   "}
+      />,
     );
 
     await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
-    await waitForFrameText(lastFrame, "Comment on First task");
-    stdin.write("   ");
-    stdin.write("\r");
-
-    await waitForFrameText(lastFrame, "Comment cannot be empty.");
-    expect(client.task.createComment).not.toHaveBeenCalled();
-  });
-
-  it("cancels comment input without sending a mutation", async () => {
-    const client = createClient();
-    const { stdin, lastFrame } = renderWithQuery(
-      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
-    );
-
-    await waitForFrameText(lastFrame, "First task");
-    stdin.write("c");
-    await waitForFrameText(lastFrame, "Comment on First task");
-    stdin.write("Draft comment");
-    stdin.write("\u001B");
 
     await waitForFrameText(lastFrame, "Cancelled comment.");
-    expect(lastFrame()).not.toContain("Comment on First task");
     expect(client.task.createComment).not.toHaveBeenCalled();
   });
 
@@ -375,14 +361,20 @@ describe("TasksScreen", () => {
         createComment: vi.fn(),
       },
     });
+    const composeComment = vi.fn();
     const { stdin, lastFrame } = renderWithQuery(
-      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        composeComment={composeComment}
+      />,
     );
 
     await waitForFrameText(lastFrame, "No active, in-progress, or waiting");
     stdin.write("c");
 
     await waitForFrameText(lastFrame, "No task selected for comment.");
+    expect(composeComment).not.toHaveBeenCalled();
     expect(client.task.createComment).not.toHaveBeenCalled();
   });
 
@@ -393,6 +385,7 @@ describe("TasksScreen", () => {
         client={client}
         projectFilter={allProjectsFilter}
         statusActionsEnabled={false}
+        composeComment={vi.fn()}
       />,
     );
 
@@ -400,7 +393,25 @@ describe("TasksScreen", () => {
     stdin.write("c");
 
     await waitForFrameText(lastFrame, "Task actions unavailable while daemon is disconnected.");
-    expect(lastFrame()).not.toContain("Comment on First task");
+    expect(client.task.createComment).not.toHaveBeenCalled();
+  });
+
+  it("renders clear comment editor launch errors", async () => {
+    const client = createClient();
+    const { stdin, lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        composeComment={() => {
+          throw new Error('Failed to launch terminal editor "missing-editor": command not found');
+        }}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "First task");
+    stdin.write("c");
+
+    await waitForFrameText(lastFrame, "Failed to launch terminal editor");
     expect(client.task.createComment).not.toHaveBeenCalled();
   });
 
@@ -415,15 +426,15 @@ describe("TasksScreen", () => {
       }),
     );
     const { stdin, lastFrame } = renderWithQuery(
-      <TasksScreen client={client} projectFilter={allProjectsFilter} />,
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        composeComment={() => "New task context"}
+      />,
     );
 
     await waitForFrameText(lastFrame, "First task");
     stdin.write("c");
-    await waitForFrameText(lastFrame, "Comment on First task");
-    stdin.write("New task context");
-    await waitForFrameText(lastFrame, "New task context_");
-    stdin.write("\r");
 
     await waitForFrameText(lastFrame, "Cannot add comment");
   });
