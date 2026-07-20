@@ -55,7 +55,7 @@ packages/tui/
       TasksScreen.tsx
       TaskDetailScreen.tsx
       ProjectsScreen.tsx
-      HabitsScreen.tsx
+      HomeScreen.tsx
       SettingsScreen.tsx
     components/
       AppFrame.tsx
@@ -256,15 +256,16 @@ The TUI should be optimized for fast keyboard workflows.
 
 The current TUI implements these global navigation and task-list movement keys:
 
-- `1`: Habits (the default startup screen).
+- `1`: Home (the default startup screen).
 - `2`: Tasks.
 - `3`: Projects.
 - `4`: Data Status.
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.
 - `Ctrl+C`: Quit immediately.
-- `j` / `Down Arrow`: Move down in the Tasks, Projects, or Habits list.
-- `k` / `Up Arrow`: Move up in the Tasks, Projects, or Habits list.
+- `Ctrl+J` / `Ctrl+K`: Move focus between Home sections.
+- `j` / `Down Arrow`: Move down in the Tasks, Projects, or focused Home Habits list.
+- `k` / `Up Arrow`: Move up in the Tasks, Projects, or focused Home Habits list.
 - `Enter`: Select the focused project and open Tasks filtered by that project, or toggle the focused habit's check-in.
 - `Space`: Toggle the focused habit's check-in.
 - `a`: Clear the project filter and open Tasks for all projects.
@@ -287,24 +288,24 @@ The current TUI implements these global navigation and task-list movement keys:
 
 ### MVP Screens
 
-1. **Tasks**
+1. **Home**
+   - Now, Next, Waiting, and Habits summary sections.
+   - `Ctrl+J` / `Ctrl+K` moves focus between sections.
+   - The Habits section preserves active habit checkboxes, `j` / `k` and arrow-key selection, and `Enter` / `Space` toggling.
+
+2. **Tasks**
    - Active/in-progress/waiting task list.
    - Project filter.
    - Search filter.
    - Sort by priority or updated/due date once due dates exist.
    - Selected task detail pane.
 
-2. **Projects**
+3. **Projects**
    - Project list with an `All projects` option.
    - Selected project summary.
    - `Enter` opens Tasks filtered by the focused project.
    - `a` clears the filter and returns to all-project Tasks.
    - The active project filter is shown in the shell status line.
-
-3. **Habits**
-   - Active habit list with today's completion state.
-   - `j` / `k` and arrow-key selection.
-   - `Enter` or `Space` toggles today's check-in and refreshes the displayed checkbox.
 
 4. **Task detail**
    - Full title, status, priority, project, labels, assignees.

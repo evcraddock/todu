@@ -8,7 +8,10 @@ describe("HelpBar", () => {
     ["tasks-projects", ["↑↓ Select", "→ Tasks", "Enter Focus", "? Help", "q Quit"]],
     ["task-detail", ["↑↓ Scroll", "Esc Back", "s Start", "d Done", "c Comment", "? Help"]],
     ["projects", ["↑↓ Select", "Enter Open Tasks", "a All Projects", "? Help", "q Quit"]],
-    ["habits", ["↑↓ Select", "Enter/Space Toggle", "? Help", "q Quit"]],
+    [
+      "home",
+      ["Ctrl+J/K Section", "↑↓ Select habit", "Enter/Space Toggle habit", "? Help", "q Quit"],
+    ],
     ["data-status", ["? Help", "q Quit"]],
     ["help", ["q Back"]],
     ["cancel-confirmation", ["y Confirm", "n/Esc Cancel"]],

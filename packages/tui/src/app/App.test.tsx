@@ -183,16 +183,16 @@ describe("App", () => {
 
     const { lastFrame } = render(<App connection={connection} toduClient={createFakeClient()} />);
 
-    expect(lastFrame()).toContain("Habits");
+    expect(lastFrame()).toContain("Home");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
     expect(lastFrame()).toContain("Daemon unavailable");
     expect(lastFrame()).toContain("todu daemon start");
-    expect(lastFrame()).toContain("1 Habits");
+    expect(lastFrame()).toContain("1 Home");
     expect(lastFrame()).toContain("2 Tasks");
     expect(lastFrame()).toContain("3 Projects");
     expect(lastFrame()).toContain("4 Data Status");
     expect(lastFrame()).toContain("↑↓ Select");
-    expect(lastFrame()).toContain("Enter/Space Toggle");
+    expect(lastFrame()).toContain("Ctrl+J/K Section");
   });
 
   it("shows connected daemon status without body handshake diagnostics", async () => {
@@ -203,9 +203,9 @@ describe("App", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
 
-    expect(lastFrame()).toContain("Habits (1)");
+    expect(lastFrame()).toContain("Home");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
     expect(lastFrame()).not.toContain("Daemon: connected");
     expect(lastFrame()).not.toContain("Daemon connected");
@@ -221,8 +221,8 @@ describe("App", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
-    expect(lastFrame()).toContain("Habits (1)");
+    await waitForFrameText(lastFrame, "Home");
+    expect(lastFrame()).toContain("Home");
 
     stdin.write("2");
     await waitForFrameText(lastFrame, "Ship");
@@ -250,7 +250,7 @@ describe("App", () => {
       <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
     stdin.write("3");
     await waitForFrameText(lastFrame, "Project detail");
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -273,7 +273,7 @@ describe("App", () => {
       <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
     stdin.write("2");
     await waitForFrameText(lastFrame, "Ship");
     stdin.write("h");
@@ -297,7 +297,7 @@ describe("App", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
     stdin.write("3");
     await waitForFrameText(lastFrame, "Project detail");
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -323,7 +323,7 @@ describe("App", () => {
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
 
-    expect(lastFrame()).toContain("1/2/3/4 Habits/Tasks/Projects/Data Status");
+    expect(lastFrame()).toContain("1/2/3/4 Home/Tasks/Projects/Data Status");
     expect(lastFrame()).toContain("?      Help");
     expect(lastFrame()).toContain("j/↓    Down");
     expect(lastFrame()).toContain("Enter  Select/Open/Submit");
@@ -343,7 +343,7 @@ describe("App", () => {
       />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
     stdin.write("2");
     await waitForFrameText(lastFrame, "Ship");
     expect(lastFrame()).toContain("c Comment");
@@ -405,7 +405,7 @@ describe("App", () => {
       <App connection={connection} toduClient={createFakeClient()} />,
     );
 
-    await waitForFrameText(lastFrame, "Meditate");
+    await waitForFrameText(lastFrame, "Home");
     stdin.write("2");
     await waitForFrameText(lastFrame, "Ship");
     await vi.waitFor(() => {
