@@ -256,9 +256,9 @@ The TUI should be optimized for fast keyboard workflows.
 
 The current TUI implements these global navigation and task-list movement keys:
 
-- `1`: Tasks.
-- `2`: Projects.
-- `3`: Habits.
+- `1`: Habits (the default startup screen).
+- `2`: Tasks.
+- `3`: Projects.
 - `4`: Data Status.
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.

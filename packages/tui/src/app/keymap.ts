@@ -6,14 +6,14 @@ export interface TuiKeyBinding {
 }
 
 export const primaryRouteKeyBindings: readonly TuiKeyBinding[] = [
-  { keys: "1", description: "Tasks" },
-  { keys: "2", description: "Projects" },
-  { keys: "3", description: "Habits" },
+  { keys: "1", description: "Habits" },
+  { keys: "2", description: "Tasks" },
+  { keys: "3", description: "Projects" },
   { keys: "4", description: "Data Status" },
 ] as const;
 
 export const globalKeyBindings: readonly TuiKeyBinding[] = [
-  { keys: "1/2/3/4", description: "Tasks/Projects/Habits/Data Status" },
+  { keys: "1/2/3/4", description: "Habits/Tasks/Projects/Data Status" },
   { keys: "?", description: "Help" },
   { keys: "q", description: "Back/Quit" },
   { keys: "j/↓", description: "Down" },
@@ -118,15 +118,15 @@ export function resolveGlobalKeyAction(input: string, key: AppKeyboardKey): AppK
   }
 
   if (input === "1") {
-    return { type: "navigate", route: "tasks" };
+    return { type: "navigate", route: "habits" };
   }
 
   if (input === "2") {
-    return { type: "navigate", route: "projects" };
+    return { type: "navigate", route: "tasks" };
   }
 
   if (input === "3") {
-    return { type: "navigate", route: "habits" };
+    return { type: "navigate", route: "projects" };
   }
 
   if (input === "4") {
