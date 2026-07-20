@@ -36,11 +36,13 @@ npm install -g @todu/tui
 todu-tui
 ```
 
-If `@todu/cli` is installed too, the CLI exposes a convenience wrapper that launches the same TUI entrypoint:
+If `@todu/cli` is installed too, running it without arguments launches the same TUI entrypoint:
 
 ```bash
-todu tui
+todu
 ```
+
+The explicit `todu tui` wrapper remains available.
 
 Use the same version alignment rule as the CLI: prefer matching `@todu/tui`, `@todu/cli`, and desktop app versions. The TUI is released independently so each incremental terminal UI improvement can be versioned and published as soon as it lands.
 

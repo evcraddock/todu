@@ -30,17 +30,20 @@ export function registerTuiCommand(
   program: Command,
   launch: (args: readonly string[]) => Promise<number> = launchTui,
 ): void {
+  const runTui = async (args: readonly string[]): Promise<void> => {
+    const exitCode = await launch(args);
+    if (exitCode !== 0) {
+      process.exitCode = exitCode;
+    }
+  };
+
+  program.action(() => runTui([]));
   program
     .command("tui")
     .description("Launch the Todu terminal UI")
     .argument("[args...]", "arguments to pass to todu-tui")
     .allowUnknownOption(true)
-    .action(async (args: string[]) => {
-      const exitCode = await launch(args);
-      if (exitCode !== 0) {
-        process.exitCode = exitCode;
-      }
-    });
+    .action((args: string[]) => runTui(args));
 }
 
 export async function launchTui(

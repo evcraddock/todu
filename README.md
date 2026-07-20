@@ -117,11 +117,13 @@ Run the standalone TUI command:
 todu-tui
 ```
 
-If `@todu/cli` is also installed, you can launch the same TUI through the CLI wrapper:
+If `@todu/cli` is also installed, running it without arguments launches the same TUI:
 
 ```bash
-todu tui
+todu
 ```
+
+The explicit wrapper remains available as `todu tui`.
 
 From a source checkout, build the workspace first with `npm run build` or run the wrapper from the checkout where `tsx` is installed for development fallback.
 
