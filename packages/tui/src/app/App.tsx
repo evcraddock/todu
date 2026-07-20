@@ -13,6 +13,7 @@ import { DataStatusScreen } from "../screens/DataStatusScreen.js";
 import { HabitsScreen } from "../screens/HabitsScreen.js";
 import { HelpScreen } from "../screens/HelpScreen.js";
 import { HomeScreen } from "../screens/HomeScreen.js";
+import { JournalScreen } from "../screens/JournalScreen.js";
 import { ProjectsScreen } from "../screens/ProjectsScreen.js";
 import { TasksScreen } from "../screens/TasksScreen.js";
 import {
@@ -263,6 +264,16 @@ function RouteScreen({
   if (route === "habits") {
     return canShowDataScreens ? (
       <HabitsScreen client={toduClient} dataQueriesEnabled={dataQueriesEnabled} />
+    ) : null;
+  }
+
+  if (route === "journal") {
+    return canShowDataScreens ? (
+      <JournalScreen
+        client={toduClient}
+        dataQueriesEnabled={dataQueriesEnabled}
+        onGlobalInputEnabledChange={onGlobalInputEnabledChange}
+      />
     ) : null;
   }
 

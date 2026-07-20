@@ -10,6 +10,7 @@ describe("HelpBar", () => {
     ["projects", ["↑↓ Select", "Enter Open Tasks", "a All Projects", "? Help", "q Quit"]],
     ["home", ["Shift+J/K Section", "j/k/↑↓ Select item", "? Help", "q Quit"]],
     ["habits", ["j/k/↑↓ Select", "Enter/Space Toggle", "? Help", "q Quit"]],
+    ["journal", ["Shift+H/L Previous/Next Week", "n New Entry", "? Help", "q Quit"]],
     ["data-status", ["? Help", "q Quit"]],
     ["help", ["q Back"]],
     ["cancel-confirmation", ["y Confirm", "n/Esc Cancel"]],

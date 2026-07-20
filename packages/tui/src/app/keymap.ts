@@ -8,13 +8,14 @@ export interface TuiKeyBinding {
 export const primaryRouteKeyBindings: readonly TuiKeyBinding[] = [
   { keys: "1", description: "Home" },
   { keys: "2", description: "Habits" },
-  { keys: "3", description: "Tasks" },
-  { keys: "4", description: "Projects" },
-  { keys: "5", description: "Data Status" },
+  { keys: "3", description: "Journal" },
+  { keys: "4", description: "Tasks" },
+  { keys: "5", description: "Projects" },
+  { keys: "6", description: "Data Status" },
 ] as const;
 
 export const globalKeyBindings: readonly TuiKeyBinding[] = [
-  { keys: "1/2/3/4/5", description: "Home/Habits/Tasks/Projects/Data Status" },
+  { keys: "1/2/3/4/5/6", description: "Home/Habits/Journal/Tasks/Projects/Data Status" },
   { keys: "?", description: "Help" },
   { keys: "q", description: "Back/Quit" },
   { keys: "j/↓", description: "Down" },
@@ -44,6 +45,7 @@ export type FooterContext =
   | "projects"
   | "home"
   | "habits"
+  | "journal"
   | "data-status"
   | "help";
 
@@ -87,6 +89,12 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
   habits: [
     { keys: "j/k/↑↓", description: "Select" },
     { keys: "Enter/Space", description: "Toggle" },
+    { keys: "?", description: "Help" },
+    { keys: "q", description: "Quit" },
+  ],
+  journal: [
+    { keys: "Shift+H/L", description: "Previous/Next Week" },
+    { keys: "n", description: "New Entry" },
     { keys: "?", description: "Help" },
     { keys: "q", description: "Quit" },
   ],
@@ -139,14 +147,18 @@ export function resolveGlobalKeyAction(input: string, key: AppKeyboardKey): AppK
   }
 
   if (input === "3") {
-    return { type: "navigate", route: "tasks" };
+    return { type: "navigate", route: "journal" };
   }
 
   if (input === "4") {
-    return { type: "navigate", route: "projects" };
+    return { type: "navigate", route: "tasks" };
   }
 
   if (input === "5") {
+    return { type: "navigate", route: "projects" };
+  }
+
+  if (input === "6") {
     return { type: "navigate", route: "data-status" };
   }
 

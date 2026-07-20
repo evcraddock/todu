@@ -1,4 +1,12 @@
-export const appRoutes = ["home", "habits", "tasks", "projects", "data-status", "help"] as const;
+export const appRoutes = [
+  "home",
+  "habits",
+  "journal",
+  "tasks",
+  "projects",
+  "data-status",
+  "help",
+] as const;
 
 export type AppRoute = (typeof appRoutes)[number];
 export type PrimaryAppRoute = Exclude<AppRoute, "help">;
@@ -10,6 +18,7 @@ export const routeLabels: Record<AppRoute, string> = {
   projects: "Projects",
   home: "Home",
   habits: "Habits",
+  journal: "Journal",
   "data-status": "Data Status",
   help: "Help",
 };

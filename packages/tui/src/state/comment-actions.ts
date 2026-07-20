@@ -21,15 +21,42 @@ export interface ComposeTaskCommentOptions {
   spawnEditor?: (command: string, args: readonly string[]) => EditorProcessResult;
 }
 
+interface ComposeEditorContentOptions extends ComposeTaskCommentOptions {
+  documentLabel: string;
+  temporaryPrefix: string;
+  fileName: string;
+}
+
 export function normalizeCommentContent(content: string): string | null {
   const trimmed = content.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function composeTaskComment({
+export function composeTaskComment(options: ComposeTaskCommentOptions = {}): string | null {
+  return composeEditorContent({
+    ...options,
+    documentLabel: "comment",
+    temporaryPrefix: "todu-comment-",
+    fileName: "comment.md",
+  });
+}
+
+export function composeJournalEntry(options: ComposeTaskCommentOptions = {}): string | null {
+  return composeEditorContent({
+    ...options,
+    documentLabel: "journal entry",
+    temporaryPrefix: "todu-journal-",
+    fileName: "entry.md",
+  });
+}
+
+function composeEditorContent({
+  documentLabel,
+  temporaryPrefix,
+  fileName,
   env = process.env,
   spawnEditor = defaultSpawnEditor,
-}: ComposeTaskCommentOptions = {}): string | null {
+}: ComposeEditorContentOptions): string | null {
   const configuredEditor = env.VISUAL?.trim() || env.EDITOR?.trim();
   if (!configuredEditor) {
     throw new CommentEditorError("No terminal editor configured. Set VISUAL or EDITOR.");
@@ -45,11 +72,11 @@ export function composeTaskComment({
   let failure: unknown;
 
   try {
-    temporaryDirectory = mkdtempSync(join(tmpdir(), "todu-comment-"));
-    const commentPath = join(temporaryDirectory, "comment.md");
-    writeFileSync(commentPath, "", { encoding: "utf8", mode: 0o600 });
+    temporaryDirectory = mkdtempSync(join(tmpdir(), temporaryPrefix));
+    const contentPath = join(temporaryDirectory, fileName);
+    writeFileSync(contentPath, "", { encoding: "utf8", mode: 0o600 });
 
-    const result = spawnEditor(command, [...editorArgs, commentPath]);
+    const result = spawnEditor(command, [...editorArgs, contentPath]);
     if (result.error) {
       throw new CommentEditorError(
         `Failed to launch terminal editor "${command}": ${result.error.message}`,
@@ -57,7 +84,7 @@ export function composeTaskComment({
     }
     if (result.signal) {
       throw new CommentEditorError(
-        `Terminal editor "${command}" was terminated by ${result.signal}; comment was not added.`,
+        `Terminal editor "${command}" was terminated by ${result.signal}; ${documentLabel} was not added.`,
       );
     }
     if (result.status === null) {
@@ -65,17 +92,17 @@ export function composeTaskComment({
     }
     if (result.status !== 0) {
       throw new CommentEditorError(
-        `Terminal editor "${command}" exited with status ${result.status}; comment was not added.`,
+        `Terminal editor "${command}" exited with status ${result.status}; ${documentLabel} was not added.`,
       );
     }
 
-    content = normalizeCommentContent(readFileSync(commentPath, "utf8"));
+    content = normalizeCommentContent(readFileSync(contentPath, "utf8"));
   } catch (error) {
     failure =
       error instanceof CommentEditorError
         ? error
         : new CommentEditorError(
-            `Unable to compose task comment with terminal editor "${command}": ${formatError(error)}`,
+            `Unable to compose ${documentLabel} with terminal editor "${command}": ${formatError(error)}`,
           );
   }
 
@@ -84,7 +111,7 @@ export function composeTaskComment({
       rmSync(temporaryDirectory, { recursive: true, force: true });
     } catch (error) {
       failure ??= new CommentEditorError(
-        `Unable to remove temporary task comment file: ${formatError(error)}`,
+        `Unable to remove temporary ${documentLabel} file: ${formatError(error)}`,
       );
     }
   }
