@@ -1,5 +1,11 @@
 # @todu/cli
 
+## 0.24.0
+
+### Minor Changes
+
+- 6031ce3: Launch the terminal UI when `todu` runs without arguments.
+
 ## 0.23.3
 
 ### Patch Changes
