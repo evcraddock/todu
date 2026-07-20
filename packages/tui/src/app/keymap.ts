@@ -73,7 +73,7 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
   ],
   habits: [
     { keys: "↑↓", description: "Select" },
-    { keys: "Enter", description: "Toggle" },
+    { keys: "Enter/Space", description: "Toggle" },
     { keys: "?", description: "Help" },
     { keys: "q", description: "Quit" },
   ],

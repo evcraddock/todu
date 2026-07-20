@@ -106,7 +106,7 @@ describe("HabitsScreen", () => {
     await waitForFrameText(lastFrame, "> [ ] Meditate");
   });
 
-  it("checks and unchecks the selected habit with Enter and updates immediately", async () => {
+  it("toggles the selected habit with Enter or Space and updates immediately", async () => {
     const client = createClient();
     const { stdin, lastFrame } = renderWithQuery(<HabitsScreen client={client} />);
 
@@ -115,7 +115,7 @@ describe("HabitsScreen", () => {
     await waitForFrameText(lastFrame, "> [x] Meditate");
     expect(client.habit.check).toHaveBeenCalledWith("hab-1");
 
-    stdin.write("\r");
+    stdin.write(" ");
     await waitForFrameText(lastFrame, "> [ ] Meditate");
     expect(client.habit.uncheck).toHaveBeenCalledWith("hab-1");
   });

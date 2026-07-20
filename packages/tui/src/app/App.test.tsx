@@ -235,7 +235,7 @@ describe("App", () => {
     stdin.write("3");
     await waitForFrameText(lastFrame, "Meditate");
     expect(lastFrame()).toContain("Habits (1)");
-    expect(lastFrame()).toContain("Enter Toggle");
+    expect(lastFrame()).toContain("Enter/Space Toggle");
 
     stdin.write("4");
     await waitForFrameText(lastFrame, "Data status ready");

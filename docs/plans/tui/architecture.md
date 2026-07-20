@@ -266,6 +266,7 @@ The current TUI implements these global navigation and task-list movement keys:
 - `j` / `Down Arrow`: Move down in the Tasks, Projects, or Habits list.
 - `k` / `Up Arrow`: Move up in the Tasks, Projects, or Habits list.
 - `Enter`: Select the focused project and open Tasks filtered by that project, or toggle the focused habit's check-in.
+- `Space`: Toggle the focused habit's check-in.
 - `a`: Clear the project filter and open Tasks for all projects.
 - `s`: Start the selected task (`inprogress`).
 - `w`: Mark the selected task waiting.
@@ -303,7 +304,7 @@ The current TUI implements these global navigation and task-list movement keys:
 3. **Habits**
    - Active habit list with today's completion state.
    - `j` / `k` and arrow-key selection.
-   - `Enter` toggles today's check-in and refreshes the displayed checkbox.
+   - `Enter` or `Space` toggles today's check-in and refreshes the displayed checkbox.
 
 4. **Task detail**
    - Full title, status, priority, project, labels, assignees.

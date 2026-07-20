@@ -100,7 +100,11 @@ export function HabitsScreen({
       return;
     }
 
-    if ((key.return || input === "\r") && selectedHabit && !toggleMutation.isPending) {
+    if (
+      (key.return || input === "\r" || input === " ") &&
+      selectedHabit &&
+      !toggleMutation.isPending
+    ) {
       void toggleHabit(selectedHabit);
     }
   });
