@@ -1,6 +1,6 @@
 {
   "name": "@todu/cli",
-  "version": "0.23.3",
+  "version": "0.24.0",
   "description": "CLI for todu task management — create, track, and sync tasks from the terminal",
   "type": "module",
   "bin": {
