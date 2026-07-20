@@ -87,6 +87,7 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
         ),
       create: vi.fn(),
     },
+    habit: { list: vi.fn().mockResolvedValue([]), check: vi.fn(), uncheck: vi.fn() },
     sync: {
       status: vi
         .fn()

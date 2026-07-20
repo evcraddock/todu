@@ -1,6 +1,10 @@
 import type {
   Actor,
   CreateNoteInput,
+  Habit,
+  HabitEntry,
+  HabitFilter,
+  HabitId,
   Note,
   NoteFilter,
   Project,
@@ -43,6 +47,11 @@ export interface TuiToduClient {
   note: {
     list(filter?: NoteFilter): Promise<Note[]>;
     create(input: CreateNoteInput): Promise<Note>;
+  };
+  habit: {
+    list(filter?: HabitFilter): Promise<Habit[]>;
+    check(id: HabitId | string): Promise<HabitEntry>;
+    uncheck(id: HabitId | string): Promise<HabitEntry>;
   };
   sync: {
     status(): Promise<TuiSyncStatus>;
@@ -99,6 +108,11 @@ export function createTuiToduClient(daemon: Pick<DaemonConnection, "request">): 
     note: {
       list: (filter) => invoke<Note[]>("note.list", { filter }),
       create: (input) => invoke<Note>("note.create", { input }),
+    },
+    habit: {
+      list: (filter) => invoke<Habit[]>("habit.list", { filter }),
+      check: (id) => invoke<HabitEntry>("habit.check", { id }),
+      uncheck: (id) => invoke<HabitEntry>("habit.uncheck", { id }),
     },
     sync: {
       status: () => invoke<TuiSyncStatus>("sync.status", {}),

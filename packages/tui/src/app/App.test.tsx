@@ -134,6 +134,30 @@ function createFakeClient(): TuiToduClient {
       createComment: vi.fn(),
     },
     note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    habit: {
+      list: vi.fn().mockImplementation((filter = {}) =>
+        Promise.resolve(
+          filter.checkedToday
+            ? []
+            : [
+                {
+                  id: "hab-1",
+                  title: "Meditate",
+                  projectId: "project-1",
+                  schedule: "FREQ=DAILY",
+                  timezone: "America/Chicago",
+                  startDate: "2026-07-01",
+                  nextDue: "2026-07-20",
+                  paused: false,
+                  createdAt: "2026-07-01T00:00:00.000Z",
+                  updatedAt: "2026-07-01T00:00:00.000Z",
+                },
+              ],
+        ),
+      ),
+      check: vi.fn().mockResolvedValue({ date: "2026-07-20", completed: true }),
+      uncheck: vi.fn().mockResolvedValue({ date: "2026-07-20", completed: false }),
+    },
     sync: {
       status: vi
         .fn()
@@ -165,7 +189,8 @@ describe("App", () => {
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Tasks");
     expect(lastFrame()).toContain("2 Projects");
-    expect(lastFrame()).toContain("3 Data Status");
+    expect(lastFrame()).toContain("3 Habits");
+    expect(lastFrame()).toContain("4 Data Status");
     expect(lastFrame()).toContain("↑↓ Select");
     expect(lastFrame()).toContain("← Projects");
     expect(lastFrame()).toContain("Enter Details");
@@ -208,6 +233,11 @@ describe("App", () => {
     expect(lastFrame()).toContain("a All Projects");
 
     stdin.write("3");
+    await waitForFrameText(lastFrame, "Meditate");
+    expect(lastFrame()).toContain("Habits (1)");
+    expect(lastFrame()).toContain("Enter Toggle");
+
+    stdin.write("4");
     await waitForFrameText(lastFrame, "Data status ready");
     expect(lastFrame()).toContain("Projects: 1");
     expect(lastFrame()).toContain("? Help");
@@ -290,7 +320,7 @@ describe("App", () => {
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
 
-    expect(lastFrame()).toContain("1/2/3  Tasks/Projects/Data Status");
+    expect(lastFrame()).toContain("1/2/3/4 Tasks/Projects/Habits/Data Status");
     expect(lastFrame()).toContain("?      Help");
     expect(lastFrame()).toContain("j/↓    Down");
     expect(lastFrame()).toContain("Enter  Select/Open/Submit");
