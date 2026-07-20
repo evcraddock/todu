@@ -302,7 +302,7 @@ describe("App", () => {
     expect(lastFrame()).toContain("Ctrl+C Quit");
   });
 
-  it("updates the footer for comment and cancellation modals", async () => {
+  it("updates the footer for cancellation confirmation", async () => {
     const { stdin, lastFrame } = render(
       <App
         connection={createFakeConnection(createConnectedSnapshot())}
@@ -311,16 +311,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Ship");
-    stdin.write("c");
-    await waitForFrameText(lastFrame, "Comment on Ship");
-    expect(lastFrame()).toContain("Enter Submit");
-    expect(lastFrame()).toContain("Esc Cancel");
-
-    stdin.write("\u001B");
-    await waitForFrameText(lastFrame, "Cancelled comment.");
-    await waitForFrameText(lastFrame, "↑↓ Select");
-    expect(lastFrame()).toContain("← Projects");
-    expect(lastFrame()).toContain("Enter Details");
+    expect(lastFrame()).toContain("c Comment");
 
     stdin.write("x");
     await waitForFrameText(lastFrame, "Cancel selected task?");

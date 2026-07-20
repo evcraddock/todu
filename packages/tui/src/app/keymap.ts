@@ -23,7 +23,7 @@ export const globalKeyBindings: readonly TuiKeyBinding[] = [
   { keys: "w", description: "Wait" },
   { keys: "d", description: "Done" },
   { keys: "x", description: "Cancel" },
-  { keys: "c", description: "Comment" },
+  { keys: "c", description: "Comment in editor" },
   { keys: "a", description: "All Projects" },
   { keys: "y/n", description: "Confirm/Cancel" },
   { keys: "Ctrl+F", description: "Filter list" },
@@ -34,7 +34,6 @@ export type TasksFooterContext =
   | "tasks-list"
   | "tasks-projects"
   | "task-detail"
-  | "comment-modal"
   | "cancel-confirmation"
   | "filter-modal";
 
@@ -45,6 +44,7 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
     { keys: "↑↓", description: "Select" },
     { keys: "←", description: "Projects" },
     { keys: "Enter", description: "Details" },
+    { keys: "c", description: "Comment" },
     { keys: "?", description: "Help" },
     { keys: "q", description: "Quit" },
   ],
@@ -60,6 +60,7 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
     { keys: "Esc", description: "Back" },
     { keys: "s", description: "Start" },
     { keys: "d", description: "Done" },
+    { keys: "c", description: "Comment" },
     { keys: "?", description: "Help" },
   ],
   projects: [
@@ -74,10 +75,6 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
     { keys: "q", description: "Quit" },
   ],
   help: [{ keys: "q", description: "Back" }],
-  "comment-modal": [
-    { keys: "Enter", description: "Submit" },
-    { keys: "Esc", description: "Cancel" },
-  ],
   "cancel-confirmation": [
     { keys: "y", description: "Confirm" },
     { keys: "n/Esc", description: "Cancel" },

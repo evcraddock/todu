@@ -270,7 +270,7 @@ The current TUI implements these global navigation and task-list movement keys:
 - `w`: Mark the selected task waiting.
 - `d`: Complete the selected task.
 - `x`: Cancel the selected task after confirmation.
-- `c`: Open a focused input to add a comment to the selected task.
+- `c`: Open the configured `VISUAL` or `EDITOR` terminal editor to add a comment to the selected task.
 
 ### MVP Task Actions
 
@@ -278,7 +278,7 @@ The current TUI implements these global navigation and task-list movement keys:
 - Mark waiting: set status to `waiting`.
 - Complete task: set status to `done`.
 - Cancel task: confirm, then set status to `cancelled`.
-- Add comment: open one-line or multiline modal.
+- Add comment: suspend the TUI while the configured terminal editor composes the comment, then submit non-empty saved content.
 - Refresh: manual refetch.
 
 ## Screens
