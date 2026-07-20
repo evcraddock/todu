@@ -256,15 +256,17 @@ The TUI should be optimized for fast keyboard workflows.
 
 The current TUI implements these global navigation and task-list movement keys:
 
-- `1`: Tasks.
-- `2`: Projects.
-- `3`: Data Status.
+- `1`: Habits (the default startup screen).
+- `2`: Tasks.
+- `3`: Projects.
+- `4`: Data Status.
 - `?`: Help.
 - `q`: Back from Help or quit from a root route.
 - `Ctrl+C`: Quit immediately.
-- `j` / `Down Arrow`: Move down in the Tasks or Projects list.
-- `k` / `Up Arrow`: Move up in the Tasks or Projects list.
-- `Enter`: Select the focused project and open Tasks filtered by that project.
+- `j` / `Down Arrow`: Move down in the Tasks, Projects, or Habits list.
+- `k` / `Up Arrow`: Move up in the Tasks, Projects, or Habits list.
+- `Enter`: Select the focused project and open Tasks filtered by that project, or toggle the focused habit's check-in.
+- `Space`: Toggle the focused habit's check-in.
 - `a`: Clear the project filter and open Tasks for all projects.
 - `s`: Start the selected task (`inprogress`).
 - `w`: Mark the selected task waiting.
@@ -299,23 +301,27 @@ The current TUI implements these global navigation and task-list movement keys:
    - `a` clears the filter and returns to all-project Tasks.
    - The active project filter is shown in the shell status line.
 
-3. **Task detail**
+3. **Habits**
+   - Active habit list with today's completion state.
+   - `j` / `k` and arrow-key selection.
+   - `Enter` or `Space` toggles today's check-in and refreshes the displayed checkbox.
+
+4. **Task detail**
    - Full title, status, priority, project, labels, assignees.
    - Description rendered as terminal markdown where practical.
    - Recent comments/notes.
    - Status/comment actions.
 
-4. **Help / command palette**
+5. **Help / command palette**
    - Discoverable shortcuts.
    - Command execution for less common actions.
 
-5. **Connection/error screen**
+6. **Connection/error screen**
    - Shows daemon unavailable, reconnecting, protocol mismatch, or timeout.
    - Gives command guidance such as `todu daemon start`.
 
 ### Later Screens
 
-- Habits.
 - Recurring templates.
 - Journal/notes.
 - Approvals.

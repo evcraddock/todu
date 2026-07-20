@@ -16,6 +16,7 @@ export async function invalidateDataChangedQueries(queryClient: QueryClient): Pr
     queryClient.invalidateQueries({ queryKey: ["projects"] }),
     queryClient.invalidateQueries({ queryKey: ["tasks"] }),
     queryClient.invalidateQueries({ queryKey: ["notes"] }),
+    queryClient.invalidateQueries({ queryKey: ["habits"] }),
   ]);
 }
 

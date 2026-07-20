@@ -10,6 +10,7 @@ import {
 } from "../daemon/connection.js";
 import { createTuiToduClient, type TuiToduClient } from "../daemon/todu-client.js";
 import { DataStatusScreen } from "../screens/DataStatusScreen.js";
+import { HabitsScreen } from "../screens/HabitsScreen.js";
 import { HelpScreen } from "../screens/HelpScreen.js";
 import { ProjectsScreen } from "../screens/ProjectsScreen.js";
 import { TasksScreen } from "../screens/TasksScreen.js";
@@ -249,6 +250,12 @@ function RouteScreen({
         onGlobalInputEnabledChange={onGlobalInputEnabledChange}
         dataQueriesEnabled={dataQueriesEnabled}
       />
+    ) : null;
+  }
+
+  if (route === "habits") {
+    return canShowDataScreens ? (
+      <HabitsScreen client={toduClient} dataQueriesEnabled={dataQueriesEnabled} />
     ) : null;
   }
 

@@ -25,6 +25,7 @@ describe("event invalidation", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["projects"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["tasks"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["notes"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["habits"] });
   });
 
   it("invalidates domain and sync queries on reconnect", async () => {

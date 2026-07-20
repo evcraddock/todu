@@ -1,4 +1,11 @@
-import type { NoteFilter, ProjectFilter, TaskFilter, TaskId, TaskSortOptions } from "@todu/core";
+import type {
+  HabitFilter,
+  NoteFilter,
+  ProjectFilter,
+  TaskFilter,
+  TaskId,
+  TaskSortOptions,
+} from "@todu/core";
 
 export const queryKeys = {
   actors: () => ["actors"] as const,
@@ -9,5 +16,6 @@ export const queryKeys = {
   task: (id: TaskId | string) => ["tasks", id] as const,
   notes: (filter?: NoteFilter) => ["notes", filter ?? null] as const,
   taskComments: (taskId: TaskId | string) => ["tasks", taskId, "comments"] as const,
+  habits: (filter?: HabitFilter) => ["habits", filter ?? null] as const,
   syncStatus: () => ["sync", "status"] as const,
 };

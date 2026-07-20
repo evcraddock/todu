@@ -72,6 +72,31 @@ describe("createTuiToduClient", () => {
     });
   });
 
+  it("maps habit list and check-in methods to daemon RPC params", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, value: [{ id: "hab-1", title: "Meditate" }] })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { date: "2026-07-20", completed: true },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { date: "2026-07-20", completed: false },
+      });
+    const client = createTuiToduClient(createMockDaemon(request));
+
+    await client.habit.list({ paused: false, checkedToday: true });
+    await client.habit.check("hab-1");
+    await client.habit.uncheck("hab-1");
+
+    expect(request).toHaveBeenNthCalledWith(1, "habit.list", {
+      filter: { paused: false, checkedToday: true },
+    });
+    expect(request).toHaveBeenNthCalledWith(2, "habit.check", { id: "hab-1" });
+    expect(request).toHaveBeenNthCalledWith(3, "habit.uncheck", { id: "hab-1" });
+  });
+
   it("maps actor, note, and sync status methods", async () => {
     const request = vi
       .fn()
