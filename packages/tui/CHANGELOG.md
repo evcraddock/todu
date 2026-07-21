@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.25.0
+
+### Minor Changes
+
+- 1a62681: Add a weekly Journal screen with date-and-time-only rows, terminal-editor entry creation and editing, and Sunday-through-Saturday navigation.
+
 ## 0.24.0
 
 ### Minor Changes
