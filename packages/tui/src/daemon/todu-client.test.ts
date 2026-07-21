@@ -102,6 +102,7 @@ describe("createTuiToduClient", () => {
       .fn()
       .mockResolvedValueOnce({ ok: true, value: [] })
       .mockResolvedValueOnce({ ok: true, value: [] })
+      .mockResolvedValueOnce({ ok: true, value: { id: "note-1", content: "Updated" } })
       .mockResolvedValueOnce({
         ok: true,
         value: { local: { mode: "standalone" }, remote: { state: "disconnected" } },
@@ -110,13 +111,18 @@ describe("createTuiToduClient", () => {
 
     await client.actor.list();
     await client.note.list({ entityType: "task", entityId: "task-1" });
+    await client.note.update("note-1", { content: "Updated" });
     await client.sync.status();
 
     expect(request).toHaveBeenNthCalledWith(1, "actor.list", {});
     expect(request).toHaveBeenNthCalledWith(2, "note.list", {
       filter: { entityType: "task", entityId: "task-1" },
     });
-    expect(request).toHaveBeenNthCalledWith(3, "sync.status", {});
+    expect(request).toHaveBeenNthCalledWith(3, "note.update", {
+      id: "note-1",
+      input: { content: "Updated" },
+    });
+    expect(request).toHaveBeenNthCalledWith(4, "sync.status", {});
   });
 
   it("throws user-facing mapped errors instead of raw protocol frames", async () => {

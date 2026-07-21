@@ -1,7 +1,8 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   CommentEditorError,
+  composeJournalEntry,
   composeTaskComment,
   normalizeCommentContent,
 } from "./comment-actions.js";
@@ -29,6 +30,33 @@ describe("comment actions", () => {
       }),
     ).toBe("Composed in the editor");
     expect(spawnEditor).toHaveBeenCalledWith("code", ["--wait", expect.any(String)]);
+  });
+
+  it("composes journal entries with a dedicated temporary file", () => {
+    const spawnEditor = vi.fn((_command: string, args: readonly string[]) => {
+      writeFileSync(args.at(-1) ?? "", "Weekly reflection\n");
+      return { status: 0, signal: null };
+    });
+
+    expect(composeJournalEntry({ env: { EDITOR: "nano" }, spawnEditor })).toBe("Weekly reflection");
+    expect(spawnEditor).toHaveBeenCalledWith("nano", [expect.stringContaining("entry.md")]);
+  });
+
+  it("prefills journal files when editing an existing entry", () => {
+    const spawnEditor = vi.fn((_command: string, args: readonly string[]) => {
+      const entryPath = args.at(-1) ?? "";
+      expect(readFileSync(entryPath, "utf8")).toBe("Existing reflection");
+      writeFileSync(entryPath, "Updated reflection\n");
+      return { status: 0, signal: null };
+    });
+
+    expect(
+      composeJournalEntry({
+        env: { EDITOR: "nano" },
+        initialContent: "Existing reflection",
+        spawnEditor,
+      }),
+    ).toBe("Updated reflection");
   });
 
   it("treats unchanged empty editor content as cancellation", () => {

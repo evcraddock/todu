@@ -67,7 +67,7 @@ function createClient(): TuiToduClient {
       update: vi.fn(),
       createComment: vi.fn(),
     },
-    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn() },
     habit: {
       list: vi
         .fn()

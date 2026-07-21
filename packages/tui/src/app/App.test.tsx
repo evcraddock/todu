@@ -133,7 +133,7 @@ function createFakeClient(): TuiToduClient {
       update: vi.fn(),
       createComment: vi.fn(),
     },
-    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    note: { list: vi.fn().mockResolvedValue([]), create: vi.fn(), update: vi.fn() },
     habit: {
       list: vi.fn().mockImplementation((filter = {}) =>
         Promise.resolve(
@@ -189,9 +189,10 @@ describe("App", () => {
     expect(lastFrame()).toContain("todu daemon start");
     expect(lastFrame()).toContain("1 Home");
     expect(lastFrame()).toContain("2 Habits");
-    expect(lastFrame()).toContain("3 Tasks");
-    expect(lastFrame()).toContain("4 Projects");
-    expect(lastFrame()).toContain("5 Data Status");
+    expect(lastFrame()).toContain("3 Journal");
+    expect(lastFrame()).toContain("4 Tasks");
+    expect(lastFrame()).toContain("5 Projects");
+    expect(lastFrame()).toContain("6 Data Status");
     expect(lastFrame()).toContain("↑↓ Select");
     expect(lastFrame()).toContain("Shift+J/K Section");
   });
@@ -230,10 +231,18 @@ describe("App", () => {
     expect(lastFrame()).toContain("Habits");
 
     stdin.write("3");
+    await waitForFrameText(lastFrame, "No journal entries this week.");
+    expect(lastFrame()).toContain("Journal");
+    expect(lastFrame()).toContain("j/k/↑↓ Select");
+    expect(lastFrame()).toContain("Enter Edit");
+    expect(lastFrame()).toContain("Shift+H/L Previous/Next Week");
+    expect(lastFrame()).toContain("n New Entry");
+
+    stdin.write("4");
     await waitForFrameText(lastFrame, "Ship");
     expect(lastFrame()).toContain("Tasks");
 
-    stdin.write("4");
+    stdin.write("5");
     await waitForFrameText(lastFrame, "Project detail");
     expect(lastFrame()).toContain("Projects");
     expect(lastFrame()).toContain("Open · Any priority · All Projects");
@@ -241,7 +250,7 @@ describe("App", () => {
     expect(lastFrame()).toContain("Enter Open Tasks");
     expect(lastFrame()).toContain("a All Projects");
 
-    stdin.write("5");
+    stdin.write("6");
     await waitForFrameText(lastFrame, "Data status ready");
     expect(lastFrame()).toContain("Projects: 1");
     expect(lastFrame()).toContain("? Help");
@@ -256,7 +265,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Home");
-    stdin.write("4");
+    stdin.write("5");
     await waitForFrameText(lastFrame, "Project detail");
     await new Promise((resolve) => setTimeout(resolve, 10));
     stdin.write("j");
@@ -279,7 +288,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Home");
-    stdin.write("3");
+    stdin.write("4");
     await waitForFrameText(lastFrame, "Ship");
     stdin.write("h");
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -303,7 +312,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Home");
-    stdin.write("4");
+    stdin.write("5");
     await waitForFrameText(lastFrame, "Project detail");
     await new Promise((resolve) => setTimeout(resolve, 10));
     stdin.write("j");
@@ -311,7 +320,7 @@ describe("App", () => {
     stdin.write("\r");
     await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
 
-    stdin.write("4");
+    stdin.write("5");
     await waitForFrameText(lastFrame, "Project detail");
     stdin.write("a");
     await waitForFrameText(lastFrame, "Open · Any priority · All Projects");
@@ -328,7 +337,7 @@ describe("App", () => {
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
 
-    expect(lastFrame()).toContain("1/2/3/4/5 Home/Habits/Tasks/Projects/Data Status");
+    expect(lastFrame()).toContain("1/2/3/4/5/6 Home/Habits/Journal/Tasks/Projects/Data Status");
     expect(lastFrame()).toContain("?      Help");
     expect(lastFrame()).toContain("j/↓    Down");
     expect(lastFrame()).toContain("Enter  Select/Open/Submit");
@@ -349,7 +358,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Home");
-    stdin.write("3");
+    stdin.write("4");
     await waitForFrameText(lastFrame, "Ship");
     expect(lastFrame()).toContain("c Comment");
 
@@ -369,7 +378,7 @@ describe("App", () => {
       />,
     );
 
-    stdin.write("4");
+    stdin.write("5");
     await waitForFrameText(lastFrame, "Project detail");
     stdin.write("?");
     await waitForFrameText(lastFrame, "Help");
@@ -386,7 +395,7 @@ describe("App", () => {
     const connection = createFakeConnection(createConnectedSnapshot());
     const client = createFakeClient();
     const { stdin } = render(<App connection={connection} toduClient={client} />);
-    stdin.write("3");
+    stdin.write("4");
 
     await vi.waitFor(() => {
       expect(client.task.list).toHaveBeenCalledTimes(1);
@@ -411,7 +420,7 @@ describe("App", () => {
     );
 
     await waitForFrameText(lastFrame, "Home");
-    stdin.write("3");
+    stdin.write("4");
     await waitForFrameText(lastFrame, "Ship");
     await vi.waitFor(() => {
       expect(connection.request).toHaveBeenCalledTimes(1);
