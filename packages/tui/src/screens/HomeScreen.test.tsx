@@ -137,6 +137,23 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "> Next");
   });
 
+  it("opens the selected task with Enter", async () => {
+    const onOpenTask = vi.fn();
+    const { stdin, lastFrame } = renderWithQuery(
+      <HomeScreen client={createClient()} today="2026-07-20" onOpenTask={onOpenTask} />,
+    );
+
+    await waitForFrameText(lastFrame, "> • Work now");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "> • Due today");
+    stdin.write("\r");
+
+    expect(onOpenTask).toHaveBeenCalledOnce();
+    expect(onOpenTask).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "task-today", projectId: "project-1" }),
+    );
+  });
+
   it("moves between items in the focused task section with j/k or arrow keys", async () => {
     const { stdin, lastFrame } = renderWithQuery(
       <HomeScreen client={createClient()} today="2026-07-20" />,

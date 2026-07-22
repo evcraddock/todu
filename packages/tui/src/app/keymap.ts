@@ -83,6 +83,7 @@ export const footerKeyBindings: Readonly<Record<FooterContext, readonly TuiKeyBi
   home: [
     { keys: "Shift+J/K", description: "Section" },
     { keys: "j/k/↑↓", description: "Select item" },
+    { keys: "Enter", description: "Open Task" },
     { keys: "?", description: "Help" },
     { keys: "q", description: "Quit" },
   ],
