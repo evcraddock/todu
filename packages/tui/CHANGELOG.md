@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.26.0
+
+### Minor Changes
+
+- ccd7f3d: Open the selected Home task directly in the Tasks view with its project and detail selected.
+
 ## 0.25.0
 
 ### Minor Changes
