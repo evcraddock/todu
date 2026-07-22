@@ -140,6 +140,25 @@ describe("TasksScreen", () => {
     expect(lastFrame()).not.toContain("Detail");
   });
 
+  it("opens an initial task with its project selected", async () => {
+    const client = createClient();
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={{ projectId: "project-1", projectName: "todu" }}
+        initialTaskId="task-2"
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Description for Second task");
+
+    expect(lastFrame()).toContain("> todu");
+    expect(lastFrame()).toContain("Task detail");
+    expect(lastFrame()).toContain("Second task");
+    expect(lastFrame()).not.toContain("First task");
+    expect(client.task.get).toHaveBeenCalledWith("task-2");
+  });
+
   it("moves task selection with j/k and arrow keys", async () => {
     const client = createClient();
     const { stdin, lastFrame } = renderWithQuery(

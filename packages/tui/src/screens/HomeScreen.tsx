@@ -24,12 +24,14 @@ export interface HomeScreenProps {
   client: TuiToduClient;
   dataQueriesEnabled?: boolean;
   today?: string;
+  onOpenTask?: (task: Task) => void;
 }
 
 export function HomeScreen({
   client,
   dataQueriesEnabled = true,
   today = localDateString(),
+  onOpenTask,
 }: HomeScreenProps): JSX.Element {
   const { stdout } = useStdout();
   const [focusedSection, setFocusedSection] = useState<HomeSection>("now");
@@ -63,6 +65,15 @@ export function HomeScreen({
     }
 
     if (key.ctrl || key.shift) {
+      return;
+    }
+
+    if (key.return || input === "\r") {
+      const selectedTaskId = effectiveSelectedTaskIds[focusedSection];
+      const selectedTask = taskSections[focusedSection].find((task) => task.id === selectedTaskId);
+      if (selectedTask) {
+        onOpenTask?.(selectedTask);
+      }
       return;
     }
 

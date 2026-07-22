@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import type { Project, Task } from "@todu/core";
 import { useApp, useInput } from "ink";
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "../components/AppFrame.js";
@@ -89,6 +90,7 @@ function AppContent({
     [projectFilter, taskListFilter],
   );
   const [tasksFooterContext, setTasksFooterContext] = useState<TasksFooterContext>("tasks-list");
+  const [homeTaskToOpen, setHomeTaskToOpen] = useState<Task | null>(null);
   const [globalInputEnabled, setGlobalInputEnabled] = useState(true);
   const [connectionSnapshot, setConnectionSnapshot] = useState<DaemonConnectionSnapshot>(() =>
     connection.getSnapshot(),
@@ -107,6 +109,9 @@ function AppContent({
   useInput(
     (input, key) => {
       const action = resolveGlobalKeyAction(input, key);
+      if (action.type === "none") {
+        return;
+      }
       const nextState = applyNavigationAction(routeState, action);
 
       if (nextState === "quit") {
@@ -114,6 +119,9 @@ function AppContent({
         return;
       }
 
+      if (action.type === "navigate") {
+        setHomeTaskToOpen(null);
+      }
       setRouteState(nextState);
     },
     { isActive: globalInputEnabled },
@@ -186,10 +194,18 @@ function AppContent({
         projectFilter={projectFilter}
         taskListFilter={taskListFilter}
         projectListFilter={projectListFilter}
+        homeTaskToOpen={homeTaskToOpen}
         onTaskListFilterChange={setTaskListFilter}
         onProjectListFilterChange={setProjectListFilter}
         onSelectProject={(project) => {
           updateProjectFilter(createProjectFilter(project));
+          setRouteState({ route: "tasks", previousRoute: "tasks" });
+        }}
+        onOpenHomeTask={(task) => {
+          setTaskListFilter(defaultTaskListFilter);
+          setProjectListFilter(defaultProjectListFilter);
+          updateProjectFilter({ projectId: task.projectId, projectName: null });
+          setHomeTaskToOpen(task);
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
         onSelectAllProjects={() => {
@@ -212,10 +228,12 @@ interface RouteScreenProps {
   projectFilter: ProjectFilterState;
   taskListFilter: TaskListFilterState;
   projectListFilter: ProjectListFilterState;
+  homeTaskToOpen: Task | null;
   onTaskListFilterChange: (filter: TaskListFilterState) => void;
   onProjectListFilterChange: (filter: ProjectListFilterState) => void;
-  onSelectProject: (project: import("@todu/core").Project) => void;
+  onSelectProject: (project: Project) => void;
   onSelectAllProjects: () => void;
+  onOpenHomeTask: (task: Task) => void;
   onTaskProjectFilterChange: (filter: ProjectFilterState) => void;
   onTasksFooterContextChange: (context: TasksFooterContext) => void;
   onGlobalInputEnabledChange: (enabled: boolean) => void;
@@ -229,10 +247,12 @@ function RouteScreen({
   projectFilter,
   taskListFilter,
   projectListFilter,
+  homeTaskToOpen,
   onTaskListFilterChange,
   onProjectListFilterChange,
   onSelectProject,
   onSelectAllProjects,
+  onOpenHomeTask,
   onTaskProjectFilterChange,
   onTasksFooterContextChange,
   onGlobalInputEnabledChange,
@@ -257,7 +277,11 @@ function RouteScreen({
 
   if (route === "home") {
     return canShowDataScreens ? (
-      <HomeScreen client={toduClient} dataQueriesEnabled={dataQueriesEnabled} />
+      <HomeScreen
+        client={toduClient}
+        dataQueriesEnabled={dataQueriesEnabled}
+        onOpenTask={onOpenHomeTask}
+      />
     ) : null;
   }
 
@@ -291,6 +315,7 @@ function RouteScreen({
       projectFilter={projectFilter}
       taskListFilter={taskListFilter}
       projectListFilter={projectListFilter}
+      initialTaskId={homeTaskToOpen?.id}
       onTaskListFilterChange={onTaskListFilterChange}
       onProjectListFilterChange={onProjectListFilterChange}
       statusActionsEnabled={dataQueriesEnabled}

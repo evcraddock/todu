@@ -195,6 +195,7 @@ describe("App", () => {
     expect(lastFrame()).toContain("6 Data Status");
     expect(lastFrame()).toContain("↑↓ Select");
     expect(lastFrame()).toContain("Shift+J/K Section");
+    expect(lastFrame()).toContain("Enter Open Task");
   });
 
   it("shows connected daemon status without body handshake diagnostics", async () => {
@@ -256,6 +257,28 @@ describe("App", () => {
     expect(lastFrame()).toContain("? Help");
     expect(lastFrame()).toContain("q Quit");
     expect(lastFrame()).toContain("Tasks: 1");
+  });
+
+  it("opens the selected Home task in Tasks with its project selected", async () => {
+    const client = createFakeClient();
+    const { stdin, lastFrame } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+
+    await waitForFrameText(lastFrame, "• Ship");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> • Ship");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Ship details");
+
+    expect(lastFrame()).toContain("Tasks");
+    expect(lastFrame()).toContain("> Inbox");
+    expect(lastFrame()).toContain("Task detail");
+    expect(client.task.list).toHaveBeenCalledWith({
+      status: ["active", "inprogress", "waiting"],
+      projectId: "project-1",
+    });
+    expect(client.task.get).toHaveBeenCalledWith("task-1");
   });
 
   it("selects a project and filters Tasks", async () => {

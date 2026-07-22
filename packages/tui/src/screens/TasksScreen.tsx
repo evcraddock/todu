@@ -25,6 +25,7 @@ import {
 import { formatListWindowIndicator } from "../state/list-window.js";
 import {
   allProjectsFilter,
+  createProjectFilter,
   describeProjectFilter,
   type ProjectFilterState,
 } from "../state/project-filter.js";
@@ -37,6 +38,7 @@ export interface TasksScreenProps {
   projectFilter: ProjectFilterState;
   taskListFilter?: TaskListFilterState;
   projectListFilter?: ProjectListFilterState;
+  initialTaskId?: Task["id"];
   onTaskListFilterChange?: (filter: TaskListFilterState) => void;
   onProjectListFilterChange?: (filter: ProjectListFilterState) => void;
   statusActionsEnabled?: boolean;
@@ -82,6 +84,7 @@ export function TasksScreen({
   projectFilter,
   taskListFilter: taskListFilterProp,
   projectListFilter: projectListFilterProp,
+  initialTaskId,
   onTaskListFilterChange,
   onProjectListFilterChange,
   statusActionsEnabled = true,
@@ -100,8 +103,8 @@ export function TasksScreen({
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
   );
   const [focusedPane, setFocusedPane] = useState<PaneFocus>("tasks");
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [taskDetailOpen, setTaskDetailOpen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId ?? null);
+  const [taskDetailOpen, setTaskDetailOpen] = useState(initialTaskId !== undefined);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [filterModalTarget, setFilterModalTarget] = useState<PaneFocus | null>(null);
@@ -157,8 +160,10 @@ export function TasksScreen({
 
   useEffect(() => {
     setSelectedProjectOptionId(projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID);
-    setTaskDetailOpen(false);
-  }, [projectFilter.projectId]);
+    if (!initialTaskId) {
+      setTaskDetailOpen(false);
+    }
+  }, [initialTaskId, projectFilter.projectId]);
 
   useEffect(() => {
     if (!projectsQuery.data) {
@@ -169,14 +174,22 @@ export function TasksScreen({
   }, [projectOptions, projectsQuery.data]);
 
   useEffect(() => {
-    if (
-      projectFilter.projectId &&
-      projectsQuery.data &&
-      !projectOptions.some((option) => option.project?.id === projectFilter.projectId)
-    ) {
-      onProjectFilterChange?.(allProjectsFilter);
+    if (!projectFilter.projectId || !projectsQuery.data) {
+      return;
     }
-  }, [onProjectFilterChange, projectFilter.projectId, projectOptions, projectsQuery.data]);
+
+    const selectedProject = projectOptions.find(
+      (option) => option.project?.id === projectFilter.projectId,
+    )?.project;
+    if (!selectedProject) {
+      onProjectFilterChange?.(allProjectsFilter);
+      return;
+    }
+
+    if (projectFilter.projectName !== selectedProject.name) {
+      onProjectFilterChange?.(createProjectFilter(selectedProject));
+    }
+  }, [onProjectFilterChange, projectFilter, projectOptions, projectsQuery.data]);
 
   useEffect(() => {
     if (!tasksQuery.data) {
