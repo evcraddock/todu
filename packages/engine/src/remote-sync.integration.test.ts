@@ -255,11 +255,12 @@ describe("remote sync", () => {
   );
 
   (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
-    "watchdog restarts a stale disconnected adapter while the server is reachable",
-    { timeout: 10000 },
+    "repeatedly replaces stale adapters without retaining sync resources",
+    { timeout: 20000 },
     async () => {
       const { relay, relayDir } = await startRelay(RELAY_PORTS.watchdog);
       let connectedAdapter: WebSocketClientAdapter | null = null;
+      const observedAdapters = new Set<WebSocketClientAdapter>();
       const logger = {
         debug: vi.fn(),
         info: vi.fn(),
@@ -273,8 +274,10 @@ describe("remote sync", () => {
           ...args: Parameters<WebSocketClientAdapter["peerCandidate"]>
         ) {
           connectedAdapter = this;
+          observedAdapters.add(this);
           return originalPeerCandidate.apply(this, args);
         });
+      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
         todu = await createTodu({
@@ -286,19 +289,65 @@ describe("remote sync", () => {
         });
 
         await waitForRemoteState(todu, "connected");
-        expect(connectedAdapter).not.toBeNull();
+        const project = await todu.project.create({ name: "Reconnect regression" });
+        expect(project.ok).toBe(true);
+        if (!project.ok) return;
+        const task = await todu.task.create({
+          title: "Loaded during reconnect",
+          projectId: project.value.id,
+        });
+        expect(task.ok).toBe(true);
 
-        const staleAdapter = connectedAdapter;
-        staleAdapter.remotePeerId = undefined;
-        staleAdapter.emit("peer-disconnected", { peerId: "stale-remote" });
-        expect(todu.sync.status().remote.state).toBe("disconnected");
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const staleAdapter = connectedAdapter;
+          expect(staleAdapter).not.toBeNull();
+          const staleSocket = staleAdapter?.socket as
+            | (WebSocketClientAdapter["socket"] & { terminate?: () => void })
+            | undefined;
+          if (staleSocket?.terminate) {
+            staleSocket.terminate();
+          } else {
+            staleSocket?.close();
+          }
 
-        await waitForRemoteState(todu, "connected");
+          const replacementDeadline = Date.now() + 3000;
+          while (connectedAdapter === staleAdapter && Date.now() < replacementDeadline) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          await waitForRemoteState(todu, "connected");
+
+          expect(connectedAdapter).not.toBe(staleAdapter);
+          expect(staleAdapter?.socket).toBeUndefined();
+          expect(staleAdapter?.eventNames()).toEqual([]);
+
+          const listStartedAt = performance.now();
+          const listResult = await todu.task.list({ projectId: project.value.id });
+          const listDurationMs = performance.now() - listStartedAt;
+          expect(listResult.ok).toBe(true);
+          expect(listDurationMs).toBeLessThan(1000);
+        }
+
+        expect(observedAdapters.size).toBe(4);
         expect(logger.warn).toHaveBeenCalledWith(
           "remote sync watchdog restarting stale adapter",
           expect.objectContaining({ server: `ws://localhost:${RELAY_PORTS.watchdog}` }),
         );
+        expect(
+          consoleLogSpy.mock.calls.some((args) =>
+            args.some((value) => {
+              if (value instanceof Error) {
+                return value.message.includes("outdated document");
+              }
+              if (typeof value === "object" && value !== null && "err" in value) {
+                const error = (value as { err?: unknown }).err;
+                return error instanceof Error && error.message.includes("outdated document");
+              }
+              return String(value).includes("outdated document");
+            }),
+          ),
+        ).toBe(false);
       } finally {
+        consoleLogSpy.mockRestore();
         peerCandidateSpy.mockRestore();
         if (todu) {
           await todu.close();

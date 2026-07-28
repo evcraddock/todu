@@ -12,10 +12,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "scripts"
   ],
   "scripts": {
     "build": "tsgo -p tsconfig.build.json",
+    "postinstall": "node scripts/patch-automerge-repo.mjs",
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
