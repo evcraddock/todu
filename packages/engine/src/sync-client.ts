@@ -118,6 +118,7 @@ export function hardenWebSocketClientAdapterErrors(
   const originalOnError = adapter.onError;
   const originalConnect = adapter.connect.bind(adapter);
   const originalDisconnect = adapter.disconnect.bind(adapter);
+  const originalSend = adapter.send.bind(adapter);
 
   adapter.onError = (event) => {
     logger?.warn("remote sync adapter error", {
@@ -137,12 +138,26 @@ export function hardenWebSocketClientAdapterErrors(
   };
 
   if (options.watchdogOwnsReconnect) {
-    adapter.onClose = () => {
-      if (disposedAdapters.has(adapter)) return;
+    const markRemotePeerDisconnected = (): void => {
+      if (disposedAdapters.has(adapter) || !adapter.remotePeerId) return;
 
-      if (adapter.remotePeerId) {
-        adapter.emit("peer-disconnected", { peerId: adapter.remotePeerId });
+      const peerId = adapter.remotePeerId;
+      adapter.remotePeerId = undefined;
+      adapter.emit("peer-disconnected", { peerId });
+    };
+
+    adapter.onClose = markRemotePeerDisconnected;
+    adapter.send = (...args: Parameters<WebSocketClientAdapter["send"]>) => {
+      const socket = adapter.socket;
+      if (!socket || socket.readyState !== socket.OPEN) {
+        logger?.warn("remote sync adapter skipped message while socket not ready", {
+          readyState: socket?.readyState,
+        });
+        markRemotePeerDisconnected();
+        return;
       }
+
+      originalSend(...args);
     };
   }
 

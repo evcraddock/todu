@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Repo } from "@automerge/automerge-repo";
+import { type DocumentId, Repo } from "@automerge/automerge-repo";
 import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import type { CatalogDocument, ProjectId, Task, TaskId, TaskListDocument } from "@todu/core";
 import {
@@ -31,6 +31,27 @@ async function readCatalogDocument(storagePath: string): Promise<CatalogDocument
   } finally {
     await repo.shutdown();
   }
+}
+
+async function readTaskDocumentChangeCounts(
+  todu: Todu,
+  projectId: ProjectId,
+  taskId: TaskId,
+): Promise<{ taskList: number; detail: number }> {
+  const repo = (todu.task as Todu["task"] & { _repo: Repo })._repo;
+  const catalogHandle = await repo.find<CatalogDocument>(todu.sync.getCatalogId() as DocumentId);
+  const taskListDocId = catalogHandle.doc()?.taskListDocIds[projectId];
+  if (!taskListDocId) throw new Error(`task list not found for project ${projectId}`);
+
+  const taskListHandle = await repo.find<TaskListDocument>(taskListDocId);
+  const detailDocId = taskListHandle.doc()?.detailDocIds[taskId];
+  if (!detailDocId) throw new Error(`task detail not found for task ${taskId}`);
+
+  const metrics = repo.metrics().documents;
+  return {
+    taskList: metrics[taskListDocId]?.size.numChanges ?? 0,
+    detail: metrics[detailDocId]?.size.numChanges ?? 0,
+  };
 }
 
 async function removeDescriptionSearchIndex(
@@ -1064,6 +1085,41 @@ describe("task namespace", () => {
       if (!result.ok) return;
       expect(result.value.externalId).toBe("gh-101");
       expect(result.value.sourceUrl).toBe("https://example.com/issues/101");
+    });
+
+    it("does not append Automerge history for identical imported updates", async () => {
+      const firstUpdate = await todu.task.update(taskId, {
+        title: "Imported title",
+        status: "active",
+        priority: "medium",
+        labels: ["sync"],
+        assigneeActorIds: [],
+        assignees: [],
+        externalId: "forgejo-42",
+        sourceUrl: "https://forge.example.test/issues/42",
+        description: "Imported description",
+        updatedAt: "2026-07-04T14:34:32.000Z",
+      });
+      if (!firstUpdate.ok) throw new Error("initial imported update failed");
+
+      const before = await readTaskDocumentChangeCounts(todu, projectId, taskId);
+      const identicalInput = {
+        title: firstUpdate.value.title,
+        status: firstUpdate.value.status,
+        priority: firstUpdate.value.priority,
+        labels: firstUpdate.value.labels,
+        assigneeActorIds: firstUpdate.value.assigneeActorIds,
+        assignees: firstUpdate.value.assignees,
+        externalId: firstUpdate.value.externalId,
+        sourceUrl: firstUpdate.value.sourceUrl,
+        description: firstUpdate.value.description,
+        updatedAt: firstUpdate.value.updatedAt,
+      };
+
+      expect((await todu.task.update(taskId, identicalInput)).ok).toBe(true);
+      expect((await todu.task.update(taskId, identicalInput)).ok).toBe(true);
+
+      expect(await readTaskDocumentChangeCounts(todu, projectId, taskId)).toEqual(before);
     });
 
     it("updates imported updatedAt without changing createdAt", async () => {

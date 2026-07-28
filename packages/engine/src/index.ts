@@ -40,6 +40,8 @@ import {
 
 export type { RemoteSyncConfig } from "@todu/core";
 export { registerHabitProcessor } from "./habits.js";
+export type { TaskListCompactionResult } from "./maintenance.js";
+export { compactTaskListDocument } from "./maintenance.js";
 export type { UpcomingOccurrence } from "./recurring.js";
 // Re-export schedule utilities for consumers
 export {
