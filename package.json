@@ -26,7 +26,7 @@
     "release": "node scripts/create-inferred-changeset.mjs",
     "version-packages": "changeset version && node scripts/generate-package-versions.mjs && npm install --package-lock-only --ignore-scripts",
     "release-packages": "npm run build && changeset publish",
-    "postinstall": "node scripts/patch-automerge-repo.mjs",
+    "postinstall": "node packages/engine/scripts/patch-automerge-repo.mjs",
     "check": "biome check --write --error-on-warnings . && npm run typecheck",
     "check:ci": "biome check --error-on-warnings . && npm run typecheck",
     "typecheck": "npm run --workspace=packages/core build && npm run --workspace=packages/engine build && npm run --workspace=packages/recurring-worker typecheck && npm run --workspace=packages/daemon build && npm run --workspace=packages/cli typecheck && npm run --workspace=packages/tui typecheck",

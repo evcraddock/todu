@@ -21,7 +21,12 @@ import {
 } from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
 import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
-import { addRemoteSyncAdapter, connectSyncClient, isSyncServerAvailable } from "./sync-client.js";
+import {
+  addRemoteSyncAdapter,
+  connectSyncClient,
+  disposeRemoteSyncAdapter,
+  isSyncServerAvailable,
+} from "./sync-client.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import {
@@ -180,12 +185,6 @@ export async function createTodu(
   let remoteAdapter: WebSocketClientAdapter | null = null;
   let remoteWatchdogTimer: ReturnType<typeof setInterval> | null = null;
   let remoteWatchdogRestarting = false;
-  // Tracked handler references so we can remove them cleanly on stop
-  let remoteHandlers: {
-    onPeerCandidate: (_payload: PeerCandidatePayload) => void;
-    onPeerDisconnected: (_payload: PeerDisconnectedPayload) => void;
-    onClose: () => void;
-  } | null = null;
 
   function setRemoteState(
     state: SyncStatus["remote"]["state"],
@@ -245,6 +244,11 @@ export async function createTodu(
     try {
       stopRemoteAdapter({ manual: false });
       startRemoteAdapter();
+    } catch (error) {
+      resolvedConfig.syncLogger?.warn("remote sync watchdog failed to replace stale adapter", {
+        server: config.remoteSync.server,
+        error: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       remoteWatchdogRestarting = false;
     }
@@ -294,19 +298,12 @@ export async function createTodu(
     remoteAdapter.on("peer-disconnected", onPeerDisconnected);
     remoteAdapter.on("close", onClose);
 
-    remoteHandlers = { onPeerCandidate, onPeerDisconnected, onClose };
     reconcileRemoteAdapterState();
     startRemoteWatchdog();
   }
 
   /**
-   * Remove the remote adapter from the repo and clean up state.
-   *
-   * Removes our state-tracking listeners first to prevent stale updates.
-   * Wraps removeNetworkAdapter in try-catch: if the adapter was created but
-   * connect() hasn't run yet (peerMetadata Promise pending), disconnect()
-   * inside removeNetworkAdapter will throw — that's safe to ignore since
-   * the adapter has already been filtered out of the subsystem's adapter list.
+   * Remove the remote adapter only after all adapter-owned resources are disposed.
    */
   function stopRemoteAdapter(options: { manual?: boolean } = {}): void {
     if (!remoteAdapter) return;
@@ -315,29 +312,11 @@ export async function createTodu(
       stopRemoteWatchdog();
     }
 
-    // Remove our listeners before touching the adapter
-    if (remoteHandlers) {
-      remoteAdapter.off("peer-candidate", remoteHandlers.onPeerCandidate);
-      remoteAdapter.off("peer-disconnected", remoteHandlers.onPeerDisconnected);
-      remoteAdapter.off("close", remoteHandlers.onClose);
-      remoteHandlers = null;
-    }
-
     const adapter = remoteAdapter;
+    disposeRemoteSyncAdapter(storage.repo, adapter);
+
     remoteAdapter = null;
     setRemoteState("disconnected", { forceNotify: options.manual !== false });
-
-    try {
-      // Swallow async WebSocket errors during teardown — the connection may
-      // not be established yet, causing ws to emit 'error' on close().
-      if (adapter.socket && typeof adapter.socket.on === "function") {
-        adapter.socket.on("error", () => {});
-      }
-      storage.repo.networkSubsystem.removeNetworkAdapter(adapter);
-    } catch {
-      // Adapter may not be fully initialized yet (peerMetadata Promise pending,
-      // so peerId is not set). The subsystem filter already ran — safe to ignore.
-    }
   }
 
   // Auto-start remote sync if configured

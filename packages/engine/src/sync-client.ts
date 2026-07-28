@@ -58,35 +58,66 @@ export async function connectSyncClient(
  * Add a remote sync adapter to a Repo without blocking.
  *
  * Unlike connectSyncClient(), this does NOT await the connection — the remote
- * server may be temporarily unreachable. The adapter reconnects automatically
- * Reconnection is owned by Todu's remote watchdog instead of the Automerge
- * adapter's internal timer. The adapter uses an uncancelled one-shot reconnect
- * timer on close, which can create zombie sockets after removeNetworkAdapter().
+ * server may be temporarily unreachable. The adapter retries initial connection
+ * attempts at a bounded interval. After the first connection, Todu's watchdog
+ * owns reconnection so a removed adapter cannot create zombie sockets.
  *
  * Returns the adapter so callers can listen for connection events and remove it.
  *
- * @param retryInterval - Adapter retry interval in ms on disconnect (default: 0; watchdog handles reconnect)
+ * @param retryInterval - Initial connection retry interval in ms (default: 30s)
  */
 export function addRemoteSyncAdapter(
   repo: Repo,
   url: string,
-  retryInterval = 0,
+  retryInterval = 30_000,
   logger?: SyncAdapterEventLogger,
 ): WebSocketClientAdapter {
   const adapter = new WebSocketClientAdapter(url, retryInterval);
-  hardenWebSocketClientAdapterErrors(adapter, logger);
+  hardenWebSocketClientAdapterErrors(adapter, logger, { watchdogOwnsReconnect: true });
   repo.networkSubsystem.addNetworkAdapter(adapter);
   return adapter;
 }
 
+/**
+ * Remove a remote adapter only after its socket, timers, and listeners are disposed.
+ */
+export function disposeRemoteSyncAdapter(repo: Repo, adapter: WebSocketClientAdapter): void {
+  disposedAdapters.add(adapter);
+
+  let disposalError: unknown;
+  try {
+    repo.networkSubsystem.removeNetworkAdapter(adapter);
+  } catch (error) {
+    disposalError = error;
+  } finally {
+    adapter.removeAllListeners();
+  }
+
+  if (disposalError) {
+    throw new Error(
+      `Failed to dispose remote sync adapter for ${adapter.url}: ${getErrorMessage(disposalError)}`,
+      { cause: disposalError },
+    );
+  }
+
+  if (adapter.socket) {
+    throw new Error(
+      `Failed to dispose remote sync adapter for ${adapter.url}: socket is still set`,
+    );
+  }
+}
+
+const disposedAdapters = new WeakSet<WebSocketClientAdapter>();
 const hardenedSockets = new WeakSet<object>();
 
 export function hardenWebSocketClientAdapterErrors(
   adapter: WebSocketClientAdapter,
   logger?: SyncAdapterEventLogger,
+  options: { watchdogOwnsReconnect?: boolean } = {},
 ): void {
   const originalOnError = adapter.onError;
   const originalConnect = adapter.connect.bind(adapter);
+  const originalDisconnect = adapter.disconnect.bind(adapter);
 
   adapter.onError = (event) => {
     logger?.warn("remote sync adapter error", {
@@ -105,9 +136,42 @@ export function hardenWebSocketClientAdapterErrors(
     }
   };
 
+  if (options.watchdogOwnsReconnect) {
+    adapter.onClose = () => {
+      if (disposedAdapters.has(adapter)) return;
+
+      if (adapter.remotePeerId) {
+        adapter.emit("peer-disconnected", { peerId: adapter.remotePeerId });
+      }
+    };
+  }
+
   adapter.connect = (...args: Parameters<WebSocketClientAdapter["connect"]>) => {
+    if (disposedAdapters.has(adapter)) return;
+
     originalConnect(...args);
     hardenCurrentWebSocket(adapter);
+  };
+
+  adapter.disconnect = () => {
+    disposedAdapters.add(adapter);
+
+    if (!adapter.peerId || !adapter.socket) {
+      const socket = adapter.socket;
+      if (socket) {
+        socket.removeEventListener("open", adapter.onOpen);
+        socket.removeEventListener("close", adapter.onClose);
+        socket.removeEventListener("message", adapter.onMessage);
+        socket.removeEventListener("error", adapter.onError);
+        socket.close();
+      }
+      adapter.remotePeerId = undefined;
+      adapter.socket = undefined;
+      return;
+    }
+
+    originalDisconnect();
+    adapter.remotePeerId = undefined;
   };
 
   hardenCurrentWebSocket(adapter);
