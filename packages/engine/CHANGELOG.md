@@ -1,5 +1,11 @@
 # @todu/engine
 
+## 0.23.5
+
+### Patch Changes
+
+- adab40b: Fully dispose stale remote sync adapters before watchdog reconnection to prevent outdated-document errors and resource growth.
+
 ## 0.23.4
 
 ### Patch Changes
