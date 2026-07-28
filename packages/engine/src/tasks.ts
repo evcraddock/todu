@@ -115,6 +115,24 @@ export function createTaskNamespace(
     return content.trim().toLowerCase();
   }
 
+  function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+  }
+
+  function approvalsEqual(
+    left: ImportedContentApproval | undefined,
+    right: ImportedContentApproval | undefined,
+  ): boolean {
+    return (
+      left?.state === right?.state &&
+      left?.sourceBindingId === right?.sourceBindingId &&
+      left?.sourceActorId === right?.sourceActorId &&
+      left?.sourceFingerprint === right?.sourceFingerprint &&
+      left?.reviewedAt === right?.reviewedAt &&
+      left?.reviewedByActorId === right?.reviewedByActorId
+    );
+  }
+
   function taskMatchesSearch(task: Task, descriptionSearchText: string, query: string): boolean {
     const normalizedQuery = normalizeTaskSearchText(query);
     if (normalizedQuery.length === 0) return true;
@@ -551,64 +569,56 @@ export function createTaskNamespace(
       const updatedAt = input.updatedAt
         ? normalizeTaskTimestamp(input.updatedAt)
         : new Date().toISOString();
+      const currentTask = result.task;
+      const title = input.title?.trim();
+      const externalId = input.externalId?.trim();
+      const sourceUrl = input.sourceUrl?.trim();
+      const metadataChanged =
+        (title !== undefined && title !== currentTask.title) ||
+        (input.status !== undefined && input.status !== currentTask.status) ||
+        (input.priority !== undefined && input.priority !== currentTask.priority) ||
+        (input.labels !== undefined && !arraysEqual(input.labels, currentTask.labels)) ||
+        (input.assigneeActorIds !== undefined &&
+          !arraysEqual(input.assigneeActorIds, currentTask.assigneeActorIds)) ||
+        (input.assignees !== undefined && !arraysEqual(input.assignees, currentTask.assignees)) ||
+        (input.dueDate !== undefined && input.dueDate !== currentTask.dueDate) ||
+        (input.scheduledDate !== undefined && input.scheduledDate !== currentTask.scheduledDate) ||
+        (externalId !== undefined && externalId !== currentTask.externalId) ||
+        (sourceUrl !== undefined && sourceUrl !== currentTask.sourceUrl);
+      const timestampChanged = input.updatedAt !== undefined && updatedAt !== currentTask.updatedAt;
 
-      // Update metadata in task list document
-      result.listHandle.change((doc) => {
-        const task = doc.tasks[result.index];
-        if (input.title !== undefined) task.title = input.title.trim();
-        if (input.status !== undefined) task.status = input.status;
-        if (input.priority !== undefined) task.priority = input.priority;
-        if (input.labels !== undefined) {
-          // Replace labels array entirely
-          task.labels.splice(0, task.labels.length, ...input.labels);
-        }
-        if (input.assigneeActorIds !== undefined) {
-          task.assigneeActorIds.splice(0, task.assigneeActorIds.length, ...input.assigneeActorIds);
-        }
-        if (input.assignees !== undefined) {
-          // Replace assignees array entirely
-          task.assignees.splice(0, task.assignees.length, ...input.assignees);
-        }
-        if (input.dueDate !== undefined) task.dueDate = input.dueDate;
-        if (input.scheduledDate !== undefined) task.scheduledDate = input.scheduledDate;
-        if (input.externalId !== undefined) task.externalId = input.externalId.trim();
-        if (input.sourceUrl !== undefined) task.sourceUrl = input.sourceUrl.trim();
-
-        task.updatedAt = updatedAt;
-      });
-
-      // Update description in detail document if changed
       let description: string | undefined;
       let descriptionApproval: ImportedContentApproval | undefined;
-      const listDoc = result.listHandle.doc();
-      const detailDocId = listDoc?.detailDocIds[id];
+      const detailDocId = result.listHandle.doc()?.detailDocIds[id];
+      let createdDetailDocId: DocumentId | undefined;
+      let contentChanged = false;
 
       if (detailDocId) {
         const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+        const currentDetail = detailHandle.doc();
 
-        if (input.description !== undefined || input.descriptionApproval !== undefined) {
-          detailHandle.change((doc) => {
-            const nextDescription =
-              input.description !== undefined ? input.description.trim() : doc.description;
-            doc.description = nextDescription;
-            doc.descriptionApproval = normalizeContentApproval(
-              nextDescription,
-              input.descriptionApproval,
-            );
-          });
+        if (
+          currentDetail &&
+          (input.description !== undefined || input.descriptionApproval !== undefined)
+        ) {
+          const nextDescription =
+            input.description !== undefined ? input.description.trim() : currentDetail.description;
+          const nextApproval = normalizeContentApproval(nextDescription, input.descriptionApproval);
+          contentChanged =
+            nextDescription !== currentDetail.description ||
+            !approvalsEqual(nextApproval, currentDetail.descriptionApproval);
+
+          if (contentChanged) {
+            detailHandle.change((doc) => {
+              doc.description = nextDescription;
+              doc.descriptionApproval = nextApproval;
+            });
+          }
         }
 
         const detailDoc = detailHandle.doc();
         description = detailDoc?.description;
         if (detailDoc?.description !== undefined) {
-          const searchText = normalizeTaskSearchText(detailDoc.description);
-          result.listHandle.change((doc) => {
-            if (searchText.length > 0) {
-              doc.descriptionSearchTextByTaskId[id] = searchText;
-            } else {
-              delete doc.descriptionSearchTextByTaskId[id];
-            }
-          });
           descriptionApproval = normalizeContentApproval(
             detailDoc.description,
             detailDoc.descriptionApproval,
@@ -626,11 +636,9 @@ export function createTaskNamespace(
             doc.descriptionApproval = template.descriptionApproval;
           }
         });
-        result.listHandle.change((doc) => {
-          doc.detailDocIds[id] = detailHandle.documentId;
-          doc.descriptionSearchTextByTaskId[id] = normalizeTaskSearchText(descriptionText);
-        });
+        createdDetailDocId = detailHandle.documentId;
         description = descriptionText;
+        contentChanged = true;
       } else if (input.descriptionApproval !== undefined) {
         return err(
           validationError(
@@ -638,6 +646,70 @@ export function createTaskNamespace(
             "Cannot update description approval without an existing description",
           ),
         );
+      }
+
+      const searchText =
+        description !== undefined ? normalizeTaskSearchText(description) : undefined;
+      const currentSearchText = result.listHandle.doc()?.descriptionSearchTextByTaskId[id];
+      const searchIndexChanged =
+        searchText !== undefined &&
+        (searchText.length > 0
+          ? searchText !== currentSearchText
+          : currentSearchText !== undefined);
+      const taskListChanged =
+        metadataChanged || timestampChanged || contentChanged || searchIndexChanged;
+
+      if (taskListChanged) {
+        result.listHandle.change((doc) => {
+          const task = doc.tasks[result.index];
+          if (title !== undefined && title !== task.title) task.title = title;
+          if (input.status !== undefined && input.status !== task.status)
+            task.status = input.status;
+          if (input.priority !== undefined && input.priority !== task.priority) {
+            task.priority = input.priority;
+          }
+          if (input.labels !== undefined && !arraysEqual(input.labels, task.labels)) {
+            task.labels.splice(0, task.labels.length, ...input.labels);
+          }
+          if (
+            input.assigneeActorIds !== undefined &&
+            !arraysEqual(input.assigneeActorIds, task.assigneeActorIds)
+          ) {
+            task.assigneeActorIds.splice(
+              0,
+              task.assigneeActorIds.length,
+              ...input.assigneeActorIds,
+            );
+          }
+          if (input.assignees !== undefined && !arraysEqual(input.assignees, task.assignees)) {
+            task.assignees.splice(0, task.assignees.length, ...input.assignees);
+          }
+          if (input.dueDate !== undefined && input.dueDate !== task.dueDate) {
+            task.dueDate = input.dueDate;
+          }
+          if (input.scheduledDate !== undefined && input.scheduledDate !== task.scheduledDate) {
+            task.scheduledDate = input.scheduledDate;
+          }
+          if (externalId !== undefined && externalId !== task.externalId) {
+            task.externalId = externalId;
+          }
+          if (sourceUrl !== undefined && sourceUrl !== task.sourceUrl) {
+            task.sourceUrl = sourceUrl;
+          }
+          if (metadataChanged || timestampChanged || contentChanged) {
+            task.updatedAt = updatedAt;
+          }
+          if (createdDetailDocId) {
+            doc.detailDocIds[id] = createdDetailDocId;
+          }
+          if (searchText !== undefined) {
+            if (searchText.length > 0 && searchText !== currentSearchText) {
+              doc.descriptionSearchTextByTaskId[id] = searchText;
+            } else if (searchText.length === 0 && currentSearchText !== undefined) {
+              delete doc.descriptionSearchTextByTaskId[id];
+            }
+          }
+        });
       }
 
       // Read back updated task

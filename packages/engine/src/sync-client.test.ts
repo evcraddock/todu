@@ -69,6 +69,29 @@ describe("hardenWebSocketClientAdapterErrors", () => {
     expect(adapter.eventNames()).toEqual([]);
   });
 
+  it("drops messages and disconnects the peer while the remote socket is closing", () => {
+    const adapter = new WebSocketClientAdapter("ws://localhost:1", 25);
+    const peerDisconnected = vi.fn();
+    const logger = { warn: vi.fn() };
+    adapter.remotePeerId = "remote-peer" as typeof adapter.remotePeerId;
+    adapter.socket = {
+      OPEN: 1,
+      readyState: 2,
+    } as WebSocketClientAdapter["socket"];
+    adapter.on("peer-disconnected", peerDisconnected);
+    hardenWebSocketClientAdapterErrors(adapter, logger, { watchdogOwnsReconnect: true });
+
+    expect(() => {
+      adapter.send({} as Parameters<WebSocketClientAdapter["send"]>[0]);
+    }).not.toThrow();
+    expect(peerDisconnected).toHaveBeenCalledWith({ peerId: "remote-peer" });
+    expect(adapter.remotePeerId).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "remote sync adapter skipped message while socket not ready",
+      { readyState: 2 },
+    );
+  });
+
   it("leaves reconnect ownership to the watchdog after a socket closes", () => {
     vi.useFakeTimers();
     try {
