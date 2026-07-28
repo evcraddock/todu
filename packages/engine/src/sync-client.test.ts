@@ -47,7 +47,7 @@ describe("hardenWebSocketClientAdapterErrors", () => {
     }).toThrow();
   });
 
-  it("disposes adapters before replacement", () => {
+  it("disposes adapters before connection initialization", () => {
     const adapter = new WebSocketClientAdapter("ws://localhost:1", 0);
     hardenWebSocketClientAdapterErrors(adapter);
     const peerCandidate = vi.fn();

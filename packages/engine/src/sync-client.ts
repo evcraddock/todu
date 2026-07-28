@@ -155,21 +155,6 @@ export function hardenWebSocketClientAdapterErrors(
 
   adapter.disconnect = () => {
     disposedAdapters.add(adapter);
-
-    if (!adapter.peerId || !adapter.socket) {
-      const socket = adapter.socket;
-      if (socket) {
-        socket.removeEventListener("open", adapter.onOpen);
-        socket.removeEventListener("close", adapter.onClose);
-        socket.removeEventListener("message", adapter.onMessage);
-        socket.removeEventListener("error", adapter.onError);
-        socket.close();
-      }
-      adapter.remotePeerId = undefined;
-      adapter.socket = undefined;
-      return;
-    }
-
     originalDisconnect();
     adapter.remotePeerId = undefined;
   };
