@@ -1,6 +1,6 @@
 {
   "name": "@todu/engine",
-  "version": "0.23.4",
+  "version": "0.23.5",
   "description": "Task management engine with offline-first CRDT storage and sync",
   "type": "module",
   "main": "./dist/index.js",
