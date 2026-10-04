@@ -42,6 +42,25 @@ describe("resolveDaemonPluginPaths", () => {
     });
   });
 
+  it("preserves npm package specifiers from config", () => {
+    const resolved = resolveDaemonPluginPaths(
+      "/workspace/.todu/config.yaml",
+      {
+        daemon: {
+          plugins: {
+            paths: ["@todu/recurring-worker", "github-sync-plugin"],
+          },
+        },
+      },
+      {},
+    );
+
+    expect(resolved).toEqual({
+      value: "@todu/recurring-worker,github-sync-plugin",
+      source: "file",
+    });
+  });
+
   it("keeps explicit empty plugin path list from config", () => {
     const resolved = resolveDaemonPluginPaths(
       "/workspace/.todu/config.yaml",

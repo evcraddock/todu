@@ -83,6 +83,7 @@ Compatibility guidance:
 - Preferred: keep the CLI version aligned with your desktop app version.
 - The desktop app version is shown in Settings and in release notes.
 - The CLI and desktop app both use the same default user-local config and data paths, so the CLI targets the same local daemon and dataset unless you override paths with env vars.
+- For automatic recurring task generation, follow [Recurring Worker Installation](docs/recurring-worker-installation.md).
 
 ### Terminal UI app (early standalone package)
 

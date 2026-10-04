@@ -66,4 +66,6 @@ Plugin settings resolve in this order:
 1. `TODU_DAEMON_PLUGIN_CONFIG` env var
 2. `daemon.plugins.config` in config file
 
-Both changes apply on daemon restart.
+Both changes apply on daemon restart. Configured local filesystem paths must be absolute or start with `.`; other values are treated as npm package specifiers.
+
+For the published recurring worker package, see [Recurring Worker Installation](recurring-worker-installation.md).

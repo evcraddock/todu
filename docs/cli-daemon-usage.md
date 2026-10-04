@@ -162,9 +162,9 @@ Notes:
 - Empty assignment (`TODU_DAEMON_ASSIGNED_WORKERS=""`) means no local workers are assigned.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 
-## Sync plugin module configuration
+## Plugin module configuration
 
-Configure sync plugin module entrypoints in config file:
+Configure worker plugin module entrypoints in the config file. Local filesystem paths must be absolute or start with `.`; npm package specifiers remain unchanged:
 
 ```yaml
 daemon:
@@ -182,7 +182,7 @@ export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plu
 
 Notes:
 - Env var overrides config file plugin paths.
-- Config file plugin paths are resolved relative to the config file directory.
+- Config entries that are absolute or start with `.` are filesystem paths; dot-relative paths resolve from the config file directory. Other entries are npm package specifiers.
 - Empty plugin path list (`TODU_DAEMON_PLUGIN_PATHS=""`) disables plugin loading.
 - Duplicate entries are tolerated and logged; first occurrence wins.
 - Changes require daemon restart to apply.
@@ -207,12 +207,15 @@ Behavior notes:
 - `plugin remove` and `plugin install` report when daemon restart is required for activation/removal.
 - `plugin config --set` requires a JSON object.
 
-Recurring worker standalone plugin example (no daemon/core dependency wiring required):
+Recurring worker npm plugin example (no source checkout or daemon/core dependency wiring required):
 
 ```bash
-todu plugin install ./packages/recurring-worker/dist/index.js
+npm install -g @todu/recurring-worker@0.1.1
+todu plugin install @todu/recurring-worker
 todu plugin config recurring-worker --set '{"intervalSeconds":30}'
 ```
+
+See [Recurring Worker Installation](recurring-worker-installation.md) for the tested version matrix, activation steps, current published-version compatibility workaround, verification procedure, and update policy.
 
 Per-plugin sync scheduler fields are configured through `plugin config --set`:
 

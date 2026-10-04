@@ -55,7 +55,7 @@ When the locally-created version PR lands on `main`, the `NPM Release` workflow 
 
 ## Ignored workspaces
 
-`@todu/electron` and `@todu/recurring-worker` are ignored by Changesets. Add them back to the Changesets publish set only when they have an intentional npm release path.
+`@todu/electron` and `@todu/recurring-worker` are ignored by Changesets. The existing `@todu/recurring-worker@0.1.1` npm package can be used as a pinned single-machine plugin, but it does not receive updates through the normal release workflow. A future recurring-worker update must be intentional: remove the workspace's private flag, add it back to the Changesets publish set, add an appropriate changeset, and verify npm installation and automatic occurrence generation before publishing.
 
 ## Internal workspace dependencies
 

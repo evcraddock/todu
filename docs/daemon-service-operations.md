@@ -189,7 +189,7 @@ tail -f ~/Library/Logs/todu-daemon.out.log ~/Library/Logs/todu-daemon.err.log
 export TODU_DAEMON_ASSIGNED_WORKERS="recurring,github-sync"
 ```
 
-- Sync plugin module paths can be defined in config file under `daemon.plugins.paths`.
+- Worker plugin module paths or npm package specifiers can be defined in the config file under `daemon.plugins.paths`.
 - Sync plugin module path env override (comma-separated module paths):
 
 ```bash
@@ -197,9 +197,10 @@ export TODU_DAEMON_PLUGIN_PATHS="/opt/todu/plugins/github/index.js,/opt/todu/plu
 ```
 
 - Plugin path resolution order is env first, then config file.
-- Config file plugin paths resolve relative to the config file directory.
+- Config entries that are absolute or start with `.` are filesystem paths; dot-relative paths resolve from the config file directory. Other entries are npm package specifiers.
 - Plugin path/config changes apply on daemon restart.
 - Plugins can export `workerPlugin` (generic worker plugin) or `syncProvider` (sync provider plugin).
+- See [Recurring Worker Installation](recurring-worker-installation.md) for npm installation, assignment, activation, and verification of recurring automation.
 - Sync plugin scheduler config can be overridden via `TODU_DAEMON_PLUGIN_CONFIG` (JSON object keyed by plugin name).
 
 ```bash
