@@ -7,7 +7,7 @@ const root = import.meta.dirname;
 export default defineConfig({
   plugins: [react()],
   test: {
-    include: ["packages/*/src/**/*.test.{ts,tsx}"],
+    include: ["packages/*/src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
   },
   resolve: {
     alias: {
