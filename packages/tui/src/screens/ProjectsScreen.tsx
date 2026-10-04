@@ -11,7 +11,7 @@ import {
   createProjectListQuery,
   defaultProjectListFilter,
   formatProjectListFilter,
-  matchesPriority,
+  matchesProjectListFilter,
   type ProjectListFilterState,
 } from "../state/list-filter.js";
 import { formatListWindowIndicator, type ListWindow } from "../state/list-window.js";
@@ -74,7 +74,7 @@ export function ProjectsScreen({
     () =>
       createProjectOptions(
         (projectsQuery.data ?? []).filter((project) =>
-          matchesPriority(project.priority, listFilter),
+          matchesProjectListFilter(project, listFilter),
         ),
       ),
     [listFilter, projectsQuery.data],
@@ -137,7 +137,7 @@ export function ProjectsScreen({
     }
   });
 
-  const projectCount = projectsQuery.data?.length ?? 0;
+  const projectCount = projectOptions.length - 1;
   const listTitle = projectsQuery.isLoading
     ? "Projects • loading…"
     : `Projects (${projectCount}) • ${formatProjectListFilter(listFilter)}`;

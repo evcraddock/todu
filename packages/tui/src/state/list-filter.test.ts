@@ -6,6 +6,7 @@ import {
   defaultTaskListFilter,
   formatProjectListFilter,
   formatTaskStatusFilter,
+  matchesProjectListFilter,
   toggleStatus,
 } from "./list-filter.js";
 import { allProjectsFilter } from "./project-filter.js";
@@ -26,6 +27,41 @@ describe("list filters", () => {
         { statuses: ["done"], priority: "high" },
       ),
     ).toEqual({ status: ["done"], priority: "high", projectId: "project-1" });
+  });
+
+  it("requires both a selected project status and the requested priority", () => {
+    const filter = { statuses: ["active", "canceled"], priority: "medium" } as const;
+
+    expect(matchesProjectListFilter({ status: "active", priority: "medium" }, filter)).toBe(true);
+    expect(matchesProjectListFilter({ status: "canceled", priority: "medium" }, filter)).toBe(true);
+    expect(matchesProjectListFilter({ status: "done", priority: "medium" }, filter)).toBe(false);
+    expect(matchesProjectListFilter({ status: "active", priority: "high" }, filter)).toBe(false);
+    expect(
+      matchesProjectListFilter(
+        { status: "active", priority: "high" },
+        { ...filter, includeHigherPriorities: true },
+      ),
+    ).toBe(true);
+    expect(
+      matchesProjectListFilter(
+        { status: "done", priority: "high" },
+        { ...filter, includeHigherPriorities: true },
+      ),
+    ).toBe(false);
+    expect(
+      matchesProjectListFilter(
+        { status: "active", priority: "low" },
+        { ...filter, includeHigherPriorities: true },
+      ),
+    ).toBe(false);
+  });
+
+  it("matches all default statuses without a priority restriction", () => {
+    for (const status of defaultProjectListFilter.statuses) {
+      expect(matchesProjectListFilter({ status, priority: "low" }, defaultProjectListFilter)).toBe(
+        true,
+      );
+    }
   });
 
   it("keeps at least one selected status", () => {

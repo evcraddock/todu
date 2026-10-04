@@ -1,8 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render } from "ink-testing-library";
-import type { JSX, ReactNode } from "react";
+import { type JSX, type ReactNode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { type TuiToduClient, TuiToduClientError } from "../daemon/todu-client.js";
+import { defaultProjectListFilter, type ProjectListFilterState } from "../state/list-filter.js";
 import { allProjectsFilter } from "../state/project-filter.js";
 import { createTuiQueryClient } from "../state/query-client.js";
 import {
@@ -96,6 +97,133 @@ describe("ProjectsScreen", () => {
     expect(lastFrame()).toContain("Project detail");
     expect(lastFrame()).toContain("Press Enter or a to show tasks from every");
     expect(lastFrame()).toContain("project.");
+  });
+
+  it.each([
+    [["active"], ["Inbox"], ["Finished", "Abandoned"]],
+    [["done"], ["Finished"], ["Inbox", "Abandoned"]],
+    [["canceled"], ["Abandoned"], ["Inbox", "Finished"]],
+    [["active", "canceled"], ["Inbox", "Abandoned"], ["Finished"]],
+  ] as const)("only displays projects with selected statuses %j", async (statuses, visible, hidden) => {
+    const client = createClient({
+      project: {
+        list: vi
+          .fn()
+          .mockResolvedValue([
+            createProject(),
+            createProject({ id: "project-done", name: "Finished", status: "done" }),
+            createProject({ id: "project-canceled", name: "Abandoned", status: "canceled" }),
+          ]),
+        get: vi.fn(),
+      },
+    });
+    const { lastFrame } = renderWithQuery(
+      <ProjectsScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        listFilter={{ statuses }}
+        onSelectProject={vi.fn()}
+        onSelectAllProjects={vi.fn()}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "> All projects");
+    for (const name of visible) {
+      expect(lastFrame()).toContain(name);
+    }
+    for (const name of hidden) {
+      expect(lastFrame()).not.toContain(name);
+    }
+    expect(lastFrame()).toContain(`Projects (${visible.length})`);
+    expect(client.project.list).toHaveBeenCalledWith({ status: [...statuses] });
+  });
+
+  it("hides Done projects after unchecking Done and restores them when selected again", async () => {
+    const client = createClient({
+      project: {
+        list: vi
+          .fn()
+          .mockResolvedValue([
+            createProject(),
+            createProject({ id: "project-done", name: "Finished", status: "done" }),
+          ]),
+        get: vi.fn(),
+      },
+    });
+    function FilteredProjects(): JSX.Element {
+      const [listFilter, setListFilter] =
+        useState<ProjectListFilterState>(defaultProjectListFilter);
+      return (
+        <ProjectsScreen
+          client={client}
+          projectFilter={allProjectsFilter}
+          listFilter={listFilter}
+          onListFilterChange={setListFilter}
+          onSelectProject={vi.fn()}
+          onSelectAllProjects={vi.fn()}
+        />
+      );
+    }
+    const { stdin, lastFrame } = renderWithQuery(<FilteredProjects />);
+
+    await waitForFrameText(lastFrame, "Finished");
+    stdin.write("\u0006");
+    await waitForFrameText(lastFrame, "Filter projects");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "> [x] Done");
+    stdin.write(" ");
+    await waitForFrameText(lastFrame, "> [ ] Done");
+    stdin.write("\r");
+
+    await waitForFrameText(lastFrame, "Project detail");
+    await vi.waitFor(() => {
+      expect(client.project.list).toHaveBeenCalledWith({ status: ["active", "canceled"] });
+      expect(lastFrame()).toContain("Projects (1)");
+      expect(lastFrame()).toContain("Inbox");
+      expect(lastFrame()).not.toContain("Finished");
+    });
+
+    stdin.write("\u0006");
+    await waitForFrameText(lastFrame, "Filter projects");
+    stdin.write("j");
+    await waitForFrameText(lastFrame, "> [ ] Done");
+    stdin.write(" ");
+    await waitForFrameText(lastFrame, "> [x] Done");
+    stdin.write("\r");
+
+    await waitForFrameText(lastFrame, "Finished");
+    expect(lastFrame()).toContain("Projects (2)");
+  });
+
+  it("falls back to All projects when the selected project is excluded by status", async () => {
+    const onSelectProject = vi.fn();
+    const onSelectAllProjects = vi.fn();
+    const client = createClient({
+      project: {
+        list: vi
+          .fn()
+          .mockResolvedValue([
+            createProject({ id: "project-done", name: "Finished", status: "done" }),
+          ]),
+        get: vi.fn(),
+      },
+    });
+    const { stdin, lastFrame } = renderWithQuery(
+      <ProjectsScreen
+        client={client}
+        projectFilter={{ projectId: "project-done", projectName: "Finished" }}
+        listFilter={{ statuses: ["active"] }}
+        onSelectProject={onSelectProject}
+        onSelectAllProjects={onSelectAllProjects}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "No projects available.");
+    expect(lastFrame()).toContain("Projects (0)");
+    expect(lastFrame()).not.toContain("Status: done");
+    stdin.write("\r");
+    expect(onSelectAllProjects).toHaveBeenCalledOnce();
+    expect(onSelectProject).not.toHaveBeenCalled();
   });
 
   it("moves selection and selects a project with enter", async () => {
