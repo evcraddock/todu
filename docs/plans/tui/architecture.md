@@ -307,6 +307,8 @@ The current TUI implements these global navigation and task-list movement keys:
 
 4. **Projects**
    - Project list with an `All projects` option.
+   - `Ctrl+F` opens the status and priority filter. Only projects with selected statuses appear; unchecking `Done` hides completed projects. The same filter applies to the permanent project pane in Tasks.
+   - Both project lists enforce selected statuses and priority locally as well as requesting filtered daemon data. The Projects count and empty state reflect the displayed list, excluding the synthetic `All projects` option; a selection hidden by the filter falls back to `All projects`.
    - Selected project summary.
    - `Enter` opens Tasks filtered by the focused project.
    - `a` clears the filter and returns to all-project Tasks.

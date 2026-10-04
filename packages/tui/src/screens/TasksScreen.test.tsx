@@ -52,7 +52,11 @@ function createClient(overrides: Partial<TuiToduClient> = {}): TuiToduClient {
   return {
     actor: { list: vi.fn().mockResolvedValue([]) },
     project: {
-      list: vi.fn().mockResolvedValue([{ id: "project-1", name: "todu" }]),
+      list: vi
+        .fn()
+        .mockResolvedValue([
+          { id: "project-1", name: "todu", status: "active", priority: "medium" },
+        ]),
       get: vi.fn(),
     },
     task: {
@@ -190,8 +194,8 @@ describe("TasksScreen", () => {
     const client = createClient({
       project: {
         list: vi.fn().mockResolvedValue([
-          { id: "project-1", name: "todu" },
-          { id: "project-2", name: "Work" },
+          { id: "project-1", name: "todu", status: "active", priority: "medium" },
+          { id: "project-2", name: "Work", status: "active", priority: "medium" },
         ]),
         get: vi.fn(),
       },
@@ -240,6 +244,65 @@ describe("TasksScreen", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     stdin.write("k");
     await waitForFrameText(lastFrame, "Work task");
+  });
+
+  it("only shows selected project statuses while preserving priority filtering", async () => {
+    const client = createClient({
+      project: {
+        list: vi.fn().mockResolvedValue([
+          { id: "project-1", name: "Inbox", status: "active", priority: "high" },
+          { id: "project-low", name: "Low priority", status: "active", priority: "low" },
+          { id: "project-done", name: "Finished", status: "done", priority: "high" },
+          { id: "project-canceled", name: "Abandoned", status: "canceled", priority: "high" },
+        ]),
+        get: vi.fn(),
+      },
+    });
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={allProjectsFilter}
+        projectListFilter={{
+          statuses: ["active"],
+          priority: "medium",
+          includeHigherPriorities: true,
+        }}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Inbox");
+    expect(lastFrame()).not.toContain("Low priority");
+    expect(lastFrame()).not.toContain("Finished");
+    expect(lastFrame()).not.toContain("Abandoned");
+    expect(client.project.list).toHaveBeenCalledWith({ status: ["active"] });
+  });
+
+  it("clears a selected project that is excluded by its status", async () => {
+    const onProjectFilterChange = vi.fn();
+    const client = createClient({
+      project: {
+        list: vi.fn().mockResolvedValue([
+          { id: "project-1", name: "Inbox", status: "active", priority: "medium" },
+          { id: "project-done", name: "Finished", status: "done", priority: "medium" },
+        ]),
+        get: vi.fn(),
+      },
+    });
+    const { lastFrame } = renderWithQuery(
+      <TasksScreen
+        client={client}
+        projectFilter={{ projectId: "project-done", projectName: "Finished" }}
+        projectListFilter={{ statuses: ["active"] }}
+        onProjectFilterChange={onProjectFilterChange}
+      />,
+    );
+
+    await waitForFrameText(lastFrame, "Inbox");
+    await vi.waitFor(() => {
+      expect(onProjectFilterChange).toHaveBeenCalledWith(allProjectsFilter);
+      expect(lastFrame()).toContain("> All Projects");
+      expect(lastFrame()).not.toContain("Finished");
+    });
   });
 
   it("passes selected project ID to task list filter", async () => {

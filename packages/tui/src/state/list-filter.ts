@@ -1,4 +1,5 @@
 import type {
+  Project,
   ProjectFilter,
   ProjectStatus,
   TaskFilter,
@@ -94,6 +95,13 @@ export function matchesPriority(
   }
 
   return priorityRank[priority] >= priorityRank[filter.priority];
+}
+
+export function matchesProjectListFilter(
+  project: Pick<Project, "status" | "priority">,
+  filter: ProjectListFilterState,
+): boolean {
+  return filter.statuses.includes(project.status) && matchesPriority(project.priority, filter);
 }
 
 export function formatProjectStatusFilter(statuses: readonly ProjectStatus[]): string {

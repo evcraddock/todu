@@ -19,6 +19,7 @@ import {
   defaultTaskListFilter,
   formatProjectListFilter,
   matchesPriority,
+  matchesProjectListFilter,
   type ProjectListFilterState,
   type TaskListFilterState,
 } from "../state/list-filter.js";
@@ -118,7 +119,7 @@ export function TasksScreen({
     () =>
       createTaskProjectOptions(
         (projectsQuery.data ?? []).filter((project) =>
-          matchesPriority(project.priority, projectListFilter),
+          matchesProjectListFilter(project, projectListFilter),
         ),
       ),
     [projectListFilter, projectsQuery.data],
