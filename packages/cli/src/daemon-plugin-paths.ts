@@ -33,7 +33,11 @@ export function resolveDaemonPluginPaths(
   const normalizedPaths = filePluginPaths
     .map((pluginPath) => pluginPath.trim())
     .filter((pluginPath) => pluginPath.length > 0)
-    .map((pluginPath) => path.resolve(configDir, pluginPath));
+    .map((pluginPath) =>
+      path.isAbsolute(pluginPath) || pluginPath.startsWith(".")
+        ? path.resolve(configDir, pluginPath)
+        : pluginPath,
+    );
 
   return {
     value: normalizedPaths.join(","),

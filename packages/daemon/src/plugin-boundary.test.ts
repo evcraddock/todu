@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+const rootDir = path.resolve(import.meta.dirname, "../../../");
+
 describe("plugin package dependency boundaries", () => {
-  const rootDir = path.resolve(import.meta.dirname, "../../../");
   const recurringWorkerPackageName = "@todu/recurring-worker";
 
   it("daemon and core package manifests do not depend on recurring-worker package", () => {
@@ -39,6 +40,21 @@ describe("plugin package dependency boundaries", () => {
       const source = fs.readFileSync(filePath, "utf8");
       expect(source).not.toContain(recurringWorkerPackageName);
     }
+  });
+});
+
+describe("daemon runtime dependency alignment", () => {
+  it("uses the same Automerge runtime version as the engine", () => {
+    const daemonPackage = JSON.parse(
+      fs.readFileSync(path.join(rootDir, "packages/daemon/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+    const enginePackage = JSON.parse(
+      fs.readFileSync(path.join(rootDir, "packages/engine/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+
+    expect(daemonPackage.dependencies?.["@automerge/automerge"]).toBe(
+      enginePackage.dependencies?.["@automerge/automerge"],
+    );
   });
 });
 
