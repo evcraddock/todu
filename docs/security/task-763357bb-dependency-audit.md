@@ -75,15 +75,17 @@ After the maintainer explicitly requested the timer fix, the engine installation
 
 Clean installation reapplies the repair, and a packed engine installed outside the workspace schedules an overdue callback with delay zero. Trace-enabled full and opt-in sync suites pass without `TimeoutNegativeWarning` or unhandled/storage-race signatures. Existing postinstall patches remain intact.
 
-## Headless desktop investigation
+## Out-of-scope headless desktop diagnostic
+
+The maintainer clarified: **"there would never be a headless electron gui"**. Headless-Ozone GUI operation is not a supported product mode or a verification requirement for this task. Native desktop GUI verification and display-less daemon/CLI integration checks are the applicable targets; the diagnostic below is retained as evidence, not a merge blocker or a claim of headless support.
 
 The failed harness tried to run the Electron GUI without a desktop using `--ozone-platform=headless --disable-gpu`. This is distinct from Todu's daemon/CLI, which already run without a graphical display and pass their integration checks.
 
 A minimal standalone Electron probe, with no Todu imports, daemon, storage, network, or task content, reproduces **SIGSEGV during `new BrowserWindow(...)`** with both the old Electron **40.4.1** and new **41.10.7**. Both log readiness and the marker before construction; neither reaches the marker after construction, HTML loading, tray creation, or global shortcut registration. The probe has a valid desktop session-bus address, so the initial D-Bus diagnostics alone do not explain the failure. The existing crash core shows a native null-address fault; stripped symbols do not identify the exact underlying native function.
 
-This localizes the issue to Electron/native window construction with this headless Ozone configuration and reproduces it independently of the dependency upgrade and Todu. It is not a successful headless test and is not claimed to be fixed or waived. Native Wayland desktop/CDP verification passes with isolated test data and zero captured renderer errors; nonfatal system VAAPI/GTK diagnostics are not described as an entirely error-free process log.
+This localizes the issue to Electron/native window construction with this headless Ozone configuration and reproduces it independently of the dependency upgrade and Todu. It is not a successful headless test and is not claimed to be fixed; the maintainer's product-scope clarification makes it inapplicable as a required test target. Native Wayland desktop/CDP verification passes with isolated test data and zero captured renderer errors; nonfatal system VAAPI/GTK diagnostics are not described as an entirely error-free process log.
 
-For future automated desktop UI coverage without a physical desktop, test a normal window backend inside a virtual X/Wayland display rather than assuming Chromium's headless Ozone backend provides all native Electron window facilities. No virtual-display packages, sandbox bypasses, permission changes, or product headless mode were added in this task. Native Linux desktop behavior is verified; headless operation and macOS/Windows execution remain separate coverage limitations.
+Future automated desktop UI testing could use a normal window backend inside a virtual X/Wayland display; that would test the supported GUI, not introduce a headless product mode. It is not required to complete this task. No virtual-display packages, sandbox bypasses, permission changes, or product headless mode were added. Native Linux desktop behavior is verified; macOS/Windows execution remains a disclosed host-platform coverage limitation.
 
 ## Release coordination
 
