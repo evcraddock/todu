@@ -69,6 +69,13 @@ applyPatch(
   "automerge-repo adapter listener cleanup",
 );
 
+applyPatch(
+  path.join(automergeRepoRoot, "dist", "helpers", "throttle.js"),
+  `const wait = lastCall + delay - Date.now();`,
+  `const wait = Math.max(0, lastCall + delay - Date.now());`,
+  "automerge-repo nonnegative storage throttle delay",
+);
+
 const websocketEntrypoint = require.resolve("@automerge/automerge-repo-network-websocket", {
   paths: [packageRoot],
 });

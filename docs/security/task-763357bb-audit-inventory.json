@@ -2379,7 +2379,15 @@
       "installedAfter": [
         "26.15.3"
       ],
-      "dependencyPaths": {},
+      "dependencyPaths": {
+        "Root tooling": [
+          "root",
+          "electron-builder",
+          "app-builder-lib",
+          "electron-builder-squirrel-windows"
+        ]
+      },
+      "exposureNote": "Installed peer dependency of app-builder-lib; development/build/CI packaging exposure, including Windows installer generation.",
       "advisories": [],
       "inheritedFrom": [
         "app-builder-lib",
