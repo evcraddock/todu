@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { DocumentId } from "@automerge/automerge-repo";
+import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import {
   createActorId,
   createProjectId,
@@ -9,7 +10,7 @@ import {
   createTaskListDocument,
   type TaskListDocument,
 } from "@todu/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { beginCatalogJoinSwitch, initBootstrapStorage, initJoinStorage } from "./storage.js";
 
 const UNREACHABLE_CATALOG_ID = "2sFuwGcFcU9fkQDnYCdveNPoF6nK" as DocumentId;
@@ -26,6 +27,7 @@ describe("storage bootstrap/join boundaries", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -38,6 +40,61 @@ describe("storage bootstrap/join boundaries", () => {
     expect(marker).toBe(storage.catalog.documentId);
 
     await storage.close();
+  });
+
+  it("close waits for an already-running autosave and its queued successor", async () => {
+    const storage = await initBootstrapStorage(tmpDir);
+    await storage.repo.flush();
+    const save = NodeFSStorageAdapter.prototype.save;
+    let releaseSave!: () => void;
+    let saveStarted!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      saveStarted = resolve;
+    });
+    const saves = vi
+      .spyOn(NodeFSStorageAdapter.prototype, "save")
+      .mockImplementationOnce(async function (key, bytes) {
+        saveStarted();
+        await blocked;
+        return save.call(this, key, bytes);
+      });
+    storage.catalog.change((doc) => {
+      doc.actors[0].displayName = "First owner";
+    });
+    await started;
+    storage.catalog.change((doc) => {
+      doc.actors[0].displayName = "Final owner";
+    });
+    let closed = false;
+    const closing = storage.close().then(() => {
+      closed = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(closed).toBe(false);
+    } finally {
+      releaseSave();
+      await closing;
+      const writesAtClose = saves.mock.calls.length;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(saves).toHaveBeenCalledTimes(writesAtClose);
+    }
+    const reopened = await initBootstrapStorage(tmpDir);
+    expect(reopened.catalog.doc()!.actors[0].displayName).toBe("Final owner");
+    await reopened.close();
+  });
+
+  it("reports actual shutdown storage failures rather than treating close as successful", async () => {
+    const storage = await initBootstrapStorage(tmpDir);
+    vi.spyOn(storage.repo, "shutdown").mockRejectedValueOnce(new Error("disk write failed"));
+    try {
+      await expect(storage.close()).rejects.toThrow("disk write failed");
+    } finally {
+      await storage.close();
+    }
   });
 
   it("bootstrap does not create replacement catalog when marker is unreachable", async () => {

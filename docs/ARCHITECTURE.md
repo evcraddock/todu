@@ -88,6 +88,10 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 - Task descriptions and note bodies persist imported-content approval metadata beside the governed content so later runtime paths can recompute approval by binding, actor, and content fingerprint.
 - Legacy string assignees and note authors are migrated to actor ids during persistent catalog load before the catalog schema version is advanced.
 
+### Local storage shutdown
+
+Engine-owned persistent repositories track filesystem saves and deletes. Closing disconnects repository networking, flushes ready documents, and waits for pending writes plus a quiet Automerge save-throttle window. This prevents delayed autosaves from accessing storage after a successful close and test teardown. Actual storage errors are reported; only non-ready documents without local content are excluded from the final ready-document flush. A five-second shutdown timeout is a failure, not cancellation of pending filesystem work or proof of remote persistence. Caller-supplied repositories manage their own adapter drain guarantees.
+
 ### Notes storage partitioning
 
 Notes are partitioned into multiple Automerge documents instead of one global notes document.

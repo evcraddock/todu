@@ -325,6 +325,7 @@ export function createSyncPluginWorkerRuntime(
               actorState,
               project,
               pullResult.tasks,
+              acknowledgedProvider !== null,
             );
             project = pullStats.project;
           }
@@ -743,6 +744,7 @@ async function applyPulledTasksV3(
   actorState: SyncBindingActorState,
   project: Project,
   tasks: ImportedTaskInput[],
+  repairEqualTimestamps = false,
 ): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
   const importedTasks = tasks.map((task) => ({
     externalId: task.externalId,
@@ -757,7 +759,7 @@ async function applyPulledTasksV3(
     updatedAt: task.updatedAt,
   })) satisfies RuntimeImportedTask[];
 
-  return applyImportedTasks(todu, actorState, project, importedTasks);
+  return applyImportedTasks(todu, actorState, project, importedTasks, repairEqualTimestamps);
 }
 
 async function applyImportedTasks(
@@ -765,6 +767,7 @@ async function applyImportedTasks(
   actorState: SyncBindingActorState,
   project: Project,
   tasks: RuntimeImportedTask[],
+  repairEqualTimestamps: boolean,
 ): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
   const stats = { created: 0, updated: 0, skipped: 0 };
   const tasksResult = await todu.task.list({ projectId: project.id });
@@ -855,6 +858,20 @@ async function applyImportedTasks(
     }
 
     if (externalUpdatedAt && externalUpdatedAt <= existingTask.updatedAt) {
+      if (repairEqualTimestamps && externalUpdatedAt === existingTask.updatedAt) {
+        const repaired = await repairReplayedTaskDescription({
+          todu,
+          actorState,
+          existingTask,
+          importedTask,
+          updatedAt: externalUpdatedAt,
+        });
+        if (repaired) {
+          localByExternalId.set(importedTask.externalId, repaired);
+          stats.updated += 1;
+          continue;
+        }
+      }
       stats.skipped += 1;
       continue;
     }
@@ -908,6 +925,42 @@ async function applyImportedTasks(
     ...stats,
     project: currentProject,
   };
+}
+
+async function repairReplayedTaskDescription(input: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  existingTask: Task;
+  importedTask: RuntimeImportedTask;
+  updatedAt: string;
+}): Promise<Task | null> {
+  if (input.importedTask.description === undefined) return null;
+  const detailResult = await input.todu.task.get(input.existingTask.id);
+  if (!detailResult.ok) {
+    throw new Error(
+      `replayed task detail load failed: task=${input.existingTask.id} error=${formatToduError(detailResult.error)}`,
+    );
+  }
+  const description = truncate(input.importedTask.description, MAX_DESCRIPTION_LENGTH).trim();
+  if (
+    detailResult.value.updatedAt > input.updatedAt ||
+    (detailResult.value.description ?? "") === description
+  ) {
+    return null;
+  }
+
+  // Equal list timestamps do not prove the separate detail document was saved.
+  const updateResult = await input.todu.task.update(input.existingTask.id, {
+    description,
+    descriptionApproval: buildImportedContentApproval(input.actorState.binding.id),
+    updatedAt: input.updatedAt,
+  });
+  if (!updateResult.ok) {
+    throw new Error(
+      `replayed task detail repair failed: task=${input.existingTask.id} error=${formatToduError(updateResult.error)}`,
+    );
+  }
+  return updateResult.value;
 }
 
 async function applyPulledCommentsV3(

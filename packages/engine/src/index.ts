@@ -1,10 +1,5 @@
-import {
-  type PeerCandidatePayload,
-  type PeerDisconnectedPayload,
-  Repo,
-} from "@automerge/automerge-repo/slim";
+import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -20,7 +15,12 @@ import {
   createSyncRuntimeCommentProvenanceTools,
 } from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
-import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
+import {
+  createPersistentRepo,
+  initBootstrapStorage,
+  initEphemeralStorage,
+  type Storage,
+} from "./storage.js";
 import {
   addRemoteSyncAdapter,
   connectSyncClient,
@@ -132,9 +132,7 @@ export async function createTodu(
     // loading the catalog. On join, the catalog document ID points to a
     // remote document not in local storage — without a network peer,
     // repo.find() marks it "unavailable" and throws.
-    const repo = new Repo({
-      storage: new NodeFSStorageAdapter(resolvedConfig.storagePath),
-    });
+    const repo = createPersistentRepo(resolvedConfig.storagePath);
     if (config?.remoteSync) {
       initialRemoteAdapter = addRemoteSyncAdapter(
         repo,

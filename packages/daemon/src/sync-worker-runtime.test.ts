@@ -2470,6 +2470,76 @@ describe("acknowledged pulls", () => {
     handle.stop();
   });
 
+  it.each([
+    "read",
+    "repair",
+  ])("does not acknowledge when equal-timestamp task detail %s fails", async (phase) => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [
+        {
+          externalId: "remote-1",
+          title: "Task",
+          description: "Restored detail",
+          updatedAt: new Date(0).toISOString(),
+        },
+      ],
+      checkpoint: "equal-timestamp",
+    });
+    const failure = err(validationError("detail", "unavailable"));
+    if (phase === "read") todu.task.get.mockResolvedValueOnce(failure);
+    else todu.task.update.mockResolvedValueOnce(failure);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it("does not rewrite matching v4 replay content or reset its approval", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [
+        {
+          externalId: "remote-1",
+          title: "Task",
+          description: "Approved detail",
+          updatedAt: new Date(0).toISOString(),
+        },
+      ],
+      checkpoint: "already-saved",
+    });
+    todu.task.get.mockResolvedValueOnce(
+      ok({
+        ...createTask(createProject().id, { externalId: "remote-1" }),
+        description: "Approved detail",
+        descriptionApproval: { state: "approved" },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(todu.task.update).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it("preserves v3 equal-timestamp skip behavior", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull(3);
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [
+        {
+          externalId: "remote-1",
+          title: "Task",
+          description: "Remote detail",
+          updatedAt: new Date(0).toISOString(),
+        },
+      ],
+      checkpoint: "legacy",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(todu.task.update).not.toHaveBeenCalled();
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
   it("rejects a malformed v4 pull without a checkpoint", async () => {
     const { provider, handle } = createAcknowledgedPull();
     vi.mocked(provider.pull).mockResolvedValue({ tasks: [] } as never);

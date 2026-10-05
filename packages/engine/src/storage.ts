@@ -19,6 +19,21 @@ import {
   type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
+import {
+  createStorageWriteDrain,
+  STORAGE_SAVE_QUIET_MS,
+  withStorageCloseTimeout,
+} from "./storage-write-drain.js";
+
+const persistentWriteDrains = new WeakMap<Repo, () => Promise<void>>();
+
+/** Construct an engine-owned persistent repo with observable pending filesystem writes. */
+export function createPersistentRepo(storagePath: string): Repo {
+  const writes = createStorageWriteDrain(new NodeFSStorageAdapter(storagePath));
+  const repo = new Repo({ storage: writes.adapter });
+  persistentWriteDrains.set(repo, writes.drain);
+  return repo;
+}
 
 // ============================================================================
 // Storage layer — Automerge repo + document management
@@ -339,19 +354,22 @@ export async function initBootstrapStorage(
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
-  const ownsRepo = repo === undefined;
-  const actualRepo =
-    repo ??
-    new Repo({
-      storage: new NodeFSStorageAdapter(storagePath),
-    });
+  const actualRepo = repo ?? createPersistentRepo(storagePath);
+  const ownsRepo = repo === undefined || persistentWriteDrains.has(actualRepo);
 
   try {
     const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath, bootstrapOwnerActor);
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
-      await shutdownRepoQuietly(actualRepo);
+      try {
+        await shutdownPersistentRepo(actualRepo);
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          `Storage initialization and cleanup failed: ${storagePath}`,
+        );
+      }
     }
     throw error;
   }
@@ -373,19 +391,22 @@ export async function initJoinStorage(
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
-  const ownsRepo = repo === undefined;
-  const actualRepo =
-    repo ??
-    new Repo({
-      storage: new NodeFSStorageAdapter(storagePath),
-    });
+  const actualRepo = repo ?? createPersistentRepo(storagePath);
+  const ownsRepo = repo === undefined || persistentWriteDrains.has(actualRepo);
 
   try {
     const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join", bootstrapOwnerActor);
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
-      await shutdownRepoQuietly(actualRepo);
+      try {
+        await shutdownPersistentRepo(actualRepo);
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          `Storage initialization and cleanup failed: ${storagePath}`,
+        );
+      }
     }
     throw error;
   }
@@ -476,23 +497,25 @@ export async function initEphemeralStorage(storagePath: string): Promise<
   };
 }
 
-async function shutdownRepoQuietly(repo: Repo): Promise<void> {
-  try {
-    await repo.flush();
-  } catch {
-    // Safe to ignore — requesting docs have no content to save
-  }
-
-  try {
-    await repo.shutdown();
-  } catch {
-    // Safe to ignore — shutdown may race with pending requesting docs
-  }
-
-  // Allow queued storage adapter writes to settle before callers clean up
-  // temporary directories. A full sync-throttle window avoids ENOENT races
-  // observed in repeated failure-path teardown tests.
-  await new Promise((resolve) => setTimeout(resolve, SYNC_THROTTLE_MS + SYNC_DELIVERY_MS));
+async function shutdownPersistentRepo(repo: Repo): Promise<void> {
+  await withStorageCloseTimeout(async () => {
+    try {
+      try {
+        await repo.shutdown();
+      } catch (error) {
+        if (!(error instanceof Error) || error.message !== "DocHandle is not ready") throw error;
+        // Requesting documents contain nothing local to save; still persist every ready handle.
+        const readyIds = Object.values(repo.handles)
+          .filter((handle) => handle.isReady())
+          .map((handle) => handle.documentId);
+        await repo.flush(readyIds);
+      }
+    } finally {
+      const drain = persistentWriteDrains.get(repo);
+      if (drain) await drain();
+      else await new Promise((resolve) => setTimeout(resolve, STORAGE_SAVE_QUIET_MS));
+    }
+  });
 }
 
 function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>): Storage {
@@ -500,23 +523,7 @@ function createPersistentStorage(repo: Repo, catalog: DocHandle<CatalogDocument>
     repo,
     catalog,
     ephemeral: false,
-    async close() {
-      // Both flush() and shutdown() (which calls flush internally) can throw
-      // "DocHandle is not ready" when a document is in "requesting" state —
-      // this happens when a connected remote peer is mid-sync during close.
-      // Requesting documents have no local content to persist, so ignoring
-      // the error is safe and correct.
-      try {
-        await repo.flush();
-      } catch {
-        // Safe to ignore — requesting docs have no content to save
-      }
-      try {
-        await repo.shutdown();
-      } catch {
-        // shutdown() calls flush() internally — same safe-to-ignore error
-      }
-    },
+    close: () => shutdownPersistentRepo(repo),
   };
 }
 

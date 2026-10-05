@@ -65,6 +65,14 @@ To force a specific behavior (for scripting/testing):
 export TODU_DAEMON_LIFECYCLE_MODE=direct # or systemd-user / launchd / auto
 ```
 
+### Shutdown feedback and persistence
+
+In interactive terminals, `todu daemon stop` and `todu daemon restart` show animated dots while the command waits, then clear the indicator before printing the final result. The animation indicates activity, not a percentage or proof that disk writes are advancing. JSON output, redirected output, and `TERM=dumb` never contain animation. Commands invoked directly through `systemctl` or `launchctl` do not show Todu's indicator.
+
+Engine-managed persistent storage shutdown flushes ready documents and drains tracked filesystem saves/deletes, allowing Automerge's throttled successors to settle before reporting completion. Local storage shutdown has a five-second deadline; actual storage errors or expiry are failures, not confirmation that writes finished. A timeout does not cancel outstanding filesystem work. Caller-supplied repositories retain responsibility for their adapters' pending writes; the engine allows a throttle-settling window but cannot track an external adapter.
+
+Direct-mode stop allows ten seconds for graceful process exit before the existing forced-termination fallback. Forced termination returns an error because local storage completion is unconfirmed, and restart does not launch a replacement after that failure. Service-manager subprocesses run asynchronously with a thirty-second command timeout so the indicator remains responsive. Inspect daemon logs for engine shutdown errors; process exit or successful service-manager delegation alone does not certify storage success or remote replication.
+
 Daemon logging level is controlled with `TODU_LOG_LEVEL`:
 
 ```bash
