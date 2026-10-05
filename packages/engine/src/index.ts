@@ -12,7 +12,7 @@ import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
-import { createNoteNamespace } from "./notes.js";
+import { createNoteNamespaces } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
 import {
@@ -73,6 +73,7 @@ export type {
   RecurringNamespace,
   RemoteSyncState,
   SyncRuntimeActorTools,
+  SyncRuntimeNoteTools,
   SyncStatus,
   TaskNamespace,
   Todu,
@@ -328,12 +329,15 @@ export async function createTodu(
 
   const stubs = createStubNamespaces(resolvedConfig);
   const taskNamespace = createTaskNamespace(storage.catalog, storage.repo);
-  const noteNamespace = createNoteNamespace(storage.catalog, storage.repo);
+  const noteNamespaces = createNoteNamespaces(storage.catalog, storage.repo);
+  const noteNamespace = noteNamespaces.namespace;
 
   const todu: ToduWithInternalTools = {
     ...stubs,
     __internal: {
       syncRuntime: {
+        flush: () => storage.repo.flush(),
+        notes: noteNamespaces.syncRuntime,
         actors: createSyncRuntimeActorTools(storage.catalog),
         commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),
       },

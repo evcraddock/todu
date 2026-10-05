@@ -2,8 +2,10 @@ import crypto from "node:crypto";
 import {
   type Actor,
   type ActorId,
+  type AnySyncProvider,
   type CommentSyncProvenance,
   createActorId,
+  createNoteId,
   createProjectId,
   type DeletedImportedCommentInput,
   type ExportedCommentInput,
@@ -14,14 +16,17 @@ import {
   type ImportedTaskInput,
   type IntegrationBinding,
   type IntegrationBindingActorMapping,
+  isSyncProviderApiVersionCompatible,
   MAX_DESCRIPTION_LENGTH,
   MAX_NOTE_CONTENT_LENGTH,
   type Note,
   type Project,
-  SYNC_PROVIDER_API_VERSION,
+  SYNC_PROVIDER_API_VERSION_V3,
+  SYNC_PROVIDER_API_VERSION_V4,
+  type SyncProviderPullResultV4,
   type SyncProviderPushCommentLink,
   type SyncProviderPushTaskLink,
-  type SyncProviderV3,
+  type SyncProviderV4,
   type Task,
   type ToduError,
 } from "@todu/core";
@@ -58,7 +63,7 @@ export interface CreateSyncPluginWorkerRuntimeOptions {
   pluginVersion: string;
   modulePath: string;
   authorityId: string;
-  provider: SyncProviderV3;
+  provider: AnySyncProvider;
   providerApiVersion?: number;
   config: SyncPluginExecutionConfig;
   logger: DaemonLogger;
@@ -181,7 +186,7 @@ export function createSyncPluginWorkerRuntime(
   const clearTimeoutFn = options.scheduler?.clearTimeoutFn ?? clearTimeout;
   const now = options.scheduler?.now ?? (() => Date.now());
   const runtimeLogger = options.logger.child(`sync-plugin.${options.pluginName}`);
-  const providerApiVersion = options.providerApiVersion ?? SYNC_PROVIDER_API_VERSION;
+  const providerApiVersion = options.providerApiVersion ?? SYNC_PROVIDER_API_VERSION_V3;
 
   return {
     start() {
@@ -291,7 +296,7 @@ export function createSyncPluginWorkerRuntime(
 
         await ensureInitialized();
 
-        if (providerApiVersion !== SYNC_PROVIDER_API_VERSION) {
+        if (!isSyncProviderApiVersionCompatible(providerApiVersion)) {
           throw new Error(
             `unsupported sync provider API version at runtime: ${providerApiVersion}`,
           );
@@ -299,6 +304,20 @@ export function createSyncPluginWorkerRuntime(
 
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
           const pullResult = await options.provider.pull(binding, project);
+          const acknowledgedProvider =
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V4
+              ? (options.provider as SyncProviderV4)
+              : null;
+          if (
+            acknowledgedProvider &&
+            (!pullResult ||
+              !Object.hasOwn(pullResult, "checkpoint") ||
+              typeof acknowledgedProvider.acknowledgePull !== "function")
+          ) {
+            throw new Error(
+              "sync provider v4 pull requires a checkpoint and acknowledgePull callback",
+            );
+          }
 
           if (pullResult.tasks.length > 0) {
             const pullStats = await applyPulledTasksV3(
@@ -319,7 +338,20 @@ export function createSyncPluginWorkerRuntime(
               comments: pullResult.comments ?? [],
               deletedComments: pullResult.deletedComments ?? [],
               completeCommentExternalTaskIds: pullResult.completeCommentExternalTaskIds ?? [],
+              requireKnownTasks: acknowledgedProvider !== null,
             });
+          }
+
+          if (acknowledgedProvider) {
+            if (actorState.mappingsChanged) {
+              await persistBindingActorMappings(activeTodu, actorState);
+            }
+            await getToduWithInternals(activeTodu).__internal.syncRuntime.flush();
+            await acknowledgedProvider.acknowledgePull(
+              binding,
+              (pullResult as SyncProviderPullResultV4).checkpoint,
+              project,
+            );
           }
         }
 
@@ -886,6 +918,7 @@ async function applyPulledCommentsV3(
     comments: ImportedCommentInput[];
     deletedComments: DeletedImportedCommentInput[];
     completeCommentExternalTaskIds: string[];
+    requireKnownTasks?: boolean;
   },
 ): Promise<{ created: number; updated: number; deleted: number }> {
   const importedComments = input.comments.map((comment) => ({
@@ -905,6 +938,7 @@ async function applyPulledCommentsV3(
     comments: importedComments,
     deletedComments,
     completeCommentExternalTaskIds: input.completeCommentExternalTaskIds,
+    requireKnownTasks: input.requireKnownTasks,
   });
 }
 
@@ -916,6 +950,7 @@ async function applyImportedComments(
     comments: RuntimeImportedComment[];
     deletedComments: RuntimeDeletedComment[];
     completeCommentExternalTaskIds: string[];
+    requireKnownTasks?: boolean;
   },
 ): Promise<{ created: number; updated: number; deleted: number }> {
   const stats = { created: 0, updated: 0, deleted: 0 };
@@ -931,6 +966,19 @@ async function applyImportedComments(
     if (task.externalId) {
       localTaskIdByExternalId.set(task.externalId, task.id);
       externalTaskIdByLocalId.set(task.id, task.externalId);
+    }
+  }
+
+  if (input.requireKnownTasks) {
+    const externalTaskIds = [
+      ...input.comments.map((comment) => comment.externalTaskId),
+      ...input.deletedComments.map((comment) => comment.externalTaskId),
+      ...input.completeCommentExternalTaskIds,
+    ];
+    for (const externalTaskId of externalTaskIds) {
+      if (!localTaskIdByExternalId.has(externalTaskId)) {
+        throw new Error(`pulled comment task unavailable: externalTaskId=${externalTaskId}`);
+      }
     }
   }
 
@@ -987,7 +1035,12 @@ async function applyImportedComments(
       entityType: "task",
       entityId: taskId,
     });
-    const localNotes: Note[] = localNotesResult.ok ? localNotesResult.value : [];
+    if (!localNotesResult.ok) {
+      throw new Error(
+        `pulled comment note list failed: task=${taskId} error=${formatToduError(localNotesResult.error)}`,
+      );
+    }
+    const localNotes = localNotesResult.value;
     const externalTaskId = externalTaskIdByLocalId.get(taskId);
     if (!externalTaskId) {
       continue;
@@ -1026,7 +1079,9 @@ async function applyImportedComments(
     const pulledExternalIds = new Set(pulledComments.map((comment) => comment.externalId));
 
     for (const pulled of pulledComments) {
-      const localNote = localByExternalId.get(pulled.externalId);
+      const importedNoteId = createImportedNoteId(actorState.binding, pulled);
+      const localNote =
+        localByExternalId.get(pulled.externalId) ?? localNotesById.get(importedNoteId);
       const authorResolution = pulled.author
         ? await resolveImportedActor(todu, actorState, pulled.author)
         : null;
@@ -1037,7 +1092,9 @@ async function applyImportedComments(
       );
 
       if (!localNote) {
-        const createResult = await todu.note.create({
+        const createResult = await getToduWithInternals(
+          todu,
+        ).__internal.syncRuntime.notes.createWithId(importedNoteId, {
           content: truncate(pulled.body, MAX_NOTE_CONTENT_LENGTH),
           author: authorResolution?.actor.displayName ?? "external",
           authorActorId: authorResolution?.actor.id,
@@ -1061,6 +1118,8 @@ async function applyImportedComments(
             pulled.updatedAt !== undefined ? "updatedAt" : "createdAt",
           ),
         });
+        localByExternalId.set(pulled.externalId, createResult.value);
+        localNotesById.set(createResult.value.id, createResult.value);
         stats.created += 1;
       } else {
         const externalUpdatedAt = normalizeImportedCommentTimestamp(
@@ -1111,6 +1170,17 @@ async function applyImportedComments(
   }
 
   return stats;
+}
+
+function createImportedNoteId(
+  binding: IntegrationBinding,
+  comment: RuntimeImportedComment,
+): Note["id"] {
+  const hash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify([binding.id, comment.externalTaskId, comment.externalId]))
+    .digest("hex");
+  return createNoteId(`note-import-${hash}`);
 }
 
 async function buildPushPayloadsV3(

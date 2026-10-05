@@ -183,6 +183,92 @@ describe("createTodu", () => {
     ]);
   });
 
+  it("flushes imported tasks, notes, provenance and mappings before provider progress can be committed", async () => {
+    todu = await createTodu({ storagePath: tmpDir });
+    const internal = (todu as ToduWithInternalTools).__internal.syncRuntime;
+    const project = await todu.project.create({ name: "Imported project" });
+    if (!project.ok) throw new Error("project create failed");
+    const binding = await todu.integration.create({
+      provider: "test",
+      projectId: project.value.id,
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      strategy: "pull",
+      enabled: true,
+    });
+    if (!binding.ok) throw new Error("binding create failed");
+    const task = await todu.task.create({
+      projectId: project.value.id,
+      title: "Imported task",
+      description: "Saved detail",
+      externalId: "external-task",
+    });
+    if (!task.ok) throw new Error("task create failed");
+    const noteId = createNoteId("note-import-test");
+    const noteInput = {
+      content: "Saved comment",
+      entityType: "task" as const,
+      entityId: task.value.id,
+    };
+    const note = await internal.notes.createWithId(noteId, noteInput);
+    expect(note.ok).toBe(true);
+    await todu.note.update(noteId, { content: "Edited comment" });
+    const replay = await internal.notes.createWithId(noteId, noteInput);
+    expect(replay.ok && replay.value.content).toBe("Edited comment");
+    const provenance = await internal.commentProvenance.upsert({
+      bindingId: binding.value.id,
+      provider: "test",
+      targetKind: "repository",
+      targetRef: "owner/repo",
+      localNoteId: noteId,
+      externalTaskId: "external-task",
+      externalCommentId: "external-comment",
+      lastMirroredAt: "2026-04-01T00:00:00.000Z",
+    });
+    expect(provenance.ok).toBe(true);
+    const mappings = [{ actorId: createActorId("actor-user"), externalLogin: "external-user" }];
+    expect(
+      (await todu.integration.update(binding.value.id, { options: { actorMappings: mappings } }))
+        .ok,
+    ).toBe(true);
+
+    await internal.flush();
+    // Snapshot before close: shutdown must not supply the persistence barrier under test.
+    const snapshot = fs.mkdtempSync(path.join(os.tmpdir(), "todu-flush-snapshot-"));
+    tmpDirs.push(snapshot);
+    fs.cpSync(tmpDir, snapshot, { recursive: true });
+    const reopened = await createTodu({ storagePath: snapshot });
+    try {
+      const savedTask = await reopened.task.get(task.value.id);
+      expect(savedTask.ok && savedTask.value.description).toBe("Saved detail");
+      const notes = await reopened.note.list({ entityType: "task", entityId: task.value.id });
+      expect(notes.ok && notes.value).toEqual([
+        expect.objectContaining({ id: noteId, content: "Edited comment" }),
+      ]);
+      const savedBinding = await reopened.integration.get(binding.value.id);
+      expect(savedBinding.ok && savedBinding.value.options?.actorMappings).toEqual(mappings);
+      const savedProvenance = await (
+        reopened as ToduWithInternalTools
+      ).__internal.syncRuntime.commentProvenance.list({ bindingId: binding.value.id });
+      expect(savedProvenance.ok && savedProvenance.value).toHaveLength(1);
+    } finally {
+      await reopened.close();
+    }
+  });
+
+  it("keeps validation and public random-ID note creation unchanged", async () => {
+    todu = await createTodu({ storagePath: tmpDir });
+    const internal = (todu as ToduWithInternalTools).__internal.syncRuntime;
+    expect(
+      await internal.notes.createWithId(createNoteId("note-import-invalid"), { content: "" }),
+    ).toMatchObject({ ok: false });
+    const first = await todu.note.create({ content: "same body" });
+    const second = await todu.note.create({ content: "same body" });
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(first.ok && first.value.id).not.toBe(second.ok && second.value.id);
+  });
+
   it("returns config via config.get()", async () => {
     todu = await createTodu({ storagePath: tmpDir });
     const config = todu.config.get();

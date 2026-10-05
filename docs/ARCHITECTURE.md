@@ -229,7 +229,8 @@ Baseline worker lifecycle states are:
 - Generic worker plugins use `WorkerPluginRegistration` from `@todu/core` and export `workerPlugin`.
 - Sync provider plugins use `SyncProviderRegistration` from `@todu/core` and export `syncProvider`.
 - Plugin load paths validate registrations at load time before worker registration.
-- Compatibility baseline for sync providers is API-version based (latest provider API version: `3`; host-supported provider API versions: `3`).
+- Compatibility baseline for sync providers is API-version based (latest provider API version: `4`; host-supported provider API versions: `3` and `4`).
+- API v4 providers return opaque pull checkpoints and commit read progress only after daemon application, actor-mapping persistence, and native local storage flush succeed. Acknowledgment precedes bidirectional push; failures retry unacknowledged pulls without waiting for remote peers. API v3 retains its legacy lifecycle without acknowledgment.
 - Daemon plugin modules resolve from `TODU_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config. Absolute and dot-relative entries are filesystem paths, with dot-relative paths resolved from the config location; other entries are npm package specifiers.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.

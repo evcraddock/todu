@@ -7,6 +7,7 @@ import {
   createNoteId,
   createProjectId,
   createTaskId,
+  err,
   type ImportedCommentInput,
   type ImportedTaskInput,
   type IntegrationBinding,
@@ -16,7 +17,9 @@ import {
   type Project,
   type SyncProvider,
   type SyncProviderV3,
+  type SyncProviderV4,
   type Task,
+  validationError,
 } from "@todu/core";
 import type { ToduWithInternalTools } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -2238,6 +2241,323 @@ describe("sync-worker-runtime", () => {
   });
 });
 
+describe("acknowledged pulls", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("applies and saves tasks, comments, provenance and mappings before acknowledging, then pushes", async () => {
+    const { provider, todu, binding, project, checkpoint, handle } = createAcknowledgedPull();
+    const flush = vi.mocked(todu.instance.__internal.syncRuntime.flush);
+    const saving = createDeferred<void>();
+    flush.mockReturnValueOnce(saving.promise);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    expect(todu.note.update).toHaveBeenCalledTimes(1);
+    expect(todu.instance.__internal.syncRuntime.notes.createWithId).toHaveBeenCalledTimes(1);
+    expect(todu.integration.update).toHaveBeenCalledTimes(1);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    saving.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).toHaveBeenCalledWith(
+      binding,
+      checkpoint,
+      expect.objectContaining({ id: project.id }),
+    );
+    expect(vi.mocked(provider.acknowledgePull).mock.calls[0][1]).toBe(checkpoint);
+    expect(vi.mocked(provider.acknowledgePull).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(provider.push).mock.invocationCallOrder[0],
+    );
+    expect(todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      binding.id,
+      expect.objectContaining({ state: "idle", lastSuccessfulSyncAt: expect.any(String) }),
+    );
+    handle.stop();
+  });
+
+  it("acknowledges empty pulls after saving local state", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({ tasks: [], checkpoint: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(todu.instance.__internal.syncRuntime.flush).toHaveBeenCalledTimes(1);
+    expect(provider.acknowledgePull).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      expect.anything(),
+    );
+    handle.stop();
+  });
+
+  it.each([
+    "task create",
+    "task update",
+    "comment read",
+    "comment create",
+    "comment update",
+    "comment delete",
+    "provenance list",
+    "provenance upsert",
+    "provenance delete",
+    "mapping",
+    "flush",
+  ])("does not acknowledge or push when %s fails, and replays without duplicates", async (phase) => {
+    const { provider, todu, binding, handle } = createAcknowledgedPull();
+    const internals = todu.instance.__internal.syncRuntime;
+    const failure = err(validationError("test", `${phase} failed`));
+    switch (phase) {
+      case "task create":
+        todu.task.create.mockResolvedValueOnce(failure);
+        break;
+      case "task update":
+        todu.task.update.mockResolvedValueOnce(failure);
+        break;
+      case "comment read":
+        todu.note.list.mockResolvedValueOnce(failure);
+        break;
+      case "comment create":
+        vi.mocked(internals.notes.createWithId).mockResolvedValueOnce(failure);
+        break;
+      case "comment update":
+        todu.note.update.mockResolvedValueOnce(failure);
+        break;
+      case "comment delete":
+        todu.note.delete.mockResolvedValueOnce(failure);
+        break;
+      case "provenance list":
+        vi.mocked(internals.commentProvenance.list).mockResolvedValueOnce(failure);
+        break;
+      case "provenance upsert":
+        vi.mocked(internals.commentProvenance.upsert).mockResolvedValueOnce(failure);
+        break;
+      case "provenance delete":
+        vi.mocked(internals.commentProvenance.deleteForNote).mockResolvedValueOnce(failure);
+        break;
+      case "mapping":
+        todu.integration.update.mockResolvedValueOnce(failure);
+        break;
+      case "flush":
+        vi.mocked(internals.flush).mockRejectedValueOnce(new Error("storage failed"));
+        break;
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    expect(todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      binding.id,
+      expect.objectContaining({ state: "error" }),
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    expect(provider.pull).toHaveBeenCalledTimes(2);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    const tasks = await todu.instance.task.list({ projectId: binding.projectId });
+    expect(tasks.ok && tasks.value).toHaveLength(2);
+    const notes = await todu.instance.note.list();
+    expect(notes.ok && notes.value).toHaveLength(2);
+    handle.stop();
+  });
+
+  it("recovers a created comment whose provenance write failed without duplicating it", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: "comment-only",
+      comments: [
+        {
+          externalId: "new-comment",
+          externalTaskId: "remote-1",
+          body: "new",
+          createdAt: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+    });
+    vi.mocked(todu.instance.__internal.syncRuntime.commentProvenance.upsert).mockRejectedValueOnce(
+      new Error("provenance unavailable"),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    const notes = await todu.instance.note.list();
+    expect(notes.ok && notes.value).toHaveLength(3);
+    expect(todu.instance.__internal.syncRuntime.notes.createWithId).toHaveBeenCalledTimes(1);
+    handle.stop();
+  });
+
+  it("retries an acknowledgment failure without duplicate imports or premature push", async () => {
+    const { provider, todu, checkpoint, handle } = createAcknowledgedPull();
+    vi.mocked(provider.acknowledgePull).mockRejectedValueOnce(new Error("checkpoint save failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.push).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(provider.acknowledgePull).mock.calls.map((call) => call[1])).toEqual([
+      checkpoint,
+      checkpoint,
+    ]);
+    expect(todu.task.create).toHaveBeenCalledTimes(1);
+    expect(todu.instance.__internal.syncRuntime.notes.createWithId).toHaveBeenCalledTimes(1);
+    expect(provider.push).toHaveBeenCalledTimes(1);
+    handle.stop();
+  });
+
+  it("does not roll back an acknowledged pull when subsequent push fails", async () => {
+    const { provider, handle } = createAcknowledgedPull();
+    vi.mocked(provider.push).mockRejectedValueOnce(new Error("push failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(2);
+    handle.stop();
+  });
+
+  it("does not acknowledge push-only bindings", async () => {
+    const { provider, binding, handle } = createAcknowledgedPull();
+    binding.strategy = "push";
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.pull).not.toHaveBeenCalled();
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).toHaveBeenCalledTimes(1);
+    handle.stop();
+  });
+
+  it.each([
+    "comments",
+    "deletedComments",
+    "completeCommentExternalTaskIds",
+  ] as const)("does not acknowledge %s for an unavailable task", async (field) => {
+    const { provider, handle } = createAcknowledgedPull();
+    const result = {
+      tasks: [],
+      checkpoint: "missing-task",
+      [field]:
+        field === "completeCommentExternalTaskIds"
+          ? ["unknown-task"]
+          : [
+              {
+                externalId: "comment",
+                externalTaskId: "unknown-task",
+                body: "body",
+                createdAt: "2026-04-01T00:00:00.000Z",
+              },
+            ],
+    };
+    vi.mocked(provider.pull).mockResolvedValue(result);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it("deduplicates repeated comment identities within one pull batch", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    const comment = {
+      externalId: "same-comment",
+      externalTaskId: "remote-1",
+      body: "body",
+      createdAt: "2026-04-01T00:00:00.000Z",
+    };
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: "repeated",
+      comments: [comment, comment],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(todu.instance.__internal.syncRuntime.notes.createWithId).toHaveBeenCalledTimes(1);
+    handle.stop();
+  });
+
+  it("rejects a malformed v4 pull without a checkpoint", async () => {
+    const { provider, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({ tasks: [] } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    handle.stop();
+  });
+
+  it("keeps v3 providers on the legacy path without acknowledging even if they expose a callback", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull(3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.pull).toHaveBeenCalledTimes(1);
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(todu.instance.__internal.syncRuntime.flush).not.toHaveBeenCalled();
+    expect(provider.push).toHaveBeenCalledTimes(1);
+    handle.stop();
+  });
+});
+
+function createAcknowledgedPull(apiVersion = 4) {
+  const project = createProject();
+  const binding = createBinding(project.id);
+  const task = createTask(project.id, { externalId: "remote-1" });
+  const todu = createTodu(project, [task], [binding], {
+    notes: [
+      createNote({
+        id: createNoteId("old-note"),
+        content: "old",
+        entityType: "task",
+        entityId: task.id,
+        tags: ["sync:externalId:old-comment"],
+      }),
+      createNote({
+        id: createNoteId("deleted-note"),
+        content: "deleted",
+        entityType: "task",
+        entityId: task.id,
+        tags: ["sync:externalId:deleted-comment"],
+      }),
+    ],
+  });
+  const checkpoint = { issueCursor: "opaque", comments: [1, 2] };
+  const provider: SyncProviderV4 = {
+    ...createV3Provider(),
+    pull: vi.fn<SyncProviderV4["pull"]>().mockResolvedValue({
+      checkpoint,
+      tasks: [
+        { externalId: "remote-1", title: "updated", updatedAt: "2026-04-01T00:00:00.000Z" },
+        {
+          externalId: "remote-2",
+          title: "new",
+          updatedAt: "2026-04-01T00:00:00.000Z",
+          assignees: [{ externalLogin: "octocat" }],
+        },
+      ],
+      comments: [
+        {
+          externalId: "old-comment",
+          externalTaskId: "remote-1",
+          body: "updated",
+          createdAt: "2026-04-01T00:00:00.000Z",
+        },
+        {
+          externalId: "new-comment",
+          externalTaskId: "remote-2",
+          body: "new",
+          createdAt: "2026-04-01T00:00:00.000Z",
+        },
+      ],
+      deletedComments: [{ externalId: "deleted-comment", externalTaskId: "remote-1" }],
+    }),
+    acknowledgePull: vi.fn<SyncProviderV4["acknowledgePull"]>().mockResolvedValue(undefined),
+  };
+  const runtime = createSyncPluginWorkerRuntime({
+    pluginName: "github",
+    pluginVersion: "1.0.0",
+    modulePath: "/plugins/github.js",
+    authorityId: "daemon://test",
+    provider,
+    providerApiVersion: apiVersion,
+    getTodu: () => todu.instance,
+    logger: createLogger(),
+    config: { enabled: true, intervalMs: 1000, retryInitialMs: 100, retryMaxMs: 800, settings: {} },
+  });
+  return { provider, todu, binding, project, checkpoint, handle: runtime.start() };
+}
+
 function createProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     initialize: vi.fn<SyncProvider["initialize"]>().mockResolvedValue(undefined),
@@ -2735,6 +3055,21 @@ function createTodu(
               .fn()
               .mockImplementation(async () => ok(createActorId("actor-user"))),
             ensure: actorEnsure,
+          },
+          flush: vi.fn().mockResolvedValue(undefined),
+          notes: {
+            createWithId: vi.fn(
+              async (
+                id: Note["id"],
+                input: Parameters<ToduWithInternalTools["note"]["create"]>[0],
+              ) => {
+                const existing = notes.find((note) => note.id === id);
+                if (existing) return ok(existing);
+                const result = await noteCreate(input);
+                if (result.ok) result.value.id = id;
+                return result;
+              },
+            ),
           },
           commentProvenance: {
             list: commentProvenanceList,

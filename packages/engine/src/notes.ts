@@ -21,7 +21,7 @@ import {
   validateNoteFilter,
   validateUpdateNoteInput,
 } from "@todu/core";
-import type { NoteNamespace } from "./todu.js";
+import type { NoteNamespace, SyncRuntimeNoteTools } from "./todu.js";
 
 const NOTES_DIAGNOSTICS_ENV = "TODU_NOTES_DIAGNOSTICS";
 
@@ -49,10 +49,10 @@ interface NoteLocation {
 // Note namespace — CRUD on partitioned NotesDocument buckets
 // ============================================================================
 
-export function createNoteNamespace(
+export function createNoteNamespaces(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
-): NoteNamespace {
+): { namespace: NoteNamespace; syncRuntime: SyncRuntimeNoteTools } {
   function diagnosticsEnabled(): boolean {
     const value = process.env[NOTES_DIAGNOSTICS_ENV];
     return value === "1" || value?.toLowerCase() === "true";
@@ -370,54 +370,58 @@ export function createNoteNamespace(
     return true;
   }
 
-  return {
-    async create(input: CreateNoteInput): Promise<Result<Note>> {
-      const validationErr = validateCreateNoteInput(input);
-      if (validationErr) return err(validationErr);
+  async function createWithId(id: NoteId, input: CreateNoteInput): Promise<Result<Note>> {
+    const validationErr = validateCreateNoteInput(input);
+    if (validationErr) return err(validationErr);
 
-      await ensurePartitionModelReady();
+    await ensurePartitionModelReady();
 
-      // Verify entity exists if attached
-      if (input.entityType && input.entityId) {
-        const exists = await entityExists(input.entityType, input.entityId);
-        if (!exists) {
-          return err(notFound(input.entityType, input.entityId));
-        }
+    // Verify entity exists if attached
+    if (input.entityType && input.entityId) {
+      const exists = await entityExists(input.entityType, input.entityId);
+      if (!exists) {
+        return err(notFound(input.entityType, input.entityId));
       }
+    }
 
-      const authorActorId = resolveAuthorActorId(input);
-      if (authorActorId !== undefined && !actorExists(authorActorId)) {
-        return err(notFound("actor", authorActorId));
-      }
+    const authorActorId = resolveAuthorActorId(input);
+    if (authorActorId !== undefined && !actorExists(authorActorId)) {
+      return err(notFound("actor", authorActorId));
+    }
 
-      const createdAt = input.createdAt
-        ? new Date(input.createdAt).toISOString()
-        : new Date().toISOString();
-      const id = createNoteId(`note-${crypto.randomUUID().slice(0, 8)}`);
+    const createdAt = input.createdAt
+      ? new Date(input.createdAt).toISOString()
+      : new Date().toISOString();
+    const content = input.content.trim();
+    const note: Note = {
+      id,
+      content,
+      author: input.author ?? "user",
+      tags: input.tags ?? [],
+      createdAt,
+      contentApproval: normalizeContentApproval(content, input.contentApproval),
+    };
+    if (authorActorId !== undefined) note.authorActorId = authorActorId;
+    if (input.entityType !== undefined) note.entityType = input.entityType;
+    if (input.entityId !== undefined) note.entityId = input.entityId;
 
-      const content = input.content.trim();
-      const note: Note = {
-        id,
-        content,
-        author: input.author ?? "user",
-        tags: input.tags ?? [],
-        createdAt,
-        contentApproval: normalizeContentApproval(content, input.contentApproval),
-      };
-      if (authorActorId !== undefined) note.authorActorId = authorActorId;
-      if (input.entityType !== undefined) note.entityType = input.entityType;
-      if (input.entityId !== undefined) note.entityId = input.entityId;
+    const bucketKey = noteBucketKeyForNote(note);
+    const notesHandle = await getOrCreateBucketHandle(bucketKey);
+    const existing = notesHandle.doc()?.notes.find((candidate) => candidate.id === id);
+    if (existing) return ok(cloneNote(existing));
+    appendNotesWithoutDuplicates(notesHandle, [note]);
 
-      const bucketKey = noteBucketKeyForNote(note);
-      const notesHandle = await getOrCreateBucketHandle(bucketKey);
-      appendNotesWithoutDuplicates(notesHandle, [note]);
+    emitDiagnostic("create", {
+      noteId: id,
+      bucketKey,
+    });
 
-      emitDiagnostic("create", {
-        noteId: id,
-        bucketKey,
-      });
+    return ok(note);
+  }
 
-      return ok(note);
+  const namespace: NoteNamespace = {
+    create(input) {
+      return createWithId(createNoteId(`note-${crypto.randomUUID().slice(0, 8)}`), input);
     },
 
     async list(filter?: NoteFilter): Promise<Result<Note[]>> {
@@ -568,6 +572,7 @@ export function createNoteNamespace(
       return ok(undefined);
     },
   };
+  return { namespace, syncRuntime: { createWithId } };
 }
 
 function toStorageNote(n: Note): Note {
