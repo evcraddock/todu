@@ -52,6 +52,8 @@ Every enabled account synchronizes in the background regardless of which account
 
 Each account's catalog contains one shared device registry, replicated through Automerge. There is no registry server or permanent administrator machine.
 
+Creating an account initializes its registry with the creator's local replica. Migration records an existing local replica using its preserved storage ID. A new joining replica is added only through approval; opening pending account storage must not self-enroll it in the target catalog. Registry initialization and migration are idempotent.
+
 A registry entry identifies an account replica and contains:
 
 - The persistent Automerge Repo storage ID.
