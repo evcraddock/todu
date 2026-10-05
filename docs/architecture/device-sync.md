@@ -233,7 +233,7 @@ A synchronized replica is not a backup: unwanted edits also replicate. Preserve 
 
 ## Stable Dependency and Responsibility Boundary
 
-Only stable releases are permitted. The verified baseline uses Automerge core `3.3.2` and Repo/WebSocket adapters `2.5.6`; this documentation task upgrades neither. Existing implementation is a baseline, not a constraint against later changes using better stable APIs.
+Only stable releases are permitted. The verified baseline uses Automerge core `3.5.0` and Repo/WebSocket adapters `2.5.6`. Core was upgraded from `3.3.2` during [dependency security remediation](../security/task-763357bb-dependency-audit.md), with legacy snapshot and synchronization regression coverage; Repo and its existing patches were retained. Existing implementation is a baseline, not a constraint against later changes using better stable APIs.
 
 | Responsibility | Owner |
 | --- | --- |

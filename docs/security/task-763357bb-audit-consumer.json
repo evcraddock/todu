@@ -1,0 +1,117 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@automerge/automerge-repo": {
+      "name": "@automerge/automerge-repo",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "uuid"
+      ],
+      "effects": [
+        "@automerge/automerge-repo-network-websocket",
+        "@automerge/automerge-repo-storage-nodefs",
+        "@todu/engine"
+      ],
+      "range": "<=2.6.0-subduction.26",
+      "nodes": [
+        "node_modules/@automerge/automerge-repo"
+      ],
+      "fixAvailable": false
+    },
+    "@automerge/automerge-repo-network-websocket": {
+      "name": "@automerge/automerge-repo-network-websocket",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@automerge/automerge-repo"
+      ],
+      "effects": [],
+      "range": "<=2.6.0-subduction.26",
+      "nodes": [
+        "node_modules/@automerge/automerge-repo-network-websocket"
+      ],
+      "fixAvailable": true
+    },
+    "@automerge/automerge-repo-storage-nodefs": {
+      "name": "@automerge/automerge-repo-storage-nodefs",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@automerge/automerge-repo"
+      ],
+      "effects": [],
+      "range": "<=2.6.0-subduction.26",
+      "nodes": [
+        "node_modules/@automerge/automerge-repo-storage-nodefs"
+      ],
+      "fixAvailable": true
+    },
+    "@todu/engine": {
+      "name": "@todu/engine",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@automerge/automerge-repo",
+        "@automerge/automerge-repo-network-websocket",
+        "@automerge/automerge-repo-storage-nodefs"
+      ],
+      "effects": [],
+      "range": ">=0.23.2",
+      "nodes": [
+        "node_modules/@todu/engine"
+      ],
+      "fixAvailable": false
+    },
+    "uuid": {
+      "name": "uuid",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1119441,
+          "name": "uuid",
+          "dependency": "uuid",
+          "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-787",
+            "CWE-1285"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+          },
+          "range": "<11.1.1"
+        }
+      ],
+      "effects": [
+        "@automerge/automerge-repo"
+      ],
+      "range": "<11.1.1",
+      "nodes": [
+        "node_modules/uuid"
+      ],
+      "fixAvailable": false
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 5,
+      "high": 0,
+      "critical": 0,
+      "total": 5
+    },
+    "dependencies": {
+      "prod": 63,
+      "dev": 0,
+      "optional": 10,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 72
+    }
+  }
+}
