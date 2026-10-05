@@ -8,6 +8,8 @@
 
 This document reflects the current architecture decisions from planning task #1923.
 
+The [agreed device-sync and account design](architecture/device-sync.md) defines the next evolution: optional dedicated servers, enrolled LAN peers, and multiple accounts. That design is not yet implemented; the current topology and contracts below remain the runtime baseline.
+
 Project context:
 - Greenfield
 - Not in production
