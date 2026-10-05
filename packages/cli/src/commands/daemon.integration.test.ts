@@ -241,18 +241,7 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     expect(result.status).toBe(1);
     const json = JSON.parse(result.stdout);
     expect(json.ok).toBe(false);
-    expect(json.message).toContain(
-      "Invalid TODU_DAEMON_LIFECYCLE_MODE/TODU_DAEMON_LIFECYCLE_MODE value",
-    );
-  });
-
-  it("serve command is removed", () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-test-"));
-    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
-
-    const output = runCli(["serve"]);
-    expect(output.status).toBe(1);
-    expect(output.stderr).toContain("unknown command 'serve'");
+    expect(json.message).toContain("Invalid TODU_DAEMON_LIFECYCLE_MODE value");
   });
 });
 

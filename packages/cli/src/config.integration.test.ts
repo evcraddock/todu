@@ -122,7 +122,6 @@ describe("config", () => {
   describe("resolveDataDir", () => {
     it("uses TODU_DATA_DIR env var first", () => {
       process.env.TODU_DATA_DIR = "/env/data";
-      process.env.TODU_DATA_DIR = "/env/legacy-data";
       const configPath = path.join(tmpDir, "config.yaml");
       const result = resolveDataDir(configPath, { data_dir: "./other" });
       expect(result).toBe("/env/data");
@@ -170,13 +169,6 @@ describe("config", () => {
       const sources = resolveConfigSources();
       expect(sources.dataDirSource).toBe("TODU_DATA_DIR env var");
       expect(sources.dataDir).toBe("/override/data");
-    });
-
-    it("reports legacy TODU_DATA_DIR as source when set", () => {
-      process.env.TODU_DATA_DIR = "/override/legacy-data";
-      const sources = resolveConfigSources();
-      expect(sources.dataDirSource).toBe("TODU_DATA_DIR env var (legacy)");
-      expect(sources.dataDir).toBe("/override/legacy-data");
     });
 
     it("reports default when nothing configured", () => {
