@@ -2,7 +2,7 @@
 
 ## Status
 
-**Blocked pending a human decision about UUID.** No exception, prerelease adoption, Node support change, merge, or publication has been approved. The compatible upgrades are implemented in an isolated worktree; the pending release worktree is unchanged.
+**UUID exception approved by the maintainer:** "its ok leave 9.0.1". Retain UUID 9.0.1 and stable Repo 2.5.6; accept only GHSA-w5hq-g745-h8pq and its three inherited Repo/adapter findings based on the reachability evidence below. This does not approve other findings, audit suppression, prerelease adoption, Node support changes, merge, or publication. The upgrades are implemented in an isolated worktree; the pending release worktree is unchanged.
 
 On October 5, 2026, `npm audit --json` reported 57 affected-package findings: 3 critical, 43 high, 9 moderate, and 2 low. Following the approved upgrades and targeted compatible transitive updates, a clean `npm ci` and a fresh audit report 4 moderate findings, all stemming from one UUID advisory. Counts include inherited package findings and are not counts of distinct advisories.
 
@@ -37,22 +37,22 @@ No `npm audit fix --force`, overrides, suppressed advisories, or public workspac
 - **Development servers and tests:** Vitest, Vite, and mocker vulnerabilities can expose files or execute code when a server is accessible. They were upgraded rather than waived based on current server configuration.
 - **Build, install, packaging, and release supply chain:** tar/extract-zip, XML parsing, credential redirects, source-map loading, glob handling, and temporary paths can affect workstations and CI when handling dependencies, archives, repository content, or publishing inputs. Their critical/high findings were addressed despite development-dependency classification. The complete inventory identifies shared runtime paths where present.
 
-## UUID blocker and alternatives
+## Approved UUID exception and alternatives
 
 The remaining advisory is [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq): UUID before 11.1.1 lacks buffer bounds checks in v3/v5/v6 when a caller supplies a buffer. The installed version is 9.0.1. Npm reports moderate severity and also propagates it to Repo, its WebSocket adapter, and its NodeFS storage adapter.
 
 Stable Repo 2.5.6 requires `uuid: ^9.0.0`. Registry version enumeration confirms it is the latest non-prerelease Repo version. The `latest` tag instead points to `2.6.0-alpha.3`, which uses UUID 14 and requires Node >=22.13. Adopting it would violate the stable-only boundary and raise the currently declared Node >=20 runtime requirement; it is not authorized by the approved core-library upgrade.
 
-Source inspection finds Repo calls `v4`, `validate`, and `parse`, not the affected v3/v5/v6 functions. Its buffered v4 call uses a freshly allocated 16-byte array. This narrows current reachability but does **not** remove the installed vulnerable code or constitute approval to accept the finding.
+Source inspection finds Repo calls `v4`, `validate`, and `parse`, not the affected v3/v5/v6 functions. Its buffered v4 call uses a freshly allocated 16-byte array. This narrows current reachability but does **not** remove the installed vulnerable code. After reviewing this evidence, the maintainer explicitly approved leaving UUID 9.0.1 unchanged. The four moderate audit findings remain visible and are accepted, not described as remediated.
 
 Alternatives considered:
 
 1. **Root-only UUID override:** rejected as a complete fix. UUID 11 is outside Repo's declared range, and workspace root overrides would not protect users installing published Todu packages. No override was added.
 2. **Prerelease Repo upgrade:** not applied. Requires separate approval for the stability-policy and Node-support changes, plus revalidation of Repo APIs and every installation patch.
 3. **Stable backport or supported fork:** requires a separate concrete implementation/review decision. Any solution must reach downstream installations, preserve current Node support, cover the affected UUID APIs with regression tests, and transparently disclose any remaining registry audit findings. Patching source without changing registry metadata must not be presented as a clean audit.
-4. **Explicitly approved, narrowly documented exception:** possible only after human approval of the reachability evidence and an upstream follow-up; no exception is currently approved.
+4. **Explicitly approved, narrowly documented exception:** selected by the maintainer. Keep UUID 9.0.1 without an override, fork, backport, or change to Repo. Scope the exception to GHSA-w5hq-g745-h8pq and its inherited findings; it is not a waiver for arbitrary moderate vulnerabilities.
 
-Task completion and a release-ready claim remain blocked until one of these paths is explicitly resolved.
+**Upstream follow-up:** Recheck stable Repo and UUID compatibility at the next dependency review and when a stable Repo with a fixed UUID dependency becomes available. Reassess the exception immediately if runtime dependency paths begin calling the affected UUID functions or advisory exposure changes. A future stable upgrade still requires installation-patch and storage/sync regression verification. Npm audit is expected to exit nonzero with these four moderate findings; retain its report rather than suppressing them. Task closure, merge, and publication still require their separate workflow gates.
 
 ## Verification so far
 
@@ -61,7 +61,7 @@ Task completion and a release-ready claim remain blocked until one of these path
 - Default full suite with isolated HOME: **1472 passed, 14 conditional skips, zero failures**, including a snapshot saved by Automerge 3.3.2 and concurrent-edit/save/load compatibility regressions, plus imported Markdown link sanitization coverage.
 - Explicit `make test-sync-server-integration` with isolated HOME: **25 passed, zero skips/failures**. This executes the fourteen cases skipped by the default suite. A trace-enabled repeat also passed all 25 tests.
 - Node **20.20.2**: **14 targeted tests** passed for legacy Automerge snapshots, storage shutdown/reopening, and sync pull checkpoint persistence. Public runtime support remains Node >=20.
-- Electron production build and bundled daemon: passed. Electron 41.10.7 binary preparation and executable smoke check passed (embedded Node 24.18.0); interactive desktop smoke testing is still pending.
+- Electron production build and bundled daemon: passed. Electron 41.10.7 binary preparation and executable smoke check passed (embedded Node 24.18.0). Isolated native-Wayland desktop/CDP smoke testing passed: the seeded Projects view and Tasks view rendered correctly, screenshots were verified, and no renderer errors were captured. A fresh HOME/config/storage/socket and a credential-free environment kept real data, plugins, and daemon configuration untouched. The initial headless-Ozone harness launch exited with SIGSEGV; headless desktop operation is not claimed to pass. The native desktop launch required no sandbox bypass or permission changes.
 - Changesets 3 status/JSON release-plan generation, release inference dry-run, and `make version-check`: passed. No changesets were consumed.
 - No unhandled rejection, missing-storage-file race, or failing assertion was found in these runs.
 

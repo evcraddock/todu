@@ -16,6 +16,14 @@
     "critical": 0,
     "total": 4
   },
+  "acceptedException": {
+    "advisory": "GHSA-w5hq-g745-h8pq",
+    "uuidVersion": "9.0.1",
+    "repoVersion": "2.5.6",
+    "approval": "Maintainer: its ok leave 9.0.1",
+    "scope": "UUID and its three inherited Repo/adapter findings only; no suppression or override",
+    "reviewTrigger": "Next dependency review, a fixed stable Repo release, or changed runtime reachability"
+  },
   "findings": [
     {
       "package": "@automerge/automerge-repo",
@@ -57,7 +65,7 @@
         "uuid"
       ],
       "automaticFix": false,
-      "disposition": "BLOCKED: uuid has no stable Repo-supported fix"
+      "disposition": "Human-approved exception: retain uuid 9.0.1; GHSA-w5hq-g745-h8pq remains visible"
     },
     {
       "package": "@automerge/automerge-repo-network-websocket",
@@ -100,7 +108,7 @@
         "@automerge/automerge-repo"
       ],
       "automaticFix": false,
-      "disposition": "BLOCKED: uuid has no stable Repo-supported fix"
+      "disposition": "Human-approved exception: retain uuid 9.0.1; GHSA-w5hq-g745-h8pq remains visible"
     },
     {
       "package": "@automerge/automerge-repo-storage-nodefs",
@@ -142,7 +150,7 @@
         "@automerge/automerge-repo"
       ],
       "automaticFix": false,
-      "disposition": "BLOCKED: uuid has no stable Repo-supported fix"
+      "disposition": "Human-approved exception: retain uuid 9.0.1; GHSA-w5hq-g745-h8pq remains visible"
     },
     {
       "package": "@babel/core",
@@ -4381,7 +4389,7 @@
       ],
       "inheritedFrom": [],
       "automaticFix": false,
-      "disposition": "BLOCKED: uuid has no stable Repo-supported fix"
+      "disposition": "Human-approved exception: retain uuid 9.0.1; GHSA-w5hq-g745-h8pq remains visible"
     },
     {
       "package": "vite",
