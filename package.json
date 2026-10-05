@@ -34,24 +34,24 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.3",
     "@testing-library/dom": "^10.4.1",
     "@types/node": "^25.2.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260215.1",
     "@vitejs/plugin-react": "^5.1.4",
-    "@vitest/coverage-v8": "^4.0.18",
-    "electron": "^40.4.1",
-    "electron-builder": "^26.7.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "electron": "^41.10.7",
+    "electron-builder": "^26.15.3",
     "husky": "^9.1.7",
     "jsdom": "^28.1.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@automerge/automerge": "3.3.2",
+    "@automerge/automerge": "3.5.0",
     "@tanstack/react-query": "^5.90.21"
   }
 }

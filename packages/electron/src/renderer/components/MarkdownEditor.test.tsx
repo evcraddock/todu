@@ -56,6 +56,20 @@ describe("MarkdownEditor", () => {
     });
   });
 
+  it("does not render executable link URLs or event attributes from imported markdown", async () => {
+    const { container } = render(
+      <MarkdownEditor
+        value={'<a href="javascript:alert(1)" onclick="alert(2)">Imported link</a>'}
+        editable={false}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Imported link")).toBeDefined();
+    });
+    expect(container.querySelector('[href^="javascript:"]')).toBeNull();
+    expect(container.querySelector("[onclick]")).toBeNull();
+  });
+
   it("renders markdown headings", async () => {
     render(<MarkdownEditor value="# Heading One" editable={false} />);
     await waitFor(() => {
