@@ -12,13 +12,19 @@ export async function startDaemonForTests(
 ): Promise<DaemonHandle> {
   const daemonEntrypoint = path.resolve(rootDir, "packages/daemon/dist/entrypoint.js");
   const socketPath = path.join(storagePath, "daemon.sock");
+  const configPath = path.join(storagePath, "daemon-test-config.yaml");
+  fs.mkdirSync(storagePath, { recursive: true });
+  fs.writeFileSync(configPath, "sync:\n  remote:\n    enabled: false\n");
   const daemonProcess = spawn("node", [daemonEntrypoint], {
     cwd: rootDir,
     env: {
       ...process.env,
-      TODU_CONFIG: "",
+      HOME: storagePath,
+      TODU_CONFIG: configPath,
       TODU_DATA_DIR: storagePath,
       TODU_DAEMON_SOCKET: socketPath,
+      TODU_SYNC_SERVER: "",
+      TODU_SYNC_ENABLED: "false",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
