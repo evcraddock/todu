@@ -308,8 +308,16 @@ export interface SyncRuntimeCommentProvenanceTools {
   deleteForNote(noteId: NoteId): Promise<Result<void>>;
 }
 
+export interface SyncRuntimeNoteTools {
+  /** Create or recover an imported note by stable binding-scoped identity. */
+  createWithId(id: NoteId, input: CreateNoteInput): Promise<Result<Note>>;
+}
+
 export interface ToduInternalTools {
   syncRuntime: {
+    /** Complete native local storage writes; does not wait for remote replication. */
+    flush(): Promise<void>;
+    notes: SyncRuntimeNoteTools;
     actors: SyncRuntimeActorTools;
     commentProvenance: SyncRuntimeCommentProvenanceTools;
   };

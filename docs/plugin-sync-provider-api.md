@@ -29,8 +29,8 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `3`).
-- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`).
+- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `4`).
+- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3` and `4`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
@@ -54,9 +54,56 @@ Rules:
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
 
-## API v3 contract
+## API v4: acknowledged pull checkpoints
 
-API v3 is the canonical and only supported sync-provider contract.
+API v4 extends the v3 task/comment payload and push contract with an opaque checkpoint and a required acknowledgment callback:
+
+```ts
+interface SyncProviderPullResultV4 extends SyncProviderPullResultV3 {
+  checkpoint: unknown;
+}
+
+interface SyncProviderV4 extends SyncProviderV3 {
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV4>;
+  acknowledgePull(binding: IntegrationBinding, checkpoint: unknown, project: Project): Promise<void>;
+}
+```
+
+Register v4 providers with `SyncProviderRegistrationV4` and `SYNC_PROVIDER_API_VERSION_V4`. The host validates that `acknowledgePull` exists before loading the provider. Every v4 pull result must contain its own `checkpoint` property, including empty pulls; `null` is a valid opaque value. The host passes the checkpoint back unchanged, without interpreting, replicating, or storing it.
+
+### Application and acknowledgment ordering
+
+For each pull-enabled binding, the daemon performs:
+
+1. Call `pull(binding, project)` to obtain normalized records and a proposed checkpoint.
+2. Apply tasks, comments, deletions, complete comment snapshots, actor authorization, and comment provenance.
+3. Persist any imported actor mappings on that binding.
+4. Await the engine's native `Repo.flush()` local storage barrier.
+5. Await `acknowledgePull(binding, checkpoint, project)`.
+6. For bidirectional bindings, build the current export payload and run push.
+7. Record successful binding status only after all required operations finish.
+
+Empty pulls still flush and receive acknowledgment: an empty remote window may represent valid progress. Push-only and `none` bindings never receive pull acknowledgments. Local persistence does not mean peer convergence or remote disk persistence, and the host does not wait for remote peers. The barrier has the native storage adapter's guarantees; it does not introduce transactions across documents or an additional filesystem durability protocol.
+
+### Provider responsibilities and retry contract
+
+- Keep read checkpoints separate from write success. Push must never advance a pull cursor.
+- `pull` may propose progress but must not durably advance cursors or mirrored snapshots that would prevent replay before acknowledgment. Stage that progress in provider-local state; the opaque checkpoint can identify the staged batch.
+- Commit progress in `acknowledgePull`, only for the supplied binding and checkpoint. Make the commit idempotent and safe if it succeeds but the callback subsequently rejects or the process exits before the host observes success.
+- Preserve stable external task/comment identities and timestamps. If acknowledgment has not succeeded, the next pull must replay the uncommitted window, including after daemon/provider restart. The host does not retain an in-memory checkpoint across restarts or invoke the old callback without pulling again.
+- Ensure an acknowledgment does not advance beyond records actually returned or safely observed. Provider-specific cursor boundaries, overlap, and partial remote-fetch behavior remain the provider's responsibility.
+
+Task or comment application, provenance, mapping, and local flush failures prevent acknowledgment and skip push. Acknowledgment failures also skip push and enter the existing retry/backoff path. Already-applied local changes are not rolled back. Tasks are replayed by external ID. For equal-timestamp v4 replays, the host reads the separate task detail document and repairs a differing imported description before acknowledgment; a task-list timestamp alone does not prove its detail was persisted. Genuinely newer local tasks remain authoritative, matching content is not rewritten or reapproved, and v3 keeps its equal-timestamp skip behavior. Imported notes use stable binding/thread/comment-scoped IDs so a note whose provenance write failed can be recovered without a duplicate. Existing provenance and legacy linked notes retain their identities. Failed note reads are errors, not empty snapshots. In v4, comments, tombstones, or complete snapshots referencing tasks unavailable locally fail the pull instead of being silently skipped and acknowledged; providers must omit deliberately excluded threads from checkpointed batches.
+
+If push fails after a successful acknowledgment, the acknowledged pull remains committed: push failure does not undo applied local data or rewind the read checkpoint. Integration status is diagnostic, not the provider's checkpoint ledger.
+
+### v3 compatibility
+
+API v3 remains supported with its original pull/push lifecycle and no host acknowledgment or new flush requirement. Legacy providers should declare `SYNC_PROVIDER_API_VERSION_V3` explicitly; the unversioned latest-version constant now advertises v4. A callback or checkpoint on a v3 registration does not opt it into v4 behavior. Registration must explicitly declare v4 to use acknowledged checkpoints. v2 remains unsupported. Existing v3 providers do not gain checkpoint safety until they adopt v4.
+
+## API v3 shared payload contract
+
+API v3 defines the shared task/comment payloads retained by v4.
 
 ```ts
 interface ExternalActorRef {
@@ -164,8 +211,8 @@ interface SyncProviderV3 {
 1. Load plugin module.
 2. Validate registration and compatibility.
 3. Call `initialize(...)` once before binding-driven sync operations.
-4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy.
-5. Call `shutdown()` during daemon stop/unload.
+4. For each applicable integration binding, call `pull(...)` and `push(...)` according to the binding strategy; v4 inserts local application/persistence and `acknowledgePull(...)` before push.
+5. Call `shutdown()` during daemon stop/unload after any in-flight cycle finishes.
 
 ## Task and comment sync semantics
 

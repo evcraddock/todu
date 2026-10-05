@@ -1791,13 +1791,15 @@ describe("createDaemonRuntime", () => {
     await observerRuntime.stop();
   });
 
-  it("executes v3 sync provider work from integration bindings and persists status", async () => {
+  it.each([
+    3, 4,
+  ] as const)("executes v%s sync provider work from integration bindings and persists status", async (apiVersion) => {
     const outputPath = path.join(tmpDir, "forgejo-provider-events.ndjson");
     const pluginPath = writeRecordingSyncPluginModule(tmpDir, "forgejo-recording-plugin.mjs", {
       providerName: "forgejo",
       providerVersion: "2.0.0",
       outputPath,
-      apiVersion: 3,
+      apiVersion,
     });
 
     const runtime = createDaemonRuntime({
@@ -1862,7 +1864,21 @@ describe("createDaemonRuntime", () => {
       (event) => event.type === "push" && event.bindingId === bindingId,
     );
 
-    expect(readProviderEvents(outputPath)).toEqual(
+    const events = readProviderEvents(outputPath);
+    const acknowledgmentIndex = events.findIndex((event) => event.type === "acknowledgePull");
+    if (apiVersion === 4) {
+      expect(acknowledgmentIndex).toBeGreaterThan(
+        events.findIndex((event) => event.type === "pull"),
+      );
+      expect(acknowledgmentIndex).toBeLessThan(events.findIndex((event) => event.type === "push"));
+      expect(events[acknowledgmentIndex]).toMatchObject({
+        bindingId,
+        checkpoint: { cursor: "opaque" },
+      });
+    } else {
+      expect(acknowledgmentIndex).toBe(-1);
+    }
+    expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "initialize",
@@ -2673,7 +2689,7 @@ function writeRecordingSyncPluginModule(
     providerName: string;
     providerVersion: string;
     outputPath: string;
-    apiVersion?: 3;
+    apiVersion?: 3 | 4;
   },
 ): string {
   const modulePath = path.join(directory, filename);
@@ -2710,8 +2726,15 @@ export const syncProvider = {
         projectId: project.id,
         strategy: binding.strategy,
       });
-      return { tasks: [], comments: [] };
+      return { tasks: [], comments: [], ${options.apiVersion === 4 ? 'checkpoint: { cursor: "opaque" }' : ""} };
     },
+    ${
+      options.apiVersion === 4
+        ? `async acknowledgePull(binding, checkpoint) {
+      record({ type: "acknowledgePull", bindingId: binding.id, checkpoint });
+    },`
+        : ""
+    }
     async push(binding, tasks, project) {
       record({
         type: "push",

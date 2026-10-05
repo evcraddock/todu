@@ -12,8 +12,12 @@ import {
 } from "./types.js";
 
 export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
-export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V3;
-export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [SYNC_PROVIDER_API_VERSION_V3] as const;
+export const SYNC_PROVIDER_API_VERSION_V4 = 4 as const;
+export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V4;
+export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
+  SYNC_PROVIDER_API_VERSION_V3,
+  SYNC_PROVIDER_API_VERSION_V4,
+] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
 export type SyncConflictResolutionPolicy = (typeof SYNC_CONFLICT_RESOLUTION_POLICIES)[number];
@@ -136,16 +140,39 @@ export interface SyncProviderV3 {
   ): Promise<SyncProviderPushResult>;
 }
 
-export type SyncProvider = SyncProviderV3;
-export type AnySyncProvider = SyncProviderV3;
+export interface SyncProviderPullResultV4 extends SyncProviderPullResultV3 {
+  /** Provider-owned checkpoint; the host passes it back without interpreting it. */
+  checkpoint: unknown;
+}
 
-export interface SyncProviderRegistration {
+export interface SyncProviderV4 extends SyncProviderV3 {
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV4>;
+  /** Commit pull progress only after successful host application and local storage flush. */
+  acknowledgePull(
+    binding: IntegrationBinding,
+    checkpoint: unknown,
+    project: Project,
+  ): Promise<void>;
+}
+
+export type SyncProvider = SyncProviderV3 | SyncProviderV4;
+export type AnySyncProvider = SyncProvider;
+
+export interface SyncProviderRegistrationV3 {
   manifest: SyncProviderManifest & {
     apiVersion: typeof SYNC_PROVIDER_API_VERSION_V3;
   };
   provider: SyncProviderV3;
 }
 
+export interface SyncProviderRegistrationV4 {
+  manifest: SyncProviderManifest & {
+    apiVersion: typeof SYNC_PROVIDER_API_VERSION_V4;
+  };
+  provider: SyncProviderV4;
+}
+
+export type SyncProviderRegistration = SyncProviderRegistrationV3 | SyncProviderRegistrationV4;
 export type AnySyncProviderRegistration = SyncProviderRegistration;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
@@ -169,6 +196,10 @@ export interface ValidateSyncProviderRegistrationOptions {
 }
 
 const REQUIRED_SYNC_PROVIDER_V3_METHODS = ["initialize", "shutdown", "pull", "push"] as const;
+const REQUIRED_SYNC_PROVIDER_V4_METHODS = [
+  ...REQUIRED_SYNC_PROVIDER_V3_METHODS,
+  "acknowledgePull",
+] as const;
 
 export function isSyncProviderApiVersionCompatible(
   providerApiVersion: number,
@@ -187,8 +218,14 @@ export function isSyncProviderApiVersionCompatible(
 
 export function isSyncProviderRegistrationV3(
   registration: AnySyncProviderRegistration,
-): registration is SyncProviderRegistration {
+): registration is SyncProviderRegistrationV3 {
   return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V3;
+}
+
+export function isSyncProviderRegistrationV4(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV4 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V4;
 }
 
 export function validateSyncProviderRegistration(
@@ -258,7 +295,10 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  if (manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3) {
+  if (
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3 &&
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V4
+  ) {
     return err(
       createSyncProviderValidationError(
         "API_VERSION_MISMATCH",
@@ -318,7 +358,11 @@ export function validateSyncProviderRegistration(
     );
   }
 
-  for (const method of REQUIRED_SYNC_PROVIDER_V3_METHODS) {
+  const requiredMethods =
+    manifestApiVersion === SYNC_PROVIDER_API_VERSION_V4
+      ? REQUIRED_SYNC_PROVIDER_V4_METHODS
+      : REQUIRED_SYNC_PROVIDER_V3_METHODS;
+  for (const method of requiredMethods) {
     if (typeof providerRecord[method] !== "function") {
       return err(
         createSyncProviderValidationError(
@@ -333,12 +377,15 @@ export function validateSyncProviderRegistration(
     }
   }
 
+  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V4) {
+    return ok({
+      manifest: { name: manifestName, version: manifestVersion, apiVersion: manifestApiVersion },
+      provider: registration.provider as SyncProviderV4,
+    });
+  }
+
   return ok({
-    manifest: {
-      name: manifestName,
-      version: manifestVersion,
-      apiVersion: manifestApiVersion as typeof SYNC_PROVIDER_API_VERSION_V3,
-    },
+    manifest: { name: manifestName, version: manifestVersion, apiVersion: manifestApiVersion },
     provider: registration.provider as SyncProviderV3,
   });
 }

@@ -88,6 +88,10 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 - Task descriptions and note bodies persist imported-content approval metadata beside the governed content so later runtime paths can recompute approval by binding, actor, and content fingerprint.
 - Legacy string assignees and note authors are migrated to actor ids during persistent catalog load before the catalog schema version is advanced.
 
+### Local storage shutdown
+
+Engine-owned persistent repositories track filesystem saves and deletes. Closing disconnects repository networking, flushes ready documents, and waits for pending writes plus a quiet Automerge save-throttle window. This prevents delayed autosaves from accessing storage after a successful close and test teardown. Actual storage errors are reported; only non-ready documents without local content are excluded from the final ready-document flush. A five-second shutdown timeout is a failure, not cancellation of pending filesystem work or proof of remote persistence. Caller-supplied repositories manage their own adapter drain guarantees.
+
 ### Notes storage partitioning
 
 Notes are partitioned into multiple Automerge documents instead of one global notes document.
@@ -229,7 +233,8 @@ Baseline worker lifecycle states are:
 - Generic worker plugins use `WorkerPluginRegistration` from `@todu/core` and export `workerPlugin`.
 - Sync provider plugins use `SyncProviderRegistration` from `@todu/core` and export `syncProvider`.
 - Plugin load paths validate registrations at load time before worker registration.
-- Compatibility baseline for sync providers is API-version based (latest provider API version: `3`; host-supported provider API versions: `3`).
+- Compatibility baseline for sync providers is API-version based (latest provider API version: `4`; host-supported provider API versions: `3` and `4`).
+- API v4 providers return opaque pull checkpoints and commit read progress only after daemon application, actor-mapping persistence, and native local storage flush succeed. Acknowledgment precedes bidirectional push; failures retry unacknowledged pulls without waiting for remote peers. API v3 retains its legacy lifecycle without acknowledgment.
 - Daemon plugin modules resolve from `TODU_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config. Absolute and dot-relative entries are filesystem paths, with dot-relative paths resolved from the config location; other entries are npm package specifiers.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
 - Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.

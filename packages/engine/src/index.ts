@@ -1,10 +1,5 @@
-import {
-  type PeerCandidatePayload,
-  type PeerDisconnectedPayload,
-  Repo,
-} from "@automerge/automerge-repo/slim";
+import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { NodeFSStorageAdapter } from "@automerge/automerge-repo-storage-nodefs";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -12,7 +7,7 @@ import { observeAllChanges } from "./change-observer.js";
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
-import { createNoteNamespace } from "./notes.js";
+import { createNoteNamespaces } from "./notes.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
 import {
@@ -20,7 +15,12 @@ import {
   createSyncRuntimeCommentProvenanceTools,
 } from "./runtime-internals.js";
 import { processTemplates } from "./scheduling.js";
-import { initBootstrapStorage, initEphemeralStorage, type Storage } from "./storage.js";
+import {
+  createPersistentRepo,
+  initBootstrapStorage,
+  initEphemeralStorage,
+  type Storage,
+} from "./storage.js";
 import {
   addRemoteSyncAdapter,
   connectSyncClient,
@@ -73,6 +73,7 @@ export type {
   RecurringNamespace,
   RemoteSyncState,
   SyncRuntimeActorTools,
+  SyncRuntimeNoteTools,
   SyncStatus,
   TaskNamespace,
   Todu,
@@ -131,9 +132,7 @@ export async function createTodu(
     // loading the catalog. On join, the catalog document ID points to a
     // remote document not in local storage — without a network peer,
     // repo.find() marks it "unavailable" and throws.
-    const repo = new Repo({
-      storage: new NodeFSStorageAdapter(resolvedConfig.storagePath),
-    });
+    const repo = createPersistentRepo(resolvedConfig.storagePath);
     if (config?.remoteSync) {
       initialRemoteAdapter = addRemoteSyncAdapter(
         repo,
@@ -328,12 +327,15 @@ export async function createTodu(
 
   const stubs = createStubNamespaces(resolvedConfig);
   const taskNamespace = createTaskNamespace(storage.catalog, storage.repo);
-  const noteNamespace = createNoteNamespace(storage.catalog, storage.repo);
+  const noteNamespaces = createNoteNamespaces(storage.catalog, storage.repo);
+  const noteNamespace = noteNamespaces.namespace;
 
   const todu: ToduWithInternalTools = {
     ...stubs,
     __internal: {
       syncRuntime: {
+        flush: () => storage.repo.flush(),
+        notes: noteNamespaces.syncRuntime,
         actors: createSyncRuntimeActorTools(storage.catalog),
         commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),
       },

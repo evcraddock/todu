@@ -1,20 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
-  type AnySyncProviderRegistration,
   isSyncProviderApiVersionCompatible,
   isSyncProviderRegistrationV3,
+  isSyncProviderRegistrationV4,
   SYNC_PROVIDER_API_VERSION,
   SYNC_PROVIDER_API_VERSION_V3,
+  SYNC_PROVIDER_API_VERSION_V4,
+  type SyncProviderRegistrationV3,
+  type SyncProviderRegistrationV4,
   validateSyncProviderRegistration,
 } from "./sync-provider.js";
 
 describe("isSyncProviderApiVersionCompatible", () => {
-  it("accepts supported v3 API version", () => {
-    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION)).toBe(true);
+  it.each([3, 4])("accepts supported v%s API version", (apiVersion) => {
+    expect(isSyncProviderApiVersionCompatible(apiVersion)).toBe(true);
+  });
+
+  it("advertises v4 as the latest API", () => {
+    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V4);
   });
 
   it("rejects unsupported API version", () => {
-    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V3 + 1)).toBe(false);
+    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V4 + 1)).toBe(false);
   });
 
   it("supports explicit supported version lists", () => {
@@ -24,6 +31,33 @@ describe("isSyncProviderApiVersionCompatible", () => {
 });
 
 describe("validateSyncProviderRegistration", () => {
+  it("accepts v4 providers with a pull acknowledgment callback", () => {
+    const registration = createValidV4Registration();
+    const result = validateSyncProviderRegistration(registration);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected valid v4 registration");
+    expect(isSyncProviderRegistrationV4(result.value)).toBe(true);
+    expect(isSyncProviderRegistrationV3(result.value)).toBe(false);
+    expect(result.value.provider).toBe(registration.provider);
+  });
+
+  it("rejects v4 providers without a pull acknowledgment callback", () => {
+    const registration = createValidV4Registration();
+    registration.provider.acknowledgePull = undefined as never;
+    const result = validateSyncProviderRegistration(registration);
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_PROVIDER", details: { method: "acknowledgePull", apiVersion: 4 } },
+    });
+  });
+
+  it("rejects v4 when the host explicitly supports only v3", () => {
+    const result = validateSyncProviderRegistration(createValidV4Registration(), {
+      supportedApiVersions: [3],
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: "API_VERSION_MISMATCH" } });
+  });
+
   it("accepts a valid v3 provider registration", () => {
     const registration = createValidV3Registration();
 
@@ -44,7 +78,7 @@ describe("validateSyncProviderRegistration", () => {
 
   it("rejects provider with unsupported API version", () => {
     const registration = createValidV3Registration();
-    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V3 + 1) as never;
+    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V4 + 1) as never;
 
     const result = validateSyncProviderRegistration(registration);
 
@@ -56,8 +90,8 @@ describe("validateSyncProviderRegistration", () => {
     expect(result.error).toMatchObject({
       code: "API_VERSION_MISMATCH",
       details: {
-        providerApiVersion: SYNC_PROVIDER_API_VERSION_V3 + 1,
-        supportedApiVersions: [SYNC_PROVIDER_API_VERSION_V3],
+        providerApiVersion: SYNC_PROVIDER_API_VERSION_V4 + 1,
+        supportedApiVersions: [SYNC_PROVIDER_API_VERSION_V3, SYNC_PROVIDER_API_VERSION_V4],
       },
     });
   });
@@ -164,7 +198,20 @@ describe("validateSyncProviderRegistration", () => {
   });
 });
 
-function createValidV3Registration(): AnySyncProviderRegistration {
+function createValidV4Registration(): SyncProviderRegistrationV4 {
+  return {
+    manifest: { name: "github", version: "1.2.3", apiVersion: 4 },
+    provider: {
+      ...createValidV3Registration().provider,
+      async pull() {
+        return { tasks: [], checkpoint: { cursor: "opaque" } };
+      },
+      async acknowledgePull() {},
+    },
+  };
+}
+
+function createValidV3Registration(): SyncProviderRegistrationV3 {
   return {
     manifest: {
       name: "github",

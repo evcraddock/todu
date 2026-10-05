@@ -1,10 +1,11 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveRemoteSyncConfig } from "@todu/core";
 import { runDaemonEntrypoint } from "@todu/daemon";
 import type { Command } from "commander";
+import { withActivityIndicator } from "../activity-indicator.js";
 import { getConfigPath, loadConfig, resolveDataDir } from "../config.js";
 import {
   type CliDaemonInvoker,
@@ -21,6 +22,7 @@ import {
   TODU_DAEMON_ASSIGNED_WORKERS_ENV,
 } from "../daemon-worker-assignment.js";
 import { formatJSON } from "../format.js";
+import { runServiceCommand, type ServiceCommandResult } from "../service-command.js";
 
 interface DaemonStatusResult {
   role: "node" | "authority";
@@ -80,7 +82,7 @@ const LAUNCHD_PLIST_PATH = "Library/LaunchAgents/com.todu.daemon.plist";
 const TODU_DAEMON_LIFECYCLE_MODE_ENV = "TODU_DAEMON_LIFECYCLE_MODE";
 const INTERNAL_DAEMON_RUN_SUBCOMMAND = "__run-internal";
 const STARTUP_TIMEOUT_MS = 5_000;
-const STOP_TIMEOUT_MS = 5_000;
+const STOP_TIMEOUT_MS = 10_000;
 
 export function registerDaemonCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const daemon = program.command("daemon").description("Manage local daemon lifecycle");
@@ -237,7 +239,15 @@ async function handleLifecycleAction(
     return;
   }
 
-  const result = await executeLifecycleAction(action, mode, context, invokeDaemon);
+  const result = await withActivityIndicator({
+    enabled:
+      action !== "start" &&
+      format !== "json" &&
+      Boolean(process.stdout.isTTY) &&
+      process.env.TERM !== "dumb",
+    message: action === "stop" ? "Stopping daemon" : "Restarting daemon",
+    operation: () => executeLifecycleAction(action, mode, context, invokeDaemon),
+  });
   renderLifecycleResult(result, format);
 
   if (!result.ok) {
@@ -307,7 +317,9 @@ async function executeLifecycleAction(
   return executeDirectStart("restart", context, invokeDaemon);
 }
 
-function executeSystemdLifecycleAction(action: DaemonLifecycleAction): DaemonLifecycleResult {
+async function executeSystemdLifecycleAction(
+  action: DaemonLifecycleAction,
+): Promise<DaemonLifecycleResult> {
   const servicePath = path.join(os.homedir(), SYSTEMD_SERVICE_PATH);
 
   if (!fs.existsSync(servicePath)) {
@@ -321,7 +333,10 @@ function executeSystemdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
     };
   }
 
-  const command = runCommand("systemctl", ["--user", action, SYSTEMD_SERVICE_NAME]);
+  const command = await runServiceCommand({
+    command: "systemctl",
+    args: ["--user", action, SYSTEMD_SERVICE_NAME],
+  });
   if (!command.ok) {
     return {
       action,
@@ -343,7 +358,9 @@ function executeSystemdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
   };
 }
 
-function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLifecycleResult {
+async function executeLaunchdLifecycleAction(
+  action: DaemonLifecycleAction,
+): Promise<DaemonLifecycleResult> {
   const plistPath = path.join(os.homedir(), LAUNCHD_PLIST_PATH);
   const uid = process.getuid?.();
 
@@ -372,7 +389,10 @@ function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
   const serviceTarget = `${domainTarget}/${LAUNCHD_LABEL}`;
 
   if (action === "stop") {
-    const stop = runCommand("launchctl", ["bootout", domainTarget, plistPath]);
+    const stop = await runServiceCommand({
+      command: "launchctl",
+      args: ["bootout", domainTarget, plistPath],
+    });
     if (!stop.ok && !isLaunchdAlreadyStopped(stop.message)) {
       return {
         action,
@@ -395,7 +415,7 @@ function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
   }
 
   if (action === "restart") {
-    const start = runLaunchdStart(serviceTarget, domainTarget, plistPath);
+    const start = await runLaunchdStart({ serviceTarget, domainTarget, plistPath });
     if (!start.ok) {
       return {
         action,
@@ -417,7 +437,7 @@ function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
     };
   }
 
-  const start = runLaunchdStart(serviceTarget, domainTarget, plistPath);
+  const start = await runLaunchdStart({ serviceTarget, domainTarget, plistPath });
   if (!start.ok) {
     return {
       action,
@@ -439,20 +459,27 @@ function executeLaunchdLifecycleAction(action: DaemonLifecycleAction): DaemonLif
   };
 }
 
-function runLaunchdStart(
-  serviceTarget: string,
-  domainTarget: string,
-  plistPath: string,
-): CommandRunResult {
-  const print = runCommand("launchctl", ["print", serviceTarget]);
+async function runLaunchdStart({
+  serviceTarget,
+  domainTarget,
+  plistPath,
+}: {
+  serviceTarget: string;
+  domainTarget: string;
+  plistPath: string;
+}): Promise<ServiceCommandResult> {
+  const print = await runServiceCommand({ command: "launchctl", args: ["print", serviceTarget] });
   if (!print.ok) {
-    const bootstrap = runCommand("launchctl", ["bootstrap", domainTarget, plistPath]);
+    const bootstrap = await runServiceCommand({
+      command: "launchctl",
+      args: ["bootstrap", domainTarget, plistPath],
+    });
     if (!bootstrap.ok && !isLaunchdAlreadyLoaded(bootstrap.message)) {
       return bootstrap;
     }
   }
 
-  return runCommand("launchctl", ["kickstart", "-k", serviceTarget]);
+  return runServiceCommand({ command: "launchctl", args: ["kickstart", "-k", serviceTarget] });
 }
 
 function isLaunchdAlreadyLoaded(message: string): boolean {
@@ -731,10 +758,12 @@ async function executeDirectStop(
 
   return {
     action,
-    ok: true,
+    ok: stopped,
     mode: "direct",
     delegated: false,
-    message: "stopped managed daemon process",
+    message: stopped
+      ? "stopped managed daemon process"
+      : "managed daemon required forced termination; local storage completion is unconfirmed",
     running: false,
   };
 }
@@ -926,40 +955,6 @@ function resolveLifecycleMode(): DaemonLifecycleMode {
   }
 
   return "direct";
-}
-
-interface CommandRunResult {
-  ok: boolean;
-  message: string;
-}
-
-function runCommand(command: string, args: string[]): CommandRunResult {
-  const result = spawnSync(command, args, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-
-  if (result.error) {
-    return {
-      ok: false,
-      message: result.error.message,
-    };
-  }
-
-  if (result.status !== 0) {
-    const stderr = result.stderr?.trim();
-    const stdout = result.stdout?.trim();
-
-    return {
-      ok: false,
-      message: stderr || stdout || `exit code ${result.status}`,
-    };
-  }
-
-  return {
-    ok: true,
-    message: result.stdout?.trim() ?? "",
-  };
 }
 
 function sleep(ms: number): Promise<void> {
