@@ -1,5 +1,13 @@
 # @todu/tui
 
+## 0.26.1
+
+### Patch Changes
+
+- Fix project status filtering in the terminal UI.
+- Updated dependencies [ad05646]
+  - @todu/core@0.24.0
+
 ## 0.26.0
 
 ### Minor Changes
