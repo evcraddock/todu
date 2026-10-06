@@ -1172,6 +1172,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         return stopPromise;
       }
 
+      // Awaited promises alone do not keep Node alive after the listener and clients close.
+      const shutdownKeepAlive = setInterval(() => {}, 1_000);
       stopPromise = (async () => {
         if (startPromise) {
           try {
@@ -1188,11 +1190,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
         runtimeStatus.state = "stopping";
 
-        const requestsDrained = rpcRouter.stop();
-        stopActiveWorkers();
-        clearEventSubscriptions();
-
         try {
+          const requestsDrained = rpcRouter.stop();
+          stopActiveWorkers();
+          clearEventSubscriptions();
           await transport.stop(() => requestsDrained);
           // An accepted join may replace the engine while requests are draining.
           const currentTodu = todu;
@@ -1217,6 +1218,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           role: runtimeStatus.role,
         });
       })().finally(() => {
+        clearInterval(shutdownKeepAlive);
         stopPromise = null;
       });
 

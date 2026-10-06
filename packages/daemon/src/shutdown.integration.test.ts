@@ -319,6 +319,69 @@ describe("connected-client shutdown", () => {
     runtime = undefined;
   });
 
+  it("keeps shutdown alive until a disconnected handler with an unreferenced timer finishes", async () => {
+    const rootDir = fileURLToPath(new URL("../../../", import.meta.url));
+    const source = new URL("./process.ts", import.meta.url).href;
+    const script = `
+      import { startDaemonProcess } from ${JSON.stringify(source)};
+      async function main() {
+        const daemon = await startDaemonProcess({
+          storagePath: ${JSON.stringify(tmpDir)}, requestTimeoutMs: 20, logLevel: "error",
+          rpcMethodHandlers: { "test.pending": async (request) => {
+            await new Promise((resolve) => setTimeout(resolve, 400).unref());
+            console.log("HANDLER_COMPLETED");
+            return { id: request.id, result: true };
+          } },
+        }, { hooks: {
+          onStarted: () => console.log("FIXTURE_READY"),
+          onStopped: () => console.log("CLEAN_STOP"),
+        } });
+        await daemon.waitForShutdown();
+      }
+      main().catch((error) => { console.error(error); process.exitCode = 1; });
+    `;
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([name]) => !name.startsWith("TODU_")),
+    );
+    child = spawn(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", script], {
+      cwd: rootDir,
+      env: { ...env, HOME: tmpDir },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let logs = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      logs += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      logs += chunk.toString();
+    });
+    childExit = new Promise((resolve, reject) => {
+      child?.once("error", reject);
+      child?.once("close", (code, signal) => resolve({ code, signal }));
+    });
+    const deadline = Date.now() + 5_000;
+    while (!logs.includes("FIXTURE_READY")) {
+      if (child.exitCode !== null || Date.now() >= deadline)
+        throw new Error(`Child daemon did not start: ${logs}`);
+      await delay(20);
+    }
+    const client = await connect(path.join(tmpDir, "daemon.sock"));
+    const response = await request({
+      client,
+      read: frameReader(client),
+      method: "test.pending",
+      params: {},
+    });
+    expect(response.error).toMatchObject({ code: "TIMEOUT" });
+    client.destroy();
+    child.kill("SIGTERM");
+    expect(await within(childExit, 2_000)).toEqual({ code: 0, signal: null });
+    expect(logs).toContain("HANDLER_COMPLETED");
+    expect(logs).toContain("CLEAN_STOP");
+    expect(logs.indexOf("HANDLER_COMPLETED")).toBeLessThan(logs.indexOf("CLEAN_STOP"));
+    expect(fs.existsSync(path.join(tmpDir, "daemon.sock"))).toBe(false);
+  }, 10_000);
+
   it("propagates process shutdown failures without firing the successful stopped hook", async () => {
     const stopped = vi.fn();
     const daemon = await startDaemonProcess(
