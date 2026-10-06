@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.3]
+
+### Changed
+- Aligned packaged Electron with the validated Electron 41.10.7 dependency instead of the stale 40.4.1 override.
+- Bundled core 0.24.0, engine 0.23.7 (Automerge 3.5.0), and daemon 0.24.1, including connected-client shutdown and storage-drain fixes.
+- Preserved independent companion versions: CLI 0.24.2 and TUI 0.26.1; desktop tags do not identify npm package versions.
+
+### Fixed
+- Bundled the platform/architecture-matching standalone CLI rather than the build host's binary.
+- Used an installer-safe Linux executable/desktop identity and the generated AppImage filename; installer helpers verify release checksums before replacing files.
+- Validated packaged runtime contents, subscribed-client shutdown, and reopened persistence in isolated configurations before creating installers.
+- Validated release tags against desktop source metadata and built all release assets from the same resolved commit; missing required installers now fail publication.
+
+### Security
+- Retained the narrowly approved UUID exception and the task-specific desktop build-tool exception for sprintf-js 1.1.3 (GHSA-hp3w-g68c-fv3c), conditional on affected build-tool code being absent from shipped runtime contents. These exceptions are not remediations or a clean audit.
+
 ## [0.23.2] - 2026-05-23
 
 This release updates Todu's local runtime dependencies to stay compatible with the current sync and Pi agent ecosystems. It upgrades Automerge client packages for remote sync stability and migrates Electron Pi integrations to the current `@earendil-works` package scope.

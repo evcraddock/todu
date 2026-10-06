@@ -66,6 +66,7 @@ clean: ## Remove build artifacts
 build-cli-binary: check-bun build ## Build standalone CLI binary for current platform
 	@mkdir -p dist/cli
 	bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+	@node -e 'const fs = require("node:fs"); const platform = process.platform === "win32" ? "windows" : process.platform; const ext = process.platform === "win32" ? ".exe" : ""; fs.copyFileSync("dist/cli/todu", `dist/cli/todu-cli-$${platform}-$${process.arch}$${ext}`)'
 	@echo "Built: dist/cli/todu ($$(ls -lh dist/cli/todu | awk '{print $$5}'))"
 
 build-cli-binaries: check-bun build ## Build standalone CLI binaries for all platforms
@@ -159,10 +160,14 @@ build-electron: node_modules ## Build Electron app for distribution
 dist: check-bun build build-electron build-cli-binary ## Build installer for current platform
 	npm run --workspace=packages/electron dist
 
-dist-linux: build build-electron ## Build Linux installers (.deb, .rpm, .AppImage)
+dist-linux: build-cli-binary build-electron ## Build validated Linux installers (.deb, .AppImage)
+	npm run --workspace=packages/electron dist:linux:dir
+	npm run --workspace=packages/electron validate:daemon-bundle:linux
 	npm run --workspace=packages/electron dist:linux
 
-dist-mac: build build-electron ## Build macOS installer (.dmg)
+dist-mac: build-cli-binaries build-electron ## Build validated macOS installers (.dmg)
+	npm run --workspace=packages/electron dist:mac:dir -- --$$(node -p process.arch)
+	npm run --workspace=packages/electron validate:daemon-bundle:mac
 	npm run --workspace=packages/electron dist:mac
 
 dist-win: build build-electron ## Build Windows installer (.exe)

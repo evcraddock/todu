@@ -1,6 +1,6 @@
 {
   "name": "todu",
-  "version": "0.23.2",
+  "version": "0.23.3",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -43,7 +43,6 @@
     "@typescript/native-preview": "^7.0.0-dev.20260215.1",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^4.1.11",
-    "electron": "^41.10.7",
     "electron-builder": "^26.15.3",
     "husky": "^9.1.7",
     "jsdom": "^28.1.0",
