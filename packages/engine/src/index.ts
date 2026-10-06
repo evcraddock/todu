@@ -1,6 +1,6 @@
 import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { createDeviceId } from "@todu/core";
+import { createDeviceId, resolveSyncListenerConfig } from "@todu/core";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
@@ -29,6 +29,7 @@ import {
   disposeRemoteSyncAdapter,
   isSyncServerAvailable,
 } from "./sync-client.js";
+import { type SyncListener, startSyncListener } from "./sync-listener.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
 import {
@@ -75,6 +76,7 @@ export type {
   ProjectNamespace,
   RecurringNamespace,
   RemoteSyncState,
+  SyncListenerStatus,
   SyncRuntimeActorTools,
   SyncRuntimeNoteTools,
   SyncStatus,
@@ -105,6 +107,7 @@ export async function createTodu(
   const resolvedConfig: ToduConfig = {
     storagePath: config.storagePath,
     bootstrapOwnerActor: config.bootstrapOwnerActor,
+    syncListener: config.syncListener,
     syncLogger: config.syncLogger,
     remoteSyncWatchdogIntervalMs: config.remoteSyncWatchdogIntervalMs,
     remoteSyncAvailabilityTimeoutMs: config.remoteSyncAvailabilityTimeoutMs,
@@ -171,6 +174,7 @@ export async function createTodu(
       : "standalone";
 
   const syncStatus: SyncStatus = {
+    listener: { state: "disabled" },
     local: { mode: localMode },
     remote: {
       state: "disconnected",
@@ -183,6 +187,42 @@ export async function createTodu(
 
   function notifySyncStatusListeners(): void {
     for (const cb of syncStatusListeners) cb(syncStatus);
+  }
+
+  let syncListener: SyncListener | null = null;
+  const listenerConfig = resolveSyncListenerConfig(config.syncListener);
+  const reportListenerError = (message: string): void => {
+    syncStatus.listener = { ...syncStatus.listener, state: "error", error: message };
+    resolvedConfig.syncLogger?.warn("LAN sync listener unavailable", { error: message });
+    notifySyncStatusListeners();
+  };
+  if (!listenerConfig.ok) {
+    reportListenerError(
+      `Invalid ${listenerConfig.error.field}: ${listenerConfig.error.message}. Local daemon operations remain available.`,
+    );
+  } else if (listenerConfig.value && !storage.ephemeral) {
+    syncStatus.listener = { state: "disabled", ...listenerConfig.value };
+    const result = await startSyncListener({
+      repo: storage.repo,
+      catalogId: storage.catalog.documentId,
+      config: listenerConfig.value,
+      logger: resolvedConfig.syncLogger,
+      onError: reportListenerError,
+    });
+    if (result.ok) {
+      syncListener = result.value;
+      syncStatus.listener = {
+        state: "listening",
+        ...listenerConfig.value,
+        syncPath: result.value.syncPath,
+      };
+    } else {
+      reportListenerError(result.error.message);
+    }
+  } else if (listenerConfig.value) {
+    reportListenerError(
+      "LAN listening requires a persistent Repo; ephemeral clients cannot listen.",
+    );
   }
 
   // Remote sync adapter — set up if configured, null when stopped
@@ -379,6 +419,11 @@ export async function createTodu(
       return observeAllChanges(storage.repo, callback);
     },
     async close() {
+      if (syncListener) {
+        await syncListener.close();
+        syncListener = null;
+        syncStatus.listener = { state: "disabled" };
+      }
       // Stop remote adapter first to avoid reconnect attempts during shutdown
       stopRemoteAdapter();
       stopRemoteWatchdog();

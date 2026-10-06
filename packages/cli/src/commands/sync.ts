@@ -3,8 +3,14 @@ import { createInterface } from "node:readline/promises";
 import type { Command } from "commander";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { formatJSON } from "../format.js";
+import {
+  type ListenerStatus,
+  registerSyncListenerCommands,
+  renderListenerStatus,
+} from "./sync-listener.js";
 
 interface SyncStatus {
+  listener?: ListenerStatus;
   local: {
     mode: string;
   };
@@ -33,6 +39,7 @@ interface DaemonError {
 
 export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const sync = program.command("sync").description("Sync status and control");
+  registerSyncListenerCommands(sync, program, invokeDaemon);
 
   sync
     .command("status")
@@ -54,6 +61,7 @@ export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonIn
       }
 
       console.log(`Local Mode:   ${status.local.mode}`);
+      renderListenerStatus(status.listener);
       if (status.local.mode === "ephemeral-client") {
         console.log("Remote Sync:  managed by server");
       } else {

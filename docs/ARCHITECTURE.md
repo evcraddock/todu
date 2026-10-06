@@ -8,7 +8,7 @@
 
 This document reflects the current architecture decisions from planning task #1923.
 
-The [agreed single-dataset device-sync design](architecture/device-sync.md) defines the next evolution: optional dedicated servers and enrolled LAN peers while retaining one dataset per daemon. Named accounts and account-switching UI are deferred; enrollment into a different initialized dataset will be refused without replacement or merging. The replicated registry foundation is implemented; LAN listeners, approval-based enrollment, registry-derived peer connections, and sharing restrictions remain pending. The current topology and contracts below remain the runtime baseline.
+The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry and explicitly enabled LAN listener are implemented; approval-based enrollment and registry-derived connections remain follow-up work. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
 
 Project context:
 - Greenfield
@@ -64,8 +64,12 @@ Electron┘
 
 ## Cross-device
 
-- Replication uses Automerge relay.
-- Daemons on different machines replicate via relay.
+- Existing configured-server replication uses the native Automerge relay protocol.
+- An opt-in listener also accepts native bidirectional connections directly at `/sync/<current-catalog-id>` on an explicitly configured address/port, using the daemon's existing Repo.
+- Peers remain equal; a listening daemon is not a master. Automatic roster-derived outbound connections and explicit LAN enrollment are not implemented yet.
+- The registry supplies connection metadata, not transport authorization. Reachable peers are not authenticated, and the route is not a document allowlist.
+- Private daemon RPC and administration remain on the local socket; the shared LAN HTTP listener exposes no administrative API.
+- Listener configuration defaults to disabled and binding errors do not prevent local daemon operation. Server settings and worker assignments are unchanged.
 
 ```
 daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
@@ -92,7 +96,7 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 
 ### Local storage shutdown
 
-Daemon shutdown closes RPC admission and its listener first, then drains actual admitted handler promises, including handlers whose response timed out or whose client disconnected. Queued requests not yet admitted are rejected with `DAEMON_UNAVAILABLE`; a response timeout is not cancellation. Shutdown holds an event-loop reference until it settles, so dangling promises or unreferenced handler timers cannot produce a premature successful process exit. Connected clients and event subscriptions are cleaned up without waiting indefinitely for peers. Only then does the daemon close the current engine; an admitted `sync.join` may replace that engine during the drain, without restarting workers or reattaching event subscriptions. Concurrent stop calls share shutdown, and a failed shutdown prevents automatic reuse of the same runtime instance. Process shutdown failures propagate to the entrypoint rather than firing the successful stopped hook. These are local shutdown guarantees, not remote replication guarantees.
+Daemon shutdown closes RPC admission and its listener first, then drains actual admitted handler promises, including handlers whose response timed out or whose client disconnected. Queued requests not yet admitted are rejected with `DAEMON_UNAVAILABLE`; a response timeout is not cancellation. Shutdown holds an event-loop reference until it settles, so dangling promises or unreferenced handler timers cannot produce a premature successful process exit. Connected clients and event subscriptions are cleaned up without waiting indefinitely for peers. Only then does the daemon close the current engine, including its optional LAN listener before storage teardown; an admitted `sync.join` may replace that engine during the drain, without restarting workers or reattaching event subscriptions. Each engine-owned LAN listener accepts only its current catalog route and releases its connections/port when the engine closes. Concurrent stop calls share shutdown, and a failed shutdown prevents automatic reuse of the same runtime instance. Process shutdown failures propagate to the entrypoint rather than firing the successful stopped hook. These are local shutdown guarantees, not remote replication guarantees.
 
 Engine-owned persistent repositories track filesystem saves and deletes. Closing disconnects repository networking, flushes ready documents, and waits for pending writes plus a quiet Automerge save-throttle window. This prevents delayed autosaves from accessing storage after a successful close and test teardown. Actual storage errors are reported; only non-ready documents without local content are excluded from the final ready-document flush. A five-second shutdown timeout is a failure, not cancellation of pending filesystem work or proof of remote persistence. Caller-supplied repositories manage their own adapter drain guarantees.
 

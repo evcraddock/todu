@@ -35,6 +35,20 @@ identity:
 
 After the dataset is already migrated, changing this config later does not rewrite existing actor IDs.
 
+## Optional LAN listener
+
+Listening is disabled unless the daemon's local config explicitly enables `sync.listener` with a literal IPv4/IPv6 `bind` address. The port defaults to `24377`; unavailable addresses and occupied ports produce listener errors without rebinding or disabling private local operations.
+
+```bash
+todu sync listener enable --bind 192.168.1.10
+todu daemon restart
+todu sync listener status
+```
+
+Ensure the CLI edits the file actually read by the service (`TODU_CONFIG` or the default home config). Configuration changes require an explicit restart. To remove exposure, run `todu sync listener disable` followed by restart, or stop the daemon; saving the disabled flag alone does not close a running listener. Existing `sync stop` affects only the configured outbound server.
+
+The shared HTTP/WebSocket listener accepts native replication at `/sync/<current-catalog-id>` and exposes no remote administration. It is unencrypted and unauthenticated: restrict access to the trusted LAN, avoid unnecessary all-interface bindings, and do not forward it to the internet. Registry endpoints are metadata, not authorization. Server settings, dataset IDs, and worker/provider assignments are preserved. See [CLI listener controls](cli-daemon-usage.md#opt-in-lan-sync-listener) for configuration, status, and follow-up limitations.
+
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 
 `todu daemon start`, `todu daemon stop`, and `todu daemon restart` follow this deterministic order:

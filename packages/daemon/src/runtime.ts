@@ -8,6 +8,7 @@ import {
   type RemoteSyncConfig,
   type Result,
   resolveStoragePath,
+  type SyncListenerConfig,
 } from "@todu/core";
 import {
   addRemoteSyncAdapter,
@@ -77,6 +78,7 @@ export interface DaemonRuntimeConfig {
   storagePath?: string;
   role?: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  syncListener?: SyncListenerConfig;
   bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath?: string;
   socketMode?: number;
@@ -97,6 +99,7 @@ export interface ResolvedDaemonRuntimeConfig {
   storagePath: string;
   role: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  syncListener?: SyncListenerConfig;
   bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath: string;
   socketMode: number;
@@ -155,6 +158,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     storagePath: resolvedStoragePath,
     role: config.role ?? "node",
     remoteSync: config.remoteSync,
+    syncListener: config.syncListener,
     bootstrapOwnerActor: config.bootstrapOwnerActor,
     socketPath: resolvedSocketPath,
     socketMode: config.socketMode ?? 0o600,
@@ -776,6 +780,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     return createTodu({
       storagePath: resolvedConfig.storagePath,
       remoteSync: resolvedConfig.remoteSync,
+      syncListener: resolvedConfig.syncListener,
       bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
       syncLogger: runtimeLogger.child("remote-sync"),
       startupTemplateProcessing: {

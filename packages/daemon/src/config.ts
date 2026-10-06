@@ -6,6 +6,7 @@ import {
   resolveBootstrapOwnerActor,
   resolveConfigPath,
   resolveRemoteSyncConfig,
+  type SyncListenerConfig,
   type ToduFileConfig,
 } from "@todu/core";
 import { parse } from "yaml";
@@ -13,6 +14,7 @@ import { parse } from "yaml";
 export interface DaemonFileConfig {
   fileConfig: ToduFileConfig;
   remoteSync: RemoteSyncConfig | null;
+  syncListener?: SyncListenerConfig;
   bootstrapOwnerActor: BootstrapOwnerActor | null;
 }
 
@@ -45,6 +47,7 @@ export function loadDaemonFileConfig(): DaemonFileConfig {
   return {
     fileConfig,
     remoteSync: resolveRemoteSyncConfig(fileConfig),
+    syncListener: fileConfig.sync?.listener,
     bootstrapOwnerActor: bootstrapOwnerActor.value,
   };
 }

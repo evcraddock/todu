@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -55,8 +56,9 @@ export interface ToduFileConfig {
       displayName?: string;
     };
   };
-  /** Remote multi-device sync configuration */
+  /** Machine-local synchronization configuration. */
   sync?: {
+    listener?: SyncListenerConfig;
     remote?: {
       /** WebSocket URL of the remote sync server (e.g. "wss://sync.todu.sh") */
       server?: string;
@@ -77,6 +79,59 @@ export interface ToduFileConfig {
       config?: Record<string, Record<string, unknown>>;
     };
   };
+}
+
+export const DEFAULT_SYNC_LISTENER_PORT = 24377;
+
+/** Explicit, machine-local LAN listener settings; never replicated. */
+export interface SyncListenerConfig {
+  enabled?: boolean;
+  /** Literal IPv4/IPv6 address; there is no implicit bind address. */
+  bind?: string;
+  /** Integer from 1 through 65535; zero/ephemeral binding is not supported. */
+  port?: number;
+}
+
+export interface ResolvedSyncListenerConfig {
+  bind: string;
+  port: number;
+}
+
+export function resolveSyncListenerConfig(
+  config: SyncListenerConfig | undefined,
+): Result<ResolvedSyncListenerConfig | null, ValidationError> {
+  if (config === undefined) return ok(null);
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return err({
+      type: "validation",
+      field: "sync.listener",
+      message: "Expected listener settings",
+    });
+  }
+  if (config.enabled !== undefined && typeof config.enabled !== "boolean") {
+    return err({
+      type: "validation",
+      field: "sync.listener.enabled",
+      message: "Expected true or false; listening must be explicitly enabled",
+    });
+  }
+  if (config.enabled !== true) return ok(null);
+  if (typeof config.bind !== "string" || isIP(config.bind) === 0) {
+    return err({
+      type: "validation",
+      field: "sync.listener.bind",
+      message: "Listening requires an explicit literal IPv4 or IPv6 bind address",
+    });
+  }
+  const port = config.port === undefined ? DEFAULT_SYNC_LISTENER_PORT : config.port;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return err({
+      type: "validation",
+      field: "sync.listener.port",
+      message: "Expected an integer port from 1 through 65535; no automatic port substitution",
+    });
+  }
+  return ok({ bind: config.bind, port });
 }
 
 /** Resolved remote sync config — only present when server is set and enabled. */

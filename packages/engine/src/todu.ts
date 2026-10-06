@@ -39,6 +39,7 @@ import type {
   RecurringTemplate,
   RemoteSyncConfig,
   Result,
+  SyncListenerConfig,
   Task,
   TaskFilter,
   TaskId,
@@ -70,6 +71,9 @@ export interface ToduConfig {
 
   /** Port for sync server/client (default: 24377) */
   syncPort?: number;
+
+  /** Explicit machine-local LAN listener; disabled unless enabled with a bind address. */
+  syncListener?: SyncListenerConfig;
 
   /** Try to connect to a running sync server (used by CLI) */
   syncClient?: boolean;
@@ -245,7 +249,17 @@ export type LocalSyncMode = "standalone" | "ephemeral-client" | "sync-server";
 /** Remote multi-device sync connection state. */
 export type RemoteSyncState = "disconnected" | "connected" | "syncing";
 
+export interface SyncListenerStatus {
+  state: "disabled" | "listening" | "error";
+  bind?: string;
+  port?: number;
+  syncPath?: string;
+  error?: string;
+}
+
 export interface SyncStatus {
+  /** Incoming LAN replication, independent of the configured remote server. */
+  listener: SyncListenerStatus;
   /** Local coordination mode with other processes on this machine. */
   local: {
     mode: LocalSyncMode;
@@ -441,6 +455,7 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       start: () => Promise.resolve(),
       stop: () => Promise.resolve(),
       status: () => ({
+        listener: { state: "disabled" },
         local: { mode: "standalone" as LocalSyncMode },
         remote: { state: "disconnected" as RemoteSyncState },
       }),
