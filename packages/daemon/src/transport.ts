@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net, { type Server, type Socket } from "node:net";
 import path from "node:path";
@@ -44,6 +45,43 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
   let server: Server | null = null;
   let startPromise: Promise<UdsEndpoint> | null = null;
   let stopPromise: Promise<void> | null = null;
+  let ownedSocket: fs.Stats | null = null;
+  const lockPath = `${endpoint.path}.lock`;
+
+  async function acquireSocketLock(): Promise<() => Promise<void>> {
+    const deadline = Date.now() + 2_000;
+    while (true) {
+      try {
+        await fs.promises.mkdir(lockPath, { mode: 0o700 });
+        return () => fs.promises.rmdir(lockPath);
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST") throw error;
+        if (Date.now() >= deadline) {
+          throw new Error(
+            `Daemon socket startup/cleanup already in progress: ${lockPath}. If this lock remains after a crash, verify no daemon is starting or stopping before removing the lock directory.`,
+          );
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      }
+    }
+  }
+
+  async function unlinkOwnedSocket(): Promise<void> {
+    if (!ownedSocket) {
+      return;
+    }
+    try {
+      const stats = await fs.promises.lstat(endpoint.path);
+      if (stats.isSocket() && stats.dev === ownedSocket.dev && stats.ino === ownedSocket.ino) {
+        await fs.promises.unlink(endpoint.path);
+      }
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") {
+        throw error;
+      }
+    }
+    ownedSocket = null;
+  }
 
   async function ensureSocketDirectory(): Promise<void> {
     await fs.promises.mkdir(path.dirname(endpoint.path), { recursive: true, mode: 0o700 });
@@ -70,38 +108,88 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     }
   }
 
+  async function bindPrivateServer(): Promise<{ server: Server; path: string }> {
+    const publicName = path.basename(endpoint.path);
+    // Never increase the configured address's byte length, including short and
+    // multibyte basenames at the platform's Unix socket limit.
+    const budget = Math.min(22, Buffer.byteLength(publicName));
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+    const offset = randomBytes(1).readUInt8(0) % alphabet.length;
+    const attempts = budget <= 2 ? alphabet.length : 32;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const suffix =
+        budget <= 2
+          ? alphabet.charAt((offset + attempt) % alphabet.length)
+          : randomBytes(budget)
+              .toString("base64url")
+              .slice(0, budget - 1);
+      const name = budget === 1 ? suffix : `.${suffix}`;
+      // Also exclude case aliases of the public name on case-insensitive filesystems.
+      if (name.toLowerCase() === publicName.toLowerCase()) continue;
+      const bindPath = path.join(path.dirname(endpoint.path), name);
+      try {
+        await fs.promises.lstat(bindPath);
+        continue;
+      } catch (error) {
+        if (errorCode(error) !== "ENOENT") throw error;
+      }
+      const created = net.createServer((socket) => {
+        sockets.add(socket);
+        socket.once("close", () => sockets.delete(socket));
+        config.onConnection?.(socket);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          created.once("error", reject);
+          created.listen(bindPath, () => {
+            created.off("error", reject);
+            resolve();
+          });
+        });
+        return { server: created, path: bindPath };
+      } catch (error) {
+        await closeServer(created);
+        if (errorCode(error) !== "EADDRINUSE") throw error;
+      }
+    }
+    throw new Error(
+      `No available private socket name within the address length budget: ${endpoint.path}`,
+    );
+  }
+
   async function startServer(): Promise<UdsEndpoint> {
     if (process.platform === "win32") {
       throw new Error("UDS transport is not supported on win32");
     }
 
     await ensureSocketDirectory();
-    await ensureSocketAvailable();
-
-    const created = net.createServer((socket) => {
-      sockets.add(socket);
-      socket.once("close", () => sockets.delete(socket));
-      config.onConnection?.(socket);
-    });
+    const releaseLock = await acquireSocketLock();
+    // libuv unlinks its bind path on close. Bind privately so closing this
+    // instance cannot unlink a replacement daemon's public socket.
+    let created: Server | null = null;
 
     try {
-      await new Promise<void>((resolve, reject) => {
-        created.once("error", reject);
-        created.listen(endpoint.path, () => {
-          created.off("error", reject);
-          resolve();
-        });
-      });
-
-      await fs.promises.chmod(endpoint.path, endpoint.mode);
+      await ensureSocketAvailable();
+      const bound = await bindPrivateServer();
+      created = bound.server;
+      await fs.promises.chmod(bound.path, endpoint.mode);
+      const identity = await fs.promises.lstat(bound.path);
+      // link() publishes without overwriting an endpoint claimed by another instance.
+      await fs.promises.link(bound.path, endpoint.path);
+      ownedSocket = identity;
       server = created;
       return endpoint;
     } catch (error) {
-      const closing = closeServer(created);
-      await closeClients(sockets);
-      await closing;
-      await unlinkSocketIfExists(endpoint.path);
+      if (created) {
+        const closing = closeServer(created);
+        await closeClients(sockets);
+        await closing;
+      }
+      await unlinkOwnedSocket();
       throw error;
+    } finally {
+      await releaseLock();
     }
   }
 
@@ -139,16 +227,20 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
           }
         }
 
+        const releaseLock = ownedSocket ? await acquireSocketLock() : null;
         const current = server;
         server = null;
-
         const closing = current ? closeServer(current) : Promise.resolve();
         try {
           await drain?.();
         } finally {
-          await closeClients(sockets);
-          await closing;
-          await unlinkSocketIfExists(endpoint.path);
+          try {
+            await closeClients(sockets);
+            await closing;
+            await unlinkOwnedSocket();
+          } finally {
+            await releaseLock?.();
+          }
         }
       })().finally(() => {
         stopPromise = null;
@@ -193,27 +285,16 @@ async function closeServer(server: Server): Promise<void> {
   });
 }
 
-async function unlinkSocketIfExists(socketPath: string): Promise<void> {
-  try {
-    const stats = await fs.promises.lstat(socketPath);
-    if (!stats.isSocket()) {
-      return;
-    }
-
-    await fs.promises.unlink(socketPath);
-  } catch (error) {
-    const code = errorCode(error);
-    if (code !== "ENOENT") {
-      throw error;
-    }
-  }
-}
-
 type SocketProbeState = "active" | "stale";
 
 async function probeSocket(socketPath: string): Promise<SocketProbeState> {
   return new Promise<SocketProbeState>((resolve, reject) => {
     const client = net.createConnection(socketPath);
+    const timer = setTimeout(() => {
+      cleanup();
+      client.destroy();
+      reject(new Error(`Timed out probing daemon socket; refusing to replace it: ${socketPath}`));
+    }, 1_000);
 
     const onConnect = () => {
       cleanup();
@@ -234,6 +315,7 @@ async function probeSocket(socketPath: string): Promise<SocketProbeState> {
     };
 
     const cleanup = () => {
+      clearTimeout(timer);
       client.off("connect", onConnect);
       client.off("error", onError);
     };

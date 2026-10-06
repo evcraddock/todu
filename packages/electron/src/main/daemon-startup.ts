@@ -1,64 +1,59 @@
-import type { DaemonConnectionManager } from "./daemon-connection-manager.js";
+import type {
+  DaemonConnectionError,
+  DaemonConnectionManager,
+} from "./daemon-connection-manager.js";
 
 export interface EnsureDaemonReadyOptions {
   protocolVersion: string;
   maxAttempts?: number;
   retryDelayMs?: number;
-  startDaemon?: () => Promise<void>;
   unavailableHint?: string;
   protocolMismatchHint?: string;
 }
 
 export async function ensureDaemonReady(
-  daemon: Pick<DaemonConnectionManager, "request">,
+  daemon: Pick<DaemonConnectionManager, "request" | "waitForConnection">,
   options: EnsureDaemonReadyOptions,
 ): Promise<void> {
   const maxAttempts = options.maxAttempts ?? 10;
   const retryDelayMs = options.retryDelayMs ?? 200;
-
   let lastError = "unknown daemon error";
-  let startAttempted = false;
+  let lastCause: DaemonConnectionError | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const hello = await daemon.request<{ protocolVersion: string }>("daemon.hello", {
-      protocolVersion: options.protocolVersion,
-    });
+    const connection = await daemon.waitForConnection();
+    const hello = connection.ok
+      ? await daemon.request<{ protocolVersion: string }>("daemon.hello", {
+          protocolVersion: options.protocolVersion,
+        })
+      : connection;
 
     if (hello.ok) {
       return;
     }
 
+    lastCause = hello.error;
     lastError = `${hello.error.code}: ${hello.error.message}`;
-
     if (hello.error.code === "PROTOCOL_MISMATCH") {
-      throw new Error(
-        `Local daemon is incompatible (${lastError}). ${options.protocolMismatchHint ?? "Update todu so the desktop app and local daemon use matching versions."}`,
+      throw Object.assign(
+        new Error(
+          `Local daemon is incompatible (${lastError}). ${options.protocolMismatchHint ?? "Use desktop and daemon releases with compatible protocol versions."}`,
+          { cause: hello.error },
+        ),
+        { code: hello.error.code },
       );
     }
 
-    if (!startAttempted && hello.error.code === "DAEMON_UNAVAILABLE" && options.startDaemon) {
-      startAttempted = true;
-      try {
-        await options.startDaemon();
-      } catch (error) {
-        throw new Error(
-          `Local daemon is required but unavailable (${lastError}). ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
-
     if (attempt < maxAttempts) {
-      await wait(retryDelayMs);
+      await new Promise<void>((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
 
-  throw new Error(
-    `Local daemon is required but unavailable (${lastError}). ${options.unavailableHint ?? "Start it with 'todu daemon start' and relaunch Electron."}`,
+  throw Object.assign(
+    new Error(
+      `Could not connect to the local daemon (${lastError}). ${options.unavailableHint ?? "Check 'todu daemon status'. If no daemon is running, start it with 'todu daemon start', then relaunch the desktop app. The desktop app does not start or restart daemons automatically."}`,
+      { cause: lastCause },
+    ),
+    { code: lastCause?.code },
   );
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

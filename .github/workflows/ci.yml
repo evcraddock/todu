@@ -44,6 +44,9 @@ jobs:
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 
+      - name: Desktop daemon startup integration tests
+        run: npm run test:all -- packages/electron/src/main/daemon-connection-manager.integration.test.ts packages/daemon/src/runtime.integration.test.ts
+
   desktop:
     name: Desktop package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -74,3 +77,5 @@ jobs:
           PLATFORM=$(node -p 'process.platform === "darwin" ? "mac" : "linux"')
           npm run --workspace=packages/electron dist:${PLATFORM}:dir -- --$(node -p process.arch)
           npm run --workspace=packages/electron validate:daemon-bundle:${PLATFORM}
+      - name: Unix socket ownership and path boundary tests
+        run: npm run test:all -- packages/daemon/src/transport.integration.test.ts

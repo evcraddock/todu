@@ -227,6 +227,22 @@ export TODU_DAEMON_SOCKET=/custom/path/daemon.sock
 
 If you set a socket override for the daemon service, CLI invocations must use the same override.
 
+## Desktop lifecycle and error log
+
+See [Desktop daemon startup diagnosis](desktop-daemon-startup.md) for the confirmed competing-startup/socket-cleanup defects and regression verification.
+
+Desktop is a daemon client, including in packaged releases. It waits for an initial connection and protocol handshake, uses the existing daemon, and reconnects without launching another process. When no daemon is reachable, check `todu daemon status`, matching config/data/socket paths, and service logs. If no daemon is running, explicitly run `todu daemon start` or start the configured user service, then reopen desktop. Desktop does not stop your daemon when it exits. On macOS, the bundled CLI is `/Applications/todu.app/Contents/Resources/cli/todu` if you have not installed a CLI on PATH.
+
+Desktop initializes `desktop-error.log` before window creation in Electron's application logs directory. The startup-error dialog reports the exact location. The default packaged macOS location is `~/Library/Logs/todu/desktop-error.log` (development builds may use `@todu/electron` instead); Linux and Windows use `<Electron userData>/logs/desktop-error.log` (usually under the platform's application config directory). Environment/config directory overrides may change these locations. Daemon service/direct-mode logs remain separate.
+
+The desktop log records timestamped startup, disconnect/reconnect, and protocol failures, socket path, available desktop/daemon versions, client protocol, retry context, and underlying errors. Each file is limited to 1 MiB with two rotated archives (`.1`, `.2`). Files use user-only permissions on Unix. Logging uses allowlisted diagnostic context and credential redaction, not task payloads or full configuration. Review logs before sharing them: paths and versions are still local diagnostic information. If logging fails, startup guidance reports the write failure and stderr receives a redacted fallback; the original connection error is preserved.
+
+### Socket ownership and crash recovery
+
+Daemon startup serializes socket publication and cleanup using `<socket>.lock`, waiting up to two seconds for a competing operation. It binds a unique private socket in the same directory and publishes the configured public socket with a no-overwrite hard link. The private basename fits within the configured public basename's byte budget so valid near-limit socket addresses remain supported; short-name collisions are retried without replacing neighboring files. Names are normally dot-prefixed, but a one-byte public basename requires a one-byte private name. The directory must support Unix sockets and hard links. An existing active daemon is never displaced; shutdown and startup-failure cleanup only unlink this instance's public socket, identified by device/inode. Normal shutdown removes the private bind path too.
+
+A crash during startup/cleanup can leave the lock directory. If the error reports a persistent lock, first verify that no daemon is starting/stopping and no service-manager restart is in progress before manually removing that empty lock directory. Do not remove a lock merely because the CLI cannot connect. A crash may also leave a private socket; do not remove unknown socket paths while a daemon is running. Stale public sockets are probed and reclaimed only during serialized explicit daemon startup.
+
 ## Troubleshooting
 
 ### CLI says daemon unavailable

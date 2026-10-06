@@ -8,7 +8,7 @@ todu is a local-first task management project with CLI, terminal UI, and Electro
 
 ### Desktop app (recommended on Linux and macOS)
 
-Desktop releases bundle the local daemon runtime. Launching the packaged app starts and manages that bundled daemon automatically for normal desktop usage.
+The desktop app is a client of your existing local daemon. Start the daemon explicitly with `todu daemon start` (or configure a user service), then open the desktop app. Desktop startup and reconnect never automatically launch, replace, or restart a daemon. If connection fails, the error explains how to check the daemon and where to find the desktop error log. See [Daemon Service Operations](docs/daemon-service-operations.md).
 
 #### Linux install
 
@@ -46,7 +46,7 @@ Windows desktop packaging is not released yet because the local daemon transport
 
 ### CLI companion (optional)
 
-Most desktop users do **not** need the CLI for normal app usage. The packaged desktop app bundles and manages the local daemon on its own.
+The CLI is optional for task management, but you need an explicitly started daemon for desktop usage. Use the CLI to start it or configure a daemon user service. macOS releases also bundle a CLI at `/Applications/todu.app/Contents/Resources/cli/todu`; run that executable with `daemon start` if you do not have `todu` on your PATH. The desktop app itself does not manage daemon lifetime.
 
 Use the CLI when you want power-user workflows like:
 
@@ -66,10 +66,10 @@ Install the latest CLI:
 npm install -g @todu/cli
 ```
 
-Install the CLI version matching a desktop release:
+Install the companion CLI version listed in the desktop release's `desktop-versions.json`:
 
 ```bash
-npm install -g @todu/cli@<desktop-version>
+npm install -g @todu/cli@<cli-version>
 ```
 
 Upgrade:
@@ -80,7 +80,7 @@ npm install -g @todu/cli@latest
 
 Compatibility guidance:
 
-- Preferred: keep the CLI version aligned with your desktop app version.
+- CLI, daemon, and desktop package versions are independent. Use the companion versions recorded in the desktop release; compatible daemon protocol versions, not identical package version numbers, determine connectivity.
 - The desktop app version is shown in Settings and in release notes.
 - The CLI and desktop app both use the same default user-local config and data paths, so the CLI targets the same local daemon and dataset unless you override paths with env vars.
 - For automatic recurring task generation, follow [Recurring Worker Installation](docs/recurring-worker-installation.md).

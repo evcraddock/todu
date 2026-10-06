@@ -53,6 +53,27 @@ describe("createDaemonRuntime", () => {
     await runtime.stop();
   });
 
+  it("keeps the existing daemon reachable after a competing runtime fails startup", async () => {
+    const first = createDaemonRuntime({ storagePath: tmpDir });
+    const second = createDaemonRuntime({ storagePath: tmpDir });
+    await first.start();
+    const socketPath = first.config().socketPath;
+    const original = fs.lstatSync(socketPath);
+    try {
+      await expect(second.start()).rejects.toThrow("Daemon socket already in use");
+      await second.stop();
+      expect(fs.lstatSync(socketPath).ino).toBe(original.ino);
+      const response = await sendRequest(socketPath, {
+        id: "existing-daemon-after-failed-start",
+        method: "daemon.hello",
+        params: { protocolVersion: DAEMON_PROTOCOL_VERSION },
+      });
+      expect(response.result).toMatchObject({ catalog: { id: first.status().catalogId } });
+    } finally {
+      await first.stop();
+    }
+  });
+
   it("routes daemon.hello over UDS with handshake response", async () => {
     const runtime = createDaemonRuntime({
       storagePath: tmpDir,

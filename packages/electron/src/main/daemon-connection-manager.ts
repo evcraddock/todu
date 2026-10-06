@@ -64,6 +64,7 @@ export interface DaemonConnectionManager {
   start(): void;
   stop(): void;
   isConnected(): boolean;
+  waitForConnection(): Promise<DaemonConnectionResult<void>>;
   setHooks(hooks: DaemonConnectionLifecycleHooks): void;
   request<T>(
     method: string,
@@ -118,6 +119,8 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private activeConnection: ActiveConnection | null = null;
   private requestChain: Promise<void> = Promise.resolve();
+  private connectionAttempt: Promise<void> = Promise.resolve();
+  private lastConnectionError: DaemonConnectionError | null = null;
 
   constructor(options: DaemonConnectionManagerOptions) {
     this.socketPath = options.socketPath;
@@ -147,7 +150,7 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
     }
 
     this.running = true;
-    void this.attemptConnect();
+    this.connectionAttempt = this.attemptConnect();
   }
 
   stop(): void {
@@ -171,6 +174,20 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
 
   isConnected(): boolean {
     return this.activeConnection !== null;
+  }
+
+  async waitForConnection(): Promise<DaemonConnectionResult<void>> {
+    await this.connectionAttempt;
+    if (this.running && this.activeConnection && !this.activeConnection.closed) {
+      return { ok: true, value: undefined };
+    }
+    return {
+      ok: false,
+      error: this.lastConnectionError ?? {
+        code: "DAEMON_UNAVAILABLE",
+        message: `No connection to daemon socket: ${this.socketPath}`,
+      },
+    };
   }
 
   setHooks(hooks: DaemonConnectionLifecycleHooks): void {
@@ -215,16 +232,19 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
     }
 
     if (!socketResult.ok) {
+      this.lastConnectionError = socketResult.error;
       this.scheduleReconnect(socketResult.error);
       return;
     }
 
+    this.lastConnectionError = null;
     const isReconnect = this.hasConnectedOnce;
     const active = this.createActiveConnection(socketResult.value);
     this.activeConnection = active;
 
     const lifecycleResult = await this.runLifecycleHooks(isReconnect);
     if (!lifecycleResult.ok) {
+      this.lastConnectionError = lifecycleResult.error;
       this.closeConnection(active, {
         reason: lifecycleResult.error,
         shouldReconnect: true,
@@ -323,12 +343,17 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
       return;
     }
 
-    const pending = connection.pending.get(parsed.value.id);
+    const responseId = parsed.value.id;
+    if (responseId === null) {
+      // A connection-level error has no request ID; do not treat it as a response.
+      return;
+    }
+    const pending = connection.pending.get(responseId);
     if (!pending) {
       return;
     }
 
-    connection.pending.delete(parsed.value.id);
+    connection.pending.delete(responseId);
     clearTimeout(pending.timeout);
 
     if (parsed.kind === "error") {
@@ -365,10 +390,10 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
       return {
         ok: false,
         error: {
-          code: "INTERNAL_ERROR",
-          message: "Daemon connection lifecycle hook failed",
+          code: errorCode(error) ?? "INTERNAL_ERROR",
+          message: getErrorMessage(error),
           details: {
-            reason: getErrorMessage(error),
+            reason: "Daemon connection lifecycle hook failed",
           },
         },
       };
@@ -437,7 +462,7 @@ class ElectronDaemonConnectionManager implements DaemonConnectionManager {
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      void this.attemptConnect();
+      this.connectionAttempt = this.attemptConnect();
     }, delayMs);
   }
 
@@ -607,7 +632,13 @@ async function connectSocket(
 ): Promise<DaemonConnectionResult<Socket>> {
   return new Promise((resolve) => {
     let settled = false;
-    const socket = connect(socketPath);
+    let socket: Socket;
+    try {
+      socket = connect(socketPath);
+    } catch (error) {
+      resolve({ ok: false, error: mapConnectError(socketPath, error) });
+      return;
+    }
 
     const cleanup = () => {
       socket.off("error", onError);
@@ -663,7 +694,7 @@ function mapConnectError(socketPath: string, source: unknown): DaemonConnectionE
   if (code === "ENOENT" || code === "ECONNREFUSED" || code === "EACCES" || code === "EPERM") {
     return {
       code: "DAEMON_UNAVAILABLE",
-      message: `Daemon unavailable at socket: ${socketPath}`,
+      message: `Cannot connect to daemon socket: ${socketPath} (${code})`,
       details: {
         socketPath,
         reason: code,
