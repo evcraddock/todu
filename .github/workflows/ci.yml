@@ -40,3 +40,6 @@ jobs:
 
       - name: Build
         run: make build
+
+      - name: Daemon shutdown integration tests
+        run: npm run test:daemon-shutdown-integration

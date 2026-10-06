@@ -4,6 +4,7 @@ import path from "node:path";
 
 export const DEFAULT_DAEMON_SOCKET_FILENAME = "daemon.sock";
 export const DEFAULT_DAEMON_SOCKET_MODE = 0o600;
+const CLIENT_CLOSE_GRACE_MS = 100;
 
 export interface UdsTransportConfig {
   storagePath: string;
@@ -20,7 +21,7 @@ export interface UdsEndpoint {
 
 export interface UdsTransport {
   start(): Promise<UdsEndpoint>;
-  stop(): Promise<void>;
+  stop(drain?: () => Promise<void>): Promise<void>;
   endpoint(): UdsEndpoint;
 }
 
@@ -39,6 +40,7 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     mode: config.socketMode ?? DEFAULT_DAEMON_SOCKET_MODE,
   };
 
+  const sockets = new Set<Socket>();
   let server: Server | null = null;
   let startPromise: Promise<UdsEndpoint> | null = null;
   let stopPromise: Promise<void> | null = null;
@@ -77,6 +79,8 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     await ensureSocketAvailable();
 
     const created = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.once("close", () => sockets.delete(socket));
       config.onConnection?.(socket);
     });
 
@@ -93,7 +97,9 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
       server = created;
       return endpoint;
     } catch (error) {
-      await closeServer(created);
+      const closing = closeServer(created);
+      await closeClients(sockets);
+      await closing;
       await unlinkSocketIfExists(endpoint.path);
       throw error;
     }
@@ -101,6 +107,9 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
 
   return {
     async start(): Promise<UdsEndpoint> {
+      if (stopPromise) {
+        await stopPromise;
+      }
       if (server) {
         return endpoint;
       }
@@ -116,7 +125,7 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
       return startPromise;
     },
 
-    async stop(): Promise<void> {
+    async stop(drain?: () => Promise<void>): Promise<void> {
       if (stopPromise) {
         return stopPromise;
       }
@@ -133,11 +142,14 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
         const current = server;
         server = null;
 
-        if (current) {
-          await closeServer(current);
+        const closing = current ? closeServer(current) : Promise.resolve();
+        try {
+          await drain?.();
+        } finally {
+          await closeClients(sockets);
+          await closing;
+          await unlinkSocketIfExists(endpoint.path);
         }
-
-        await unlinkSocketIfExists(endpoint.path);
       })().finally(() => {
         stopPromise = null;
       });
@@ -153,6 +165,26 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
       };
     },
   };
+}
+
+async function closeClients(sockets: Set<Socket>): Promise<void> {
+  await Promise.all(
+    [...sockets].map(
+      (socket) =>
+        new Promise<void>((resolve) => {
+          if (socket.destroyed) {
+            resolve();
+            return;
+          }
+          const timer = setTimeout(() => socket.destroy(), CLIENT_CLOSE_GRACE_MS);
+          socket.once("close", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          socket.end();
+        }),
+    ),
+  );
 }
 
 async function closeServer(server: Server): Promise<void> {

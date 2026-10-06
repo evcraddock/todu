@@ -181,6 +181,8 @@ interface ConnectionHandlerOptions {
 }
 
 export interface DaemonRpcRouter {
+  start(): void;
+  stop(): Promise<void>;
   handleRequest(
     request: ProtocolRequestFrame,
     context: DaemonRpcContext,
@@ -200,6 +202,8 @@ export interface DaemonRpcRouter {
 
 export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}): DaemonRpcRouter {
   const connections = new Set<DaemonConnection>();
+  const activeRequests = new Set<Promise<DaemonRpcResponse>>();
+  let acceptingRequests = true;
   const logger =
     options.logger ??
     createDaemonLogger({
@@ -282,6 +286,29 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     return response;
   }
 
+  function runTrackedRequest(
+    request: ProtocolRequestFrame,
+    context: DaemonRpcContext,
+    connection?: DaemonConnection,
+  ): Promise<DaemonRpcResponse> {
+    if (!acceptingRequests) {
+      return Promise.resolve(
+        createProtocolErrorFrame(
+          request.id,
+          createProtocolError("DAEMON_UNAVAILABLE", "Daemon is shutting down"),
+        ),
+      );
+    }
+
+    const execution = Promise.resolve().then(() => runRequest(request, context, connection));
+    activeRequests.add(execution);
+    void execution.then(
+      () => activeRequests.delete(execution),
+      () => activeRequests.delete(execution),
+    );
+    return execution;
+  }
+
   async function executeRequestWithTimeout(
     request: ProtocolRequestFrame,
     context: DaemonRpcContext,
@@ -308,7 +335,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
         );
       }, requestTimeoutMs);
 
-      void runRequest(request, context, connection).then((response) => {
+      const finish = (response: DaemonRpcResponse) => {
         if (settled) {
           return;
         }
@@ -316,7 +343,10 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
         settled = true;
         clearTimeout(timeout);
         resolve(response);
-      });
+      };
+      void runTrackedRequest(request, context, connection).then(finish, (error: unknown) =>
+        finish(createProtocolErrorFrame(request.id, error)),
+      );
     });
   }
 
@@ -371,12 +401,28 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
   }
 
   return {
+    start() {
+      if (activeRequests.size > 0) {
+        throw new Error("Cannot restart RPC admission while requests are still executing");
+      }
+      acceptingRequests = true;
+    },
+
+    async stop() {
+      acceptingRequests = false;
+      for (const connection of connections) {
+        connection.subscriptions.clear();
+      }
+      // A response timeout or client disconnect does not cancel its handler.
+      await Promise.all([...activeRequests]);
+    },
+
     handleRequest(
       request: ProtocolRequestFrame,
       context: DaemonRpcContext,
       connection?: DaemonConnection,
     ) {
-      return runRequest(request, context, connection);
+      return runTrackedRequest(request, context, connection);
     },
 
     async handlePayload(payload: string, context: DaemonRpcContext, connection?: DaemonConnection) {
@@ -393,7 +439,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
         return createProtocolErrorFrame(null, parsed.error);
       }
 
-      return runRequest(parsed.value, context, connection);
+      return runTrackedRequest(parsed.value, context, connection);
     },
 
     createConnectionHandler(
@@ -493,6 +539,9 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
       payload: unknown,
       ts: string = new Date().toISOString(),
     ): number {
+      if (!acceptingRequests) {
+        return 0;
+      }
       const frame = createProtocolEventFrame(event, payload, ts);
       let delivered = 0;
 

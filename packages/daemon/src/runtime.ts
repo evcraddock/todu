@@ -174,6 +174,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let todu: Todu | null = null;
   let startPromise: Promise<DaemonRuntimeStatus> | null = null;
   let stopPromise: Promise<void> | null = null;
+  let shutdownFailure: { error: unknown } | null = null;
   let joinPromise: Promise<JoinOperationResult> | null = null;
   let changeSubscriptionCleanup: (() => void) | null = null;
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
@@ -446,6 +447,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   function attachEventSubscriptions(activeTodu: Todu): void {
     clearEventSubscriptions();
+    if (runtimeStatus.state !== "running") {
+      return;
+    }
 
     changeSubscriptionCleanup = activeTodu.onChange(() => {
       rpcRouter.dispatchEvent("data.changed", {
@@ -628,6 +632,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   }
 
   function startRegisteredWorkers(): void {
+    if (runtimeStatus.state !== "running") {
+      return;
+    }
     const workers = workerRegistry.list();
     for (const worker of workers) {
       const startResult = startWorkerExecution(worker.manifest.type);
@@ -785,6 +792,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     });
 
     try {
+      rpcRouter.start();
       const endpoint = await transport.start();
 
       const startedTodu = await createHostOwnedTodu();
@@ -1133,6 +1141,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   return {
     async start(): Promise<DaemonRuntimeStatus> {
+      if (shutdownFailure) {
+        throw new Error("Previous daemon shutdown failed; storage completion is unconfirmed", {
+          cause: shutdownFailure.error,
+        });
+      }
+      if (stopPromise) {
+        await stopPromise;
+      }
       if (runtimeStatus.state === "running") {
         return cloneStatus();
       }
@@ -1149,6 +1165,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     },
 
     async stop(): Promise<void> {
+      if (shutdownFailure) {
+        throw shutdownFailure.error;
+      }
       if (stopPromise) {
         return stopPromise;
       }
@@ -1169,26 +1188,34 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
         runtimeStatus.state = "stopping";
 
-        const currentTodu = todu;
+        const requestsDrained = rpcRouter.stop();
         stopActiveWorkers();
-        todu = null;
         clearEventSubscriptions();
 
         try {
-          await transport.stop();
+          await transport.stop(() => requestsDrained);
+          // An accepted join may replace the engine while requests are draining.
+          const currentTodu = todu;
+          todu = null;
 
           if (currentTodu) {
             await currentTodu.close();
           }
+        } catch (error) {
+          shutdownFailure = { error };
+          runtimeLogger.error("daemon runtime shutdown failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
         } finally {
           runtimeStatus.state = "stopped";
           runtimeStatus.startedAt = undefined;
           runtimeStatus.catalogId = undefined;
           runtimeStatus.transport = undefined;
-          runtimeLogger.info("daemon runtime stopped", {
-            role: runtimeStatus.role,
-          });
         }
+        runtimeLogger.info("daemon runtime stopped", {
+          role: runtimeStatus.role,
+        });
       })().finally(() => {
         stopPromise = null;
       });
