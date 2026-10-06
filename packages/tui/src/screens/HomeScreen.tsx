@@ -90,7 +90,14 @@ export function HomeScreen({
     }));
   });
 
-  const homeRows = createHomeRows(taskSections, tasksQuery.error);
+  const homeRows = tasksQuery.isPending ? [] : createHomeRows(taskSections, tasksQuery.error);
+  const status = tasksQuery.isError
+    ? "failed"
+    : tasksQuery.isPending
+      ? "loading…"
+      : tasksQuery.isFetching
+        ? "refreshing…"
+        : "ready";
   const selectedTaskId = effectiveSelectedTaskIds[focusedSection];
   const activeRowId = selectedTaskId ? `task:${selectedTaskId}` : `header:${focusedSection}`;
   const homeWindow = getVisibleTaskWindow(
@@ -103,7 +110,14 @@ export function HomeScreen({
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Pane title={`Home${tasksQuery.isLoading ? " • loading…" : ""}`} width="100%" focused>
+      <Pane title={`Home • ${status}`} width="100%" focused>
+        {tasksQuery.isPending ? (
+          <Text color="yellow">
+            {dataQueriesEnabled
+              ? "Loading tasks from local daemon…"
+              : "Waiting for daemon connection…"}
+          </Text>
+        ) : null}
         {aboveIndicator ? <Text color="gray">{aboveIndicator}</Text> : null}
         {homeWindow.items.map((row) => (
           <HomeRowLine

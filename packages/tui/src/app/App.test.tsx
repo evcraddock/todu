@@ -178,6 +178,77 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("App", () => {
+  it("waits for handshake, then shows data loading until Home is ready", async () => {
+    const connection = createFakeConnection({
+      ...createConnectedSnapshot(),
+      state: "connecting",
+      hello: null,
+    });
+    const client = createFakeClient();
+    let resolveTasks!: (tasks: ReturnType<typeof createFakeTask>[]) => void;
+    vi.mocked(client.task.list).mockReturnValue(
+      new Promise((resolve) => {
+        resolveTasks = resolve;
+      }),
+    );
+    const { lastFrame, unmount } = render(<App connection={connection} toduClient={client} />);
+
+    await waitForFrameText(lastFrame, "Connecting to daemon");
+    expect(client.task.list).not.toHaveBeenCalled();
+    expect(lastFrame()).not.toContain("No tasks.");
+    expect(lastFrame()).not.toContain("Home • ready");
+
+    connection.emitSnapshot(createConnectedSnapshot());
+    await waitForFrameText(lastFrame, "Loading tasks from local daemon…");
+    expect(lastFrame()).not.toContain("No tasks.");
+    expect(lastFrame()).not.toContain("Home • ready");
+
+    resolveTasks([createFakeTask()]);
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("Ship");
+    expect(lastFrame()).not.toContain("Loading tasks");
+    expect(client.sync.status).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("keeps cached Home tasks visible while a background refresh is pending", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const client = createFakeClient();
+    const { lastFrame, unmount } = render(<App connection={connection} toduClient={client} />);
+    await waitForFrameText(lastFrame, "Home • ready");
+
+    let resolveTasks!: (tasks: ReturnType<typeof createFakeTask>[]) => void;
+    vi.mocked(client.task.list).mockReturnValue(
+      new Promise((resolve) => {
+        resolveTasks = resolve;
+      }),
+    );
+    connection.emitEvent({ event: "data.changed", payload: { type: "task" } });
+    await waitForFrameText(lastFrame, "Home • refreshing…");
+    expect(lastFrame()).toContain("Ship");
+    expect(lastFrame()).not.toContain("Loading tasks from local daemon");
+
+    resolveTasks([{ ...createFakeTask(), title: "Refreshed task" }]);
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("Refreshed task");
+    unmount();
+  });
+
+  it("allows quitting while initial data is still loading", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const client = createFakeClient();
+    vi.mocked(client.task.list).mockReturnValue(new Promise(() => {}));
+    const onExit = vi.fn();
+    const { stdin, lastFrame, unmount } = render(
+      <App connection={connection} toduClient={client} onExit={onExit} />,
+    );
+
+    await waitForFrameText(lastFrame, "Loading tasks from local daemon…");
+    stdin.write("q");
+    expect(onExit).toHaveBeenCalledOnce();
+    unmount();
+  });
+
   it("renders the initial TUI shell with daemon connection guidance", () => {
     const connection = createFakeConnection(createFailedSnapshot());
 

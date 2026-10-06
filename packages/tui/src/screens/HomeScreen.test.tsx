@@ -105,6 +105,72 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
 }
 
 describe("HomeScreen", () => {
+  it("shows loading feedback instead of empty sections until initial tasks arrive", async () => {
+    const client = createClient();
+    let resolveTasks!: (tasks: Task[]) => void;
+    vi.mocked(client.task.list).mockReturnValue(
+      new Promise<Task[]>((resolve) => {
+        resolveTasks = resolve;
+      }),
+    );
+    const { lastFrame, unmount } = renderWithQuery(<HomeScreen client={client} />);
+
+    await waitForFrameText(lastFrame, "Loading tasks from local daemon…");
+    expect(lastFrame()).toContain("Home • loading…");
+    expect(lastFrame()).not.toContain("No tasks.");
+    expect(lastFrame()).not.toContain("Home • ready");
+
+    resolveTasks([createTask({ title: "Loaded task", status: "inprogress" })]);
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("Loaded task");
+    expect(lastFrame()).not.toContain("Loading tasks");
+    unmount();
+  });
+
+  it("shows ready and empty sections only after a successful empty response", async () => {
+    const client = createClient();
+    vi.mocked(client.task.list).mockResolvedValue([]);
+    const { lastFrame, unmount } = renderWithQuery(<HomeScreen client={client} />);
+
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("No tasks.");
+    expect(lastFrame()).not.toContain("loading");
+    unmount();
+  });
+
+  it("ends loading and reports a failed initial task request without empty sections", async () => {
+    const client = createClient();
+    let rejectTasks!: (error: Error) => void;
+    vi.mocked(client.task.list).mockReturnValue(
+      new Promise<Task[]>((_resolve, reject) => {
+        rejectTasks = reject;
+      }),
+    );
+    const { lastFrame, unmount } = renderWithQuery(<HomeScreen client={client} />);
+
+    await waitForFrameText(lastFrame, "Loading tasks from local daemon…");
+    rejectTasks(new Error("Fixture task request failed"));
+    await waitForFrameText(lastFrame, "Home • failed");
+    expect(lastFrame()).toContain("Tasks unavailable: Fixture task request failed");
+    expect(lastFrame()).not.toContain("loading");
+    expect(lastFrame()).not.toContain("No tasks.");
+    expect(lastFrame()).not.toContain("Home • ready");
+    unmount();
+  });
+
+  it("waits for the connection rather than reporting ready when queries are disabled", () => {
+    const client = createClient();
+    const { lastFrame, unmount } = renderWithQuery(
+      <HomeScreen client={client} dataQueriesEnabled={false} />,
+    );
+
+    expect(lastFrame()).toContain("Waiting for daemon connection…");
+    expect(lastFrame()).not.toContain("No tasks.");
+    expect(lastFrame()).not.toContain("Home • ready");
+    expect(client.task.list).not.toHaveBeenCalled();
+    unmount();
+  });
+
   it("renders Now, Next, and Waiting without habits", async () => {
     const { lastFrame } = renderWithQuery(
       <HomeScreen client={createClient()} today="2026-07-20" />,
