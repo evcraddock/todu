@@ -276,6 +276,8 @@ jobs:
           cat release-notes.md
 
       - name: Collect release assets
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           mkdir -p release-assets
 
@@ -287,9 +289,10 @@ jobs:
           cp artifacts/cli-windows/todu-cli-windows-x64.exe release-assets/
 
           # Electron installers
-          cp artifacts/electron-linux/*.AppImage release-assets/
-          cp artifacts/electron-linux/*.deb release-assets/
-          cp artifacts/electron-macos/*.dmg release-assets/
+          cp "artifacts/electron-linux/todu-${VERSION}-linux-x86_64.AppImage" release-assets/
+          cp "artifacts/electron-linux/todu-${VERSION}-linux-amd64.deb" release-assets/
+          cp "artifacts/electron-macos/todu-${VERSION}-mac-x64.dmg" release-assets/
+          cp "artifacts/electron-macos/todu-${VERSION}-mac-arm64.dmg" release-assets/
           cp desktop-versions.json release-assets/
 
           # Desktop installer helpers

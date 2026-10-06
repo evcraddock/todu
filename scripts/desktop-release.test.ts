@@ -175,6 +175,15 @@ describe("desktop release metadata", () => {
   it("does not invent a matching npm companion version or hide missing installers", () => {
     expect(workflow).not.toMatch(/@todu\/cli@\$\{VERSION\}/);
     expect(workflow).not.toMatch(/cp artifacts\/electron-.*\|\| true/);
+    expect(workflow).not.toMatch(/cp artifacts\/electron-.*\*/);
+    for (const suffix of [
+      "linux-x86_64.AppImage",
+      "linux-amd64.deb",
+      "mac-x64.dmg",
+      "mac-arm64.dmg",
+    ])
+      expect(workflow).toContain(`${suffix}" release-assets/`);
+    expect(workflow.match(/cp "artifacts\/electron-/g)).toHaveLength(4);
     expect(workflow).toContain("validate:daemon-bundle:linux");
     expect(workflow).toContain("validate:daemon-bundle:mac");
   });
