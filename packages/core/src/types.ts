@@ -5,6 +5,24 @@
 export type TaskId = string & { readonly __brand: "TaskId" };
 export type ProjectId = string & { readonly __brand: "ProjectId" };
 export type ActorId = string & { readonly __brand: "ActorId" };
+/** Native persistent Repo storage identity, not a peer ID or authenticated identity. */
+export type DeviceId = string & { readonly __brand: "DeviceId" };
+
+export interface Device {
+  id: DeviceId;
+  name: string;
+  /** Advertised listening base endpoint; never enables or binds a listener. */
+  endpoint?: string;
+}
+
+/** Retained removal prevents automatic upgrade initialization from reenrolling a device. */
+export interface DeviceRegistryEntry extends Device {
+  removed?: boolean;
+}
+
+export function createDeviceId(id: string): DeviceId {
+  return id as DeviceId;
+}
 export type LabelId = string & { readonly __brand: "LabelId" };
 export type NoteId = string & { readonly __brand: "NoteId" };
 export type HabitId = string & { readonly __brand: "HabitId" };

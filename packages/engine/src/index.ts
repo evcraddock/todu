@@ -1,9 +1,11 @@
 import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+import { createDeviceId } from "@todu/core";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
+import { createDeviceNamespace } from "./devices.js";
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
@@ -64,6 +66,7 @@ export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   ActorNamespace,
   ApprovalNamespace,
+  DeviceNamespace,
   HabitNamespace,
   IntegrationNamespace,
   LabelNamespace,
@@ -330,6 +333,7 @@ export async function createTodu(
   const noteNamespaces = createNoteNamespaces(storage.catalog, storage.repo);
   const noteNamespace = noteNamespaces.namespace;
 
+  const localStorageId = await storage.repo.storageId();
   const todu: ToduWithInternalTools = {
     ...stubs,
     __internal: {
@@ -340,6 +344,11 @@ export async function createTodu(
         commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),
       },
     },
+    device: createDeviceNamespace({
+      catalog: storage.catalog,
+      localDeviceId:
+        !storage.ephemeral && localStorageId ? createDeviceId(localStorageId) : undefined,
+    }),
     actor: createActorNamespace(storage.catalog),
     project: createProjectNamespace(storage.catalog),
     task: taskNamespace,

@@ -4,6 +4,8 @@ import {
   type ActorId,
   type CommentSyncProvenance,
   createActorId,
+  type DeviceId,
+  type DeviceRegistryEntry,
   type Habit,
   type HabitEntry,
   type HabitId,
@@ -41,6 +43,9 @@ export interface CatalogDocument {
 
   /** Catalog-wide actors used for assignment and authorship. */
   actors: Actor[];
+
+  /** Root-level per-device keys avoid conflicting registry-map creation during offline upgrades. */
+  [key: `device:${string}`]: DeviceRegistryEntry;
 
   /** Catalog owner actor, when established. */
   ownerActorId?: ActorId;
@@ -209,6 +214,17 @@ export function createEmptyCatalog(
       schemaVersion: SCHEMA_VERSION,
     },
   };
+}
+
+export function deviceRegistryKey(id: DeviceId): `device:${string}` {
+  return `device:${id}`;
+}
+
+/** Project the dataset roster; no merge or replication logic is required. */
+export function getDeviceRegistryEntries(catalog: CatalogDocument): DeviceRegistryEntry[] {
+  return Object.keys(catalog)
+    .filter((key): key is `device:${string}` => key.startsWith("device:"))
+    .map((key) => catalog[key]);
 }
 
 export function createTaskListDocument(projectId: ProjectId): TaskListDocument {

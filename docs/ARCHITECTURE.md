@@ -8,7 +8,7 @@
 
 This document reflects the current architecture decisions from planning task #1923.
 
-The [agreed device-sync and account design](architecture/device-sync.md) defines the next evolution: optional dedicated servers, enrolled LAN peers, and multiple accounts. That design is not yet implemented; the current topology and contracts below remain the runtime baseline.
+The [agreed single-dataset device-sync design](architecture/device-sync.md) defines the next evolution: optional dedicated servers and enrolled LAN peers while retaining one dataset per daemon. Named accounts and account-switching UI are deferred; enrollment into a different initialized dataset will be refused without replacement or merging. The replicated registry foundation is implemented; LAN listeners, approval-based enrollment, registry-derived peer connections, and sharing restrictions remain pending. The current topology and contracts below remain the runtime baseline.
 
 Project context:
 - Greenfield
@@ -84,7 +84,7 @@ daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)
 
 - Dataset is rooted by a catalog document ID.
 - All clients/daemons for the same dataset should converge on the same catalog ID and referenced sub-document graph.
-- The catalog stores small shared metadata including projects, labels, actors, owner identity, habits, recurring templates, and references to heavier sub-documents.
+- The catalog stores small shared metadata including projects, labels, actors, owner identity, the dataset device registry, habits, recurring templates, and references to heavier sub-documents. Device entries occupy typed root-level `device:<native-storage-id>` keys so simultaneous offline upgrades do not create conflicting parent registry maps. Native Automerge handles entry and field convergence; retained removal markers prevent automatic reenrollment.
 - Projects carry authorized-assignee actor ids, tasks carry actor assignment metadata, and notes carry actor authorship metadata as the assignment model evolves.
 - Integration bindings may also carry binding-scoped actor mappings and trust flags in `binding.options.actorMappings`.
 - Task descriptions and note bodies persist imported-content approval metadata beside the governed content so later runtime paths can recompute approval by binding, actor, and content fingerprint.

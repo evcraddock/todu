@@ -51,6 +51,58 @@ export const MAX_ASSIGNEE_LENGTH = 100;
 export const MAX_ACTOR_ID_LENGTH = 100;
 export const MAX_ACTOR_DISPLAY_NAME_LENGTH = 100;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
+export const MAX_DEVICE_NAME_LENGTH = 100;
+export const MAX_DEVICE_ENDPOINT_LENGTH = 2048;
+
+export function validateDeviceName(name: unknown): ValidationError | null {
+  if (
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.trim().length > MAX_DEVICE_NAME_LENGTH ||
+    Array.from(name).some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    })
+  ) {
+    return validationError(
+      "name",
+      `Device name must be 1–${MAX_DEVICE_NAME_LENGTH} characters without control characters`,
+    );
+  }
+  return null;
+}
+
+export function validateDeviceEndpoint(endpoint: unknown): ValidationError | null {
+  if (endpoint === null) return null;
+  const invalid = () =>
+    validationError(
+      "endpoint",
+      "Device endpoint must be an HTTP(S) base URL without credentials, path, query, or fragment; use null to clear it",
+    );
+  if (
+    typeof endpoint !== "string" ||
+    !endpoint ||
+    endpoint.length > MAX_DEVICE_ENDPOINT_LENGTH ||
+    /\s/.test(endpoint)
+  )
+    return invalid();
+  try {
+    const url = new URL(endpoint);
+    if (
+      !/^https?:$/.test(url.protocol) ||
+      !url.hostname ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    )
+      return invalid();
+    return null;
+  } catch {
+    return invalid();
+  }
+}
 
 // ============================================================================
 // Field validators
