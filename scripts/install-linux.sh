@@ -11,7 +11,7 @@ ARCH=$(uname -m)
 
 case "$ARCH" in
   x86_64)
-    APPIMAGE_ARCH="x64"
+    APPIMAGE_ARCH="x86_64"
     ;;
   *)
     echo "error: unsupported Linux desktop architecture '$ARCH' (currently supported: x86_64)"
@@ -40,6 +40,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "Downloading ${APPIMAGE_URL}..."
 curl -fL --progress-bar "$APPIMAGE_URL" -o "$APPIMAGE_PATH"
+curl -fL "${BASE_URL}/SHA256SUMS.txt" -o "${TMP_DIR}/SHA256SUMS.txt"
+awk -v name="$APPIMAGE_NAME" '$2 == name { print; found++ } END { if (found != 1) exit 1 }' "${TMP_DIR}/SHA256SUMS.txt" > "${TMP_DIR}/download-checksum.txt"
+(cd "$TMP_DIR" && sha256sum --check download-checksum.txt)
 
 mkdir -p "$INSTALL_DIR" "$ICON_DIR" "$DESKTOP_DIR"
 install -m 755 "$APPIMAGE_PATH" "$INSTALL_DIR/todu.AppImage"

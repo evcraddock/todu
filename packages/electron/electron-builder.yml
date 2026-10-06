@@ -1,7 +1,6 @@
 appId: com.todu.app
 productName: todu
 copyright: Copyright © 2026 todu
-electronVersion: "40.4.1"
 
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 
@@ -17,13 +16,14 @@ files:
 extraMetadata:
   main: dist/main/index.js
 
-# Include CLI binary built by make build-cli-binary (current platform)
-extraResources:
-  - from: ../../dist/cli/todu
-    to: cli/todu
-
+# Bundle the matching platform/architecture CLI, not the build host's binary.
 # Linux
 linux:
+  executableName: todu
+  syncDesktopName: true
+  extraResources:
+    - from: "../../dist/cli/todu-cli-linux-${arch}"
+      to: cli/todu
   target:
     - target: deb
       arch: [x64]
@@ -50,6 +50,9 @@ deb:
 
 # macOS
 mac:
+  extraResources:
+    - from: "../../dist/cli/todu-cli-darwin-${arch}"
+      to: cli/todu
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -69,6 +72,9 @@ dmg:
 
 # Windows
 win:
+  extraResources:
+    - from: ../../dist/cli/todu-cli-windows-x64.exe
+      to: cli/todu.exe
   target:
     - target: nsis
       arch: [x64]

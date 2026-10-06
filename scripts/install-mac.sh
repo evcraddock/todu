@@ -43,6 +43,9 @@ trap 'if [[ -n "$MOUNT" ]]; then hdiutil detach "$MOUNT" -quiet 2>/dev/null || t
 
 echo "Downloading ${DMG_URL}..."
 curl -fL --progress-bar "$DMG_URL" -o "$DMG_PATH"
+curl -fL "${BASE_URL}/SHA256SUMS.txt" -o "${TMP_DIR}/SHA256SUMS.txt"
+awk -v name="$DMG_NAME" '$2 == name { print; found++ } END { if (found != 1) exit 1 }' "${TMP_DIR}/SHA256SUMS.txt" > "${TMP_DIR}/download-checksum.txt"
+(cd "$TMP_DIR" && shasum -a 256 -c download-checksum.txt)
 
 echo "Mounting ${DMG_NAME}..."
 MOUNT=$(hdiutil attach "$DMG_PATH" -nobrowse | awk '/\/Volumes\// {print substr($0, index($0, "/Volumes"))}' | tail -1)

@@ -1,7 +1,8 @@
 {
   "name": "@todu/electron",
-  "version": "0.23.2",
+  "version": "0.23.3",
   "description": "todu desktop app — local-first task management",
+  "desktopName": "todu.desktop",
   "author": {
     "name": "evcraddock",
     "email": "erik@craddock.org"
@@ -50,7 +51,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.1.3",
-    "electron": "^41.10.7",
+    "electron": "41.10.7",
     "electron-vite": "^5.0.0",
     "jsdom": "^28.0.0",
     "vite": "^7.3.6"

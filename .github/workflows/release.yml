@@ -28,28 +28,23 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Extract and validate version
         id: version
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          # Get tag (from push event or manual input)
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-
-          # Strip v prefix
+          node scripts/validate-desktop-release.mjs "$TAG"
           VERSION="${TAG#v}"
-          echo "Tag: $TAG, Version: $VERSION"
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-          # Detect pre-release
-          if echo "$VERSION" | grep -qE '(alpha|beta|rc|dev)'; then
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
@@ -65,6 +60,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
 
       - name: Set up Node
         uses: actions/setup-node@v6.4.0
@@ -138,6 +135,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
 
       - name: Set up Node
         uses: actions/setup-node@v6.4.0
@@ -168,7 +167,7 @@ jobs:
       - name: Build Electron (macOS)
         run: |
           make build-electron
-          npm run --workspace=packages/electron dist:mac:dir
+          npm run --workspace=packages/electron dist:mac:dir -- --$(node -p process.arch)
           npm run --workspace=packages/electron validate:daemon-bundle:mac
           npm run --workspace=packages/electron dist:mac
 
@@ -195,6 +194,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
 
       - name: Set up Node
         uses: actions/setup-node@v6.4.0
@@ -237,6 +238,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8.0.1
@@ -250,6 +253,8 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
+          node scripts/validate-desktop-release.mjs "v$VERSION" > desktop-versions.json
+          CLI_VERSION=$(node -p 'require("./desktop-versions.json").cli')
           # Extract the changelog section for this version
           if [ -f CHANGELOG.md ]; then
             # Extract content between this version header and the next
@@ -262,7 +267,7 @@ jobs:
               "" \
               "## Install" \
               "- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime." \
-              "- CLI (optional power-user companion): install the matching version with npm install -g @todu/cli@${VERSION} or use npm install -g @todu/cli for latest.")
+              "- CLI (optional power-user companion): npm install -g @todu/cli@${CLI_VERSION}. Companion npm versions are independent of the desktop version.")
           fi
 
           # Write to file to preserve newlines
@@ -271,6 +276,8 @@ jobs:
           cat release-notes.md
 
       - name: Collect release assets
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           mkdir -p release-assets
 
@@ -282,10 +289,11 @@ jobs:
           cp artifacts/cli-windows/todu-cli-windows-x64.exe release-assets/
 
           # Electron installers
-          cp artifacts/electron-linux/*.AppImage release-assets/ 2>/dev/null || true
-          cp artifacts/electron-linux/*.deb release-assets/ 2>/dev/null || true
-          cp artifacts/electron-macos/*.dmg release-assets/ 2>/dev/null || true
-          cp artifacts/electron-windows/*.exe release-assets/ 2>/dev/null || true
+          cp "artifacts/electron-linux/todu-${VERSION}-linux-x86_64.AppImage" release-assets/
+          cp "artifacts/electron-linux/todu-${VERSION}-linux-amd64.deb" release-assets/
+          cp "artifacts/electron-macos/todu-${VERSION}-mac-x64.dmg" release-assets/
+          cp "artifacts/electron-macos/todu-${VERSION}-mac-arm64.dmg" release-assets/
+          cp desktop-versions.json release-assets/
 
           # Desktop installer helpers
           cp scripts/install-linux.sh release-assets/install-todu-linux.sh

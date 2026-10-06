@@ -130,4 +130,29 @@ make version-check
 
 ## Desktop and binary releases
 
-The existing `Release` workflow still creates GitHub releases for desktop installers and standalone CLI binaries from `v*` tags. It no longer publishes npm packages. NPM publishing is owned by the Changesets workflow.
+The `Release` workflow creates GitHub releases for Linux desktop installers (x64 AppImage/deb), macOS desktop installers (x64/arm64 DMG), and standalone CLI binaries from `v*` tags. Windows receives a standalone CLI binary only; no Windows desktop installer is published by this workflow. NPM publication remains owned by Changesets.
+
+### Prepare locally; publish only after approval
+
+1. Update the private root and `@todu/electron` versions together and add the desktop changelog section. Leave published npm package versions independent; do not run Changesets versioning for a desktop-only release.
+2. Run `node scripts/validate-desktop-release.mjs vX.Y.Z`. The tag must exactly match the checked-out desktop/root metadata. Manual dispatch checks out the requested tag, then all build/release jobs use the same validated commit.
+3. Run `make pre-pr`, build the platform/architecture CLI binaries, and build Electron. `make dist-linux` and `make dist-mac` validate unpacked native runtime contents and bundled-daemon lifecycle before creating installers.
+4. Review and merge the source/version PR through the normal human approval gate. A merge does not publish desktop artifacts.
+5. Only with explicit desktop publication approval, create/push the tag or dispatch the release workflow. Do not change signing/authentication/security settings as part of recovery.
+6. Verify the release assets, `SHA256SUMS.txt`, `desktop-versions.json`, actual Electron runtime, core/engine/daemon bundle contents, and architecture-matching CLI. Installer helpers verify the named asset's SHA-256 digest before replacing installed files. Linux AppImages use `linux-x86_64.AppImage`, matching electron-builder's architecture naming. Installation and live daemon verification require separate approval; publishing alone does not update installed desktop software.
+
+### Runtime and bundle validation
+
+The exact Electron dependency in `packages/electron/package.json` is authoritative. There is no separate `electronVersion` packager override or duplicate root Electron dependency. Electron-builder resolves the installed pinned dependency. `dist/desktop-runtime.json` records the workspace/component versions; the packaged validator checks them against source and checks the executable's actual Electron version.
+
+The packager selects the standalone CLI for the target architecture, including separate x64/arm64 macOS binaries. Npm CLI/TUI versions need not equal the desktop tag: for desktop 0.23.3, the companion CLI is 0.24.2 and TUI is 0.26.1. The bundled daemon is 0.24.1; updating the npm CLI does not replace an installed desktop's fallback daemon.
+
+`validate:daemon-bundle:linux` and `validate:daemon-bundle:mac` inspect fresh candidate contents, compare repaired daemon modules with the tested build, verify the Repo timer repair, and reject affected packaging-tool code in shipped runtime contents. They create temporary HOME/config/storage/socket paths, clear inherited Todu overrides, and disable sync/plugins/workers. An RPC handshake, accepted mutation, subscribed-client graceful shutdown, and reopened catalog/project persistence are required. Forced termination, nonzero exit, leftover sockets, and race/failure signatures fail validation rather than certify storage completion.
+
+Normal candidate CI validates native unpacked Linux x64 and macOS x64/arm64 packages without publishing. These Node-mode daemon probes are not GUI/headless-GUI tests. Native graphical smoke coverage is recorded separately, with unverified platforms disclosed. Do not add sandbox-disable flags or change sandbox configuration to make a graphical check pass. The pre-existing renderer `sandbox: false` setting and unsigned macOS/hardened-runtime settings are unchanged by this task; successful smoke coverage is not a claim of renderer sandboxing or code-signing assurance.
+
+### Scoped dependency exceptions
+
+For task `task-a52e2803`, the maintainer separately approved **sprintf-js 1.1.3 / GHSA-hp3w-g68c-fv3c and inherited affected-package findings**, limited to controlled desktop packaging tooling and conditional on verification that affected code is absent from shipped runtime contents. The build path is electron-builder → app-builder-lib → @electron/get 3 → optional global-agent 3 → roarr 2 → sprintf-js. No compatible patched sprintf-js or supported parent update removing this path was available during assessment; changing proxy/downloader majors through overrides or downgrading the builder is not approved.
+
+The fresh baseline has 12 moderate affected-package findings from two advisories: eight sprintf-derived entries and four UUID-derived entries. This is not a clean audit. The existing UUID 9.0.1 exception remains narrow and separate; see [dependency audit](security/task-763357bb-dependency-audit.md). Dev/optional status is not itself a waiver. Reassess exposure and stop for a new decision if candidate contents, advisory scope, or reachability change; neither exception is a general future waiver.
