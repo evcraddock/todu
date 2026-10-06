@@ -44,6 +44,9 @@ jobs:
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 
+      - name: Desktop daemon startup integration tests
+        run: npm run test:all -- packages/electron/src/main/daemon-connection-manager.integration.test.ts packages/daemon/src/runtime.integration.test.ts
+
   desktop:
     name: Desktop package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

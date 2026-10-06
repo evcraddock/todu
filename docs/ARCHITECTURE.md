@@ -31,6 +31,8 @@ Project context:
 3. **Fail-fast client behavior**
    - If local daemon is unavailable, clients fail with clear instructions.
    - No silent fallback ownership mode.
+   - Electron waits for its initial connection/handshake before deciding readiness; it never automatically starts or restarts a daemon. An unavailable daemon requires an explicit CLI/service-manager action.
+   - Desktop startup and connection failures persist in a bounded, redacted local error log, whose location is included in startup-error guidance.
 
 4. **Transactional join with rollback**
    - Join failures never implicitly create a fresh catalog.
@@ -132,6 +134,7 @@ No implicit "create new catalog" fallback in failed join path.
 
 - Primary: **UDS** (macOS/Linux)
 - Must be abstracted for future Windows support (named pipes preferred)
+- The daemon binds a unique private UDS path and publishes the public endpoint using an atomic, no-overwrite hard link. Startup/cleanup are serialized by a short-lived `<socket>.lock` directory. Shutdown only removes the public socket if its device/inode still match the owning transport. This also prevents libuv's automatic bind-path unlink from removing a replacement daemon's endpoint.
 
 ## Connection model
 

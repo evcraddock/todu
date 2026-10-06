@@ -14,6 +14,44 @@ describe("createDaemonConnectionManager", () => {
     vi.useRealTimers();
   });
 
+  it("waits for the initial connection before sending startup requests", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-electron-ready-"));
+    const socketPath = path.join(tmpDir, "daemon.sock");
+    const daemon = createMockDaemonServer(socketPath);
+    await daemon.start();
+    const manager = createDaemonConnectionManager({ socketPath });
+    try {
+      manager.start();
+      expect(await manager.waitForConnection()).toEqual({ ok: true, value: undefined });
+      expect(
+        await manager.request("daemon.hello", { protocolVersion: DAEMON_PROTOCOL_VERSION }),
+      ).toEqual({
+        ok: true,
+        value: { protocolVersion: DAEMON_PROTOCOL_VERSION },
+      });
+    } finally {
+      manager.stop();
+      await daemon.stop();
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it("preserves the underlying connection failure instead of claiming no daemon exists", async () => {
+    const manager = createDaemonConnectionManager({
+      socketPath: "/tmp/never-used.sock",
+      connect: () => createFailingSocket("EACCES"),
+    });
+    try {
+      manager.start();
+      expect(await manager.waitForConnection()).toMatchObject({
+        ok: false,
+        error: { code: "DAEMON_UNAVAILABLE", details: { reason: "EACCES" } },
+      });
+    } finally {
+      manager.stop();
+    }
+  });
+
   it("uses bounded reconnect backoff (250ms → 500ms → 1s → 2s cap)", async () => {
     const scheduledDelays: number[] = [];
     const manager = createDaemonConnectionManager({

@@ -14,9 +14,9 @@ import {
   type DaemonConnectionResult,
   resolveDaemonSocketPath,
 } from "./daemon-connection-manager.js";
-import { createPackagedDaemonLifecycle } from "./daemon-lifecycle.js";
 import { ensureDaemonReady } from "./daemon-startup.js";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
+import { createDesktopErrorLog, formatDesktopStartupError } from "./error-log.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { registerOAuthIpc, unregisterOAuthIpc } from "./oauth.js";
 
@@ -28,6 +28,17 @@ import { createWindow, restoreWindowState, saveWindowState } from "./window.js";
 let mainWindow: BrowserWindow | null = null;
 let daemonConnectionManager: DaemonConnectionManager | null = null;
 let isQuitting = false;
+let daemonVersion: string | undefined;
+let daemonSocketPath: string | undefined;
+
+app.setAppLogsPath();
+const errorLog = createDesktopErrorLog({ directory: app.getPath("logs") });
+const errorContext = () => ({
+  socketPath: daemonSocketPath,
+  desktopVersion: app.getVersion(),
+  daemonVersion,
+  clientProtocol: DAEMON_PROTOCOL_VERSION,
+});
 
 function getMainWindow(): BrowserWindow | null {
   return mainWindow;
@@ -49,7 +60,12 @@ function assertRequestOk<T>(
   method: string,
 ): asserts result is { ok: true; value: T } {
   if (!result.ok) {
-    throw new Error(`Daemon ${method} failed: ${result.error.code} ${result.error.message}`);
+    throw Object.assign(
+      new Error(`Daemon ${method} failed: ${result.error.code} ${result.error.message}`, {
+        cause: result.error,
+      }),
+      { code: result.error.code },
+    );
   }
 }
 
@@ -57,25 +73,17 @@ async function init(): Promise<void> {
   const { storagePath } = loadElectronConfig();
   const socketPath = resolveDaemonSocketPath(storagePath);
 
-  const packagedDaemonLifecycle = app.isPackaged
-    ? createPackagedDaemonLifecycle({
-        appPath: app.getAppPath(),
-        socketPath,
-        onError: (message) => {
-          dialog.showErrorBox("todu daemon error", message);
-        },
-      })
-    : null;
+  daemonSocketPath = socketPath;
 
   daemonConnectionManager = createDaemonConnectionManager({
     socketPath,
     hooks: {
       onConnected: async ({ request }) => {
-        const hello = await request("daemon.hello", {
+        const hello = await request<{ daemonVersion: string }>("daemon.hello", {
           protocolVersion: DAEMON_PROTOCOL_VERSION,
         });
         assertRequestOk(hello, "daemon.hello");
-
+        daemonVersion = hello.value.daemonVersion;
         await subscribeRendererToDaemonEvents({ request });
       },
       onReconnected: async ({ request }) => {
@@ -84,8 +92,15 @@ async function init(): Promise<void> {
           dispatchRendererEvent(getMainWindow(), event);
         }
       },
+      onDisconnected: ({ reason }) => {
+        if (!isQuitting) errorLog.write("disconnect", reason, errorContext());
+      },
       onReconnectScheduled: (info) => {
-        packagedDaemonLifecycle?.handleReconnectScheduled(info);
+        errorLog.write("reconnect", info.reason, {
+          ...errorContext(),
+          attempt: info.attempt,
+          delayMs: info.delayMs,
+        });
       },
       onEvent: (event) => {
         const rendererEvent = mapDaemonEventToRendererEvent(event);
@@ -101,13 +116,8 @@ async function init(): Promise<void> {
 
   await ensureDaemonReady(daemonConnectionManager, {
     protocolVersion: DAEMON_PROTOCOL_VERSION,
-    startDaemon: packagedDaemonLifecycle?.startIfNeeded,
-    unavailableHint:
-      packagedDaemonLifecycle?.unavailableHint ??
-      "Start it with 'todu daemon start' and relaunch Electron.",
-    protocolMismatchHint: app.isPackaged
-      ? "The bundled desktop app could not talk to the local daemon because their versions do not match. Reinstall or relaunch todu so the desktop app and daemon are updated together."
-      : "Update todu so the desktop app and local daemon use matching versions.",
+    protocolMismatchHint:
+      "Use desktop and daemon releases with compatible protocol versions. The desktop app will not replace or restart the existing daemon.",
   });
 
   const daemonTodu = createDaemonToduClient(daemonConnectionManager);
@@ -158,9 +168,8 @@ app
   .whenReady()
   .then(init)
   .catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(error);
-    dialog.showErrorBox("todu startup failed", message);
+    errorLog.write("startup", error, errorContext());
+    dialog.showErrorBox("todu startup failed", formatDesktopStartupError(error, errorLog));
     app.quit();
   });
 

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net, { type Server, type Socket } from "node:net";
 import path from "node:path";
@@ -44,6 +45,43 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
   let server: Server | null = null;
   let startPromise: Promise<UdsEndpoint> | null = null;
   let stopPromise: Promise<void> | null = null;
+  let ownedSocket: fs.Stats | null = null;
+  const lockPath = `${endpoint.path}.lock`;
+
+  async function acquireSocketLock(): Promise<() => Promise<void>> {
+    const deadline = Date.now() + 2_000;
+    while (true) {
+      try {
+        await fs.promises.mkdir(lockPath, { mode: 0o700 });
+        return () => fs.promises.rmdir(lockPath);
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST") throw error;
+        if (Date.now() >= deadline) {
+          throw new Error(
+            `Daemon socket startup/cleanup already in progress: ${lockPath}. If this lock remains after a crash, verify no daemon is starting or stopping before removing the lock directory.`,
+          );
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      }
+    }
+  }
+
+  async function unlinkOwnedSocket(): Promise<void> {
+    if (!ownedSocket) {
+      return;
+    }
+    try {
+      const stats = await fs.promises.lstat(endpoint.path);
+      if (stats.isSocket() && stats.dev === ownedSocket.dev && stats.ino === ownedSocket.ino) {
+        await fs.promises.unlink(endpoint.path);
+      }
+    } catch (error) {
+      if (errorCode(error) !== "ENOENT") {
+        throw error;
+      }
+    }
+    ownedSocket = null;
+  }
 
   async function ensureSocketDirectory(): Promise<void> {
     await fs.promises.mkdir(path.dirname(endpoint.path), { recursive: true, mode: 0o700 });
@@ -76,8 +114,13 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     }
 
     await ensureSocketDirectory();
-    await ensureSocketAvailable();
-
+    const releaseLock = await acquireSocketLock();
+    // libuv unlinks its bind path on close. Bind privately so closing this
+    // instance cannot unlink a replacement daemon's public socket.
+    const bindPath = path.join(
+      path.dirname(endpoint.path),
+      `.todu-${randomBytes(8).toString("hex")}`,
+    );
     const created = net.createServer((socket) => {
       sockets.add(socket);
       socket.once("close", () => sockets.delete(socket));
@@ -85,23 +128,30 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     });
 
     try {
+      await ensureSocketAvailable();
       await new Promise<void>((resolve, reject) => {
         created.once("error", reject);
-        created.listen(endpoint.path, () => {
+        created.listen(bindPath, () => {
           created.off("error", reject);
           resolve();
         });
       });
 
-      await fs.promises.chmod(endpoint.path, endpoint.mode);
+      await fs.promises.chmod(bindPath, endpoint.mode);
+      const identity = await fs.promises.lstat(bindPath);
+      // link() publishes without overwriting an endpoint claimed by another instance.
+      await fs.promises.link(bindPath, endpoint.path);
+      ownedSocket = identity;
       server = created;
       return endpoint;
     } catch (error) {
       const closing = closeServer(created);
       await closeClients(sockets);
       await closing;
-      await unlinkSocketIfExists(endpoint.path);
+      await unlinkOwnedSocket();
       throw error;
+    } finally {
+      await releaseLock();
     }
   }
 
@@ -139,16 +189,20 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
           }
         }
 
+        const releaseLock = ownedSocket ? await acquireSocketLock() : null;
         const current = server;
         server = null;
-
         const closing = current ? closeServer(current) : Promise.resolve();
         try {
           await drain?.();
         } finally {
-          await closeClients(sockets);
-          await closing;
-          await unlinkSocketIfExists(endpoint.path);
+          try {
+            await closeClients(sockets);
+            await closing;
+            await unlinkOwnedSocket();
+          } finally {
+            await releaseLock?.();
+          }
         }
       })().finally(() => {
         stopPromise = null;
@@ -193,27 +247,16 @@ async function closeServer(server: Server): Promise<void> {
   });
 }
 
-async function unlinkSocketIfExists(socketPath: string): Promise<void> {
-  try {
-    const stats = await fs.promises.lstat(socketPath);
-    if (!stats.isSocket()) {
-      return;
-    }
-
-    await fs.promises.unlink(socketPath);
-  } catch (error) {
-    const code = errorCode(error);
-    if (code !== "ENOENT") {
-      throw error;
-    }
-  }
-}
-
 type SocketProbeState = "active" | "stale";
 
 async function probeSocket(socketPath: string): Promise<SocketProbeState> {
   return new Promise<SocketProbeState>((resolve, reject) => {
     const client = net.createConnection(socketPath);
+    const timer = setTimeout(() => {
+      cleanup();
+      client.destroy();
+      reject(new Error(`Timed out probing daemon socket; refusing to replace it: ${socketPath}`));
+    }, 1_000);
 
     const onConnect = () => {
       cleanup();
@@ -234,6 +277,7 @@ async function probeSocket(socketPath: string): Promise<SocketProbeState> {
     };
 
     const cleanup = () => {
+      clearTimeout(timer);
       client.off("connect", onConnect);
       client.off("error", onError);
     };

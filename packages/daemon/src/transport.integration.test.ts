@@ -3,7 +3,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createUdsTransport,
   DEFAULT_DAEMON_SOCKET_FILENAME,
@@ -110,9 +110,84 @@ describeOnUnix("createUdsTransport", () => {
     await first.start();
 
     const second = createUdsTransport({ storagePath: tmpDir, socketPath });
-    await expect(second.start()).rejects.toThrow("Daemon socket already in use");
+    try {
+      await expect(second.start()).rejects.toThrow("Daemon socket already in use");
+      await second.stop();
+      expect(fs.existsSync(socketPath)).toBe(true);
+      await connectAndClose(socketPath);
+    } finally {
+      await first.stop();
+    }
+  });
 
-    await first.stop();
+  it("refuses to reclaim a socket when its liveness probe times out", async () => {
+    const socketPath = path.join(tmpDir, "daemon.sock");
+    const first = createUdsTransport({ storagePath: tmpDir, socketPath });
+    const second = createUdsTransport({ storagePath: tmpDir, socketPath });
+    await first.start();
+    const probe = vi.spyOn(net, "createConnection").mockImplementation(() => new net.Socket());
+    try {
+      await expect(second.start()).rejects.toThrow("Timed out probing daemon socket");
+      await second.stop();
+      expect(fs.existsSync(socketPath)).toBe(true);
+    } finally {
+      probe.mockRestore();
+      await first.stop();
+    }
+  });
+
+  it("does not remove an existing startup lock or socket on lock timeout", async () => {
+    const socketPath = path.join(tmpDir, "daemon.sock");
+    const first = createUdsTransport({ storagePath: tmpDir, socketPath });
+    const second = createUdsTransport({ storagePath: tmpDir, socketPath });
+    await first.start();
+    fs.mkdirSync(`${socketPath}.lock`);
+    try {
+      await expect(second.start()).rejects.toThrow("startup/cleanup already in progress");
+      await second.stop();
+      expect(fs.existsSync(`${socketPath}.lock`)).toBe(true);
+      await connectAndClose(socketPath);
+    } finally {
+      fs.rmdirSync(`${socketPath}.lock`);
+      await first.stop();
+    }
+  });
+
+  it("preserves a replacement socket when the original owner shuts down", async () => {
+    const socketPath = path.join(tmpDir, "daemon.sock");
+    const first = createUdsTransport({ storagePath: tmpDir, socketPath });
+    const replacement = createUdsTransport({ storagePath: tmpDir, socketPath });
+    await first.start();
+    fs.renameSync(socketPath, path.join(tmpDir, "original.sock"));
+    await replacement.start();
+    try {
+      await first.stop();
+      expect(fs.existsSync(socketPath)).toBe(true);
+      await connectAndClose(socketPath);
+    } finally {
+      await first.stop();
+      await replacement.stop();
+    }
+  });
+
+  it("keeps the winning socket usable after concurrent startup and loser cleanup", async () => {
+    const socketPath = path.join(tmpDir, "daemon.sock");
+    const transports = Array.from({ length: 4 }, () =>
+      createUdsTransport({ storagePath: tmpDir, socketPath }),
+    );
+    const results = await Promise.allSettled(transports.map((transport) => transport.start()));
+    try {
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      await Promise.all(
+        transports
+          .filter((_, i) => results[i].status === "rejected")
+          .map((transport) => transport.stop()),
+      );
+      expect(fs.existsSync(socketPath)).toBe(true);
+      await connectAndClose(socketPath);
+    } finally {
+      await Promise.all(transports.map((transport) => transport.stop()));
+    }
   });
 
   it("removes the socket file during shutdown", async () => {
@@ -126,6 +201,16 @@ describeOnUnix("createUdsTransport", () => {
     expect(fs.existsSync(socketPath)).toBe(false);
   });
 });
+
+async function connectAndClose(socketPath: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const client = net.createConnection(socketPath, () => {
+      client.end();
+      resolve();
+    });
+    client.once("error", reject);
+  });
+}
 
 describe("resolveUdsSocketPath", () => {
   it("uses daemon.sock inside storage path by default", () => {

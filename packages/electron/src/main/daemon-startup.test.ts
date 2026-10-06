@@ -2,61 +2,40 @@ import { describe, expect, it, vi } from "vitest";
 import { ensureDaemonReady } from "./daemon-startup.js";
 
 describe("ensureDaemonReady", () => {
-  it("succeeds when daemon.hello succeeds", async () => {
-    const request = vi.fn().mockResolvedValue({
-      ok: true,
-      value: { protocolVersion: "1" },
+  it("waits for connection readiness before requesting daemon.hello", async () => {
+    const order: string[] = [];
+    const waitForConnection = vi.fn(async () => {
+      await Promise.resolve();
+      order.push("connected");
+      return { ok: true as const, value: undefined };
     });
-
-    await expect(
-      ensureDaemonReady(
-        { request },
-        {
-          protocolVersion: "1",
-          maxAttempts: 1,
-          retryDelayMs: 0,
-        },
-      ),
-    ).resolves.toBeUndefined();
-
-    expect(request).toHaveBeenCalledWith("daemon.hello", {
-      protocolVersion: "1",
+    const request = vi.fn().mockImplementation(async () => {
+      order.push("hello");
+      return { ok: true as const, value: { protocolVersion: "1" } };
     });
+    await ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1" });
+    expect(order).toEqual(["connected", "hello"]);
+    expect(request).toHaveBeenCalledWith("daemon.hello", { protocolVersion: "1" });
   });
 
-  it("starts the daemon on first unavailable response and then succeeds", async () => {
-    const request = vi
+  it("retries a transient connection failure without starting a daemon", async () => {
+    const waitForConnection = vi
       .fn()
       .mockResolvedValueOnce({
         ok: false,
-        error: {
-          code: "DAEMON_UNAVAILABLE",
-          message: "socket missing",
-        },
+        error: { code: "DAEMON_UNAVAILABLE", message: "connecting" },
       })
-      .mockResolvedValueOnce({
-        ok: true,
-        value: { protocolVersion: "1" },
-      });
-    const startDaemon = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      ensureDaemonReady(
-        { request },
-        {
-          protocolVersion: "1",
-          maxAttempts: 2,
-          retryDelayMs: 0,
-          startDaemon,
-        },
-      ),
-    ).resolves.toBeUndefined();
-
-    expect(startDaemon).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledTimes(2);
+      .mockResolvedValueOnce({ ok: true, value: undefined });
+    const request = vi.fn().mockResolvedValue({ ok: true, value: { protocolVersion: "1" } });
+    await ensureDaemonReady(
+      { request, waitForConnection },
+      { protocolVersion: "1", maxAttempts: 2, retryDelayMs: 0 },
+    );
+    expect(waitForConnection).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces protocol mismatch with actionable guidance", async () => {
+  it("surfaces protocol mismatch immediately with actionable guidance", async () => {
     const request = vi.fn().mockResolvedValue({
       ok: false,
       error: {
@@ -64,68 +43,47 @@ describe("ensureDaemonReady", () => {
         message: "daemon protocol 2 does not match client protocol 1",
       },
     });
-
+    const waitForConnection = vi.fn().mockResolvedValue({ ok: true, value: undefined });
     await expect(
-      ensureDaemonReady(
-        { request },
-        {
-          protocolVersion: "1",
-          maxAttempts: 2,
-          retryDelayMs: 0,
-          protocolMismatchHint: "Install matching desktop and CLI versions.",
-        },
-      ),
+      ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1" }),
     ).rejects.toThrow(
-      "Local daemon is incompatible (PROTOCOL_MISMATCH: daemon protocol 2 does not match client protocol 1). Install matching desktop and CLI versions.",
+      "Local daemon is incompatible (PROTOCOL_MISMATCH: daemon protocol 2 does not match client protocol 1). Use desktop and daemon releases with compatible protocol versions.",
     );
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces bundled daemon startup failures", async () => {
-    const request = vi.fn().mockResolvedValue({
+  it("preserves protocol mismatch detected in connection lifecycle hooks", async () => {
+    const request = vi.fn();
+    const waitForConnection = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { code: "PROTOCOL_MISMATCH", message: "incompatible protocol" },
+    });
+    await expect(
+      ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1" }),
+    ).rejects.toThrow("Local daemon is incompatible");
+    expect(request).not.toHaveBeenCalled();
+    expect(waitForConnection).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "ENOENT",
+    "ECONNREFUSED",
+    "EACCES",
+    "EPERM",
+  ])("reports %s with socket context and manual-start guidance", async (reason) => {
+    const request = vi.fn();
+    const waitForConnection = vi.fn().mockResolvedValue({
       ok: false,
       error: {
         code: "DAEMON_UNAVAILABLE",
-        message: "socket missing",
+        message: `Cannot connect to daemon socket: /tmp/todu.sock (${reason})`,
       },
     });
-    const startDaemon = vi.fn().mockRejectedValue(new Error("Failed to start bundled daemon"));
-
     await expect(
-      ensureDaemonReady(
-        { request },
-        {
-          protocolVersion: "1",
-          maxAttempts: 2,
-          retryDelayMs: 0,
-          startDaemon,
-        },
-      ),
+      ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1", maxAttempts: 1 }),
     ).rejects.toThrow(
-      "Local daemon is required but unavailable (DAEMON_UNAVAILABLE: socket missing). Failed to start bundled daemon",
+      `Could not connect to the local daemon (DAEMON_UNAVAILABLE: Cannot connect to daemon socket: /tmp/todu.sock (${reason})). Check 'todu daemon status'. If no daemon is running, start it with 'todu daemon start', then relaunch the desktop app. The desktop app does not start or restart daemons automatically.`,
     );
-  });
-
-  it("throws actionable error when daemon stays unavailable", async () => {
-    const request = vi.fn().mockResolvedValue({
-      ok: false,
-      error: {
-        code: "DAEMON_UNAVAILABLE",
-        message: "socket missing",
-      },
-    });
-
-    await expect(
-      ensureDaemonReady(
-        { request },
-        {
-          protocolVersion: "1",
-          maxAttempts: 2,
-          retryDelayMs: 0,
-          unavailableHint: "todu could not start its bundled daemon.",
-        },
-      ),
-    ).rejects.toThrow(
-      "Local daemon is required but unavailable (DAEMON_UNAVAILABLE: socket missing). todu could not start its bundled daemon.",
-    );
+    expect(request).not.toHaveBeenCalled();
   });
 });
