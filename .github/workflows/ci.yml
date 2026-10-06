@@ -44,6 +44,9 @@ jobs:
       - name: Device registry integration tests
         run: npm run test:all -- packages/engine/src/devices.integration.test.ts packages/daemon/src/protocol-conformance.integration.test.ts
 
+      - name: LAN sync listener integration tests
+        run: npm run test:all -- packages/engine/src/sync-listener.integration.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts
+
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 
@@ -82,3 +85,5 @@ jobs:
           npm run --workspace=packages/electron validate:daemon-bundle:${PLATFORM}
       - name: Unix socket ownership and path boundary tests
         run: npm run test:all -- packages/daemon/src/transport.integration.test.ts
+      - name: LAN sync listener integration tests
+        run: npm run test:all -- packages/engine/src/sync-listener.integration.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts

@@ -156,13 +156,55 @@ todu device remove <enrolled-storage-id>
 
 Naming and endpoint commands default to the daemon's automatically supplied persistent native Repo storage ID. Explicit IDs target another existing registry entry; removal requires an explicit ID. IDs are not transient connection peer IDs, physical hardware identities, or authenticated credentials. Listing does not establish that a device is online or fully synchronized.
 
-Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listeners and automatic registry-based connections are not available in this foundation release.
+Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration; automatic registry-based connections remain follow-up work.
 
 Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the future local approval-based enrollment flow. An existing `sync join` operation is not membership approval.
 
-Removal retains a replicated tombstone so normal startup cannot restore membership. It does not delete dataset documents or remote copies, instantly revoke access on offline replicas, or authenticate devices. Registry-based transport restrictions are a subsequent feature; the currently configured sync-server path remains unchanged. Take independent backups before rollout; do not retire a working sync server based on registry visibility alone.
+Removal retains a replicated tombstone so normal startup cannot restore membership. It does not delete dataset documents or remote copies, instantly revoke access on offline replicas, or authenticate devices. The registry is connection metadata, not a transport authorization layer; the currently configured sync-server path remains unchanged. Take independent backups before rollout; do not retire a working sync server based on registry visibility alone.
 
 See [Device Sync Design](architecture/device-sync.md) for the roadmap and trusted-LAN limitations.
+
+## Opt-in LAN sync listener
+
+The local daemon can accept native Automerge peer connections without a separate sync service. Listening is disabled by default and uses the existing dataset/Repo; it does not change the configured server or activate workers.
+
+```bash
+todu sync listener enable --bind 192.168.1.10
+todu sync listener enable --bind 192.168.1.10 --port 24400
+todu daemon restart
+todu sync listener status
+todu --format json sync listener status
+todu sync status
+```
+
+Equivalent local configuration:
+
+```yaml
+sync:
+  listener:
+    enabled: true
+    bind: 192.168.1.10
+    port: 24377
+```
+
+Supply a literal IPv4/IPv6 address assigned to this machine. There is no implicit interface or hostname-based binding. The default port is `24377`; zero/ephemeral ports and automatic port substitution are refused. Explicit all-interface addresses are supported but expose every matching interface; IPv6 bindings do not implicitly listen on IPv4.
+
+Configuration commands preserve other settings and YAML comments. They do **not** change a running listener or restart the daemon: restart explicitly to apply, using the same configuration context as the daemon. `--config` selects the file to edit; a service-managed daemon still reads the configuration selected by its service. Registry endpoint metadata is not automatically edited.
+
+Disable listening with:
+
+```bash
+todu sync listener disable
+todu daemon restart
+```
+
+Saving the disabled flag alone does not stop a running listener. Before travel to an untrusted network, apply the restart or stop the daemon. Existing `sync start|stop|restart` controls the outbound configured-server path only, not LAN listening.
+
+The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id>` (bracket IPv6 addresses in URLs). Wrong-catalog and non-exact upgrade paths are refused. HTTP requests, enrollment routes awaiting their follow-up implementation, remote RPC, and remote approval return `404`. Binding errors appear in listener status and daemon logs while private local reads/edits remain available. Listener status is separate from outbound server state and does not claim synchronization completeness.
+
+**Trusted LAN only:** HTTP/WebSocket transport is unencrypted and unauthenticated. The registry is not an access-control list; any reachable peer knowing the catalog path can attempt native replication. Restrict exposure through the operator's network configuration. No authentication, encrypted pairing, internet traversal, or per-document sharing filter is provided.
+
+This supplies the incoming transport. Explicit LAN enrollment and automatic roster-derived connections remain separate tasks; enabling a listener alone does not make other daemons connect or remove the need for an existing working server.
 
 ## Worker assignment configuration
 

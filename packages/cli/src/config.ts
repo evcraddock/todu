@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { normalizeConfigPaths, type ToduFileConfig } from "@todu/core";
-import { parse, stringify } from "yaml";
+import { normalizeConfigPaths, type SyncListenerConfig, type ToduFileConfig } from "@todu/core";
+import { isMap, parse, parseDocument, stringify } from "yaml";
 
 // ============================================================================
 // CLI Configuration
@@ -34,9 +34,27 @@ export function loadConfig(configPath: string): ToduFileConfig {
   return normalizeConfigPaths(parsed, configPath);
 }
 
-/**
- * Save config to YAML file. Creates directory if needed.
- */
+/** Patch only listener settings, retaining other values, relative paths, and YAML comments. */
+export function saveSyncListenerConfig(config: SyncListenerConfig, configPath: string): void {
+  let content = "";
+  try {
+    content = fs.readFileSync(configPath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const document = parseDocument(content);
+  if (document.errors.length > 0) throw document.errors[0];
+  if (document.contents !== null && !isMap(document.contents)) {
+    throw new Error(`Cannot update listener settings: ${configPath} must contain a YAML mapping`);
+  }
+  for (const [key, value] of Object.entries(config)) {
+    if (value !== undefined) document.setIn(["sync", "listener", key], value);
+  }
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, document.toString(), "utf-8");
+}
+
+/** Save config to YAML file, creating its directory if needed. */
 export function saveConfig(config: ToduFileConfig, configPath: string): void {
   const dir = path.dirname(configPath);
   fs.mkdirSync(dir, { recursive: true });
