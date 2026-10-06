@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Device registry integration tests
+        run: npm run test:all -- packages/engine/src/devices.integration.test.ts packages/daemon/src/protocol-conformance.integration.test.ts
+
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 

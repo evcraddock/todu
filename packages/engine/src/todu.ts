@@ -14,6 +14,8 @@ import type {
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  Device,
+  DeviceId,
   Habit,
   HabitEntry,
   HabitFilter,
@@ -126,6 +128,14 @@ export interface ToduConfig {
 // SDK Interface — namespace stubs
 // Each vertical slice will implement its namespace.
 // ============================================================================
+
+export interface DeviceNamespace {
+  localId(): Promise<Result<DeviceId>>;
+  list(): Promise<Result<Device[]>>;
+  rename(id: DeviceId, name: string): Promise<Result<Device>>;
+  setEndpoint(id: DeviceId, endpoint: string | null): Promise<Result<Device>>;
+  remove(id: DeviceId): Promise<Result<void>>;
+}
 
 export interface ActorNamespace {
   list(): Promise<Result<Actor[]>>;
@@ -275,6 +285,7 @@ export interface ConfigNamespace {
 }
 
 export interface Todu {
+  device: DeviceNamespace;
   actor: ActorNamespace;
   project: ProjectNamespace;
   task: TaskNamespace;
@@ -339,6 +350,13 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
   const stub = () => notImplemented();
 
   return {
+    device: {
+      localId: stub,
+      list: stub,
+      rename: stub,
+      setEndpoint: stub,
+      remove: stub,
+    },
     actor: {
       list: stub,
       create: stub,

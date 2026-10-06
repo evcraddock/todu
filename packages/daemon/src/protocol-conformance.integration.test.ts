@@ -167,6 +167,48 @@ describe("daemon protocol conformance suite", () => {
     });
   });
 
+  it("manages the device registry over private local RPC without changing runtime configuration", async () => {
+    await withRunningRuntime({}, async (runtime) => {
+      const request = (method: string, params: Record<string, unknown> = {}) =>
+        sendRequest(runtime.config().socketPath, { id: method, method, params });
+      const config = runtime.config();
+      const status = await request("daemon.status");
+      const local = await request("device.localId");
+      const id = local.result;
+      expect(typeof id).toBe("string");
+      const list = await request("device.list");
+      expect(list.result).toEqual([expect.objectContaining({ id })]);
+      expect(await request("device.rename", { id, name: "Desktop" })).toMatchObject({
+        result: { id, name: "Desktop" },
+      });
+      expect(
+        await request("device.setEndpoint", { id, endpoint: "http://0.0.0.0:24377" }),
+      ).toMatchObject({ result: { endpoint: "http://0.0.0.0:24377" } });
+      expect(runtime.config()).toEqual(config);
+      expect(await request("daemon.status")).toEqual(status);
+      expect(await request("device.setEndpoint", { id, endpoint: null })).toMatchObject({
+        result: { id, name: "Desktop" },
+      });
+      expect(await request("device.setEndpoint", { id, endpoint: {} })).toMatchObject({
+        error: { code: "BAD_REQUEST" },
+      });
+      expect(
+        await request("device.setEndpoint", { id, endpoint: "http://host/enrollment/requests" }),
+      ).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+      expect(await request("device.rename", { id: "unknown", name: "Unknown" })).toMatchObject({
+        error: { code: "NOT_FOUND" },
+      });
+      expect(
+        await request("device.create", { id: "unapproved", name: "Unapproved" }),
+      ).toMatchObject({ error: { code: "METHOD_NOT_FOUND" } });
+      expect(await request("device.remove", { id })).not.toHaveProperty("error");
+      expect(await request("device.list")).toMatchObject({ result: [] });
+      expect(await request("device.rename", { id, name: "Reenroll" })).toMatchObject({
+        error: { code: "NOT_FOUND" },
+      });
+    });
+  });
+
   it("routes integration methods through default runtime adapters", async () => {
     await withRunningRuntime({}, async (runtime) => {
       const projectResponse = await sendRequest(runtime.config().socketPath, {

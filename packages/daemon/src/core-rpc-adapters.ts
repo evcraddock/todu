@@ -9,6 +9,7 @@ import {
   type CreateRecurringInput,
   type CreateTaskInput,
   createActorId,
+  createDeviceId,
   createHabitId,
   createIntegrationBindingId,
   createLabelId,
@@ -53,6 +54,28 @@ export function createCoreNamespaceHandlers(
   const method = createMethodExecutor(options.getTodu);
 
   return {
+    device: {
+      localId: method(async (_request, todu) => todu.device.localId()),
+      list: method(async (_request, todu) => todu.device.list()),
+      rename: method(async (request, todu) => {
+        const id = createDeviceId(getRequiredStringParam(request, "id"));
+        return todu.device.rename(id, getRequiredStringParam(request, "name"));
+      }),
+      setEndpoint: method(async (request, todu) => {
+        const id = createDeviceId(getRequiredStringParam(request, "id"));
+        const endpoint = request.params.endpoint;
+        if (endpoint !== null && typeof endpoint !== "string") {
+          throw createProtocolError(
+            "BAD_REQUEST",
+            "device.setEndpoint requires a string endpoint or null",
+          );
+        }
+        return todu.device.setEndpoint(id, endpoint);
+      }),
+      remove: method(async (request, todu) => {
+        return todu.device.remove(createDeviceId(getRequiredStringParam(request, "id")));
+      }),
+    },
     actor: {
       list: method(async (_request, todu) => {
         return todu.actor.list();

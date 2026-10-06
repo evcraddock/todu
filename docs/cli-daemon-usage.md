@@ -139,6 +139,31 @@ Override with:
 
 - `TODU_DAEMON_SOCKET=/path/to/daemon.sock`
 
+## Device registry management
+
+The `device` command group manages the replicated roster for the local daemon's single dataset through its private local socket. It never connects directly to another daemon or enables a listener.
+
+```bash
+todu device list
+todu --format json device list
+todu device rename --name "Laptop"
+todu device endpoint --url http://laptop.lan:24377
+todu device endpoint --clear
+todu device rename <enrolled-storage-id> --name "Mac mini"
+todu device endpoint <enrolled-storage-id> --url http://mac-mini.lan:24377
+todu device remove <enrolled-storage-id>
+```
+
+Naming and endpoint commands default to the daemon's automatically supplied persistent native Repo storage ID. Explicit IDs target another existing registry entry; removal requires an explicit ID. IDs are not transient connection peer IDs, physical hardware identities, or authenticated credentials. Listing does not establish that a device is online or fully synchronized.
+
+Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listeners and automatic registry-based connections are not available in this foundation release.
+
+Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the future local approval-based enrollment flow. An existing `sync join` operation is not membership approval.
+
+Removal retains a replicated tombstone so normal startup cannot restore membership. It does not delete dataset documents or remote copies, instantly revoke access on offline replicas, or authenticate devices. Registry-based transport restrictions are a subsequent feature; the currently configured sync-server path remains unchanged. Take independent backups before rollout; do not retire a working sync server based on registry visibility alone.
+
+See [Device Sync Design](architecture/device-sync.md) for the roadmap and trusted-LAN limitations.
+
 ## Worker assignment configuration
 
 Configure assigned worker types in config file:

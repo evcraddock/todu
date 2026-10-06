@@ -19,6 +19,7 @@ import {
   type TaskListDocument,
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
+import { initializeDeviceRegistry, markPendingDeviceRegistry } from "./devices.js";
 import {
   createStorageWriteDrain,
   STORAGE_SAVE_QUIET_MS,
@@ -359,6 +360,7 @@ export async function initBootstrapStorage(
 
   try {
     const catalog = await loadOrBootstrapCatalog(actualRepo, storagePath, bootstrapOwnerActor);
+    await initializeDeviceRegistry({ repo: actualRepo, catalog });
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
@@ -395,6 +397,7 @@ export async function initJoinStorage(
   const ownsRepo = repo === undefined || persistentWriteDrains.has(actualRepo);
 
   try {
+    await markPendingDeviceRegistry(actualRepo, targetCatalogId);
     const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join", bootstrapOwnerActor);
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
@@ -540,6 +543,9 @@ async function loadOrBootstrapCatalog(
 
   if (fs.existsSync(markerPath)) {
     const docId = fs.readFileSync(markerPath, "utf-8").trim() as DocumentId;
+    // A marker alone is not evidence of an established same-dataset replica.
+    const localData = await repo.storageSubsystem?.loadDocData(docId);
+    if (!localData) await markPendingDeviceRegistry(repo, docId);
     return loadCatalogById(repo, docId, "bootstrap", bootstrapOwnerActor);
   }
 
@@ -562,6 +568,9 @@ async function loadCatalogById(
     const handle = await repo.find<CatalogDocument>(docId, {
       signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
     });
+
+    // Pending reachability validation is read-only; migrations belong to active storage.
+    if (mode === "join") return handle;
 
     stage = "migrateCatalog";
     migrateCatalog(handle, bootstrapOwnerActor);
