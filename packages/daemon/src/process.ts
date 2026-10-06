@@ -31,6 +31,7 @@ export async function startDaemonProcess(
 
   let stopPromise: Promise<void> | null = null;
   let resolveShutdown: (() => void) | null = null;
+  let shutdownFailure: { error: unknown } | null = null;
   const shutdownPromise = new Promise<void>((resolve) => {
     resolveShutdown = resolve;
   });
@@ -56,13 +57,15 @@ export async function startDaemonProcess(
     }
 
     stopPromise = (async () => {
-      hooks?.onStopping?.(reason);
-      unregisterSignalHandlers();
-
       try {
+        hooks?.onStopping?.(reason);
         await runtime.stop();
-      } finally {
         hooks?.onStopped?.();
+      } catch (error) {
+        shutdownFailure = { error };
+        throw error;
+      } finally {
+        unregisterSignalHandlers();
         resolveShutdown?.();
       }
     })();
@@ -71,13 +74,15 @@ export async function startDaemonProcess(
   };
 
   if (registerSignalHandlers) {
+    const onSignal = (reason: "SIGINT" | "SIGTERM") => {
+      void stop(reason).catch(() => {
+        // waitForShutdown() reports the failure to the daemon entrypoint.
+        process.exitCode = 1;
+      });
+    };
     handlers = {
-      onSigInt: () => {
-        void stop("SIGINT");
-      },
-      onSigTerm: () => {
-        void stop("SIGTERM");
-      },
+      onSigInt: () => onSignal("SIGINT"),
+      onSigTerm: () => onSignal("SIGTERM"),
     };
 
     process.on("SIGINT", handlers.onSigInt);
@@ -95,6 +100,11 @@ export async function startDaemonProcess(
   return {
     runtime,
     stop,
-    waitForShutdown: () => shutdownPromise,
+    async waitForShutdown() {
+      await shutdownPromise;
+      if (shutdownFailure) {
+        throw shutdownFailure.error;
+      }
+    },
   };
 }
