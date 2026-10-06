@@ -108,6 +108,56 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     }
   }
 
+  async function bindPrivateServer(): Promise<{ server: Server; path: string }> {
+    const publicName = path.basename(endpoint.path);
+    // Never increase the configured address's byte length, including short and
+    // multibyte basenames at the platform's Unix socket limit.
+    const budget = Math.min(22, Buffer.byteLength(publicName));
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+    const offset = randomBytes(1).readUInt8(0) % alphabet.length;
+    const attempts = budget <= 2 ? alphabet.length : 32;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const suffix =
+        budget <= 2
+          ? alphabet.charAt((offset + attempt) % alphabet.length)
+          : randomBytes(budget)
+              .toString("base64url")
+              .slice(0, budget - 1);
+      const name = budget === 1 ? suffix : `.${suffix}`;
+      // Also exclude case aliases of the public name on case-insensitive filesystems.
+      if (name.toLowerCase() === publicName.toLowerCase()) continue;
+      const bindPath = path.join(path.dirname(endpoint.path), name);
+      try {
+        await fs.promises.lstat(bindPath);
+        continue;
+      } catch (error) {
+        if (errorCode(error) !== "ENOENT") throw error;
+      }
+      const created = net.createServer((socket) => {
+        sockets.add(socket);
+        socket.once("close", () => sockets.delete(socket));
+        config.onConnection?.(socket);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          created.once("error", reject);
+          created.listen(bindPath, () => {
+            created.off("error", reject);
+            resolve();
+          });
+        });
+        return { server: created, path: bindPath };
+      } catch (error) {
+        await closeServer(created);
+        if (errorCode(error) !== "EADDRINUSE") throw error;
+      }
+    }
+    throw new Error(
+      `No available private socket name within the address length budget: ${endpoint.path}`,
+    );
+  }
+
   async function startServer(): Promise<UdsEndpoint> {
     if (process.platform === "win32") {
       throw new Error("UDS transport is not supported on win32");
@@ -117,37 +167,25 @@ export function createUdsTransport(config: UdsTransportConfig): UdsTransport {
     const releaseLock = await acquireSocketLock();
     // libuv unlinks its bind path on close. Bind privately so closing this
     // instance cannot unlink a replacement daemon's public socket.
-    const bindPath = path.join(
-      path.dirname(endpoint.path),
-      `.todu-${randomBytes(8).toString("hex")}`,
-    );
-    const created = net.createServer((socket) => {
-      sockets.add(socket);
-      socket.once("close", () => sockets.delete(socket));
-      config.onConnection?.(socket);
-    });
+    let created: Server | null = null;
 
     try {
       await ensureSocketAvailable();
-      await new Promise<void>((resolve, reject) => {
-        created.once("error", reject);
-        created.listen(bindPath, () => {
-          created.off("error", reject);
-          resolve();
-        });
-      });
-
-      await fs.promises.chmod(bindPath, endpoint.mode);
-      const identity = await fs.promises.lstat(bindPath);
+      const bound = await bindPrivateServer();
+      created = bound.server;
+      await fs.promises.chmod(bound.path, endpoint.mode);
+      const identity = await fs.promises.lstat(bound.path);
       // link() publishes without overwriting an endpoint claimed by another instance.
-      await fs.promises.link(bindPath, endpoint.path);
+      await fs.promises.link(bound.path, endpoint.path);
       ownedSocket = identity;
       server = created;
       return endpoint;
     } catch (error) {
-      const closing = closeServer(created);
-      await closeClients(sockets);
-      await closing;
+      if (created) {
+        const closing = closeServer(created);
+        await closeClients(sockets);
+        await closing;
+      }
       await unlinkOwnedSocket();
       throw error;
     } finally {

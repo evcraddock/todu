@@ -77,3 +77,5 @@ jobs:
           PLATFORM=$(node -p 'process.platform === "darwin" ? "mac" : "linux"')
           npm run --workspace=packages/electron dist:${PLATFORM}:dir -- --$(node -p process.arch)
           npm run --workspace=packages/electron validate:daemon-bundle:${PLATFORM}
+      - name: Unix socket ownership and path boundary tests
+        run: npm run test:all -- packages/daemon/src/transport.integration.test.ts

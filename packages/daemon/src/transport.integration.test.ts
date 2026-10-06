@@ -45,6 +45,56 @@ describeOnUnix("createUdsTransport", () => {
     await transport.stop();
   });
 
+  it.each([
+    "daemon.sock",
+    "s",
+    "é",
+  ])("supports a near-limit public socket path with basename %s", async (basename) => {
+    const maxBytes = process.platform === "linux" ? 107 : 103;
+    const padding = maxBytes - Buffer.byteLength(tmpDir) - Buffer.byteLength(basename) - 2;
+    expect(padding).toBeGreaterThan(0);
+    const directory = path.join(tmpDir, "x".repeat(padding));
+    fs.mkdirSync(directory);
+    const socketPath = path.join(directory, basename);
+    expect(Buffer.byteLength(socketPath)).toBe(maxBytes);
+
+    // Establish that the configured public path works on the current platform.
+    const control = net.createServer((socket) => socket.end());
+    await new Promise<void>((resolve, reject) => {
+      control.once("error", reject);
+      control.listen(socketPath, resolve);
+    });
+    await connectAndClose(socketPath);
+    await new Promise<void>((resolve) => control.close(() => resolve()));
+
+    const transport = createUdsTransport({ storagePath: directory, socketPath });
+    try {
+      await transport.start();
+      await connectAndClose(socketPath);
+    } finally {
+      await transport.stop();
+    }
+    expect(fs.readdirSync(directory)).toEqual([]);
+  });
+
+  it("retries short private names without replacing neighboring files or public case aliases", async () => {
+    const socketPath = path.join(tmpDir, "s");
+    for (const name of "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_") {
+      if (name.toLowerCase() !== "s") fs.writeFileSync(path.join(tmpDir, name), "preserve me");
+    }
+    const existing = fs.readdirSync(tmpDir).sort();
+    const transport = createUdsTransport({ storagePath: tmpDir, socketPath });
+    try {
+      await transport.start();
+      await connectAndClose(socketPath);
+    } finally {
+      await transport.stop();
+    }
+    expect(fs.readdirSync(tmpDir).sort()).toEqual(existing);
+    for (const name of existing)
+      expect(fs.readFileSync(path.join(tmpDir, name), "utf8")).toBe("preserve me");
+  });
+
   it("sets strict socket file permissions", async () => {
     const socketPath = path.join(tmpDir, "daemon.sock");
     const transport = createUdsTransport({ storagePath: tmpDir, socketPath });
