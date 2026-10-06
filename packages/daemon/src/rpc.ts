@@ -286,11 +286,12 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
     return response;
   }
 
-  function runTrackedRequest(
-    request: ProtocolRequestFrame,
-    context: DaemonRpcContext,
-    connection?: DaemonConnection,
-  ): Promise<DaemonRpcResponse> {
+  function runTrackedRequest(options: {
+    request: ProtocolRequestFrame;
+    context: DaemonRpcContext;
+    connection?: DaemonConnection;
+  }): Promise<DaemonRpcResponse> {
+    const { request, context, connection } = options;
     if (!acceptingRequests) {
       return Promise.resolve(
         createProtocolErrorFrame(
@@ -344,7 +345,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
         clearTimeout(timeout);
         resolve(response);
       };
-      void runTrackedRequest(request, context, connection).then(finish, (error: unknown) =>
+      void runTrackedRequest({ request, context, connection }).then(finish, (error: unknown) =>
         finish(createProtocolErrorFrame(request.id, error)),
       );
     });
@@ -422,7 +423,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
       context: DaemonRpcContext,
       connection?: DaemonConnection,
     ) {
-      return runTrackedRequest(request, context, connection);
+      return runTrackedRequest({ request, context, connection });
     },
 
     async handlePayload(payload: string, context: DaemonRpcContext, connection?: DaemonConnection) {
@@ -439,7 +440,7 @@ export function createDaemonRpcRouter(options: CreateDaemonRpcRouterOptions = {}
         return createProtocolErrorFrame(null, parsed.error);
       }
 
-      return runTrackedRequest(parsed.value, context, connection);
+      return runTrackedRequest({ request: parsed.value, context, connection });
     },
 
     createConnectionHandler(

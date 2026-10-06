@@ -93,21 +93,31 @@ describe("connected-client shutdown", () => {
     const catalogId = runtime.status().catalogId;
     const client = await connect(runtime.config().socketPath);
     const read = frameReader(client);
-    const project = await request(client, read, "project.create", { input: { name: "Keep me" } });
+    const project = await request({
+      client,
+      read,
+      method: "project.create",
+      params: { input: { name: "Keep me" } },
+    });
     expect(project.result).toMatchObject({ name: "Keep me" });
-    await request(client, read, "events.subscribe", { events: ["data.changed"] });
+    await request({
+      client,
+      read,
+      method: "events.subscribe",
+      params: { events: ["data.changed"] },
+    });
     await within(Promise.all([runtime.stop(), runtime.stop()]), 2_000);
     expect(runtime.status().state).toBe("stopped");
     expect(fs.existsSync(runtime.config().socketPath)).toBe(false);
     await runtime.start();
     expect(runtime.status().catalogId).toBe(catalogId);
     const restartedClient = await connect(runtime.config().socketPath);
-    const projects = await request(
-      restartedClient,
-      frameReader(restartedClient),
-      "project.list",
-      {},
-    );
+    const projects = await request({
+      client: restartedClient,
+      read: frameReader(restartedClient),
+      method: "project.list",
+      params: {},
+    });
     expect(projects.result).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "Keep me" })]),
     );
@@ -147,7 +157,12 @@ describe("connected-client shutdown", () => {
     await runtime.start();
     const client = await connect(runtime.config().socketPath);
     const read = frameReader(client);
-    const pending = request(client, read, "project.create", { input: { name: "Delayed" } });
+    const pending = request({
+      client,
+      read,
+      method: "project.create",
+      params: { input: { name: "Delayed" } },
+    });
     await entered.promise;
     if (disconnected) {
       expect((await pending).error).toMatchObject({ code: "TIMEOUT" });
@@ -170,7 +185,12 @@ describe("connected-client shutdown", () => {
     vi.restoreAllMocks();
     await runtime.start();
     const reopened = await connect(runtime.config().socketPath);
-    const projects = await request(reopened, frameReader(reopened), "project.list", {});
+    const projects = await request({
+      client: reopened,
+      read: frameReader(reopened),
+      method: "project.list",
+      params: {},
+    });
     expect(projects.result).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "Delayed" })]),
     );
@@ -200,13 +220,15 @@ describe("connected-client shutdown", () => {
     await runtime.start();
     const client = await connect(runtime.config().socketPath);
     const read = frameReader(client);
-    const first = request(client, read, "test.work", {});
+    const first = request({ client, read, method: "test.work", params: {} });
     if (queued)
       client.write(`${JSON.stringify({ id: "queued", method: "test.work", params: {} })}\n`);
     await entered.promise;
     const stopping = runtime.stop();
     expect((await first).error).toMatchObject({ code: "TIMEOUT" });
-    const rejected = queued ? await read() : await request(client, read, "test.work", {});
+    const rejected = queued
+      ? await read()
+      : await request({ client, read, method: "test.work", params: {} });
     expect(rejected.error).toMatchObject({ code: "DAEMON_UNAVAILABLE" });
     expect(calls).toBe(1);
     release.resolve();
@@ -264,7 +286,12 @@ describe("connected-client shutdown", () => {
     });
     await runtime.start();
     const client = await connect(runtime.config().socketPath);
-    const joining = request(client, frameReader(client), "sync.join", { catalogId: targetId });
+    const joining = request({
+      client,
+      read: frameReader(client),
+      method: "sync.join",
+      params: { catalogId: targetId },
+    });
     await within(entered.promise, 2_000);
     const stopping = runtime.stop();
     release.resolve();
@@ -351,9 +378,17 @@ describe("connected-client shutdown", () => {
     }
     const client = await connect(socketPath);
     const read = frameReader(client);
-    await request(client, read, "events.subscribe", { events: ["data.changed"] });
-    const project = await request(client, read, "project.create", {
-      input: { name: "SIGTERM persisted" },
+    await request({
+      client,
+      read,
+      method: "events.subscribe",
+      params: { events: ["data.changed"] },
+    });
+    const project = await request({
+      client,
+      read,
+      method: "project.create",
+      params: { input: { name: "SIGTERM persisted" } },
     });
     expect(project.result).toMatchObject({ name: "SIGTERM persisted" });
     child.kill("SIGTERM");
@@ -406,12 +441,13 @@ function frameReader(client: Socket): () => Promise<Frame> {
 }
 
 let nextId = 0;
-async function request(
-  client: Socket,
-  read: () => Promise<Frame>,
-  method: string,
-  params: Record<string, unknown>,
-): Promise<Frame> {
+async function request(options: {
+  client: Socket;
+  read: () => Promise<Frame>;
+  method: string;
+  params: Record<string, unknown>;
+}): Promise<Frame> {
+  const { client, read, method, params } = options;
   client.write(`${JSON.stringify({ id: `shutdown-${nextId++}`, method, params })}\n`);
   return read();
 }
