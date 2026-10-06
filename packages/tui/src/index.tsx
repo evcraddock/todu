@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { render } from "ink";
-import { App } from "./app/App.js";
 import { resolveCliMode } from "./cli.js";
+import { startTui } from "./startup.js";
 
 const mode = resolveCliMode(process.argv.slice(2));
 
 if (mode.kind === "app") {
-  render(<App />);
+  if (!(await startTui())) {
+    process.exitCode = 1;
+  }
 } else {
   console.log(mode.output);
 }

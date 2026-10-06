@@ -202,6 +202,7 @@ For daemon path details and overrides, see [docs/cli-daemon-usage.md](docs/cli-d
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Dependency maintenance: [docs/dependency-maintenance.md](docs/dependency-maintenance.md)
 - Daemon CLI behavior: [docs/cli-daemon-usage.md](docs/cli-daemon-usage.md)
+- TUI startup states and diagnostics: [docs/tui-startup.md](docs/tui-startup.md)
 - Electron multi-user management: [docs/electron-actor-project-auth.md](docs/electron-actor-project-auth.md)
 
 ## License
