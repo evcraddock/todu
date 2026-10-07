@@ -15,7 +15,8 @@ for (let index = 0; index < argv.length; index += 2) {
 let executablePath = args.get("executable");
 let appPath = args.get("app-path");
 if (args.has("app-bundle")) {
-  const bundle = resolveAppBundle(args.get("app-bundle"));
+  const bundle = args.get("app-bundle");
+  if (!fs.existsSync(bundle)) throw new Error(`App bundle not found: ${bundle}`);
   executablePath = singleExecutable(path.join(bundle, "Contents/MacOS"));
   appPath = path.join(bundle, "Contents/Resources/app.asar");
 } else if (args.has("unpacked-dir")) {
@@ -49,29 +50,6 @@ function singleExecutable(directory) {
   if (candidates.length !== 1)
     throw new Error(
       `Expected one packaged executable in ${directory}, found ${candidates.join(", ") || "none"}`,
-    );
-  return candidates[0];
-}
-
-function resolveAppBundle(requested) {
-  if (fs.existsSync(requested)) return requested;
-  let directory = path.dirname(requested);
-  while (!fs.existsSync(directory) && directory !== path.dirname(directory))
-    directory = path.dirname(directory);
-  const queue = [directory];
-  const candidates = [];
-  while (queue.length) {
-    const parent = queue.shift();
-    for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const name = path.join(parent, entry.name);
-      if (entry.name === path.basename(requested)) candidates.push(name);
-      else if (!entry.name.endsWith(".app")) queue.push(name);
-    }
-  }
-  if (candidates.length !== 1)
-    throw new Error(
-      `Expected one app bundle for ${requested}, found ${candidates.join(", ") || "none"}; supply an explicit bundle path`,
     );
   return candidates[0];
 }

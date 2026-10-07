@@ -18,12 +18,12 @@
     "dist": "electron-builder --config electron-builder.yml",
     "dist:linux": "electron-builder --config electron-builder.yml --linux",
     "dist:linux:dir": "electron-builder --config electron-builder.yml --linux dir",
-    "dist:mac": "electron-builder --config electron-builder.yml --mac",
-    "dist:mac:dir": "electron-builder --config electron-builder.yml --mac dir",
+    "dist:mac": "electron-builder --config electron-builder.yml --mac --arm64",
+    "dist:mac:dir": "electron-builder --config electron-builder.yml --mac dir --arm64",
     "dist:win": "electron-builder --config electron-builder.yml --win",
     "dist:win:dir": "electron-builder --config electron-builder.yml --win dir",
     "validate:daemon-bundle:linux": "node scripts/validate-daemon-bundle.mjs --unpacked-dir ../../dist/installers/linux-unpacked",
-    "validate:daemon-bundle:mac": "node scripts/validate-daemon-bundle.mjs --app-bundle ../../dist/installers/mac/todu.app",
+    "validate:daemon-bundle:mac": "node scripts/validate-daemon-bundle.mjs --app-bundle ../../dist/installers/mac-arm64/todu.app",
     "validate:daemon-bundle:win": "node scripts/validate-daemon-bundle.mjs --unpacked-dir ../../dist/installers/win-unpacked"
   },
   "dependencies": {

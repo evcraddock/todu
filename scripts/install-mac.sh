@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install todu on macOS by downloading the GitHub release DMG and copying to /Applications.
+# Install todu on Apple Silicon macOS from the verified GitHub release DMG.
 set -euo pipefail
 
 REPO="evcraddock/todu"
@@ -10,16 +10,20 @@ TARGET_PATH="/Applications/${APP_NAME}"
 
 case "$ARCH" in
   arm64)
-    DMG_ARCH="arm64"
     ;;
   x86_64)
-    DMG_ARCH="x64"
+    # A Rosetta shell reports x86_64; check the hardware before rejecting it.
+    if ! HARDWARE_ARM64=$(sysctl -n hw.optional.arm64 2>/dev/null) || [[ "$HARDWARE_ARM64" != "1" ]]; then
+      echo "error: todu requires Apple Silicon (arm64); Intel Macs are not supported."
+      exit 1
+    fi
     ;;
   *)
-    echo "error: unsupported macOS architecture '$ARCH'"
+    echo "error: unsupported macOS architecture '$ARCH'; todu requires Apple Silicon (arm64)."
     exit 1
     ;;
 esac
+DMG_ARCH="arm64"
 
 if [[ "$VERSION" == "latest" ]]; then
   TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest" | sed 's#/$##' | awk -F/ '{print $NF}')

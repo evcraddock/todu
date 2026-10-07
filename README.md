@@ -6,7 +6,7 @@ todu is a local-first task management project with CLI, terminal UI, and Electro
 
 ## Install
 
-### Desktop app (recommended on Linux and macOS)
+### Desktop app (recommended on Linux and Apple Silicon macOS)
 
 The desktop app is a client of your existing local daemon. Start the daemon explicitly with `todu daemon start` (or configure a user service), then open the desktop app. Desktop startup and reconnect never automatically launch, replace, or restart a daemon. If connection fails, the error explains how to check the daemon and where to find the desktop error log. See [Daemon Service Operations](docs/daemon-service-operations.md).
 
@@ -26,9 +26,11 @@ curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/instal
 
 This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher in `~/.local/share/applications`.
 
-#### macOS install
+#### macOS install (Apple Silicon only)
 
-Install the latest macOS desktop build into `/Applications`:
+Todu supports macOS on Apple Silicon (`arm64`) only. New releases no longer provide Intel Mac desktop or standalone CLI builds; historical release assets remain available unchanged.
+
+Install the latest Apple Silicon macOS desktop build into `/Applications`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-mac.sh | bash
@@ -40,7 +42,7 @@ Install a specific version:
 curl -fsSL https://raw.githubusercontent.com/evcraddock/todu/main/scripts/install-mac.sh | bash -s -- 0.18.0
 ```
 
-This downloads the release DMG, mounts it, copies `todu.app` into `/Applications`, and unmounts the DMG.
+This selects the arm64 DMG, verifies its checksum, mounts it, copies `todu.app` into `/Applications`, and unmounts the DMG. It also detects Apple Silicon from a Rosetta shell. Intel Macs are rejected before downloading or changing installed files.
 
 Windows desktop packaging is not released yet because the local daemon transport is currently implemented for Unix domain sockets. Windows users should use the CLI companion for now.
 
@@ -155,7 +157,8 @@ make install
 ```
 
 - Linux install script uses the generated AppImage.
-- macOS install script mounts the generated DMG and copies the app to `/Applications`.
+- macOS builds and installers target Apple Silicon only. Use native arm64 Node.js and Bun for macOS package builds and validation; the install script also works from a Rosetta shell on Apple Silicon.
+- macOS install script mounts the generated arm64 DMG and copies the app to `/Applications`.
 
 ## Work on the project
 
