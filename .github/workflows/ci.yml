@@ -47,6 +47,9 @@ jobs:
       - name: LAN sync listener integration tests
         run: npm run test:all -- packages/engine/src/sync-listener.integration.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts
 
+      - name: Device enrollment integration tests
+        run: npm run test:all -- packages/engine/src/enrollment-storage.integration.test.ts packages/daemon/src/enrollment.integration.test.ts
+
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 
@@ -83,6 +86,8 @@ jobs:
           PLATFORM=$(node -p 'process.platform === "darwin" ? "mac" : "linux"')
           npm run --workspace=packages/electron dist:${PLATFORM}:dir -- --$(node -p process.arch)
           npm run --workspace=packages/electron validate:daemon-bundle:${PLATFORM}
+      - name: Device enrollment integration tests
+        run: npm run test:all -- packages/engine/src/enrollment-storage.integration.test.ts packages/daemon/src/enrollment.integration.test.ts
       - name: Unix socket ownership and path boundary tests
         run: npm run test:all -- packages/daemon/src/transport.integration.test.ts
       - name: LAN sync listener integration tests

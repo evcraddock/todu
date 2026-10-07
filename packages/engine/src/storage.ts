@@ -20,6 +20,7 @@ import {
 } from "@todu/core";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { initializeDeviceRegistry, markPendingDeviceRegistry } from "./devices.js";
+import { readEnrollmentState } from "./enrollment-storage.js";
 import {
   createStorageWriteDrain,
   STORAGE_SAVE_QUIET_MS,
@@ -31,7 +32,47 @@ const persistentWriteDrains = new WeakMap<Repo, () => Promise<void>>();
 /** Construct an engine-owned persistent repo with observable pending filesystem writes. */
 export function createPersistentRepo(storagePath: string): Repo {
   const writes = createStorageWriteDrain(new NodeFSStorageAdapter(storagePath));
+  let identityError: unknown;
+  let identityInitialized!: () => void;
+  const identityReady = new Promise<void>((resolve) => {
+    identityInitialized = resolve;
+  });
+  const isIdentityKey = (key: string[]) => key.length === 1 && key[0] === "storage-adapter-id";
+  const load = writes.adapter.load.bind(writes.adapter);
+  const save = writes.adapter.save.bind(writes.adapter);
+  writes.adapter.load = async (key) => {
+    try {
+      const bytes = await load(key);
+      if (isIdentityKey(key) && bytes) identityInitialized();
+      return bytes;
+    } catch (error) {
+      if (isIdentityKey(key)) {
+        identityError = error;
+        identityInitialized();
+      }
+      throw error;
+    }
+  };
+  writes.adapter.save = async (key, bytes) => {
+    try {
+      await save(key, bytes);
+      if (isIdentityKey(key)) identityInitialized();
+    } catch (error) {
+      if (isIdentityKey(key)) {
+        identityError = error;
+        identityInitialized();
+      }
+      throw error;
+    }
+  };
   const repo = new Repo({ storage: writes.adapter });
+  const storageId = repo.storageId.bind(repo);
+  // Observe native identity initialization rather than racing its constructor's initial load/save.
+  repo.storageId = async () => {
+    await identityReady;
+    if (identityError !== undefined) throw identityError;
+    return storageId();
+  };
   persistentWriteDrains.set(repo, writes.drain);
   return repo;
 }
@@ -352,6 +393,15 @@ export async function initBootstrapStorage(
   repo?: Repo,
   bootstrapOwnerActor?: BootstrapOwnerActor,
 ): Promise<Storage> {
+  const enrollment = readEnrollmentState(storagePath);
+  if (enrollment?.mode === "pending") {
+    throw new Error(
+      "Pending enrollment must attach an approved catalog; ordinary bootstrap is disabled",
+    );
+  }
+  if (enrollment?.mode === "active" && !fs.existsSync(getCatalogMarkerPath(storagePath))) {
+    throw new Error("Enrolled catalog marker is missing; refusing substitute catalog creation");
+  }
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
 
@@ -389,6 +439,7 @@ export async function initJoinStorage(
   targetCatalogId: DocumentId,
   repo?: Repo,
   bootstrapOwnerActor?: BootstrapOwnerActor,
+  signal?: AbortSignal,
 ): Promise<Storage> {
   await ensureAutomergeWasmInitialized();
   fs.mkdirSync(storagePath, { recursive: true });
@@ -398,7 +449,13 @@ export async function initJoinStorage(
 
   try {
     await markPendingDeviceRegistry(actualRepo, targetCatalogId);
-    const catalog = await loadCatalogById(actualRepo, targetCatalogId, "join", bootstrapOwnerActor);
+    const catalog = await loadCatalogById(
+      actualRepo,
+      targetCatalogId,
+      "join",
+      bootstrapOwnerActor,
+      signal,
+    );
     return createPersistentStorage(actualRepo, catalog);
   } catch (error) {
     if (ownsRepo) {
@@ -500,7 +557,7 @@ export async function initEphemeralStorage(storagePath: string): Promise<
   };
 }
 
-async function shutdownPersistentRepo(repo: Repo): Promise<void> {
+export async function shutdownPersistentRepo(repo: Repo): Promise<void> {
   await withStorageCloseTimeout(async () => {
     try {
       try {
@@ -561,12 +618,22 @@ async function loadCatalogById(
   docId: DocumentId,
   mode: "bootstrap" | "join",
   bootstrapOwnerActor?: BootstrapOwnerActor,
+  signal?: AbortSignal,
 ): Promise<DocHandle<CatalogDocument>> {
   let stage = "find";
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  const timeout = setTimeout(
+    () => controller.abort(new Error("Catalog load timed out")),
+    CATALOG_LOAD_TIMEOUT_MS,
+  );
+  timeout.unref();
+  signal?.addEventListener("abort", abort, { once: true });
 
   try {
+    signal?.throwIfAborted();
     const handle = await repo.find<CatalogDocument>(docId, {
-      signal: AbortSignal.timeout(CATALOG_LOAD_TIMEOUT_MS),
+      signal: controller.signal,
     });
 
     // Pending reachability validation is read-only; migrations belong to active storage.
@@ -587,6 +654,9 @@ async function loadCatalogById(
     throw new Error(
       `[storage] ${mode} catalog ${docId} not reachable within ${CATALOG_LOAD_TIMEOUT_MS}ms at ${stage}: ${cause}`,
     );
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
 }
 

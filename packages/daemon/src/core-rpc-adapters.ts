@@ -407,9 +407,13 @@ function createMethodExecutor(
       if (!todu) {
         return createProtocolErrorFrame(
           request.id,
-          createProtocolError("INTERNAL_ERROR", "Daemon runtime is not ready", {
-            method: request.method,
-          }),
+          createProtocolError(
+            "PRECONDITION_FAILED",
+            "No active dataset is available; complete pending enrollment or wait for startup",
+            {
+              method: request.method,
+            },
+          ),
         );
       }
 

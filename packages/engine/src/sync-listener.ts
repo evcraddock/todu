@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import type { Repo } from "@automerge/automerge-repo";
 import { WebSocketServerAdapter } from "@automerge/automerge-repo-network-websocket";
@@ -25,6 +25,7 @@ interface StartSyncListenerOptions {
   config: ResolvedSyncListenerConfig;
   logger?: SyncAdapterEventLogger;
   onError(message: string): void;
+  httpHandler?: (request: IncomingMessage, response: ServerResponse) => Promise<boolean>;
 }
 
 /** Attach a native replication listener to the existing Repo, not a second dataset. */
@@ -33,11 +34,27 @@ export async function startSyncListener(
 ): Promise<Result<SyncListener, StorageError>> {
   const { repo, catalogId, config, logger } = options;
   const syncPath = `/sync/${catalogId}`;
-  const server = createServer({ requestTimeout: 30_000 }, (_request, response) => {
-    // Enrollment handlers belong to the enrollment task; no HTTP administration is exposed.
-    response.writeHead(404, { Connection: "close", "Content-Type": "text/plain" });
-    response.end("Not found\n");
-  });
+  const httpOperations = new Set<Promise<void>>();
+  const server = createServer(
+    { requestTimeout: 5_000, headersTimeout: 5_000 },
+    (request, response) => {
+      const operation = (async () => {
+        try {
+          if (options.httpHandler && (await options.httpHandler(request, response))) return;
+          response.writeHead(404, { Connection: "close", "Content-Type": "text/plain" });
+          response.end("Not found\n");
+        } catch (error) {
+          logger?.warn("LAN enrollment HTTP request failed", { error: String(error) });
+          if (!response.destroyed && !response.headersSent) {
+            response.writeHead(503, { Connection: "close" });
+            response.end("Enrollment request failed\n");
+          }
+        }
+      })();
+      httpOperations.add(operation);
+      void operation.finally(() => httpOperations.delete(operation));
+    },
+  );
   const wss = new WebSocketServer({ noServer: true });
   const adapter = new WebSocketServerAdapter(wss as unknown as IsoWebSocketServer);
   const receiveMessage = adapter.receiveMessage.bind(adapter);
@@ -67,6 +84,7 @@ export async function startSyncListener(
         server.closeAllConnections();
       });
       await Promise.all([websocketClosed, httpClosed]);
+      await Promise.all(httpOperations);
       adapter.removeAllListeners();
     })();
     return closePromise;

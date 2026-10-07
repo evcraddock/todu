@@ -3,6 +3,7 @@ import { createInterface } from "node:readline/promises";
 import type { Command } from "commander";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { formatJSON } from "../format.js";
+import { registerSyncEnrollmentCommands } from "./sync-enrollment.js";
 import {
   type ListenerStatus,
   registerSyncListenerCommands,
@@ -40,6 +41,7 @@ interface DaemonError {
 export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonInvoker): void {
   const sync = program.command("sync").description("Sync status and control");
   registerSyncListenerCommands(sync, program, invokeDaemon);
+  registerSyncEnrollmentCommands(sync, program, invokeDaemon);
 
   sync
     .command("status")

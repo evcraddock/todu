@@ -2,7 +2,7 @@
 
 ## Status
 
-The replicated device registry and opt-in LAN listener are implemented. Local approval-based enrollment and automatic registry-derived connections remain follow-up work. This document supersedes the earlier roadmap's registry authorization, complete-offline-replica, and automation-ownership proposals, which were cancelled after reviewing the existing implementation and native Automerge behavior.
+The replicated device registry, opt-in LAN listener, and local approval-based enrollment are implemented. Automatic registry-derived connections remain follow-up work. This document supersedes the earlier roadmap's registry authorization, complete-offline-replica, and automation-ownership proposals, which were cancelled after reviewing the existing implementation and native Automerge behavior.
 
 [Current architecture](../ARCHITECTURE.md) remains the runtime reference. Enabling a listener does not make an existing deployment automatically serverless: another peer must establish a native connection to it. No listener is enabled by upgrading or editing a registry endpoint.
 
@@ -26,7 +26,7 @@ The catalog ID identifies the dataset. A persistent native Automerge Repo storag
 
 Listener enablement preserves the catalog and storage IDs, data directory, configured server, local provider settings/state, and automation assignments. There is no migration into another data layout and no dataset creation or replacement as part of binding a listener.
 
-The future enrollment flow must refuse a different initialized dataset without replacement or merging, even when it contains no tasks. A pristine installation must join explicitly before normal catalog bootstrap rather than creating and overwriting a throwaway dataset. Those join operations are not implemented by the listener task.
+Managed enrollment refuses a different initialized dataset without replacement or merging, even when it contains no tasks. A pristine installation explicitly prepares pending storage before normal catalog bootstrap; it never creates and overwrites a throwaway dataset. Native identity initialization is serialized so the persisted ID, registry ID, and announced native storage ID agree.
 
 ## Replicated Device Registry
 
@@ -72,7 +72,7 @@ One embedded Node HTTP listener handles WebSocket upgrades through the existing 
 ws://<bind-address>:<port>/sync/<current-catalog-id>
 ```
 
-Only the exact current-catalog path accepts upgrades. Wrong-catalog, trailing-path, query-bearing, RPC, and administration paths are rejected; there is no fallback dataset or account routing. Ordinary HTTP requests return `404`, including `/enrollment/requests`. The enrollment task will add its request handlers to this same HTTP listener, not start a second service or introduce remote approval.
+Only the exact current-catalog path accepts upgrades. Wrong-catalog, trailing-path, query-bearing, RPC, and administration paths are rejected; there is no fallback dataset or account routing. The daemon also accepts bounded metadata-only `POST /enrollment/requests` and request-scoped `GET /enrollment/requests/<request-id>` on this same HTTP listener. Other HTTP routes return `404`; remote approval and administration are unavailable. No second service or document JSON transfer is introduced.
 
 The daemon attaches the listener to its existing persistent Repo. Startup errors report the configured address/port and corrective action through private sync status and daemon logs while local reads, edits, and administration remain available. There is no silent rebind. Shutdown closes connections and listener resources before storage teardown; catalog switching recreates the listener for the newly attached engine's current catalog.
 
@@ -96,9 +96,23 @@ Status reports the running listener separately from the optional outbound server
 
 Before moving to an untrusted network, disable listening and explicitly restart, or stop the daemon. Saving `enabled: false` alone does not close a currently running listener. A future persisted global pause remains separate work.
 
-## Follow-up Work
+## Managed Enrollment
 
-- `task-4e23e7e3`: Explicit join/enrollment and local approval using the shared listener. Preserve same-dataset replicas and refuse different initialized datasets.
+The joining device supplies one known HTTP(S) listening base endpoint, not catalog or storage IDs. Todu obtains its persistent native identity and sends readable registration metadata. The receiving daemon lists and approves or denies requests through its private local socket for its current catalog. Names, endpoints, and IDs are not authenticated identities.
+
+For pristine storage, run `todu sync enrollment prepare` before first daemon/desktop startup, start the daemon, then run `todu sync enroll http://known-peer.lan:24377`. Pending startup has a persistent Repo identity but no live catalog, outbound document adapters, plugin loading, workers, or host template processing. Ordinary bootstrap and domain RPC cannot create a substitute dataset. Existing same-dataset replicas use their current engine and keep their native IDs, data, server configuration, provider state, assignments, and worker execution.
+
+Requests expire after ten minutes while pending. The local approval journal is bounded to 128 records; request and response bodies are limited to 8 KiB, and HTTP exchanges have a five-second deadline. Durable approval intent precedes registry mutation/flush. Repeated requests for the same native identity deduplicate, and lost responses or partial approval recover without duplicate membership. An approved receipt carries only the catalog ID, native replica metadata, and exact native sync path; no response contains dataset documents.
+
+The managed client validates approval against its current dataset and native identity before connecting. Pristine attachment uses native loading of the approved catalog and active roster entry, flushes them locally, then publishes the catalog marker without overwriting another dataset. An approved but failed attachment remains bound to that catalog so cached data cannot be repurposed as pristine storage for a different dataset. Cached documents are retained on failure; no substitute catalog is created. The explicit approved-source link persists across restart without editing `sync.remote`. It is not yet a registry-derived topology manager.
+
+`sync enrollment cancel` stops local pending polling/attachment and retains identity, staged data, and any established source membership. An abandoned source request expires if still pending. Once approval intent is durable, denial/cleanup does not undo membership; already-approved entries remain even if the client never attaches. Inspect the roster and use explicit device management for stale entries rather than deleting them as pending cleanup. Active enrollment cannot be cancelled into an empty/default dataset. Removed identities are not automatically restored by enrollment.
+
+Pristine approval does not start workers or replay host startup processing. Enrollment never imports plugin credentials or changes local worker settings. A later explicit normal daemon restart uses the installation's existing local startup/assignment configuration; no new execution-ownership policy is introduced.
+
+Approval gates this managed enrollment workflow, not arbitrary reachable native peers that already know the catalog route. It is operational local approval on a trusted LAN, not encrypted pairing, authentication, or a transport authorization layer.
+
+## Follow-up Work
 - `task-b8e0cfb5`: Establish and maintain native connections using roster endpoints, including retries, endpoint changes, and cleanup. No permanent privileged peer or separately maintained peer list.
 - `task-e0d9e744`: Optional server management alongside direct peers.
 - `task-75b82848`: Persisted synchronization pause/resume.
@@ -117,7 +131,7 @@ Preserve provider credentials and runtime internals locally. A replicated datase
 
 Listener tests cover disabled defaults, explicit addresses and ports, current-catalog routing, refused remote administration, occupied-port/unavailable-address failures, private local operation after failures, bidirectional native exchange between established persistent replicas, preserved identities/settings/worker assignments, and resource cleanup on close/restart.
 
-End-to-end pristine enrollment and automatic roster-derived connections are not claimed by these tests and remain follow-up work. Initial tests bind loopback rather than exposing the operator's LAN.
+Enrollment tests also cover inert pristine startup, stable native identity initialization, approval and bidirectional native exchange, same-dataset data/settings/worker preservation, empty different-dataset refusal, metadata-only pending/denied/expired responses, wrong-catalog approval rejection, lost-response deduplication, partial durable approval, cancellation/abandonment, and restart. Automatic roster-derived connections remain follow-up work. Tests bind isolated loopback rather than exposing the operator's LAN.
 
 ## Stable Dependencies and Sources
 
