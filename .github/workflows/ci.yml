@@ -50,6 +50,9 @@ jobs:
       - name: Device enrollment integration tests
         run: npm run test:all -- packages/engine/src/enrollment-storage.integration.test.ts packages/daemon/src/enrollment.integration.test.ts
 
+      - name: Sync provider checkpoint and field-group integration tests
+        run: npm run test:all -- packages/daemon/src/sync-worker-checkpoint.integration.test.ts packages/daemon/src/sync-field-groups.integration.test.ts
+
       - name: Daemon shutdown integration tests
         run: npm run test:daemon-shutdown-integration
 
@@ -88,6 +91,8 @@ jobs:
           npm run --workspace=packages/electron validate:daemon-bundle:${PLATFORM}
       - name: Device enrollment integration tests
         run: npm run test:all -- packages/engine/src/enrollment-storage.integration.test.ts packages/daemon/src/enrollment.integration.test.ts
+      - name: Sync provider checkpoint and field-group integration tests
+        run: npm run test:all -- packages/daemon/src/sync-worker-checkpoint.integration.test.ts packages/daemon/src/sync-field-groups.integration.test.ts
       - name: Unix socket ownership and path boundary tests
         run: npm run test:all -- packages/daemon/src/transport.integration.test.ts
       - name: LAN sync listener integration tests

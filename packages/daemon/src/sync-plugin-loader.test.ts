@@ -11,7 +11,7 @@ function createModule(apiVersion: number, acknowledge = true) {
         async initialize() {},
         async shutdown() {},
         async pull() {
-          return { tasks: [], checkpoint: "opaque" };
+          return { tasks: [], taskUpdates: [], checkpoint: "opaque" };
         },
         async push() {
           return { taskLinks: [], commentLinks: [] };
@@ -24,9 +24,9 @@ function createModule(apiVersion: number, acknowledge = true) {
 
 describe("sync provider loading", () => {
   it.each([
-    3, 4,
+    3, 4, 5,
   ])("loads supported API v%s and preserves its declared version", async (apiVersion) => {
-    const module = createModule(apiVersion, apiVersion === 4);
+    const module = createModule(apiVersion, apiVersion >= 4);
     const result = await loadConfiguredPlugins({
       modulePaths: ["/plugins/test.mjs"],
       importModule: async () => module,
@@ -40,10 +40,10 @@ describe("sync provider loading", () => {
     });
   });
 
-  it("rejects contract-only v5 before worker registration", async () => {
+  it("rejects unsupported v6 before worker registration", async () => {
     const result = await loadConfiguredPlugins({
       modulePaths: ["/plugins/test.mjs"],
-      importModule: async () => createModule(5),
+      importModule: async () => createModule(6),
     });
     expect(result.loadedPlugins).toEqual([]);
     expect(result.failures).toMatchObject([

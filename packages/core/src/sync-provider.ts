@@ -17,12 +17,12 @@ import {
 
 export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
 export const SYNC_PROVIDER_API_VERSION_V4 = 4 as const;
-/** Contract-only extension; not yet enabled in the daemon's supported version set. */
 export const SYNC_PROVIDER_API_VERSION_V5 = 5 as const;
-export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V4;
+export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V5;
 export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
+  SYNC_PROVIDER_API_VERSION_V5,
 ] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;

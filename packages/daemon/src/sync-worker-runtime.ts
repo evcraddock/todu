@@ -23,15 +23,27 @@ import {
   type Project,
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
+  SYNC_PROVIDER_API_VERSION_V5,
+  type SyncAssigneeIdentity,
   type SyncProviderPullResultV4,
+  type SyncProviderPullResultV5,
   type SyncProviderPushCommentLink,
   type SyncProviderPushTaskLink,
   type SyncProviderV4,
+  type SyncProviderV5,
+  type SyncTaskFieldGroupResult,
   type Task,
   type ToduError,
 } from "@todu/core";
 import type { Todu, ToduWithInternalTools } from "@todu/engine";
 import type { DaemonLogger } from "./logger.js";
+import {
+  applySyncFieldGroupUpdates,
+  clearAcknowledgedContentRecovery,
+  type FieldGroupActors,
+  prepareSyncFieldGroupPull,
+  verifySyncFieldGroupResults,
+} from "./sync-field-group-pull.js";
 import type { WorkerRuntime } from "./workers.js";
 
 const DEFAULT_SYNC_INTERVAL_SECONDS = 300;
@@ -304,10 +316,14 @@ export function createSyncPluginWorkerRuntime(
 
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
           const pullResult = await options.provider.pull(binding, project);
+          const fieldGroupProvider =
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V5
+              ? (options.provider as SyncProviderV5)
+              : null;
           const acknowledgedProvider =
             providerApiVersion === SYNC_PROVIDER_API_VERSION_V4
               ? (options.provider as SyncProviderV4)
-              : null;
+              : fieldGroupProvider;
           if (
             acknowledgedProvider &&
             (!pullResult ||
@@ -315,19 +331,69 @@ export function createSyncPluginWorkerRuntime(
               typeof acknowledgedProvider.acknowledgePull !== "function")
           ) {
             throw new Error(
-              "sync provider v4 pull requires a checkpoint and acknowledgePull callback",
+              `sync provider v${providerApiVersion} pull requires a checkpoint and acknowledgePull callback`,
             );
           }
 
+          if (fieldGroupProvider) {
+            await prepareSyncFieldGroupPull({
+              todu: getToduWithInternals(activeTodu),
+              binding,
+              project,
+              pull: pullResult as SyncProviderPullResultV5,
+            });
+            for (const update of (pullResult as SyncProviderPullResultV5).taskUpdates) {
+              const assignment = update.groups.assignment;
+              if (assignment)
+                for (const identity of [
+                  ...assignment.base.assignees,
+                  ...assignment.remote.assignees,
+                ])
+                  enrichFieldGroupActorMapping(identity, actorState);
+            }
+          }
+          const fieldGroupActors: FieldGroupActors = {
+            local: (task) => projectFieldGroupAssignees({ task, actorState, project }),
+            canonicalize: (value) => ({
+              assignees: value.assignees.map((identity) =>
+                canonicalFieldGroupIdentity(identity, actorState),
+              ),
+            }),
+            async import(assignees) {
+              for (const identity of assignees) canonicalFieldGroupIdentity(identity, actorState);
+              const resolved = await resolveImportedAssignees(activeTodu, actorState, assignees);
+              project = await ensureProjectAuthorizedAssigneeActors(
+                activeTodu,
+                project,
+                resolved.actorIds,
+              );
+              return {
+                actorIds: resolved.actorIds,
+                assignees: resolved.actorIds.map((id) => getActorDisplayName(actorState, id)),
+              };
+            },
+          };
+          let taskResults: SyncTaskFieldGroupResult[] = [];
           if (pullResult.tasks.length > 0) {
-            const pullStats = await applyPulledTasksV3(
-              activeTodu,
+            const pullStats = await applyPulledTasksV3({
+              todu: activeTodu,
               actorState,
               project,
-              pullResult.tasks,
-              acknowledgedProvider !== null,
-            );
+              tasks: pullResult.tasks,
+              repairEqualTimestamps: acknowledgedProvider !== null,
+              guardedReplay: fieldGroupProvider !== null,
+            });
             project = pullStats.project;
+          }
+
+          if (fieldGroupProvider) {
+            taskResults = await applySyncFieldGroupUpdates({
+              todu: getToduWithInternals(activeTodu),
+              binding,
+              updates: (pullResult as SyncProviderPullResultV5).taskUpdates,
+              actors: fieldGroupActors,
+              logger: runtimeLogger,
+            });
           }
 
           const hasPulledCommentChanges =
@@ -348,21 +414,42 @@ export function createSyncPluginWorkerRuntime(
               await persistBindingActorMappings(activeTodu, actorState);
             }
             await getToduWithInternals(activeTodu).__internal.syncRuntime.flush();
-            await acknowledgedProvider.acknowledgePull(
-              binding,
-              (pullResult as SyncProviderPullResultV4).checkpoint,
-              project,
-            );
+            if (fieldGroupProvider) {
+              await verifySyncFieldGroupResults({
+                todu: getToduWithInternals(activeTodu),
+                binding,
+                results: taskResults,
+                actors: fieldGroupActors,
+              });
+              await fieldGroupProvider.acknowledgePull(
+                binding,
+                (pullResult as SyncProviderPullResultV5).checkpoint,
+                project,
+                { taskResults },
+              );
+              await clearAcknowledgedContentRecovery({
+                todu: getToduWithInternals(activeTodu),
+                binding,
+                results: taskResults,
+              });
+            } else {
+              await (acknowledgedProvider as SyncProviderV4).acknowledgePull(
+                binding,
+                (pullResult as SyncProviderPullResultV4).checkpoint,
+                project,
+              );
+            }
           }
         }
 
         if (binding.strategy === "push" || binding.strategy === "bidirectional") {
-          const pushPayloads = await buildPushPayloadsV3(
-            activeTodu,
+          const pushPayloads = await buildPushPayloadsV3({
+            todu: activeTodu,
             actorState,
             project,
-            runtimeLogger,
-          );
+            logger: runtimeLogger,
+            requireCompleteReads: providerApiVersion === SYNC_PROVIDER_API_VERSION_V5,
+          });
           const pushResult = await options.provider.push(binding, pushPayloads, project);
           if (
             !pushResult ||
@@ -372,7 +459,13 @@ export function createSyncPluginWorkerRuntime(
             throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
           }
 
-          await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
+          await applyPushTaskLinks({
+            todu: activeTodu,
+            links: pushResult.taskLinks,
+            ...(providerApiVersion === SYNC_PROVIDER_API_VERSION_V5
+              ? { guardProjectId: project.id }
+              : {}),
+          });
           await applyPushCommentLinks(activeTodu, actorState, pushResult.commentLinks);
         }
 
@@ -587,7 +680,12 @@ async function resolveExportedCommentProvenance(
   });
 }
 
-async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[]): Promise<void> {
+async function applyPushTaskLinks(params: {
+  todu: Todu;
+  links: SyncProviderPushTaskLink[];
+  guardProjectId?: Project["id"];
+}): Promise<void> {
+  const { todu, links, guardProjectId } = params;
   for (const link of links) {
     const taskResult = await todu.task.get(link.localTaskId);
     if (!taskResult.ok) {
@@ -597,6 +695,8 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
     }
 
     const task = taskResult.value;
+    if (guardProjectId !== undefined && task.projectId !== guardProjectId)
+      throw new Error(`v5 push task link references another project: task=${task.id}`);
     if (task.externalId && task.externalId !== link.externalId) {
       throw new Error(
         `push task link conflicts with existing task linkage: task=${link.localTaskId} existing=${task.externalId} next=${link.externalId}`,
@@ -620,7 +720,14 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
       continue;
     }
 
-    const updateResult = await todu.task.update(task.id, updateInput);
+    const updateResult =
+      guardProjectId === undefined
+        ? await todu.task.update(task.id, updateInput)
+        : await getToduWithInternals(todu).__internal.syncRuntime.tasks.updateIfCurrent({
+            id: task.id,
+            input: updateInput,
+            expected: task,
+          });
     if (!updateResult.ok) {
       throw new Error(
         `push task link update failed: task=${link.localTaskId} externalId=${link.externalId} error=${formatToduError(updateResult.error)}`,
@@ -739,14 +846,15 @@ function getImportedTaskTimestamps(task: RuntimeImportedTask): {
   };
 }
 
-async function applyPulledTasksV3(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  tasks: ImportedTaskInput[],
-  repairEqualTimestamps = false,
-): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
-  const importedTasks = tasks.map((task) => ({
+async function applyPulledTasksV3(params: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  project: Project;
+  tasks: ImportedTaskInput[];
+  repairEqualTimestamps?: boolean;
+  guardedReplay?: boolean;
+}): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+  const importedTasks = params.tasks.map((task) => ({
     externalId: task.externalId,
     title: task.title,
     description: task.description,
@@ -759,16 +867,25 @@ async function applyPulledTasksV3(
     updatedAt: task.updatedAt,
   })) satisfies RuntimeImportedTask[];
 
-  return applyImportedTasks(todu, actorState, project, importedTasks, repairEqualTimestamps);
+  return applyImportedTasks({ ...params, tasks: importedTasks });
 }
 
-async function applyImportedTasks(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  tasks: RuntimeImportedTask[],
-  repairEqualTimestamps: boolean,
-): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+async function applyImportedTasks(params: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  project: Project;
+  tasks: RuntimeImportedTask[];
+  repairEqualTimestamps?: boolean;
+  guardedReplay?: boolean;
+}): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+  const {
+    todu,
+    actorState,
+    project,
+    tasks,
+    repairEqualTimestamps = false,
+    guardedReplay = false,
+  } = params;
   const stats = { created: 0, updated: 0, skipped: 0 };
   const tasksResult = await todu.task.list({ projectId: project.id });
   if (!tasksResult.ok) {
@@ -788,6 +905,14 @@ async function applyImportedTasks(
     const existingTask = localByExternalId.get(importedTask.externalId);
     const pulledTimestamps = getImportedTaskTimestamps(importedTask);
     const externalUpdatedAt = pulledTimestamps.comparisonTimestamp;
+    if (
+      guardedReplay &&
+      existingTask &&
+      (!externalUpdatedAt || externalUpdatedAt > existingTask.updatedAt)
+    )
+      throw new Error(
+        `v5 bootstrap is no longer an interrupted creation replay: externalId=${importedTask.externalId}`,
+      );
     const assigneeResolution = await resolveImportedAssignees(
       todu,
       actorState,
@@ -865,6 +990,7 @@ async function applyImportedTasks(
           existingTask,
           importedTask,
           updatedAt: externalUpdatedAt,
+          guardedReplay,
         });
         if (repaired) {
           localByExternalId.set(importedTask.externalId, repaired);
@@ -933,6 +1059,7 @@ async function repairReplayedTaskDescription(input: {
   existingTask: Task;
   importedTask: RuntimeImportedTask;
   updatedAt: string;
+  guardedReplay?: boolean;
 }): Promise<Task | null> {
   if (input.importedTask.description === undefined) return null;
   const detailResult = await input.todu.task.get(input.existingTask.id);
@@ -950,11 +1077,17 @@ async function repairReplayedTaskDescription(input: {
   }
 
   // Equal list timestamps do not prove the separate detail document was saved.
-  const updateResult = await input.todu.task.update(input.existingTask.id, {
+  const patch = {
     description,
     descriptionApproval: buildImportedContentApproval(input.actorState.binding.id),
-    updatedAt: input.updatedAt,
-  });
+  };
+  const updateResult = input.guardedReplay
+    ? await getToduWithInternals(input.todu).__internal.syncRuntime.tasks.updateIfCurrent({
+        id: input.existingTask.id,
+        input: patch,
+        expected: detailResult.value,
+      })
+    : await input.todu.task.update(input.existingTask.id, { ...patch, updatedAt: input.updatedAt });
   if (!updateResult.ok) {
     throw new Error(
       `replayed task detail repair failed: task=${input.existingTask.id} error=${formatToduError(updateResult.error)}`,
@@ -1236,12 +1369,14 @@ function createImportedNoteId(
   return createNoteId(`note-import-${hash}`);
 }
 
-async function buildPushPayloadsV3(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  logger: DaemonLogger,
-): Promise<ExportedTaskInput[]> {
+async function buildPushPayloadsV3(params: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  project: Project;
+  logger: DaemonLogger;
+  requireCompleteReads?: boolean;
+}): Promise<ExportedTaskInput[]> {
+  const { todu, actorState, project, logger, requireCompleteReads = false } = params;
   const tasksResult = await todu.task.list({ projectId: project.id });
   if (!tasksResult.ok) {
     throw new Error(`task list failed: ${formatToduError(tasksResult.error)}`);
@@ -1250,12 +1385,20 @@ async function buildPushPayloadsV3(
   const pushPayloads: ExportedTaskInput[] = [];
   for (const task of tasksResult.value) {
     const detailResult = await todu.task.get(task.id);
+    if (!detailResult.ok && requireCompleteReads)
+      throw new Error(
+        `v5 push task detail load failed: task=${task.id} ${formatToduError(detailResult.error)}`,
+      );
     const taskDetail = detailResult.ok ? detailResult.value : { ...task, description: undefined };
 
     const commentsResult = await todu.note.list({
       entityType: "task",
       entityId: task.id,
     });
+    if (!commentsResult.ok && requireCompleteReads)
+      throw new Error(
+        `v5 push comment load failed: task=${task.id} ${formatToduError(commentsResult.error)}`,
+      );
     const comments: Note[] = commentsResult.ok ? commentsResult.value : [];
 
     pushPayloads.push({
@@ -1476,6 +1619,84 @@ function buildOutboundV3Assignees(
   }
 
   return assignees;
+}
+
+function enrichFieldGroupActorMapping(
+  identity: SyncAssigneeIdentity,
+  actorState: SyncBindingActorState,
+): void {
+  canonicalFieldGroupIdentity(identity, actorState);
+  const account = normalizeExternalAccountId(identity.externalAccountId);
+  const login = normalizeExternalLogin(identity.externalLogin);
+  if (!account || !login) return;
+  const mapping = actorState.actorMappings.find(
+    (row) => normalizeExternalLogin(row.externalLogin) === login,
+  );
+  if (mapping && !normalizeExternalAccountId(mapping.externalAccountId)) {
+    mapping.externalAccountId = account;
+    actorState.mappingsChanged = true;
+  }
+}
+
+function canonicalFieldGroupIdentity(
+  identity: SyncAssigneeIdentity,
+  actorState: SyncBindingActorState,
+): SyncAssigneeIdentity {
+  const account = normalizeExternalAccountId(identity.externalAccountId);
+  const login = normalizeExternalLogin(identity.externalLogin);
+  let matches = account
+    ? actorState.actorMappings.filter(
+        (row) => normalizeExternalAccountId(row.externalAccountId) === account,
+      )
+    : [];
+  if (matches.length === 0 && login) {
+    matches = actorState.actorMappings.filter(
+      (row) => normalizeExternalLogin(row.externalLogin) === login,
+    );
+    if (
+      account &&
+      matches.some(
+        (row) =>
+          row.externalAccountId !== undefined &&
+          normalizeExternalAccountId(row.externalAccountId) !== account,
+      )
+    )
+      throw new Error(`field-group assignment account/login mismatch: ${account}`);
+  }
+  if (matches.length > 1) throw new Error("ambiguous field-group assignment mapping");
+  const mapping = matches[0];
+  const mappedAccount = mapping ? normalizeExternalAccountId(mapping.externalAccountId) : null;
+  if (mappedAccount || account) return { externalAccountId: mappedAccount ?? account! };
+  return { externalLogin: login! };
+}
+
+function projectFieldGroupAssignees(params: {
+  task: Task;
+  actorState: SyncBindingActorState;
+  project: Project;
+}): { assignees: SyncAssigneeIdentity[] } | null {
+  const { task, actorState, project } = params;
+  const assignees: SyncAssigneeIdentity[] = [];
+  for (const id of task.assigneeActorIds) {
+    const mappings = actorState.actorMappings.filter((row) => row.actorId === id);
+    if (
+      mappings.length !== 1 ||
+      !project.authorizedAssigneeActorIds.includes(id) ||
+      !actorState.actorsById.has(id)
+    )
+      return null;
+    const mapping = mappings[0];
+    const account = normalizeExternalAccountId(mapping.externalAccountId);
+    const login = normalizeExternalLogin(mapping.externalLogin);
+    if (!account && !login) return null;
+    assignees.push(
+      canonicalFieldGroupIdentity(
+        account ? { externalAccountId: account } : { externalLogin: login! },
+        actorState,
+      ),
+    );
+  }
+  return { assignees };
 }
 
 function getOutboundV3Assignee(mapping: IntegrationBindingActorMapping): ExternalActorRef | null {

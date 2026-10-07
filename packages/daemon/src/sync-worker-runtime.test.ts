@@ -9,6 +9,7 @@ import {
   createTaskId,
   err,
   type ImportedCommentInput,
+  type ImportedContentApproval,
   type ImportedTaskInput,
   type IntegrationBinding,
   type IntegrationBindingStatus,
@@ -18,10 +19,13 @@ import {
   type SyncProvider,
   type SyncProviderV3,
   type SyncProviderV4,
+  type SyncProviderV5,
+  type SyncTaskFieldGroupUpdate,
   type Task,
+  type TaskWithDetail,
   validationError,
 } from "@todu/core";
-import type { ToduWithInternalTools } from "@todu/engine";
+import { createSyncContentRecoveryStore, type ToduWithInternalTools } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonLogger } from "./logger.js";
 import {
@@ -2549,6 +2553,24 @@ describe("acknowledged pulls", () => {
     handle.stop();
   });
 
+  it("does not opt a v4 registration into field-group processing through extra payload fields", async () => {
+    const { provider, todu, handle } = createAcknowledgedPull();
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: { workflow: { base: { status: "active" }, remote: { status: "done" } } },
+        },
+      ],
+    } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(todu.task.update).not.toHaveBeenCalled();
+    expect(vi.mocked(provider.acknowledgePull).mock.calls[0]).toHaveLength(3);
+    handle.stop();
+  });
+
   it("keeps v3 providers on the legacy path without acknowledging even if they expose a callback", async () => {
     const { provider, todu, handle } = createAcknowledgedPull(3);
     await vi.advanceTimersByTimeAsync(0);
@@ -2559,6 +2581,859 @@ describe("acknowledged pulls", () => {
     handle.stop();
   });
 });
+
+describe("v5 field-group pulls", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("preserves unrelated fields and chooses different winners using the original local clock", async () => {
+    const fixture = createFieldGroupPull({
+      task: {
+        title: "Local title",
+        updatedAt: "2026-04-03T00:00:00Z",
+        priority: "high",
+        labels: ["b", "a"],
+      },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: fixture.checkpoint,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            content: {
+              base: { title: "Base", description: "" },
+              remote: { title: "Remote title", description: "" },
+              sourceTimestamp: "2026-04-02T00:00:00Z",
+            },
+            workflow: {
+              base: { status: "active" },
+              remote: { status: "done" },
+              sourceTimestamp: "2026-04-01T00:00:00Z",
+            },
+            classification: {
+              base: { priority: "high", labels: ["a", "b"] },
+              remote: { priority: "high", labels: ["b", "a"] },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).toHaveBeenCalledExactlyOnceWith(fixture.task.id, {
+      status: "done",
+      updatedAt: fixture.task.updatedAt,
+    });
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledWith(
+      fixture.binding,
+      fixture.checkpoint,
+      expect.anything(),
+      {
+        taskResults: [
+          expect.objectContaining({
+            groups: {
+              content: expect.objectContaining({
+                winner: "local",
+                resolution: "conflict",
+                remoteWriteRequired: true,
+              }),
+              workflow: expect.objectContaining({
+                winner: "remote",
+                resolution: "remote-only",
+                remoteWriteRequired: false,
+              }),
+              classification: expect.objectContaining({ winner: "equal", resolution: "unchanged" }),
+            },
+          }),
+        ],
+      },
+    );
+    expect(fixture.logger.warn).toHaveBeenCalledWith(
+      "sync field-group conflict",
+      expect.objectContaining({
+        bindingId: fixture.binding.id,
+        taskId: fixture.task.id,
+        group: "content",
+        winner: "local",
+      }),
+    );
+    fixture.handle.stop();
+  });
+
+  it.each([
+    "equal",
+    "missing-remote",
+    "missing-local",
+  ])("selects remote and emits diagnostics for %s conflict clocks", async (clock) => {
+    const fixture = createFieldGroupPull({
+      task: {
+        status: "waiting",
+        updatedAt: clock === "missing-local" ? (undefined as never) : "2026-04-02T00:00:00Z",
+      },
+    });
+    const sourceTimestamp = clock === "missing-remote" ? undefined : "2026-04-02T01:00:00+01:00";
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            workflow: {
+              base: { status: "active" },
+              remote: { status: "done" },
+              ...(sourceTimestamp ? { sourceTimestamp } : {}),
+            },
+          },
+        },
+      ],
+    });
+    if (clock === "missing-local") fixture.task.updatedAt = undefined as never;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.status).toBe("done");
+    expect(fixture.logger.warn).toHaveBeenCalledWith(
+      "sync field-group conflict",
+      expect.objectContaining({
+        winner: "remote",
+        selection:
+          clock === "equal" ? "remote-wins-equal-timestamps" : "remote-wins-missing-timestamp",
+      }),
+    );
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    fixture.handle.stop();
+  });
+
+  it("does not rewrite converged values or approved descriptions", async () => {
+    const fixture = createFieldGroupPull({
+      task: { title: "Same" },
+      description: "Same body",
+      approval: { state: "approved" },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            content: {
+              base: { title: "Base", description: "Base body" },
+              remote: { title: "Same", description: "Same body" },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      expect.anything(),
+      {
+        taskResults: [
+          expect.objectContaining({
+            groups: {
+              content: expect.objectContaining({ resolution: "converged", winner: "equal" }),
+            },
+          }),
+        ],
+      },
+    );
+    fixture.handle.stop();
+  });
+
+  it("applies a remote body with approval metadata and supports a deliberate clear", async () => {
+    const fixture = createFieldGroupPull({ description: "Old body" });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            content: {
+              base: { title: "Task", description: "Old body" },
+              remote: { title: "Task", description: "" },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).toHaveBeenCalledWith(fixture.task.id, {
+      description: "",
+      descriptionApproval: { state: "pendingApproval", sourceBindingId: fixture.binding.id },
+      updatedAt: fixture.task.updatedAt,
+    });
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    fixture.handle.stop();
+  });
+
+  it("acknowledges empty pulls only after flush and before push", async () => {
+    const fixture = createFieldGroupPull();
+    const saving = createDeferred<void>();
+    vi.mocked(fixture.todu.instance.__internal.syncRuntime.flush).mockReturnValueOnce(
+      saving.promise,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    saving.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledWith(
+      fixture.binding,
+      fixture.checkpoint,
+      expect.anything(),
+      { taskResults: [] },
+    );
+    expect(vi.mocked(fixture.provider.acknowledgePull).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(fixture.provider.push).mock.invocationCallOrder[0],
+    );
+    fixture.handle.stop();
+  });
+
+  it.each([
+    "partial-task",
+    "flush",
+    "recovery-read",
+    "recovery-write",
+    "detail-read",
+    "mapping-save",
+  ])("does not acknowledge or push after %s failure and retries fresh", async (phase) => {
+    const fixture = createFieldGroupPull({ description: "Old body" });
+    const update: SyncTaskFieldGroupUpdate = {
+      externalId: "remote-1",
+      groups: {
+        content: {
+          base: { title: "Task", description: "Old body" },
+          remote: { title: "Remote", description: "New body" },
+        },
+        workflow: { base: { status: "active" }, remote: { status: "done" } },
+      },
+    };
+    if (phase === "mapping-save")
+      update.groups.assignment = {
+        base: { assignees: [] },
+        remote: { assignees: [{ externalAccountId: "42" }] },
+      };
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      taskUpdates: [update],
+      checkpoint: fixture.checkpoint,
+    });
+    const failure = err(validationError("test", "application failed"));
+    if (phase === "partial-task") {
+      const applyFirst = fixture.todu.task.update.getMockImplementation()!;
+      fixture.todu.task.update.mockImplementationOnce(applyFirst).mockResolvedValueOnce(failure);
+    }
+    if (phase === "flush")
+      vi.mocked(fixture.todu.instance.__internal.syncRuntime.flush).mockRejectedValueOnce(
+        new Error("flush failed"),
+      );
+    if (phase === "detail-read") fixture.todu.task.get.mockResolvedValueOnce(failure);
+    if (phase === "mapping-save") fixture.todu.integration.update.mockResolvedValueOnce(failure);
+    const store = fixture.todu.instance.__internal.syncRuntime.contentRecovery;
+    if (phase === "recovery-read") vi.spyOn(store, "read").mockResolvedValueOnce(failure);
+    if (phase === "recovery-write") vi.spyOn(store, "write").mockResolvedValueOnce(failure);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    const saved = await fixture.todu.instance.task.get(fixture.task.id);
+    expect(saved.ok && saved.value).toMatchObject({
+      title: "Remote",
+      description: "New body",
+      status: "done",
+    });
+    fixture.handle.stop();
+  });
+
+  it("guards v5 bootstrap detail repair against intervening local edits", async () => {
+    const fixture = createFieldGroupPull({
+      description: "Base body",
+      task: { updatedAt: "2026-04-01T00:00:00.000Z" },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [
+        {
+          externalId: "remote-1",
+          title: "Task",
+          description: "Remote body",
+          updatedAt: fixture.task.updatedAt,
+        },
+      ],
+      taskUpdates: [],
+      checkpoint: null,
+    });
+    const tools = fixture.todu.instance.__internal.syncRuntime.tasks;
+    const original = vi.mocked(tools.updateIfCurrent).getMockImplementation()!;
+    vi.mocked(tools.updateIfCurrent).mockImplementationOnce(async (params) => {
+      await fixture.todu.instance.task.update(fixture.task.id, {
+        title: "New local edit",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      });
+      return original(params);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(await fixture.todu.instance.task.get(fixture.task.id)).toMatchObject({
+      ok: true,
+      value: {
+        title: "New local edit",
+        description: "Base body",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(await fixture.todu.instance.task.get(fixture.task.id)).toMatchObject({
+      ok: true,
+      value: {
+        title: "New local edit",
+        description: "Base body",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    });
+    fixture.handle.stop();
+  });
+
+  it("preserves the v5 task clock when saving transport links", async () => {
+    const fixture = createFieldGroupPull();
+    const clock = fixture.task.updatedAt;
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.sourceUrl).toBe("https://example.test/task/1");
+    expect(fixture.task.updatedAt).toBe(clock);
+    expect(
+      fixture.todu.instance.__internal.syncRuntime.tasks.updateIfCurrent,
+    ).toHaveBeenCalledTimes(1);
+    fixture.handle.stop();
+  });
+
+  it("does not reset an intervening local clock while saving a v5 transport link", async () => {
+    const fixture = createFieldGroupPull({ task: { updatedAt: "2026-04-01T00:00:00.000Z" } });
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    const tools = fixture.todu.instance.__internal.syncRuntime.tasks;
+    const original = vi.mocked(tools.updateIfCurrent).getMockImplementation()!;
+    vi.mocked(tools.updateIfCurrent).mockImplementationOnce(async (params) => {
+      await fixture.todu.instance.task.update(fixture.task.id, {
+        title: "New local edit",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      });
+      return original(params);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(fixture.task).toMatchObject({
+      title: "New local edit",
+      updatedAt: "2026-04-04T00:00:00.000Z",
+    });
+    expect(fixture.task.sourceUrl).toBeUndefined();
+    expect(fixture.todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      fixture.binding.id,
+      expect.objectContaining({ state: "error" }),
+    );
+    fixture.handle.stop();
+  });
+
+  it("rejects v5 transport links to tasks outside the binding project", async () => {
+    const fixture = createFieldGroupPull();
+    fixture.task.projectId = createProjectId("other-project");
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.task.sourceUrl).toBeUndefined();
+    expect(fixture.todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      fixture.binding.id,
+      expect.objectContaining({ state: "error" }),
+    );
+    fixture.handle.stop();
+  });
+
+  it("does not acknowledge a partially applied multi-task batch and retains result ordering on replay", async () => {
+    const fixture = createFieldGroupPull();
+    const created = await fixture.todu.instance.task.create({
+      projectId: fixture.project.id,
+      title: "Second",
+      externalId: "remote-2",
+    });
+    if (!created.ok) throw new Error("Expected second task");
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: ["remote-1", "remote-2"].map((externalId) => ({
+        externalId,
+        groups: { workflow: { base: { status: "active" }, remote: { status: "done" } } },
+      })),
+    });
+    const applyFirst = fixture.todu.task.update.getMockImplementation()!;
+    fixture.todu.task.update
+      .mockImplementationOnce(applyFirst)
+      .mockResolvedValueOnce(err(validationError("test", "second task failed")));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.status).toBe("done");
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(
+      vi
+        .mocked(fixture.provider.acknowledgePull)
+        .mock.calls[0][3].taskResults.map((result) => result.localTaskId),
+    ).toEqual([fixture.task.id, created.value.id]);
+    expect(
+      vi
+        .mocked(fixture.provider.acknowledgePull)
+        .mock.calls[0][3].taskResults.map((result) => result.groups.workflow?.resolution),
+    ).toEqual(["converged", "remote-only"]);
+    fixture.handle.stop();
+  });
+
+  it("rechecks touched values after flush and does not acknowledge an intervening local edit", async () => {
+    const fixture = createFieldGroupPull();
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: { workflow: { base: { status: "active" }, remote: { status: "done" } } },
+        },
+      ],
+    });
+    vi.mocked(fixture.todu.instance.__internal.syncRuntime.flush).mockImplementationOnce(
+      async () => {
+        fixture.task.status = "waiting";
+      },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    fixture.handle.stop();
+  });
+
+  it.each([
+    "missing",
+    "contradictory",
+    "duplicate",
+    "cross-array",
+    "invalid",
+    "noncanonical",
+    "linked-bootstrap",
+    "missing-updates",
+  ])("rejects %s payloads before task application", async (problem) => {
+    const fixture = createFieldGroupPull();
+    const update: SyncTaskFieldGroupUpdate = {
+      externalId: "remote-1",
+      groups: { workflow: { base: { status: "active" }, remote: { status: "done" } } },
+    };
+    const tasks: ImportedTaskInput[] = [];
+    if (problem === "missing") update.externalId = "unknown";
+    if (problem === "contradictory") update.localTaskId = createTaskId("another-task");
+    if (problem === "invalid") update.groups.workflow!.remote.status = "closed" as never;
+    if (problem === "noncanonical")
+      update.groups.content = {
+        base: { title: "Task", description: "" },
+        remote: { title: " Task ", description: "" },
+      };
+    if (problem === "cross-array" || problem === "linked-bootstrap")
+      tasks.push({ externalId: "remote-1", title: "Remote", updatedAt: "2026-04-05T00:00:00Z" });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks,
+      checkpoint: null,
+      taskUpdates:
+        problem === "missing-updates"
+          ? (undefined as never)
+          : problem === "duplicate"
+            ? [update, update]
+            : problem === "linked-bootstrap"
+              ? []
+              : [update],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.todu.task.create).not.toHaveBeenCalled();
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    fixture.handle.stop();
+  });
+
+  it("imports remote assignment, persists mappings and authorization, and allows an explicit clear", async () => {
+    const fixture = createFieldGroupPull();
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            assignment: {
+              base: { assignees: [] },
+              remote: { assignees: [{ externalAccountId: "42" }] },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.assigneeActorIds).toHaveLength(1);
+    expect(fixture.todu.project.update).toHaveBeenCalledTimes(1);
+    expect(fixture.todu.integration.update).toHaveBeenCalledTimes(1);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            assignment: {
+              base: { assignees: [{ externalAccountId: "42" }] },
+              remote: { assignees: [] },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fixture.task.assigneeActorIds).toEqual([]);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(2);
+    fixture.handle.stop();
+  });
+
+  it("compares known login aliases by stable identity and does not rewrite equivalent assignments", async () => {
+    const id = createActorId("actor-user");
+    const fixture = createFieldGroupPull({
+      task: { assigneeActorIds: [id] },
+      mappings: [{ actorId: id, externalLogin: "erik" }],
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            assignment: {
+              base: { assignees: [{ externalLogin: "ERIK" }] },
+              remote: { assignees: [{ externalAccountId: "42", externalLogin: "erik" }] },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(fixture.binding.options?.actorMappings?.[0].externalAccountId).toBe("42");
+    fixture.handle.stop();
+  });
+
+  it("defers incomplete local mappings while still applying other groups", async () => {
+    const fixture = createFieldGroupPull({
+      task: { assigneeActorIds: [createActorId("actor-user")] },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            assignment: { base: { assignees: [] }, remote: { assignees: [] } },
+            workflow: { base: { status: "active" }, remote: { status: "done" } },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.assigneeActorIds).toEqual([createActorId("actor-user")]);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      expect.anything(),
+      {
+        taskResults: [
+          expect.objectContaining({
+            deferred: { assignment: "incomplete-assignment-mapping" },
+            groups: { workflow: expect.anything() },
+          }),
+        ],
+      },
+    );
+    fixture.handle.stop();
+  });
+
+  it("blocks ambiguous partial recovery after an intervening clock change instead of acknowledging stale content", async () => {
+    const fixture = createFieldGroupPull({
+      task: { title: "Remote", updatedAt: "2026-04-04T00:00:00Z" },
+      description: "Base body",
+    });
+    await fixture.todu.instance.__internal.syncRuntime.contentRecovery.write(fixture.binding.id, [
+      {
+        localTaskId: fixture.task.id,
+        externalId: "remote-1",
+        localTimestamp: "2026-04-03T00:00:00Z",
+        before: { title: "Task", description: "Base body" },
+        after: { title: "Remote", description: "Remote body" },
+        sourceTimestamp: "2026-04-01T00:00:00Z",
+      },
+    ]);
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            content: {
+              base: { title: "Task", description: "Base body" },
+              remote: { title: "Remote", description: "Remote body" },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    expect(fixture.todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      fixture.binding.id,
+      expect.objectContaining({
+        state: "error",
+        lastErrorSummary: expect.stringContaining("ambiguous provenance"),
+      }),
+    );
+    fixture.handle.stop();
+  });
+
+  it.each([
+    ["active", "active", "unchanged", "equal"],
+    ["waiting", "active", "local-only", "local"],
+    ["active", "done", "remote-only", "remote"],
+    ["done", "done", "converged", "equal"],
+    ["waiting", "done", "conflict", "local"],
+  ] as const)("reports the %s/%s workflow decision as %s", async (local, remote, resolution, winner) => {
+    const fixture = createFieldGroupPull({
+      task: { status: local, updatedAt: "2026-04-03T00:00:00Z" },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            workflow: {
+              base: { status: "active" },
+              remote: { status: remote },
+              sourceTimestamp: "2026-04-01T00:00:00Z",
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      vi.mocked(fixture.provider.acknowledgePull).mock.calls[0][3].taskResults[0].groups.workflow,
+    ).toMatchObject({ resolution, winner });
+    expect(fixture.todu.task.update).toHaveBeenCalledTimes(winner === "remote" ? 1 : 0);
+    fixture.handle.stop();
+  });
+
+  it("updates only classification fields and exports fresh values", async () => {
+    const fixture = createFieldGroupPull({
+      task: { title: "Keep title", labels: ["old"] },
+      description: "Keep body",
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: null,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: {
+            classification: {
+              base: { priority: "medium", labels: ["old"] },
+              remote: { priority: "high", labels: ["new"] },
+            },
+          },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).toHaveBeenCalledExactlyOnceWith(fixture.task.id, {
+      priority: "high",
+      labels: ["new"],
+      updatedAt: fixture.task.updatedAt,
+    });
+    expect(fixture.provider.push).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          title: "Keep title",
+          description: "Keep body",
+          priority: "high",
+          labels: ["new"],
+        }),
+      ],
+      expect.anything(),
+    );
+    fixture.handle.stop();
+  });
+
+  it.each([
+    "detail",
+    "comments",
+  ])("fails v5 push closed when fresh %s reads fail after acknowledgment", async (phase) => {
+    const fixture = createFieldGroupPull();
+    vi.mocked(fixture.provider.acknowledgePull).mockImplementationOnce(async () => {
+      const failure = err(validationError("read", "unavailable"));
+      if (phase === "detail") fixture.todu.task.get.mockResolvedValueOnce(failure);
+      else fixture.todu.note.list.mockResolvedValueOnce(failure);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    fixture.handle.stop();
+  });
+
+  it("skips push until acknowledgment succeeds and recomputes replay outcomes", async () => {
+    const fixture = createFieldGroupPull();
+    vi.mocked(fixture.provider.acknowledgePull).mockRejectedValueOnce(
+      new Error("receipt save failed"),
+    );
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [],
+      checkpoint: fixture.checkpoint,
+      taskUpdates: [
+        {
+          externalId: "remote-1",
+          groups: { workflow: { base: { status: "active" }, remote: { status: "done" } } },
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.push).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(2);
+    expect(
+      vi.mocked(fixture.provider.acknowledgePull).mock.calls[1][3].taskResults[0].groups.workflow
+        ?.resolution,
+    ).toBe("converged");
+    expect(fixture.provider.push).toHaveBeenCalledTimes(1);
+    fixture.handle.stop();
+  });
+});
+
+function createFieldGroupPull(
+  options: {
+    task?: Partial<Task>;
+    description?: string;
+    approval?: ImportedContentApproval;
+    mappings?: NonNullable<IntegrationBinding["options"]>["actorMappings"];
+  } = {},
+) {
+  const project = createProject();
+  const binding = createBinding(project.id, { options: { actorMappings: options.mappings ?? [] } });
+  const task = createTask(project.id, { externalId: "remote-1", ...options.task });
+  const todu = createTodu(project, [task], [binding]);
+  const details = new Map<
+    string,
+    { description?: string; descriptionApproval?: ImportedContentApproval }
+  >([[task.id, { description: options.description, descriptionApproval: options.approval }]]);
+  const originalUpdate = todu.task.update.getMockImplementation() as (
+    id: string,
+    input: Partial<TaskWithDetail>,
+  ) => ReturnType<ToduWithInternalTools["task"]["update"]>;
+  todu.task.update.mockImplementation(async (id: string, input: Partial<TaskWithDetail>) => {
+    const result = await originalUpdate(id, input);
+    if (result.ok && result.value) {
+      const detail = details.get(id) ?? {};
+      if (input.description !== undefined) detail.description = input.description;
+      if (input.descriptionApproval !== undefined)
+        detail.descriptionApproval = input.descriptionApproval;
+      details.set(id, detail);
+      return ok({ ...result.value, ...detail });
+    }
+    return result;
+  });
+  todu.task.get.mockImplementation(async (id: string) => {
+    const result = await todu.instance.task.list();
+    const found = result.ok && result.value.find((row) => row.id === id);
+    return found ? ok({ ...found, ...details.get(id) }) : err(validationError("id", "missing"));
+  });
+  todu.instance.__internal.syncRuntime.contentRecovery = createSyncContentRecoveryStore({
+    storagePath: "unused",
+    catalogId: "test",
+    ephemeral: true,
+  });
+  todu.instance.__internal.syncRuntime.tasks = {
+    updateIfCurrent: vi.fn(async ({ id, input, expected }) => {
+      const current = await todu.instance.task.get(id);
+      if (!current.ok) return current;
+      if (JSON.stringify(current.value) !== JSON.stringify(expected))
+        return err(
+          validationError("syncPrecondition", "Task changed during sync; retry reconciliation"),
+        );
+      return todu.instance.task.update(id, { ...input, updatedAt: expected.updatedAt });
+    }),
+  };
+  const checkpoint = { cursor: "opaque" };
+  const provider: SyncProviderV5 = {
+    ...createV3Provider(),
+    pull: vi
+      .fn<SyncProviderV5["pull"]>()
+      .mockResolvedValue({ tasks: [], taskUpdates: [], checkpoint }),
+    acknowledgePull: vi.fn<SyncProviderV5["acknowledgePull"]>().mockResolvedValue(undefined),
+  };
+  const logger = createLogger();
+  const runtime = createSyncPluginWorkerRuntime({
+    pluginName: "github",
+    pluginVersion: "1.0.0",
+    modulePath: "/plugins/github.js",
+    authorityId: "test",
+    provider,
+    providerApiVersion: 5,
+    getTodu: () => todu.instance,
+    logger,
+    config: { enabled: true, intervalMs: 1000, retryInitialMs: 100, retryMaxMs: 800, settings: {} },
+  });
+  return { task, todu, binding, project, provider, checkpoint, logger, handle: runtime.start() };
+}
 
 function createAcknowledgedPull(apiVersion = 4) {
   const project = createProject();

@@ -34,9 +34,10 @@ import {
   disposeRemoteSyncAdapter,
   isSyncServerAvailable,
 } from "./sync-client.js";
+import { createSyncContentRecoveryStore } from "./sync-content-recovery.js";
 import { type SyncListener, startSyncListener } from "./sync-listener.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
-import { createTaskNamespace } from "./tasks.js";
+import { createTaskNamespaces } from "./tasks.js";
 import {
   createStubNamespaces,
   type LocalSyncMode,
@@ -89,6 +90,12 @@ export {
   initJoinStorage,
 } from "./storage.js";
 export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
+export {
+  createSyncContentRecoveryStore,
+  type SyncContentRecovery,
+  type SyncContentRecoveryStore,
+} from "./sync-content-recovery.js";
+export { reconcileSyncTaskFieldGroup, syncTaskFieldGroupValuesEqual } from "./sync-field-groups.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   ActorNamespace,
@@ -105,6 +112,7 @@ export type {
   SyncListenerStatus,
   SyncRuntimeActorTools,
   SyncRuntimeNoteTools,
+  SyncRuntimeTaskTools,
   SyncStatus,
   TaskNamespace,
   Todu,
@@ -408,7 +416,8 @@ export async function createTodu(
   }
 
   const stubs = createStubNamespaces(resolvedConfig);
-  const taskNamespace = createTaskNamespace(storage.catalog, storage.repo);
+  const taskNamespaces = createTaskNamespaces(storage.catalog, storage.repo);
+  const taskNamespace = taskNamespaces.namespace;
   const noteNamespaces = createNoteNamespaces(storage.catalog, storage.repo);
   const noteNamespace = noteNamespaces.namespace;
 
@@ -478,6 +487,12 @@ export async function createTodu(
       },
       syncRuntime: {
         flush: () => storage.repo.flush(),
+        contentRecovery: createSyncContentRecoveryStore({
+          storagePath: resolvedConfig.storagePath,
+          catalogId: storage.catalog.documentId,
+          ephemeral: storage.ephemeral,
+        }),
+        tasks: taskNamespaces.syncRuntime,
         notes: noteNamespaces.syncRuntime,
         actors: createSyncRuntimeActorTools(storage.catalog),
         commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),
