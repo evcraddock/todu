@@ -7,6 +7,7 @@ import type {
   CatalogDocument,
   Result,
   SyncProviderV5,
+  SyncTaskFieldGroupUpdate,
   TaskDetailDocument,
   TaskListDocument,
 } from "@todu/core";
@@ -178,6 +179,222 @@ describe("v5 persistence and split-document replay", () => {
     expect(value(await todu.task.get(task.id)).description).toBe(selectedBody);
   });
 
+  it("rejects linkage made ambiguous after observing the task", async () => {
+    todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
+    const project = value(await todu.project.create({ name: "Linkage" }));
+    const task = value(
+      await todu.task.create({
+        projectId: project.id,
+        title: "Base",
+        externalId: "remote-task",
+        updatedAt: REMOTE_TIME,
+      }),
+    );
+    const expected = value(await todu.task.get(task.id));
+    value(
+      await todu.task.create({
+        projectId: project.id,
+        title: "Duplicate",
+        externalId: "remote-task",
+      }),
+    );
+    expect(
+      await todu.__internal.syncRuntime.tasks.updateIfCurrent({
+        id: task.id,
+        expected,
+        input: { status: "done" },
+      }),
+    ).toMatchObject({ ok: false, error: { field: "syncPrecondition" } });
+    expect(value(await todu.task.get(task.id))).toMatchObject({
+      status: "active",
+      updatedAt: REMOTE_TIME,
+    });
+  });
+
+  it("rejects a stale body even when an intervening edit has the same millisecond clock", async () => {
+    todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
+    const project = value(await todu.project.create({ name: "Equal clock" }));
+    const task = value(
+      await todu.task.create({
+        projectId: project.id,
+        title: "Base",
+        description: "Base body",
+        updatedAt: REMOTE_TIME,
+      }),
+    );
+    const expected = value(await todu.task.get(task.id));
+    value(
+      await todu.task.update(task.id, { description: "New local body", updatedAt: REMOTE_TIME }),
+    );
+    const result = await todu.__internal.syncRuntime.tasks.updateIfCurrent({
+      id: task.id,
+      expected,
+      input: { title: "Remote", description: "Remote body" },
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { type: "validation", field: "syncPrecondition" },
+    });
+    expect(value(await todu.task.get(task.id))).toMatchObject({
+      title: "Base",
+      description: "New local body",
+      updatedAt: REMOTE_TIME,
+    });
+  });
+
+  it.each([
+    ["workflow", false],
+    ["content", false],
+    ["workflow", true],
+    ["content", true],
+  ] as const)("guards %s application against an intervening edit (during document load=%s) and preserves its conflict clock", async (group, duringLoad) => {
+    todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
+    const project = value(await todu.project.create({ name: "Interleaving" }));
+    const binding = value(
+      await todu.integration.create({
+        provider: "test",
+        projectId: project.id,
+        targetKind: "repository",
+        targetRef: "owner/repo",
+        strategy: "pull",
+        enabled: true,
+      }),
+    );
+    const task = value(
+      await todu.task.create({
+        projectId: project.id,
+        title: "Base",
+        description: "Base body",
+        externalId: "remote-task",
+        updatedAt: REMOTE_TIME,
+      }),
+    );
+    const newLocalTime = "2026-04-04T00:00:00.000Z";
+    const update: SyncTaskFieldGroupUpdate = {
+      externalId: "remote-task",
+      groups:
+        group === "workflow"
+          ? {
+              workflow: {
+                base: { status: "active" },
+                remote: { status: "done" },
+                sourceTimestamp: LOCAL_TIME,
+              },
+            }
+          : {
+              content: {
+                base: { title: "Base", description: "Base body" },
+                remote: { title: "Older remote edit", description: "Remote body" },
+                sourceTimestamp: LOCAL_TIME,
+              },
+            },
+    };
+    const provider: SyncProviderV5 = {
+      name: "test",
+      version: "1.0.0",
+      initialize: vi.fn().mockResolvedValue(undefined),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+      pull: vi
+        .fn<SyncProviderV5["pull"]>()
+        .mockResolvedValue({ tasks: [], taskUpdates: [update], checkpoint: null }),
+      acknowledgePull: vi.fn().mockResolvedValue(undefined),
+      push: vi.fn().mockResolvedValue({ taskLinks: [], commentLinks: [] }),
+    };
+    const tools = todu.__internal.syncRuntime.tasks;
+    const guardedUpdate = tools.updateIfCurrent.bind(tools);
+    vi.spyOn(tools, "updateIfCurrent").mockImplementationOnce(async (params) => {
+      expect(params.expected.updatedAt).toBe(REMOTE_TIME);
+      const editLocal = async () =>
+        value(
+          await todu!.task.update(
+            task.id,
+            group === "workflow"
+              ? { title: "New local edit", updatedAt: newLocalTime }
+              : { status: "waiting", updatedAt: newLocalTime },
+          ),
+        );
+      if (!duringLoad) {
+        await editLocal();
+        return guardedUpdate(params);
+      }
+      const repo = (todu!.task as unknown as { _repo: Repo })._repo;
+      const catalog = await repo.find<CatalogDocument>(todu!.sync.getCatalogId() as DocumentId);
+      const list = await repo.find<TaskListDocument>(
+        catalog.doc()!.taskListDocIds[project.id] as DocumentId,
+      );
+      const detailId = list.doc()!.detailDocIds[task.id];
+      const find = repo.find.bind(repo);
+      let injected = false;
+      const load = vi
+        .spyOn(repo, "find")
+        .mockImplementation(async <T>(...args: Parameters<Repo["find"]>) => {
+          if (args[0] === detailId && !injected) {
+            injected = true;
+            await editLocal();
+          }
+          return find<T>(...args);
+        });
+      try {
+        const result = await guardedUpdate(params);
+        expect(injected).toBe(true);
+        return result;
+      } finally {
+        load.mockRestore();
+      }
+    });
+    await cycle(provider, binding.id, "error");
+    expect(provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+    expect(value(await todu.task.get(task.id))).toMatchObject({
+      updatedAt: newLocalTime,
+      ...(group === "workflow"
+        ? { title: "New local edit", status: "active" }
+        : { title: "Base", description: "Base body", status: "waiting" }),
+    });
+    await cycle(provider, binding.id, "idle");
+    expect(value(await todu.task.get(task.id))).toMatchObject({
+      updatedAt: newLocalTime,
+      ...(group === "workflow"
+        ? { title: "New local edit", status: "done" }
+        : { title: "Older remote edit", description: "Remote body", status: "waiting" }),
+    });
+    const following: SyncTaskFieldGroupUpdate = {
+      externalId: "remote-task",
+      groups:
+        group === "workflow"
+          ? {
+              content: {
+                base: { title: "Base", description: "Base body" },
+                remote: { title: "Older remote edit", description: "Remote body" },
+                sourceTimestamp: LOCAL_TIME,
+              },
+            }
+          : {
+              workflow: {
+                base: { status: "active" },
+                remote: { status: "done" },
+                sourceTimestamp: LOCAL_TIME,
+              },
+            },
+    };
+    vi.mocked(provider.pull).mockResolvedValue({
+      tasks: [],
+      taskUpdates: [following],
+      checkpoint: null,
+    });
+    await cycle(provider, binding.id, "idle");
+    const result = vi.mocked(provider.acknowledgePull).mock.calls.at(-1)![3].taskResults[0];
+    expect(group === "workflow" ? result.groups.content : result.groups.workflow).toMatchObject({
+      winner: "local",
+      remoteWriteRequired: true,
+      conflict: { localTimestamp: newLocalTime },
+    });
+    expect(value(await todu.task.get(task.id))).toMatchObject({
+      updatedAt: newLocalTime,
+      ...(group === "workflow" ? { title: "New local edit" } : { status: "waiting" }),
+    });
+  });
+
   it("persists different winners without overwriting omitted groups", async () => {
     todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
     const project = value(await todu.project.create({ name: "Mixed" }));
@@ -347,6 +564,7 @@ describe("v5 persistence and split-document replay", () => {
     state: "idle" | "error",
   ): Promise<void> {
     const shutdownCalls = vi.mocked(provider.shutdown).mock.calls.length;
+    const pullCalls = vi.mocked(provider.pull).mock.calls.length;
     const handle = createSyncPluginWorkerRuntime({
       pluginName: "test",
       pluginVersion: "1.0.0",
@@ -366,8 +584,8 @@ describe("v5 persistence and split-document replay", () => {
     }).start();
     try {
       await vi.waitFor(async () => {
+        expect(provider.pull).toHaveBeenCalledTimes(pullCalls + 1);
         expect(value(await todu!.integration.getStatus(bindingId)).state).toBe(state);
-        expect(provider.pull).toHaveBeenCalled();
       });
     } finally {
       handle.stop();

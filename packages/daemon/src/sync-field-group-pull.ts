@@ -353,7 +353,11 @@ export async function applySyncFieldGroupUpdates(params: {
       }
     }
     if (Object.keys(patch).length > 0) {
-      const applied = await todu.task.update(local.id, { ...patch, updatedAt: local.updatedAt });
+      const applied = await todu.__internal.syncRuntime.tasks.updateIfCurrent({
+        id: local.id,
+        input: patch,
+        expected: local,
+      });
       if (!applied.ok)
         throw new Error(
           `field-group task update failed: task=${local.id} ${JSON.stringify(applied.error)}`,
@@ -457,7 +461,11 @@ async function applyContent(params: {
     patch.descriptionApproval = { state: "pendingApproval", sourceBindingId: binding.id };
   }
   if (Object.keys(patch).length === 0) return task;
-  const result = await todu.task.update(task.id, { ...patch, updatedAt: task.updatedAt });
+  const result = await todu.__internal.syncRuntime.tasks.updateIfCurrent({
+    id: task.id,
+    input: patch,
+    expected: task,
+  });
   if (!result.ok)
     throw new Error(
       `field-group content update failed: task=${task.id} ${JSON.stringify(result.error)}`,

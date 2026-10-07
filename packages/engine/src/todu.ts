@@ -351,6 +351,15 @@ export interface SyncRuntimeNoteTools {
   createWithId(id: NoteId, input: CreateNoteInput): Promise<Result<Note>>;
 }
 
+export interface SyncRuntimeTaskTools {
+  /** Check the complete observed task at the mutation boundary and preserve its clock. */
+  updateIfCurrent(params: {
+    id: TaskId;
+    input: Omit<UpdateTaskInput, "updatedAt">;
+    expected: TaskWithDetail;
+  }): Promise<Result<TaskWithDetail>>;
+}
+
 export interface ToduInternalTools {
   enrollment: {
     registerDevice(device: Device): Promise<Result<Device>>;
@@ -360,6 +369,7 @@ export interface ToduInternalTools {
     /** Complete native local storage writes; does not wait for remote replication. */
     flush(): Promise<void>;
     contentRecovery: SyncContentRecoveryStore;
+    tasks: SyncRuntimeTaskTools;
     notes: SyncRuntimeNoteTools;
     actors: SyncRuntimeActorTools;
     commentProvenance: SyncRuntimeCommentProvenanceTools;

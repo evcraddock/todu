@@ -2854,6 +2854,135 @@ describe("v5 field-group pulls", () => {
     fixture.handle.stop();
   });
 
+  it("guards v5 bootstrap detail repair against intervening local edits", async () => {
+    const fixture = createFieldGroupPull({
+      description: "Base body",
+      task: { updatedAt: "2026-04-01T00:00:00.000Z" },
+    });
+    vi.mocked(fixture.provider.pull).mockResolvedValue({
+      tasks: [
+        {
+          externalId: "remote-1",
+          title: "Task",
+          description: "Remote body",
+          updatedAt: fixture.task.updatedAt,
+        },
+      ],
+      taskUpdates: [],
+      checkpoint: null,
+    });
+    const tools = fixture.todu.instance.__internal.syncRuntime.tasks;
+    const original = vi.mocked(tools.updateIfCurrent).getMockImplementation()!;
+    vi.mocked(tools.updateIfCurrent).mockImplementationOnce(async (params) => {
+      await fixture.todu.instance.task.update(fixture.task.id, {
+        title: "New local edit",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      });
+      return original(params);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).not.toHaveBeenCalled();
+    expect(await fixture.todu.instance.task.get(fixture.task.id)).toMatchObject({
+      ok: true,
+      value: {
+        title: "New local edit",
+        description: "Base body",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(await fixture.todu.instance.task.get(fixture.task.id)).toMatchObject({
+      ok: true,
+      value: {
+        title: "New local edit",
+        description: "Base body",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      },
+    });
+    fixture.handle.stop();
+  });
+
+  it("preserves the v5 task clock when saving transport links", async () => {
+    const fixture = createFieldGroupPull();
+    const clock = fixture.task.updatedAt;
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.task.sourceUrl).toBe("https://example.test/task/1");
+    expect(fixture.task.updatedAt).toBe(clock);
+    expect(
+      fixture.todu.instance.__internal.syncRuntime.tasks.updateIfCurrent,
+    ).toHaveBeenCalledTimes(1);
+    fixture.handle.stop();
+  });
+
+  it("does not reset an intervening local clock while saving a v5 transport link", async () => {
+    const fixture = createFieldGroupPull({ task: { updatedAt: "2026-04-01T00:00:00.000Z" } });
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    const tools = fixture.todu.instance.__internal.syncRuntime.tasks;
+    const original = vi.mocked(tools.updateIfCurrent).getMockImplementation()!;
+    vi.mocked(tools.updateIfCurrent).mockImplementationOnce(async (params) => {
+      await fixture.todu.instance.task.update(fixture.task.id, {
+        title: "New local edit",
+        updatedAt: "2026-04-04T00:00:00.000Z",
+      });
+      return original(params);
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+    expect(fixture.task).toMatchObject({
+      title: "New local edit",
+      updatedAt: "2026-04-04T00:00:00.000Z",
+    });
+    expect(fixture.task.sourceUrl).toBeUndefined();
+    expect(fixture.todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      fixture.binding.id,
+      expect.objectContaining({ state: "error" }),
+    );
+    fixture.handle.stop();
+  });
+
+  it("rejects v5 transport links to tasks outside the binding project", async () => {
+    const fixture = createFieldGroupPull();
+    fixture.task.projectId = createProjectId("other-project");
+    vi.mocked(fixture.provider.push).mockResolvedValue({
+      taskLinks: [
+        {
+          localTaskId: fixture.task.id,
+          externalId: "remote-1",
+          sourceUrl: "https://example.test/task/1",
+        },
+      ],
+      commentLinks: [],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.todu.task.update).not.toHaveBeenCalled();
+    expect(fixture.task.sourceUrl).toBeUndefined();
+    expect(fixture.todu.integration.updateStatus).toHaveBeenLastCalledWith(
+      fixture.binding.id,
+      expect.objectContaining({ state: "error" }),
+    );
+    fixture.handle.stop();
+  });
+
   it("does not acknowledge a partially applied multi-task batch and retains result ordering on replay", async () => {
     const fixture = createFieldGroupPull();
     const created = await fixture.todu.instance.task.create({
@@ -3272,6 +3401,17 @@ function createFieldGroupPull(
     catalogId: "test",
     ephemeral: true,
   });
+  todu.instance.__internal.syncRuntime.tasks = {
+    updateIfCurrent: vi.fn(async ({ id, input, expected }) => {
+      const current = await todu.instance.task.get(id);
+      if (!current.ok) return current;
+      if (JSON.stringify(current.value) !== JSON.stringify(expected))
+        return err(
+          validationError("syncPrecondition", "Task changed during sync; retry reconciliation"),
+        );
+      return todu.instance.task.update(id, { ...input, updatedAt: expected.updatedAt });
+    }),
+  };
   const checkpoint = { cursor: "opaque" };
   const provider: SyncProviderV5 = {
     ...createV3Provider(),

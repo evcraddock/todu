@@ -28,7 +28,7 @@ import {
   validateUpdateTaskInput,
   validationError,
 } from "@todu/core";
-import type { TaskNamespace } from "./todu.js";
+import type { SyncRuntimeTaskTools, TaskNamespace } from "./todu.js";
 
 // ============================================================================
 // Task namespace — multi-document CRUD
@@ -57,6 +57,13 @@ export function createTaskNamespace(
   catalog: DocHandle<CatalogDocument>,
   repo: Repo,
 ): InternalTaskNamespace {
+  return createTaskNamespaces(catalog, repo).namespace;
+}
+
+export function createTaskNamespaces(
+  catalog: DocHandle<CatalogDocument>,
+  repo: Repo,
+): { namespace: InternalTaskNamespace; syncRuntime: SyncRuntimeTaskTools } {
   function normalizeRangeBoundary(
     value: string,
     bound: "start" | "end",
@@ -130,6 +137,42 @@ export function createTaskNamespace(
       left?.sourceFingerprint === right?.sourceFingerprint &&
       left?.reviewedAt === right?.reviewedAt &&
       left?.reviewedByActorId === right?.reviewedByActorId
+    );
+  }
+
+  function syncPreconditionMatches(params: {
+    task: Task | undefined;
+    detail: TaskDetailDocument | undefined;
+    expected: TaskWithDetail;
+  }): boolean {
+    const { task, detail, expected } = params;
+    if (!task) return false;
+    const scalars = [
+      "id",
+      "projectId",
+      "title",
+      "status",
+      "priority",
+      "dueDate",
+      "scheduledDate",
+      "externalId",
+      "sourceUrl",
+      "templateId",
+      "createdAt",
+      "updatedAt",
+    ] as const;
+    return (
+      scalars.every((field) => task[field] === expected[field]) &&
+      arraysEqual(task.labels, expected.labels) &&
+      arraysEqual(task.assigneeActorIds, expected.assigneeActorIds) &&
+      arraysEqual(task.assignees, expected.assignees) &&
+      (detail?.description ?? "") === (expected.description ?? "") &&
+      approvalsEqual(
+        detail
+          ? normalizeContentApproval(detail.description, detail.descriptionApproval)
+          : undefined,
+        expected.descriptionApproval,
+      )
     );
   }
 
@@ -315,7 +358,7 @@ export function createTaskNamespace(
     return { found: false };
   }
 
-  return {
+  const operations = {
     async create(
       input: CreateTaskInput,
       overrideTaskId?: TaskId,
@@ -543,7 +586,16 @@ export function createTaskNamespace(
       return ok({ ...result.task, description, descriptionApproval });
     },
 
-    async update(id: TaskId, input: UpdateTaskInput): Promise<Result<TaskWithDetail>> {
+    async update(params: {
+      id: TaskId;
+      input: UpdateTaskInput;
+      expected?: TaskWithDetail;
+    }): Promise<Result<TaskWithDetail>> {
+      const { id, input, expected } = params;
+      if (expected && input.updatedAt !== undefined)
+        return err(
+          validationError("updatedAt", "Guarded sync writes preserve the observed task clock"),
+        );
       const result = await findTask(id);
       if (!result.found) return err(notFound("task", id));
 
@@ -566,9 +618,11 @@ export function createTaskNamespace(
         if (authorizationError) return err(authorizationError);
       }
 
-      const updatedAt = input.updatedAt
-        ? normalizeTaskTimestamp(input.updatedAt)
-        : new Date().toISOString();
+      const updatedAt = expected
+        ? expected.updatedAt
+        : input.updatedAt
+          ? normalizeTaskTimestamp(input.updatedAt)
+          : new Date().toISOString();
       const currentTask = result.task;
       const title = input.title?.trim();
       const externalId = input.externalId?.trim();
@@ -590,11 +644,48 @@ export function createTaskNamespace(
       let description: string | undefined;
       let descriptionApproval: ImportedContentApproval | undefined;
       const detailDocId = result.listHandle.doc()?.detailDocIds[id];
+      const detailHandle = detailDocId
+        ? await repo.find<TaskDetailDocument>(detailDocId as DocumentId)
+        : undefined;
+      // No awaits follow this guard before either document is mutated.
+      if (expected) {
+        const liveList = result.listHandle.doc();
+        const liveTask = liveList?.tasks[result.index];
+        const nextExternalId = externalId ?? expected.externalId;
+        if (
+          nextExternalId &&
+          liveList?.tasks.some((task) => task.id !== id && task.externalId === nextExternalId)
+        )
+          return err(
+            validationError(
+              "syncPrecondition",
+              "Task linkage changed during sync; retry reconciliation",
+            ),
+          );
+        if (
+          catalog.doc()?.taskListDocIds[expected.projectId] !== result.listHandle.documentId ||
+          liveList?.detailDocIds[id] !== detailDocId ||
+          !syncPreconditionMatches({ task: liveTask, detail: detailHandle?.doc(), expected })
+        )
+          return err(
+            validationError("syncPrecondition", "Task changed during sync; retry reconciliation"),
+          );
+        const liveProject = catalog.doc()?.projects.find((p) => p.id === expected.projectId);
+        if (!liveProject) return err(notFound("project", expected.projectId));
+        if (input.assigneeActorIds !== undefined) {
+          const missingActorId = findMissingActorId(input.assigneeActorIds);
+          if (missingActorId) return err(notFound("actor", missingActorId));
+          const authorizationError = validateAuthorizedAssigneeActorIds(
+            liveProject,
+            input.assigneeActorIds,
+          );
+          if (authorizationError) return err(authorizationError);
+        }
+      }
       let createdDetailDocId: DocumentId | undefined;
       let contentChanged = false;
 
-      if (detailDocId) {
-        const detailHandle = await repo.find<TaskDetailDocument>(detailDocId as DocumentId);
+      if (detailHandle) {
         const currentDetail = detailHandle.doc();
 
         if (
@@ -836,6 +927,10 @@ export function createTaskNamespace(
     },
 
     _repo: repo,
+  };
+  return {
+    namespace: { ...operations, update: (id, input) => operations.update({ id, input }) },
+    syncRuntime: { updateIfCurrent: (params) => operations.update(params) },
   };
 }
 

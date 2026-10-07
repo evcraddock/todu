@@ -375,13 +375,14 @@ export function createSyncPluginWorkerRuntime(
           };
           let taskResults: SyncTaskFieldGroupResult[] = [];
           if (pullResult.tasks.length > 0) {
-            const pullStats = await applyPulledTasksV3(
-              activeTodu,
+            const pullStats = await applyPulledTasksV3({
+              todu: activeTodu,
               actorState,
               project,
-              pullResult.tasks,
-              acknowledgedProvider !== null,
-            );
+              tasks: pullResult.tasks,
+              repairEqualTimestamps: acknowledgedProvider !== null,
+              guardedReplay: fieldGroupProvider !== null,
+            });
             project = pullStats.project;
           }
 
@@ -458,7 +459,13 @@ export function createSyncPluginWorkerRuntime(
             throw new Error("sync provider push must return { commentLinks: [], taskLinks: [] }");
           }
 
-          await applyPushTaskLinks(activeTodu, pushResult.taskLinks);
+          await applyPushTaskLinks({
+            todu: activeTodu,
+            links: pushResult.taskLinks,
+            ...(providerApiVersion === SYNC_PROVIDER_API_VERSION_V5
+              ? { guardProjectId: project.id }
+              : {}),
+          });
           await applyPushCommentLinks(activeTodu, actorState, pushResult.commentLinks);
         }
 
@@ -673,7 +680,12 @@ async function resolveExportedCommentProvenance(
   });
 }
 
-async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[]): Promise<void> {
+async function applyPushTaskLinks(params: {
+  todu: Todu;
+  links: SyncProviderPushTaskLink[];
+  guardProjectId?: Project["id"];
+}): Promise<void> {
+  const { todu, links, guardProjectId } = params;
   for (const link of links) {
     const taskResult = await todu.task.get(link.localTaskId);
     if (!taskResult.ok) {
@@ -683,6 +695,8 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
     }
 
     const task = taskResult.value;
+    if (guardProjectId !== undefined && task.projectId !== guardProjectId)
+      throw new Error(`v5 push task link references another project: task=${task.id}`);
     if (task.externalId && task.externalId !== link.externalId) {
       throw new Error(
         `push task link conflicts with existing task linkage: task=${link.localTaskId} existing=${task.externalId} next=${link.externalId}`,
@@ -706,7 +720,14 @@ async function applyPushTaskLinks(todu: Todu, links: SyncProviderPushTaskLink[])
       continue;
     }
 
-    const updateResult = await todu.task.update(task.id, updateInput);
+    const updateResult =
+      guardProjectId === undefined
+        ? await todu.task.update(task.id, updateInput)
+        : await getToduWithInternals(todu).__internal.syncRuntime.tasks.updateIfCurrent({
+            id: task.id,
+            input: updateInput,
+            expected: task,
+          });
     if (!updateResult.ok) {
       throw new Error(
         `push task link update failed: task=${link.localTaskId} externalId=${link.externalId} error=${formatToduError(updateResult.error)}`,
@@ -825,14 +846,15 @@ function getImportedTaskTimestamps(task: RuntimeImportedTask): {
   };
 }
 
-async function applyPulledTasksV3(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  tasks: ImportedTaskInput[],
-  repairEqualTimestamps = false,
-): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
-  const importedTasks = tasks.map((task) => ({
+async function applyPulledTasksV3(params: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  project: Project;
+  tasks: ImportedTaskInput[];
+  repairEqualTimestamps?: boolean;
+  guardedReplay?: boolean;
+}): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+  const importedTasks = params.tasks.map((task) => ({
     externalId: task.externalId,
     title: task.title,
     description: task.description,
@@ -845,16 +867,25 @@ async function applyPulledTasksV3(
     updatedAt: task.updatedAt,
   })) satisfies RuntimeImportedTask[];
 
-  return applyImportedTasks(todu, actorState, project, importedTasks, repairEqualTimestamps);
+  return applyImportedTasks({ ...params, tasks: importedTasks });
 }
 
-async function applyImportedTasks(
-  todu: Todu,
-  actorState: SyncBindingActorState,
-  project: Project,
-  tasks: RuntimeImportedTask[],
-  repairEqualTimestamps: boolean,
-): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+async function applyImportedTasks(params: {
+  todu: Todu;
+  actorState: SyncBindingActorState;
+  project: Project;
+  tasks: RuntimeImportedTask[];
+  repairEqualTimestamps?: boolean;
+  guardedReplay?: boolean;
+}): Promise<{ created: number; updated: number; skipped: number; project: Project }> {
+  const {
+    todu,
+    actorState,
+    project,
+    tasks,
+    repairEqualTimestamps = false,
+    guardedReplay = false,
+  } = params;
   const stats = { created: 0, updated: 0, skipped: 0 };
   const tasksResult = await todu.task.list({ projectId: project.id });
   if (!tasksResult.ok) {
@@ -874,6 +905,14 @@ async function applyImportedTasks(
     const existingTask = localByExternalId.get(importedTask.externalId);
     const pulledTimestamps = getImportedTaskTimestamps(importedTask);
     const externalUpdatedAt = pulledTimestamps.comparisonTimestamp;
+    if (
+      guardedReplay &&
+      existingTask &&
+      (!externalUpdatedAt || externalUpdatedAt > existingTask.updatedAt)
+    )
+      throw new Error(
+        `v5 bootstrap is no longer an interrupted creation replay: externalId=${importedTask.externalId}`,
+      );
     const assigneeResolution = await resolveImportedAssignees(
       todu,
       actorState,
@@ -951,6 +990,7 @@ async function applyImportedTasks(
           existingTask,
           importedTask,
           updatedAt: externalUpdatedAt,
+          guardedReplay,
         });
         if (repaired) {
           localByExternalId.set(importedTask.externalId, repaired);
@@ -1019,6 +1059,7 @@ async function repairReplayedTaskDescription(input: {
   existingTask: Task;
   importedTask: RuntimeImportedTask;
   updatedAt: string;
+  guardedReplay?: boolean;
 }): Promise<Task | null> {
   if (input.importedTask.description === undefined) return null;
   const detailResult = await input.todu.task.get(input.existingTask.id);
@@ -1036,11 +1077,17 @@ async function repairReplayedTaskDescription(input: {
   }
 
   // Equal list timestamps do not prove the separate detail document was saved.
-  const updateResult = await input.todu.task.update(input.existingTask.id, {
+  const patch = {
     description,
     descriptionApproval: buildImportedContentApproval(input.actorState.binding.id),
-    updatedAt: input.updatedAt,
-  });
+  };
+  const updateResult = input.guardedReplay
+    ? await getToduWithInternals(input.todu).__internal.syncRuntime.tasks.updateIfCurrent({
+        id: input.existingTask.id,
+        input: patch,
+        expected: detailResult.value,
+      })
+    : await input.todu.task.update(input.existingTask.id, { ...patch, updatedAt: input.updatedAt });
   if (!updateResult.ok) {
     throw new Error(
       `replayed task detail repair failed: task=${input.existingTask.id} error=${formatToduError(updateResult.error)}`,
