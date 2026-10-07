@@ -6,6 +6,8 @@ import {
   isEnrollmentRequestId,
   ok,
   type Result,
+  resolveEnrollmentEndpoint,
+  type SyncListenerConfig,
   validationError,
 } from "@todu/core";
 import {
@@ -37,6 +39,7 @@ import type { DaemonRpcNamespaceHandlers } from "./rpc.js";
 
 export function createEnrollmentRuntime(options: {
   storagePath: string;
+  syncListener?: SyncListenerConfig;
   getTodu(): Todu | null;
   isRunning(): boolean;
   activateTodu(todu: Todu): void;
@@ -153,6 +156,9 @@ export function createEnrollmentRuntime(options: {
       commitEnrollmentCatalog(options.storagePath, { ...local, approval: sourceInfo.approval });
       options.activateTodu(joined);
       pending = null;
+      const reloaded = await joined.sync.reloadPeers();
+      if (!reloaded.ok)
+        options.logger.warn("enrolled roster peer reload failed", { error: reloaded.error });
     } catch (error) {
       connection.close();
       if (joined) await joined.close();
@@ -203,7 +209,21 @@ export function createEnrollmentRuntime(options: {
             return err(
               validationError("endpoint", "Supply a known HTTP(S) listening base endpoint"),
             );
-          return getClient().begin(request.params.endpoint);
+          const advertised = request.params.advertisedEndpoint;
+          if (advertised !== undefined && typeof advertised !== "string")
+            return err(
+              validationError("advertisedEndpoint", "Expected an HTTP(S) listener endpoint"),
+            );
+          const device = await getDevice();
+          const endpoint = resolveEnrollmentEndpoint({
+            listener: options.syncListener,
+            published: device.endpoint,
+            override: advertised,
+          });
+          if (!endpoint.ok) return endpoint;
+          return getClient().begin(request.params.endpoint, {
+            registration: { ...device, endpoint: endpoint.value },
+          });
         }),
       enrollmentStatus: (request) => execute(request, async () => ok(getClient().status())),
       enrollmentCancel: (request) => execute(request, () => getClient().cancel()),

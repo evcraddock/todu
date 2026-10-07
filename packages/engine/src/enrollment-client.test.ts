@@ -70,6 +70,33 @@ describe("managed enrollment client boundaries", () => {
     fs.rmSync(directory, { recursive: true });
   });
 
+  it.each([
+    "legacy signal",
+    "options signal",
+  ])("honors cancellation with %s before requesting", async (mode) => {
+    const client = open();
+    const signal = AbortSignal.abort(new Error("Cancelled before request"));
+    expect(
+      await client.begin("http://known-peer:24377", mode === "legacy signal" ? signal : { signal }),
+    ).toMatchObject({ ok: false });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fs.readdirSync(directory)).toEqual([]);
+  });
+  it("retains host-supplied registration metadata through restart and polling", async () => {
+    prepareEnrollmentStorage({ storagePath: directory });
+    const registration = { ...device, endpoint: "http://laptop.lan:24377" };
+    const first = open();
+    await first.begin("http://known-peer:24377", { registration });
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).device).toEqual(registration);
+    expect(readEnrollmentState(directory)?.requestDevice).toEqual(registration);
+    await first.stop();
+    responseState = "approved";
+    const resumed = open();
+    resumed.resume();
+    await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS);
+    expect(resumed.status().stage).toBe("active");
+    expect(readEnrollmentState(directory)?.requestDevice).toEqual(registration);
+  });
   it("requests metadata only and never activates an unapproved response", async () => {
     prepareEnrollmentStorage({ storagePath: directory });
     const client = open();

@@ -77,6 +77,7 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
     "stop",
     "status",
     "catalogId",
+    "peersReload",
     "join",
     "enroll",
     "enrollmentStatus",

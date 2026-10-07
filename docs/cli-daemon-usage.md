@@ -156,7 +156,7 @@ todu device remove <enrolled-storage-id>
 
 Naming and endpoint commands default to the daemon's automatically supplied persistent native Repo storage ID. Explicit IDs target another existing registry entry; removal requires an explicit ID. IDs are not transient connection peer IDs, physical hardware identities, or authenticated credentials. Listing does not establish that a device is online or fully synchronized.
 
-Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration; automatic registry-based connections remain follow-up work.
+Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration. Daemons read advertised roster endpoints when their dataset becomes active; use `todu sync peers reload` after roster changes arrive to refresh running connections.
 
 Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the local approval-based enrollment flow below. An existing `sync join` operation is not membership approval.
 
@@ -204,7 +204,18 @@ The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id
 
 **Trusted LAN only:** HTTP/WebSocket transport is unencrypted and unauthenticated. The registry is not an access-control list; any reachable peer knowing the catalog path can attempt native replication. Restrict exposure through the operator's network configuration. No authentication, encrypted pairing, internet traversal, or per-document sharing filter is provided.
 
-This supplies incoming transport for explicit enrollment and native replication. Automatic roster-derived connections remain separate work; enabling a listener alone does not make other daemons connect or remove the need for an existing working server.
+This supplies incoming transport for enrollment and native replication. Listener enablement alone does not publish an address or refresh other daemons' target snapshots. Publish a reachable endpoint and explicitly reload peers after the roster update reaches them. Do not retire a working server until actual direct-peer operation has been verified.
+
+## Roster peer connections
+
+At startup or pristine dataset activation, the daemon connects through native adapters to other active roster entries with advertised endpoints, excluding self and removed/endpoint-less entries. Configured-server and matching enrollment links are reused where appropriate. Unavailable targets use existing transport retry handling and do not block local work.
+
+```bash
+todu sync peers reload
+todu --format json sync peers reload
+```
+
+Reload rereads the local shared roster without restarting. It retains unchanged links, adds targets, and disposes removed/replaced managed connections. Roster edits do not automatically change running connections. The report counts target changes, not online peers or synchronized documents. Reload does not edit the local listener, advertised address, server configuration, or worker assignments. Removal is not transport revocation, and `sync stop` is not a global peer pause.
 
 ## Locally approved device enrollment
 
@@ -214,12 +225,22 @@ On a genuinely pristine installation, **before first daemon/desktop startup**:
 
 ```bash
 todu sync enrollment prepare
+# Explicit local configuration; pending startup will not bind a catalog listener yet.
+todu sync listener enable --bind 192.168.1.20 --port 24377
 todu daemon start
 todu sync enroll http://mac-mini.lan:24377
 todu sync enrollment status
 ```
 
 Preparation creates only machine-local pending state, not a default catalog. Pending startup obtains/persists the native replica ID automatically but has no live dataset or document connection and runs no plugins, workers, or host processing. Domain commands remain unavailable until approval and valid catalog attachment. If a daemon/service already started normally, even an empty dataset is initialized and cannot be replaced by this command. Do not delete existing storage to force pristine eligibility.
+
+Enrollment automatically supplies the local advertised endpoint from its published roster metadata or concrete listener address/port. No extra address argument is needed normally. A wildcard binding requires a published endpoint or an explicit override:
+
+```bash
+todu sync enroll http://mac-mini.lan:24377 --advertise http://laptop.lan:24377
+```
+
+The local listener must be explicitly configured; this command never enables or rebinds it. Names/IDs/addresses in the request are operational metadata, not authenticated identity. The request endpoint is retained through polling/restart. Existing endpoint-less approval journals remain readable; new requests must include an advertised endpoint.
 
 An existing **same-dataset** replica skips preparation and runs `todu sync enroll <base-endpoint>` against its current daemon. Its catalog/storage IDs, existing data, server settings, provider-local state, assignments, and running workers are retained. A different initialized dataset is refused without merging or replacement.
 
@@ -246,7 +267,7 @@ todu sync enrollment cancel
 
 Cancellation stops local pending work, but retains native identity and cached data. Unapproved source requests expire; already-approved membership remains even if attachment never finishes. Pending cleanup must not remove existing members' entries or dataset documents. Inspect stale roster entries and manage them explicitly with `device` commands. Once active, cancellation is refused rather than clearing the dataset or removing its membership. Removed identities are not automatically restored.
 
-See [Device Sync Design](architecture/device-sync.md#managed-enrollment) for failure, partial approval, and trusted-LAN limitations. Approval gates the managed flow only; peers already knowing the native catalog route can still attempt replication.
+See [Device Sync Design](architecture/device-sync.md#managed-enrollment) for failure, partial approval, and trusted-LAN limitations, and its [manual production checklist](architecture/device-sync.md#manual-production-verification) for actual device validation beyond local wiring tests. Approval gates the managed flow only; peers already knowing the native catalog route can still attempt replication.
 
 ## Worker assignment configuration
 

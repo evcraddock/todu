@@ -51,6 +51,20 @@ describe("device enrollment CLI", () => {
     });
     expect(log.mock.calls.flat().join(" ")).toContain("Approve this request locally");
   });
+  it("passes an optional advertised address without changing local configuration", async () => {
+    const { run, invoke } = setup();
+    await run([
+      "sync",
+      "enroll",
+      "http://source.lan:24377",
+      "--advertise",
+      "http://laptop.lan:24377",
+    ]);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("sync.enroll", {
+      endpoint: "http://source.lan:24377",
+      advertisedEndpoint: "http://laptop.lan:24377",
+    });
+  });
   it("prepares pristine local storage before daemon startup without invoking RPC", async () => {
     const { run, invoke, log } = setup();
     await run(["sync", "enrollment", "prepare"]);

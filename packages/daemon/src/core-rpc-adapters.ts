@@ -371,6 +371,7 @@ export function createCoreNamespaceHandlers(
       }),
     },
     sync: {
+      peersReload: method(async (_request, todu) => todu.sync.reloadPeers()),
       start: method(async (_request, todu) => {
         await todu.sync.start();
         return ok(undefined);

@@ -71,8 +71,12 @@ export async function registerApprovedDevice(options: {
       ),
     );
   if (existing) {
+    if (!existing.endpoint && device.endpoint)
+      catalog.change((doc) => {
+        doc[deviceRegistryKey(device.id)].endpoint = device.endpoint;
+      });
     await repo.flush([catalog.documentId]);
-    return ok(cloneDevice(existing));
+    return ok(cloneDevice(catalog.doc()![deviceRegistryKey(device.id)]));
   }
   catalog.change((doc) => {
     doc[deviceRegistryKey(device.id)] = structuredClone(device);

@@ -1,6 +1,7 @@
 import type { Repo } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import type { EnrollmentApproval } from "@todu/core";
+import { assertNativePeerIdentity } from "./peer-identity.js";
 import {
   addRemoteSyncAdapter,
   disposeRemoteSyncAdapter,
@@ -15,6 +16,7 @@ export interface EnrollmentPeerConnection {
   source: EnrollmentSource;
   ready(signal?: AbortSignal): Promise<void>;
   close(): void;
+  isClosed?(): boolean;
 }
 export function enrollmentSyncUrl(source: EnrollmentSource): string {
   const url = new URL(source.approval.syncPath, source.endpoint);
@@ -22,7 +24,7 @@ export function enrollmentSyncUrl(source: EnrollmentSource): string {
   return url.href;
 }
 
-/** One explicit approved source link; automatic registry topology is separate work. */
+/** Identity-checked native transport reused by enrollment and explicit roster snapshots. */
 export function createEnrollmentPeerConnection(options: {
   repo: Repo;
   source: EnrollmentSource;
@@ -50,6 +52,19 @@ export function createEnrollmentPeerConnection(options: {
       ) {
         failure = "Approved source replica identity changed; refusing native attachment";
         logger?.warn("enrollment source mismatch", { error: failure });
+        next.disconnect();
+        return;
+      }
+      try {
+        assertNativePeerIdentity({
+          repo,
+          localId: source.approval.deviceId,
+          peerId,
+          storageId: metadata.storageId,
+        });
+      } catch (error) {
+        failure = String(error);
+        logger?.warn("native peer identity refused", { error: failure });
         next.disconnect();
         return;
       }
@@ -95,6 +110,7 @@ export function createEnrollmentPeerConnection(options: {
 
   return {
     source,
+    isClosed: () => closed,
     async ready(signal) {
       signal?.throwIfAborted();
       if (closed) throw new Error("Enrollment source connection was closed");

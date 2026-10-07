@@ -16,7 +16,7 @@ import {
 import type { WebSocketServer as IsoWebSocketServer } from "isomorphic-ws";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
-import { createDeviceNamespace } from "./devices.js";
+import { createDeviceNamespace, registerApprovedDevice } from "./devices.js";
 import { createTodu } from "./index.js";
 import {
   createPersistentRepo,
@@ -81,6 +81,30 @@ describe("dataset device registry", () => {
     expect(fs.existsSync(path.join(directory, "local", "accounts"))).toBe(false);
   });
 
+  it("publishes an approved endpoint for an existing endpoint-less entry without replacing its name or later explicit endpoint", async () => {
+    const storage = await open("local");
+    const id = createDeviceId("existing-registered-id");
+    storage.catalog.change((doc) => {
+      doc[deviceRegistryKey(id)] = { id, name: "Existing name" };
+    });
+    const approved = unwrap(
+      await registerApprovedDevice({
+        catalog: storage.catalog,
+        repo: storage.repo,
+        device: { id, name: "Request name", endpoint: "http://laptop.lan:24377" },
+      }),
+    );
+    expect(approved).toEqual({ id, name: "Existing name", endpoint: "http://laptop.lan:24377" });
+    expect(storage.catalog.doc()![deviceRegistryKey(id)]).toEqual(approved);
+    const repeated = unwrap(
+      await registerApprovedDevice({
+        catalog: storage.catalog,
+        repo: storage.repo,
+        device: { id, name: "Another name", endpoint: "http://other.lan:24377" },
+      }),
+    );
+    expect(repeated).toEqual(approved);
+  });
   it("initializes an existing catalog idempotently without changing its data or IDs", async () => {
     const storage = await open("legacy");
     const id = createDeviceId((await storage.repo.storageId())!);

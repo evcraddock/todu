@@ -17,8 +17,12 @@ export function registerSyncEnrollmentCommands(
   sync
     .command("enroll <endpoint>")
     .description("Request locally approved enrollment through one known HTTP(S) peer")
-    .action(async (endpoint: string) => {
-      const result = await invokeDaemon<EnrollmentClientStatus>("sync.enroll", { endpoint });
+    .option("--advertise <endpoint>", "Override the local advertised listener endpoint when needed")
+    .action(async (endpoint: string, options: { advertise?: string }) => {
+      const result = await invokeDaemon<EnrollmentClientStatus>("sync.enroll", {
+        endpoint,
+        ...(options.advertise !== undefined ? { advertisedEndpoint: options.advertise } : {}),
+      });
       if (!result.ok) {
         console.error(formatDaemonCommandError(result.error));
         process.exitCode = 1;

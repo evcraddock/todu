@@ -8,7 +8,7 @@
 
 This document reflects the current architecture decisions from planning task #1923.
 
-The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry, explicitly enabled LAN listener, and local approval-based enrollment are implemented; registry-derived connections remain follow-up work. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
+The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry, explicitly enabled LAN listener, local approval-based enrollment, and roster-derived connections at daemon startup or explicit reload are implemented. Roster edits do not automatically reconcile running connections. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
 
 macOS distribution and native package validation support Apple Silicon (`arm64`) only; Linux/Windows targets and shared npm package behavior are unchanged. See [Release Process](release.md) for current artifact and platform support.
 
@@ -68,7 +68,7 @@ Electron┘
 
 - Existing configured-server replication uses the native Automerge relay protocol.
 - An opt-in listener also accepts native bidirectional connections directly at `/sync/<current-catalog-id>` on an explicitly configured address/port, using the daemon's existing Repo.
-- Peers remain equal; a listening daemon is not a master. Explicit enrollment exchanges bounded metadata through the shared listener, then attaches native replication after local approval. Automatic roster-derived outbound connections remain follow-up work.
+- Peers remain equal; a listening daemon is not a master. Explicit enrollment exchanges bounded metadata through the shared listener, then attaches native replication after local approval. Each daemon loads advertised roster endpoints when its dataset becomes active; `todu sync peers reload` explicitly refreshes targets without restarting. Existing native transport handles synchronization and reconnection; no roster watcher or connection-election protocol is added.
 - The registry supplies connection metadata, not transport authorization. Reachable peers are not authenticated, and the route is not a document allowlist.
 - Private daemon RPC and administration remain on the local socket; the shared LAN HTTP listener exposes no administrative API.
 - Listener configuration defaults to disabled and binding errors do not prevent local daemon operation. Server settings and worker assignments are unchanged.

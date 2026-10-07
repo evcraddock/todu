@@ -396,6 +396,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
   const enrollment = createEnrollmentRuntime({
     storagePath: resolvedConfig.storagePath,
+    syncListener: resolvedConfig.syncListener,
     getTodu: () => todu,
     isRunning: () => runtimeStatus.state === "running",
     createTodu: (input) => createHostOwnedTodu(input),
@@ -811,6 +812,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       enrollmentHttpHandler: enrollment.handleHttp,
       remoteSync: resolvedConfig.remoteSync,
       syncListener: resolvedConfig.syncListener,
+      registeredPeerConnections: true,
       bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
       syncLogger: runtimeLogger.child("remote-sync"),
       startupTemplateProcessing: {
@@ -840,6 +842,9 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.transport = endpoint;
 
       if (startedTodu) {
+        const reloaded = await startedTodu.sync.reloadPeers();
+        if (!reloaded.ok)
+          runtimeLogger.warn("roster peer startup failed", { error: reloaded.error });
         await loadConfiguredPluginWorkers();
         attachEventSubscriptions(startedTodu);
         startRegisteredWorkers();
