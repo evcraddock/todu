@@ -10,6 +10,7 @@ import {
   createEnrollmentPeerConnection,
   type EnrollmentSource,
 } from "../../engine/src/enrollment-peer.js";
+import * as engine from "../../engine/src/index.js";
 import * as storage from "../../engine/src/storage.js";
 import { createDaemonRuntime, type DaemonRuntime } from "./runtime.js";
 
@@ -106,6 +107,65 @@ describe("daemon roster snapshots and private reload", () => {
     });
     expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 1, removed: 1 } });
     expect(runtime.config()).toEqual(config);
+    await runtime.stop();
+    for (const result of vi.mocked(createEnrollmentPeerConnection).mock.results)
+      expect(result.value.close).toHaveBeenCalledOnce();
+  });
+  it.each([
+    "removal",
+    "retarget",
+  ])("does not alias different identities at one URL or close the unchanged source on %s", async (change) => {
+    let host: engine.ToduWithInternalTools | undefined;
+    const create = engine.createTodu;
+    vi.spyOn(engine, "createTodu").mockImplementation(async (...args) => {
+      const instance = await create(...args);
+      host = instance as engine.ToduWithInternalTools;
+      return instance;
+    });
+    runtime = createDaemonRuntime({
+      storagePath: directory,
+      assignedWorkerTypes: [],
+      logLevel: "error",
+    });
+    await runtime.start();
+    const endpoint = "http://shared-address.invalid:24377";
+    for (const device of [id, second]) {
+      expect(
+        await host!.__internal.enrollment.registerDevice({ id: device, name: device, endpoint }),
+      ).toMatchObject({ ok: true });
+    }
+    const local = await host!.device.localId();
+    if (!local.ok) throw new Error(local.error.message);
+    const source: EnrollmentSource = {
+      endpoint,
+      approval: {
+        catalogId: runtime.status().catalogId!,
+        deviceId: local.value,
+        sourceDeviceId: id,
+        syncPath: `/sync/${runtime.status().catalogId}`,
+      },
+    };
+    expect(await host!.__internal.enrollment.attachSource(source)).toMatchObject({ ok: true });
+    const original = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
+    expect(await rpc()).toMatchObject({ ok: true, value: { retained: 1, added: 1, removed: 0 } });
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
+    expect(
+      vi.mocked(createEnrollmentPeerConnection).mock.results[1].value.source.approval
+        .sourceDeviceId,
+    ).toBe(second);
+    expect(
+      await (change === "removal"
+        ? host!.device.remove(second)
+        : host!.device.setEndpoint(second, "http://changed-address.invalid:24377")),
+    ).toMatchObject({ ok: true });
+    expect(await rpc()).toMatchObject({
+      ok: true,
+      value: { retained: 1, added: change === "removal" ? 0 : 1, removed: 1 },
+    });
+    expect(original.close).not.toHaveBeenCalled();
+    expect(await host!.__internal.enrollment.attachSource(source)).toMatchObject({ ok: true });
+    expect(original.ready).toHaveBeenCalledTimes(2);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(change === "removal" ? 2 : 3);
     await runtime.stop();
     for (const result of vi.mocked(createEnrollmentPeerConnection).mock.results)
       expect(result.value.close).toHaveBeenCalledOnce();

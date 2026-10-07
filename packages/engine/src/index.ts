@@ -480,6 +480,7 @@ export async function createTodu(
             if (
               enrollmentPeer &&
               !enrollmentPeer.isClosed?.() &&
+              enrollmentPeer.source.approval.sourceDeviceId === source.approval.sourceDeviceId &&
               enrollmentSyncUrl(enrollmentPeer.source) === enrollmentSyncUrl(source)
             ) {
               const connection = enrollmentPeer;
