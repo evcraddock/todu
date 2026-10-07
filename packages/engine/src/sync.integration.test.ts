@@ -1,237 +1,125 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { startTestSyncServer } from "../../../scripts/test-helpers/sync-server.js";
 import { createTodu } from "./index.js";
 import type { Todu } from "./todu.js";
 
-const TEST_SYNC_PORT = 24399; // Avoid conflict with real instances on 24377
-const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
-
 async function waitFor<T>(fn: () => Promise<T>, predicate: (value: T) => boolean): Promise<T> {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const value = await fn();
     if (predicate(value)) return value;
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
-
-  throw new Error("timed out waiting for expected sync state");
+  throw new Error("Timed out waiting for note replication");
 }
 
-(RUN_SYNC_SERVER_TESTS ? describe : describe.skip)("sync: ephemeral client + server", () => {
-  let tmpDir: string;
-  let server: Todu;
-  let client: Todu;
-
-  beforeEach(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-sync-test-"));
-
-    // Start server (Electron-like): persistent storage + sync server
-    server = await createTodu({
-      storagePath: tmpDir,
-      syncServer: true,
-      syncPort: TEST_SYNC_PORT,
-    });
-
-    // Allow sync server to fully initialize before clients connect
-    await new Promise((r) => setTimeout(r, 100));
-  });
+describe("SDK sync server and ephemeral client", () => {
+  let directory: string | undefined;
+  let server: Todu | undefined;
+  let client: Todu | undefined;
 
   afterEach(async () => {
-    if (client) await client.close();
-    if (server) await server.close();
-    // Small delay for Automerge to release file handles
-    await new Promise((r) => setTimeout(r, 100));
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("server creates data, ephemeral client reads it", { timeout: 15000 }, async () => {
-    // Create data on server
-    const createResult = await server.project.create({ name: "Sync Test Project" });
-    expect(createResult.ok).toBe(true);
-
-    // Connect ephemeral client
-    client = await createTodu({
-      storagePath: tmpDir,
-      syncClient: true,
-      syncPort: TEST_SYNC_PORT,
-    });
-
-    // Client should see the project via sync
-    const listResult = await client.project.list();
-    expect(listResult.ok).toBe(true);
-    if (listResult.ok) {
-      const projects = listResult.value;
-      expect(projects.length).toBeGreaterThanOrEqual(1);
-      expect(projects.some((p) => p.name === "Sync Test Project")).toBe(true);
+    try {
+      await client?.close();
+    } finally {
+      await server?.close();
     }
-  });
-
-  it("ephemeral client creates data, server sees it", { timeout: 15000 }, async () => {
-    // Connect ephemeral client
-    client = await createTodu({
-      storagePath: tmpDir,
-      syncClient: true,
-      syncPort: TEST_SYNC_PORT,
-    });
-
-    // Create data on client
-    const createResult = await client.project.create({ name: "Client Project" });
-    expect(createResult.ok).toBe(true);
-
-    // Give sync a moment to propagate
-    await new Promise((r) => setTimeout(r, 200));
-
-    // Server should see it
-    const listResult = await server.project.list();
-    expect(listResult.ok).toBe(true);
-    if (listResult.ok) {
-      expect(listResult.value.some((p) => p.name === "Client Project")).toBe(true);
-    }
+    if (directory) fs.rmSync(directory, { recursive: true, force: true });
+    directory = undefined;
+    server = undefined;
+    client = undefined;
   });
 
   it(
-    "syncs note create/update across server and ephemeral client",
-    { timeout: 20000 },
+    "replicates note buckets bidirectionally and persists received edits across restart",
+    { timeout: 20_000 },
     async () => {
+      directory = fs.mkdtempSync(path.join(os.tmpdir(), "todu-sync-test-"));
+      const started = await startTestSyncServer(directory);
+      server = started.server;
+      expect(server.sync.status()).toMatchObject({
+        local: { mode: "sync-server" },
+        remote: { state: "disconnected" },
+      });
+
       const project = await server.project.create({ name: "Notes Sync Project" });
       expect(project.ok).toBe(true);
-      if (!project.ok) return;
-
+      if (!project.ok) throw new Error(JSON.stringify(project.error));
       const task = await server.task.create({
         title: "Notes Sync Task",
         projectId: project.value.id,
       });
       expect(task.ok).toBe(true);
-      if (!task.ok) return;
-
-      const serverNote = await server.note.create({
+      if (!task.ok) throw new Error(JSON.stringify(task.error));
+      const note = await server.note.create({
         content: "Created on server",
         entityType: "task",
         entityId: task.value.id,
       });
-      expect(serverNote.ok).toBe(true);
-      if (!serverNote.ok) return;
+      expect(note.ok).toBe(true);
+      if (!note.ok) throw new Error(JSON.stringify(note.error));
 
       client = await createTodu({
-        storagePath: tmpDir,
+        storagePath: directory,
         syncClient: true,
-        syncPort: TEST_SYNC_PORT,
+        syncPort: started.port,
       });
-
-      const clientTaskNotes = await waitFor(
-        () => client.note.list({ entityType: "task", entityId: task.value.id }),
-        (result) => result.ok && result.value.some((note) => note.id === serverNote.value.id),
+      expect(client.sync.status()).toMatchObject({
+        local: { mode: "ephemeral-client" },
+        remote: { state: "disconnected" },
+      });
+      const projects = await client.project.list();
+      expect(projects.ok).toBe(true);
+      if (projects.ok) expect(projects.value.map((entry) => entry.id)).toContain(project.value.id);
+      await waitFor(
+        () => client!.note.list({ entityType: "task", entityId: task.value.id }),
+        (result) => result.ok && result.value.some((entry) => entry.id === note.value.id),
       );
-      expect(clientTaskNotes.ok).toBe(true);
-
-      const updateFromClient = await client.note.update(serverNote.value.id, {
-        content: "Updated from client",
-        tags: ["synced"],
-      });
-      expect(updateFromClient.ok).toBe(true);
-
-      const serverTaskNotes = await waitFor(
-        () => server.note.list({ entityType: "task", entityId: task.value.id }),
+      expect(
+        (
+          await client.note.update(note.value.id, {
+            content: "Updated from client",
+            tags: ["synced"],
+          })
+        ).ok,
+      ).toBe(true);
+      const received = await waitFor(
+        () => server!.note.list({ entityType: "task", entityId: task.value.id }),
         (result) =>
           result.ok &&
           result.value.some(
-            (note) => note.id === serverNote.value.id && note.content === "Updated from client",
+            (entry) => entry.id === note.value.id && entry.content === "Updated from client",
           ),
       );
-      expect(serverTaskNotes.ok).toBe(true);
+      expect(received.ok).toBe(true);
+      if (received.ok)
+        expect(received.value.find((entry) => entry.id === note.value.id)?.tags).toEqual([
+          "synced",
+        ]);
 
-      const clientJournal = await client.note.create({ content: "Journal from client" });
-      expect(clientJournal.ok).toBe(true);
-      if (!clientJournal.ok) return;
-
-      const serverAllNotes = await waitFor(
-        () => server.note.list(),
-        (result) => result.ok && result.value.some((note) => note.id === clientJournal.value.id),
+      const journal = await client.note.create({ content: "Journal from client" });
+      expect(journal.ok).toBe(true);
+      if (!journal.ok) throw new Error(JSON.stringify(journal.error));
+      await waitFor(
+        () => server!.note.list(),
+        (result) => result.ok && result.value.some((entry) => entry.id === journal.value.id),
       );
-      expect(serverAllNotes.ok).toBe(true);
+
+      await client.close();
+      client = undefined;
+      await server.close();
+      server = undefined;
+      server = await createTodu({ storagePath: directory });
+      const persisted = await server.note.get(note.value.id);
+      expect(persisted.ok).toBe(true);
+      if (persisted.ok)
+        expect(persisted.value).toMatchObject({ content: "Updated from client", tags: ["synced"] });
+      const persistedJournal = await server.note.get(journal.value.id);
+      expect(persistedJournal.ok).toBe(true);
+      if (persistedJournal.ok) expect(persistedJournal.value.content).toBe("Journal from client");
     },
   );
-
-  it("ephemeral client does not write to disk", { timeout: 15000 }, async () => {
-    // Note the files before client connects
-    const filesBefore = new Set(fs.readdirSync(tmpDir));
-
-    // Connect ephemeral client and create data
-    client = await createTodu({
-      storagePath: tmpDir,
-      syncClient: true,
-      syncPort: TEST_SYNC_PORT,
-    });
-
-    await client.project.create({ name: "Ephemeral Project" });
-
-    // Wait for sync to propagate to server before closing
-    await new Promise((r) => setTimeout(r, 500));
-
-    // Close client
-    await client.close();
-
-    // Only the server should have written files.
-    // The ephemeral client should not have added any new files.
-    // (Server may have flushed synced data, which is expected.)
-    // The key check: no new storage adapter files from the client.
-    const filesAfter = new Set(fs.readdirSync(tmpDir));
-
-    // The marker file and automerge storage should already exist from server init.
-    // We mainly verify the client didn't crash or corrupt anything.
-    expect(filesAfter.size).toBeGreaterThanOrEqual(filesBefore.size);
-
-    // Reconnect server to verify data integrity
-    await server.close();
-    const server2 = await createTodu({ storagePath: tmpDir });
-    const listResult = await server2.project.list();
-    expect(listResult.ok).toBe(true);
-    if (listResult.ok) {
-      // The project created by the ephemeral client should have synced to server
-      // and been persisted by the server
-      expect(listResult.value.some((p) => p.name === "Ephemeral Project")).toBe(true);
-    }
-    await server2.close();
-  });
-});
-
-describe("sync: standalone mode (no server)", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-standalone-test-"));
-  });
-
-  afterEach(async () => {
-    await new Promise((r) => setTimeout(r, 100));
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("CLI standalone creates and reads data without sync", { timeout: 10000 }, async () => {
-    const todu = await createTodu({ storagePath: tmpDir });
-
-    const createResult = await todu.project.create({ name: "Standalone Project" });
-    expect(createResult.ok).toBe(true);
-
-    const listResult = await todu.project.list();
-    expect(listResult.ok).toBe(true);
-    if (listResult.ok) {
-      expect(listResult.value.length).toBe(1);
-      expect(listResult.value[0].name).toBe("Standalone Project");
-    }
-
-    await todu.close();
-
-    // Reopen — data should persist
-    const todu2 = await createTodu({ storagePath: tmpDir });
-    const listResult2 = await todu2.project.list();
-    expect(listResult2.ok).toBe(true);
-    if (listResult2.ok) {
-      expect(listResult2.value.length).toBe(1);
-      expect(listResult2.value[0].name).toBe("Standalone Project");
-    }
-    await todu2.close();
-  });
 });

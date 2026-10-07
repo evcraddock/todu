@@ -29,7 +29,8 @@
     "includes": [
       "**/packages/**/*/src/**/*.ts",
       "**/packages/**/*/src/**/*.tsx",
-      "scripts/**/*.test.ts"
+      "scripts/**/*.test.ts",
+      "scripts/test-helpers/**/*.ts"
     ]
   }
 }

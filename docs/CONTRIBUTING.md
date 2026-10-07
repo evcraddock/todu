@@ -177,9 +177,9 @@ PR Pipeline Status
 | `npm run release-packages` | Build and publish changed npm packages through Changesets |
 | `make build` | Build all packages (core → engine → recurring-worker → daemon → cli → tui) |
 | `make test` | Run unit tests only (fast, no Automerge/storage) |
-| `make test-all` | Run all tests including integration tests |
-| `make test-integration` | Run integration tests only (Automerge/storage) |
-| `make test-sync-server-integration` | Run sync-server-backed integration tests explicitly |
+| `make test-all` | Run all tests, including integration and local sync-server coverage (CI default) |
+| `make test-integration` | Run integration tests only (Automerge/storage/local servers) |
+| `make test-sync-server-integration` | Run the focused local sync-server suites without an opt-in flag |
 | `make check` | Lint + format + typecheck |
 | `make pre-pr` | Full pre-PR checks (check + unit tests + build) |
 | `npm run test:storage-stability` | Repeat storage teardown tests to detect race leaks |
@@ -192,11 +192,11 @@ npm run test:conformance
 npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
 ```
 
-Sync-server-backed integration coverage is opt-in and must be run explicitly:
+The default full suite (`npm run test:all` / `make test-all`) includes retained sync-server coverage without an environment flag. CI builds the packages before running the full suite so daemon/CLI subprocess tests use current artifacts. `make test` and `make pre-pr` deliberately retain fast unit-only coverage; run `make build` followed by `make test-all` before handing off changes that affect integration behavior.
 
-```bash
-make test-sync-server-integration
-```
+For focused sync verification, use `make test-sync-server-integration`. These suites start loopback-only servers on dynamically allocated ports, use temporary storage, and close clients/daemons before deleting storage. Tests must not contact live provider integrations or use live daemon settings. When validating changes locally, isolate `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` in temporary directories as CI does.
+
+Unhandled errors fail Vitest by default; do not use retries, ignore-unhandled-error settings, or relaxed assertions to make integration runs green. The [test coverage audit](testing/task-f3ec895a-coverage-audit.md) records deleted/consolidated cases, retained regression coverage, and legitimate platform skips.
 
 See also:
 
