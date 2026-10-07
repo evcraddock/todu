@@ -87,6 +87,8 @@ export interface ToduConfig {
 
   /** Explicit machine-local LAN listener; disabled unless enabled with a bind address. */
   syncListener?: SyncListenerConfig;
+  /** Host-owned roster connections; thin clients and standalone SDK instances opt out. */
+  registeredPeerConnections?: boolean;
 
   /** Try to connect to a running sync server (used by CLI) */
   syncClient?: boolean;
@@ -288,6 +290,8 @@ export interface SyncStatus {
 }
 
 export interface SyncNamespace {
+  /** Explicitly refresh peer targets; completion is not proof of synchronization. */
+  reloadPeers(): Promise<Result<import("./peer-connections.js").PeerReloadReport>>;
   /** Start remote multi-device sync connection. */
   start(): Promise<void>;
   /** Stop remote multi-device sync connection. */
@@ -480,6 +484,10 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       history: stub,
     },
     sync: {
+      reloadPeers: async () => ({
+        ok: true,
+        value: { added: 0, retained: 0, removed: 0, errors: [] },
+      }),
       start: () => Promise.resolve(),
       stop: () => Promise.resolve(),
       status: () => ({

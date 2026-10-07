@@ -6,6 +6,7 @@ import { isValidDocumentId } from "@automerge/automerge-repo/slim";
 import {
   type CatalogDocument,
   createDeviceId,
+  type Device,
   type DeviceId,
   deviceRegistryKey,
   type EnrollmentApproval,
@@ -26,6 +27,8 @@ export interface LocalEnrollmentState {
   mode: "pending" | "active";
   status: EnrollmentClientStatus;
   approval?: EnrollmentApproval;
+  /** Registration metadata retained across request retries and daemon restart. */
+  requestDevice?: Device;
   connection?: { endpoint: string; approval: EnrollmentApproval };
 }
 

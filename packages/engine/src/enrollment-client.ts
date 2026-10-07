@@ -24,7 +24,10 @@ import {
 } from "./enrollment-storage.js";
 
 export interface EnrollmentClient {
-  begin(endpoint: string, signal?: AbortSignal): Promise<Result<EnrollmentClientStatus>>;
+  begin(
+    endpoint: string,
+    input?: AbortSignal | { signal?: AbortSignal; registration?: Device },
+  ): Promise<Result<EnrollmentClientStatus>>;
   status(): EnrollmentClientStatus;
   cancel(): Promise<Result<EnrollmentClientStatus>>;
   resume(): void;
@@ -208,7 +211,12 @@ export function createEnrollmentClient(options: {
           ? approval.error.message
           : JSON.stringify(approval.error),
       );
-    save({ ...previous, status, ...(approval?.ok ? { approval: approval.value } : {}) });
+    save({
+      ...previous,
+      status,
+      requestDevice: structuredClone(device),
+      ...(approval?.ok ? { approval: approval.value } : {}),
+    });
     if (approval?.ok && !deferActivation) {
       await options.activate({ endpoint, approval: approval.value }, signal);
       signal.throwIfAborted();
@@ -229,7 +237,7 @@ export function createEnrollmentClient(options: {
     controller = new AbortController();
     try {
       const current = state;
-      const device = await options.getDevice();
+      const device = current.requestDevice ?? (await options.getDevice());
       const response = await requestEnrollment({
         endpoint: current.status.endpoint!,
         route: `/enrollment/requests/${current.status.requestId}`,
@@ -256,7 +264,9 @@ export function createEnrollmentClient(options: {
     }
   }
   const client: EnrollmentClient = {
-    async begin(endpoint, signal) {
+    async begin(endpoint, input) {
+      const signal = input && "aborted" in input ? input : input?.signal;
+      const registration = input && "aborted" in input ? undefined : input?.registration;
       const endpointError = validateDeviceEndpoint(endpoint);
       if (endpointError) return err(endpointError);
       if (stopped || operation)
@@ -271,7 +281,7 @@ export function createEnrollmentClient(options: {
       operation = (async () => {
         try {
           signal?.throwIfAborted();
-          const device = await options.getDevice();
+          const device = registration ?? (await options.getDevice());
           const catalogId = options.getCatalogId();
           if (
             state?.status.stage === "active" &&

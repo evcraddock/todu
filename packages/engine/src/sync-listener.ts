@@ -12,6 +12,7 @@ import {
 } from "@todu/core";
 import type { WebSocketServer as IsoWebSocketServer } from "isomorphic-ws";
 import { WebSocketServer } from "ws";
+import { assertNativePeerIdentity } from "./peer-identity.js";
 import type { SyncAdapterEventLogger } from "./sync-client.js";
 
 export interface SyncListener {
@@ -57,6 +58,11 @@ export async function startSyncListener(
   );
   const wss = new WebSocketServer({ noServer: true });
   const adapter = new WebSocketServerAdapter(wss as unknown as IsoWebSocketServer);
+  const localId = await repo.storageId();
+  // Validate before the Repo's peer-candidate handler admits the native connection.
+  adapter.on("peer-candidate", ({ peerId, peerMetadata }) => {
+    assertNativePeerIdentity({ repo, localId, peerId, storageId: peerMetadata?.storageId });
+  });
   const receiveMessage = adapter.receiveMessage.bind(adapter);
   adapter.receiveMessage = (...args: Parameters<WebSocketServerAdapter["receiveMessage"]>) => {
     try {

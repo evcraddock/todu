@@ -131,6 +131,13 @@ export function createEnrollmentRequestStore(options: {
         const validated = validateEnrollmentInput(input);
         if (!validated.ok) return validated;
         const registration = validated.value;
+        if (!registration.device.endpoint)
+          return err(
+            validationError(
+              "device.endpoint",
+              "New enrollment requires an advertised listener endpoint",
+            ),
+          );
         const current = await context();
         if (registration.expectedCatalogId && registration.expectedCatalogId !== current.catalogId)
           return err(

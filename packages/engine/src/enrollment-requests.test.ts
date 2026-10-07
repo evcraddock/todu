@@ -24,7 +24,11 @@ describe("machine-local enrollment approval journal", () => {
   });
   const input = () => ({
     requestId: createEnrollmentRequestId(crypto.randomUUID()),
-    device: { id: createDeviceId("joining-native-id"), name: "Laptop" },
+    device: {
+      id: createDeviceId("joining-native-id"),
+      name: "Laptop",
+      endpoint: "http://laptop.lan:24377",
+    },
   });
   const open = () =>
     createEnrollmentRequestStore({
@@ -69,6 +73,31 @@ describe("machine-local enrollment approval journal", () => {
     });
     expect(register).toHaveBeenCalledTimes(1);
   });
+  it("refuses new endpoint-less requests while retaining readable historical journals", async () => {
+    const request = input();
+    const legacy = { ...request, device: { id: request.device.id, name: request.device.name } };
+    expect(await open().submit(legacy)).toMatchObject({
+      ok: false,
+      error: { field: "device.endpoint" },
+    });
+    expect(fs.readdirSync(directory)).toEqual([]);
+    fs.writeFileSync(
+      path.join(directory, "todu-enrollment-requests.json"),
+      JSON.stringify([
+        {
+          ...legacy,
+          catalogId,
+          state: "pending",
+          createdAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 60000).toISOString(),
+        },
+      ]),
+    );
+    expect(await open().list()).toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ device: legacy.device })],
+    });
+  });
   it("deduplicates retries even when the initial response and request UUID are lost", async () => {
     const store = open();
     const request = input();
@@ -76,7 +105,7 @@ describe("machine-local enrollment approval journal", () => {
     const retried = await store.submit({
       ...request,
       requestId: createEnrollmentRequestId(crypto.randomUUID()),
-      device: { name: "Laptop", id: request.device.id },
+      device: { ...request.device, name: "Laptop", id: request.device.id },
     });
     expect(retried).toMatchObject({ ok: true, value: { requestId: request.requestId } });
     expect(await store.list()).toMatchObject({
@@ -159,7 +188,11 @@ describe("machine-local enrollment approval journal", () => {
     for (let i = 0; i < MAX_ENROLLMENT_REQUESTS; i++)
       await store.submit({
         ...input(),
-        device: { id: createDeviceId(`native-${i}`), name: `Device ${i}` },
+        device: {
+          id: createDeviceId(`native-${i}`),
+          name: `Device ${i}`,
+          endpoint: "http://laptop.lan:24377",
+        },
       });
     expect(await store.submit(input())).toMatchObject({ ok: false, error: { field: "requests" } });
     now += ENROLLMENT_REQUEST_TTL_MS + 1;

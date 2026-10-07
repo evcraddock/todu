@@ -26,9 +26,11 @@ import { createDaemonRuntime, type DaemonRuntime } from "./runtime.js";
 
 describe("locally approved device enrollment", { timeout: 30_000 }, () => {
   let directory: string;
+  let clientPort: number;
   const runtimes: DaemonRuntime[] = [];
-  beforeEach(() => {
+  beforeEach(async () => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-enrollment-"));
+    clientPort = await reservePort();
   });
   afterEach(async () => {
     await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
@@ -40,6 +42,7 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
       storagePath: path.join(directory, name),
       assignedWorkerTypes: [],
       logLevel: "error",
+      syncListener: { enabled: true, bind: "127.0.0.1", port: clientPort },
       ...options,
     });
     runtimes.push(instance);
