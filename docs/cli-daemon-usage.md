@@ -158,7 +158,7 @@ Naming and endpoint commands default to the daemon's automatically supplied pers
 
 Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration; automatic registry-based connections remain follow-up work.
 
-Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the future local approval-based enrollment flow. An existing `sync join` operation is not membership approval.
+Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the local approval-based enrollment flow below. An existing `sync join` operation is not membership approval.
 
 Removal retains a replicated tombstone so normal startup cannot restore membership. It does not delete dataset documents or remote copies, instantly revoke access on offline replicas, or authenticate devices. The registry is connection metadata, not a transport authorization layer; the currently configured sync-server path remains unchanged. Take independent backups before rollout; do not retire a working sync server based on registry visibility alone.
 
@@ -200,11 +200,53 @@ todu daemon restart
 
 Saving the disabled flag alone does not stop a running listener. Before travel to an untrusted network, apply the restart or stop the daemon. Existing `sync start|stop|restart` controls the outbound configured-server path only, not LAN listening.
 
-The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id>` (bracket IPv6 addresses in URLs). Wrong-catalog and non-exact upgrade paths are refused. HTTP requests, enrollment routes awaiting their follow-up implementation, remote RPC, and remote approval return `404`. Binding errors appear in listener status and daemon logs while private local reads/edits remain available. Listener status is separate from outbound server state and does not claim synchronization completeness.
+The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id>` (bracket IPv6 addresses in URLs). Wrong-catalog and non-exact upgrade paths are refused. The shared listener accepts metadata-only enrollment requests/polls; other HTTP routes, remote RPC, and remote approval return `404`. Binding errors appear in listener status and daemon logs while private local reads/edits remain available. Listener status is separate from outbound server state and does not claim synchronization completeness.
 
 **Trusted LAN only:** HTTP/WebSocket transport is unencrypted and unauthenticated. The registry is not an access-control list; any reachable peer knowing the catalog path can attempt native replication. Restrict exposure through the operator's network configuration. No authentication, encrypted pairing, internet traversal, or per-document sharing filter is provided.
 
-This supplies the incoming transport. Explicit LAN enrollment and automatic roster-derived connections remain separate tasks; enabling a listener alone does not make other daemons connect or remove the need for an existing working server.
+This supplies incoming transport for explicit enrollment and native replication. Automatic roster-derived connections remain separate work; enabling a listener alone does not make other daemons connect or remove the need for an existing working server.
+
+## Locally approved device enrollment
+
+Use one known listening peer's base endpoint; do not copy catalog/storage IDs or put a `/sync/...` path in the command. The listener must already be explicitly enabled on the receiving device. The exchange is trusted-LAN-only operational approval, not authenticated or encrypted pairing.
+
+On a genuinely pristine installation, **before first daemon/desktop startup**:
+
+```bash
+todu sync enrollment prepare
+todu daemon start
+todu sync enroll http://mac-mini.lan:24377
+todu sync enrollment status
+```
+
+Preparation creates only machine-local pending state, not a default catalog. Pending startup obtains/persists the native replica ID automatically but has no live dataset or document connection and runs no plugins, workers, or host processing. Domain commands remain unavailable until approval and valid catalog attachment. If a daemon/service already started normally, even an empty dataset is initialized and cannot be replaced by this command. Do not delete existing storage to force pristine eligibility.
+
+An existing **same-dataset** replica skips preparation and runs `todu sync enroll <base-endpoint>` against its current daemon. Its catalog/storage IDs, existing data, server settings, provider-local state, assignments, and running workers are retained. A different initialized dataset is refused without merging or replacement.
+
+On the receiving device, inspect and decide locally:
+
+```bash
+todu sync enrollment list
+todu sync enrollment approve <request-id>
+# or:
+todu sync enrollment deny <request-id>
+```
+
+The request ID is a local request selector displayed by `list`, not a catalog/storage ID to transfer between machines. Responses contain metadata only. The requesting daemon polls and, after approval plus eligibility validation, attaches native bidirectional replication through that peer. `status` reports `prepared`, `pending`, `attaching`, `active`, `denied`, `expired`, `error`, or `cancelled`; `active` records successful activation, not ongoing connection health or complete offline readiness. Use `--format json` for structured output.
+
+The approved-source link survives daemon restart without changing `sync.remote` or listener settings. Pristine approval does not activate workers or host startup processing; a later explicit normal restart honors locally configured startup/worker settings. Source plugin credentials/configuration are not imported.
+
+Requests expire after ten minutes while pending. The source journal retains at most 128 request records and accepts at most 8 KiB metadata bodies. HTTP exchanges have a five-second deadline. Retries retain the native ID, reuse/deduplicate request state, and never create substitute catalogs or duplicate membership. An approved but failed pristine attachment remains bound to that dataset; retained cached data is not reused to join a different dataset. Keep the same config/data/socket context when retrying.
+
+To abandon pending enrollment locally:
+
+```bash
+todu sync enrollment cancel
+```
+
+Cancellation stops local pending work, but retains native identity and cached data. Unapproved source requests expire; already-approved membership remains even if attachment never finishes. Pending cleanup must not remove existing members' entries or dataset documents. Inspect stale roster entries and manage them explicitly with `device` commands. Once active, cancellation is refused rather than clearing the dataset or removing its membership. Removed identities are not automatically restored.
+
+See [Device Sync Design](architecture/device-sync.md#managed-enrollment) for failure, partial approval, and trusted-LAN limitations. Approval gates the managed flow only; peers already knowing the native catalog route can still attempt replication.
 
 ## Worker assignment configuration
 

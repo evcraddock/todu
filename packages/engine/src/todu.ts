@@ -56,7 +56,9 @@ import type {
   UpdateTaskInput,
   UpsertCommentSyncProvenanceInput,
 } from "@todu/core";
+import type { EnrollmentSource } from "./enrollment-peer.js";
 import type { UpcomingOccurrence } from "./recurring.js";
+import type { Storage } from "./storage.js";
 
 // ============================================================================
 // Config
@@ -71,6 +73,16 @@ export interface ToduConfig {
 
   /** Port for sync server/client (default: 24377) */
   syncPort?: number;
+
+  /** Validated engine-owned join storage; bypasses normal catalog bootstrap. */
+  joinedStorage?: Storage;
+  /** Explicit approved source, independent of configured-server settings. */
+  enrollmentSource?: EnrollmentSource;
+  /** Machine-local enrollment HTTP handler; no general remote RPC is exposed. */
+  enrollmentHttpHandler?: (
+    request: import("node:http").IncomingMessage,
+    response: import("node:http").ServerResponse,
+  ) => Promise<boolean>;
 
   /** Explicit machine-local LAN listener; disabled unless enabled with a bind address. */
   syncListener?: SyncListenerConfig;
@@ -339,6 +351,10 @@ export interface SyncRuntimeNoteTools {
 }
 
 export interface ToduInternalTools {
+  enrollment: {
+    registerDevice(device: Device): Promise<Result<Device>>;
+    attachSource(source: EnrollmentSource, signal?: AbortSignal): Promise<Result<void>>;
+  };
   syncRuntime: {
     /** Complete native local storage writes; does not wait for remote replication. */
     flush(): Promise<void>;

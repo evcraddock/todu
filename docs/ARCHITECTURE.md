@@ -8,7 +8,7 @@
 
 This document reflects the current architecture decisions from planning task #1923.
 
-The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry and explicitly enabled LAN listener are implemented; approval-based enrollment and registry-derived connections remain follow-up work. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
+The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry, explicitly enabled LAN listener, and local approval-based enrollment are implemented; registry-derived connections remain follow-up work. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
 
 Project context:
 - Greenfield
@@ -66,7 +66,7 @@ Electron┘
 
 - Existing configured-server replication uses the native Automerge relay protocol.
 - An opt-in listener also accepts native bidirectional connections directly at `/sync/<current-catalog-id>` on an explicitly configured address/port, using the daemon's existing Repo.
-- Peers remain equal; a listening daemon is not a master. Automatic roster-derived outbound connections and explicit LAN enrollment are not implemented yet.
+- Peers remain equal; a listening daemon is not a master. Explicit enrollment exchanges bounded metadata through the shared listener, then attaches native replication after local approval. Automatic roster-derived outbound connections remain follow-up work.
 - The registry supplies connection metadata, not transport authorization. Reachable peers are not authenticated, and the route is not a document allowlist.
 - Private daemon RPC and administration remain on the local socket; the shared LAN HTTP listener exposes no administrative API.
 - Listener configuration defaults to disabled and binding errors do not prevent local daemon operation. Server settings and worker assignments are unchanged.
@@ -118,6 +118,7 @@ Diagnostics: set `TODU_NOTES_DIAGNOSTICS=1` to log notes bucket usage and legacy
 
 - **Bootstrap** (first run, no marker/catalog): creating initial catalog is allowed.
 - **Join** (explicit switch to another catalog ID): fail-safe transactional switch only.
+- **Managed enrollment**: pristine storage is explicitly prepared before bootstrap and keeps only native identity/local pending metadata until approval. The approved catalog is natively loaded/validated/flushed before marker publication; different initialized datasets are refused without replacement. Pending/pristine attachment runs no workers/host processing, and existing same-dataset engines are retained. Approval/cancellation journals are machine-local and contain no document bodies.
 
 ### Join flow (required)
 

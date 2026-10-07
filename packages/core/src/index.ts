@@ -1,5 +1,6 @@
 export * from "./config.js";
 export * from "./constants.js";
+export * from "./enrollment.js";
 export * from "./schedule.js";
 export * from "./schema.js";
 export * from "./sync-provider.js";

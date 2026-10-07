@@ -49,6 +49,14 @@ Ensure the CLI edits the file actually read by the service (`TODU_CONFIG` or the
 
 The shared HTTP/WebSocket listener accepts native replication at `/sync/<current-catalog-id>` and exposes no remote administration. It is unencrypted and unauthenticated: restrict access to the trusted LAN, avoid unnecessary all-interface bindings, and do not forward it to the internet. Registry endpoints are metadata, not authorization. Server settings, dataset IDs, and worker/provider assignments are preserved. See [CLI listener controls](cli-daemon-usage.md#opt-in-lan-sync-listener) for configuration, status, and follow-up limitations.
 
+## Pristine enrollment before service startup
+
+For a new replica of an existing dataset, run `todu sync enrollment prepare` in the service's actual config/data context **before enabling the service or starting the desktop/daemon for the first time**. Then start the daemon and request enrollment with `todu sync enroll http://known-peer.lan:24377`. Inspect/approve the request locally on that listening peer. Pending startup keeps a native persistent identity but has no live catalog, configured-server document adapter, plugins, workers, or host processing. No throwaway catalog is created.
+
+An already initialized empty installation is not pristine. Same-dataset replicas can enroll through their existing daemon; different datasets are refused unchanged. Do not change a service data directory or delete its storage merely to bypass refusal. Environment overrides such as `TODU_DATA_DIR` and `TODU_DAEMON_SOCKET` must match the service when preparing and issuing commands.
+
+Pending requests and staged data survive restarts, and polling/attachment is stopped and drained before pending storage shutdown. Approval does not enable worker/plugin settings; existing same-dataset execution stays intact. Initial pristine attachment skips worker startup/host processing, while a later explicit normal restart honors existing local configuration. Source credentials/provider state are not copied. Cancellation does not undo durable source approval, remove existing membership, delete cached documents, or initialize a default dataset. See [enrollment commands and failure handling](cli-daemon-usage.md#locally-approved-device-enrollment).
+
 ## CLI lifecycle wrappers (`daemon start|stop|restart`)
 
 `todu daemon start`, `todu daemon stop`, and `todu daemon restart` follow this deterministic order:

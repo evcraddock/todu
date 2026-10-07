@@ -1,11 +1,16 @@
 import type { PeerCandidatePayload, PeerDisconnectedPayload } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
-import { createDeviceId, resolveSyncListenerConfig } from "@todu/core";
+import { createDeviceId, err, ok, resolveSyncListenerConfig, storageError } from "@todu/core";
 import { createActorNamespace } from "./actors.js";
 import { createApprovalNamespace } from "./approvals.js";
 import { ensureAutomergeWasmInitialized } from "./automerge-init.js";
 import { observeAllChanges } from "./change-observer.js";
-import { createDeviceNamespace } from "./devices.js";
+import { createDeviceNamespace, registerApprovedDevice } from "./devices.js";
+import {
+  createEnrollmentPeerConnection,
+  type EnrollmentPeerConnection,
+  enrollmentSyncUrl,
+} from "./enrollment-peer.js";
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
@@ -42,6 +47,27 @@ import {
 } from "./todu.js";
 
 export type { RemoteSyncConfig } from "@todu/core";
+export { createEnrollmentClient, type EnrollmentClient } from "./enrollment-client.js";
+export {
+  createEnrollmentPeerConnection,
+  type EnrollmentPeerConnection,
+  type EnrollmentSource,
+} from "./enrollment-peer.js";
+export {
+  createEnrollmentRequestStore,
+  type EnrollmentRequestStore,
+} from "./enrollment-requests.js";
+export {
+  commitEnrollmentCatalog,
+  type LocalEnrollmentState,
+  openPendingEnrollmentStorage,
+  type PendingEnrollmentStorage,
+  prepareEnrollmentStorage,
+  readEnrollmentCatalogId,
+  readEnrollmentState,
+  validateEnrolledCatalog,
+  writeEnrollmentState,
+} from "./enrollment-storage.js";
 export { registerHabitProcessor } from "./habits.js";
 export type { TaskListCompactionResult } from "./maintenance.js";
 export { compactTaskListDocument } from "./maintenance.js";
@@ -122,7 +148,16 @@ export async function createTodu(
   let storage: Storage;
   let initialRemoteAdapter: WebSocketClientAdapter | null = null;
 
-  if (config?.syncClient) {
+  if (config.joinedStorage) {
+    storage = config.joinedStorage;
+    if (config.remoteSync)
+      initialRemoteAdapter = addRemoteSyncAdapter(
+        storage.repo,
+        config.remoteSync.server,
+        undefined,
+        resolvedConfig.syncLogger,
+      );
+  } else if (config?.syncClient) {
     // Mode 2: CLI as ephemeral sync client
     // 1. Create ephemeral repo (no storage)
     // 2. Connect sync adapter so the repo has a peer
@@ -208,6 +243,7 @@ export async function createTodu(
       config: listenerConfig.value,
       logger: resolvedConfig.syncLogger,
       onError: reportListenerError,
+      httpHandler: config.enrollmentHttpHandler,
     });
     if (result.ok) {
       syncListener = result.value;
@@ -227,6 +263,9 @@ export async function createTodu(
 
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
+  let enrollmentPeer: EnrollmentPeerConnection | null = null;
+  const pendingEnrollmentPeers = new Set<EnrollmentPeerConnection>();
+  let engineClosed = false;
   let remoteWatchdogTimer: ReturnType<typeof setInterval> | null = null;
   let remoteWatchdogRestarting = false;
 
@@ -377,6 +416,66 @@ export async function createTodu(
   const todu: ToduWithInternalTools = {
     ...stubs,
     __internal: {
+      enrollment: {
+        registerDevice: (device) =>
+          registerApprovedDevice({ catalog: storage.catalog, repo: storage.repo, device }),
+        async attachSource(source, signal) {
+          let candidate: EnrollmentPeerConnection | null = null;
+          try {
+            signal?.throwIfAborted();
+            if (engineClosed) throw new Error("Engine is closing enrollment connections");
+            if (source.approval.catalogId !== storage.catalog.documentId)
+              return err(storageError("Approved catalog does not match the active dataset"));
+            if (
+              config.remoteSync &&
+              new URL(config.remoteSync.server).href === enrollmentSyncUrl(source)
+            ) {
+              const deadline = Date.now() + 10_000;
+              while (true) {
+                signal?.throwIfAborted();
+                if (engineClosed) throw new Error("Engine closed during enrollment");
+                const peerId = remoteAdapter?.remotePeerId;
+                // Native peer metadata survives a handshake that completed before SDK listeners were installed.
+                const storageId = peerId
+                  ? storage.repo.getStorageIdOfPeer(peerId)?.slice(0)
+                  : undefined;
+                if (storageId === source.approval.sourceDeviceId) break;
+                if (storageId)
+                  throw new Error("Configured server is not the approved native source");
+                if (Date.now() >= deadline)
+                  throw new Error("Configured source did not connect within 10000ms");
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              return ok(undefined);
+            }
+            if (
+              enrollmentPeer?.source.endpoint === source.endpoint &&
+              enrollmentPeer.source.approval.sourceDeviceId === source.approval.sourceDeviceId
+            ) {
+              await enrollmentPeer.ready(signal);
+            } else {
+              candidate = createEnrollmentPeerConnection({
+                repo: storage.repo,
+                source,
+                logger: resolvedConfig.syncLogger,
+              });
+              pendingEnrollmentPeers.add(candidate);
+              await candidate.ready(signal);
+              signal?.throwIfAborted();
+              if (engineClosed) throw new Error("Engine closed during enrollment");
+              enrollmentPeer?.close();
+              enrollmentPeer = candidate;
+              pendingEnrollmentPeers.delete(candidate);
+              candidate = null;
+            }
+            return ok(undefined);
+          } catch (error) {
+            if (candidate) pendingEnrollmentPeers.delete(candidate);
+            candidate?.close();
+            return err(storageError(`Cannot attach approved source: ${String(error)}`));
+          }
+        },
+      },
       syncRuntime: {
         flush: () => storage.repo.flush(),
         notes: noteNamespaces.syncRuntime,
@@ -419,6 +518,11 @@ export async function createTodu(
       return observeAllChanges(storage.repo, callback);
     },
     async close() {
+      engineClosed = true;
+      for (const peer of pendingEnrollmentPeers) peer.close();
+      pendingEnrollmentPeers.clear();
+      enrollmentPeer?.close();
+      enrollmentPeer = null;
       if (syncListener) {
         await syncListener.close();
         syncListener = null;
@@ -436,5 +540,16 @@ export async function createTodu(
     },
   };
 
+  if (
+    config.enrollmentSource &&
+    (!config.remoteSync ||
+      new URL(config.remoteSync.server).href !== enrollmentSyncUrl(config.enrollmentSource))
+  ) {
+    enrollmentPeer = createEnrollmentPeerConnection({
+      repo: storage.repo,
+      source: config.enrollmentSource,
+      logger: resolvedConfig.syncLogger,
+    });
+  }
   return todu;
 }

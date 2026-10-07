@@ -14,11 +14,14 @@ import {
   addRemoteSyncAdapter,
   beginCatalogJoinSwitch,
   createTodu,
+  type EnrollmentSource,
   initJoinStorage,
   registerHabitProcessor,
+  type Storage,
   type Todu,
 } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
+import { createEnrollmentRuntime } from "./enrollment-runtime.js";
 import {
   createDaemonLogger,
   type DaemonLogger,
@@ -391,12 +394,27 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     });
   }
 
+  const enrollment = createEnrollmentRuntime({
+    storagePath: resolvedConfig.storagePath,
+    getTodu: () => todu,
+    isRunning: () => runtimeStatus.state === "running",
+    createTodu: (input) => createHostOwnedTodu(input),
+    activateTodu(joinedTodu) {
+      todu = joinedTodu;
+      runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();
+      attachEventSubscriptions(joinedTodu);
+      rpcRouter.dispatchEvent("data.changed", { catalog: { id: runtimeStatus.catalogId } });
+      // Pristine enrollment does not load/start workers or replay host startup processing.
+    },
+    logger: runtimeLogger.child("enrollment"),
+  });
   const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
     mergeNamespaceHandlerSets(
-      createCoreNamespaceHandlers({
-        getTodu: () => todu,
-      }),
-      createJoinSyncNamespaceHandlers(),
+      mergeNamespaceHandlerSets(
+        createCoreNamespaceHandlers({ getTodu: () => todu }),
+        createJoinSyncNamespaceHandlers(),
+      ),
+      enrollment.handlers,
     ),
     createWorkerNamespaceHandlers(),
   );
@@ -481,6 +499,11 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   function startWorkerExecution(
     workerType: string,
   ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+    if (!todu)
+      return err({
+        code: "START_FAILED",
+        message: "Pending enrollment has no active dataset; workers are not started",
+      });
     const normalizedWorkerType = workerType.trim();
     const worker = workerRegistry.get(normalizedWorkerType);
     if (!worker) {
@@ -774,17 +797,24 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
   }
 
-  async function createHostOwnedTodu(): Promise<Todu> {
-    registerHabitProcessor();
+  async function createHostOwnedTodu(input?: {
+    joinedStorage?: Storage;
+    enrollmentSource?: EnrollmentSource;
+    skipProcessing?: boolean;
+  }): Promise<Todu> {
+    if (!input?.skipProcessing) registerHabitProcessor();
 
     return createTodu({
       storagePath: resolvedConfig.storagePath,
+      joinedStorage: input?.joinedStorage,
+      enrollmentSource: input?.enrollmentSource ?? enrollment.initialSource(),
+      enrollmentHttpHandler: enrollment.handleHttp,
       remoteSync: resolvedConfig.remoteSync,
       syncListener: resolvedConfig.syncListener,
       bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
       syncLogger: runtimeLogger.child("remote-sync"),
       startupTemplateProcessing: {
-        enabled: true,
+        enabled: !input?.skipProcessing,
       },
     });
   }
@@ -800,17 +830,21 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       rpcRouter.start();
       const endpoint = await transport.start();
 
-      const startedTodu = await createHostOwnedTodu();
+      const pendingSetup = await enrollment.startPending();
+      const startedTodu = pendingSetup ? null : await createHostOwnedTodu();
 
       todu = startedTodu;
       runtimeStatus.state = "running";
       runtimeStatus.startedAt = new Date().toISOString();
-      runtimeStatus.catalogId = startedTodu.sync.getCatalogId();
+      runtimeStatus.catalogId = startedTodu?.sync.getCatalogId();
       runtimeStatus.transport = endpoint;
 
-      await loadConfiguredPluginWorkers();
-      attachEventSubscriptions(startedTodu);
-      startRegisteredWorkers();
+      if (startedTodu) {
+        await loadConfiguredPluginWorkers();
+        attachEventSubscriptions(startedTodu);
+        startRegisteredWorkers();
+      }
+      enrollment.resume();
 
       runtimeLogger.info("daemon runtime started", {
         role: runtimeStatus.role,
@@ -822,6 +856,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     } catch (error) {
       stopActiveWorkers();
       clearEventSubscriptions();
+      await enrollment.stop();
       await safeStopTransport(transport);
       runtimeStatus.state = "stopped";
       runtimeStatus.startedAt = undefined;
@@ -1197,6 +1232,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
         try {
           const requestsDrained = rpcRouter.stop();
+          await enrollment.stop();
           stopActiveWorkers();
           clearEventSubscriptions();
           await transport.stop(() => requestsDrained);
@@ -1341,6 +1377,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         storagePath: resolvedConfig.storagePath,
         role: resolvedConfig.role,
         remoteSync: resolvedConfig.remoteSync,
+        syncListener: resolvedConfig.syncListener,
         bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
         socketPath: resolvedConfig.socketPath,
         socketMode: resolvedConfig.socketMode,

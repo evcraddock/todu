@@ -55,6 +55,32 @@ export async function initializeDeviceRegistry(options: {
   );
 }
 
+/** Used only after a durable local enrollment approval; not a generic public add command. */
+export async function registerApprovedDevice(options: {
+  catalog: DocHandle<CatalogDocument>;
+  repo: Repo;
+  device: Device;
+}): Promise<Result<Device>> {
+  const { catalog, repo, device } = options;
+  const existing = catalog.doc()?.[deviceRegistryKey(device.id)];
+  if (existing?.removed)
+    return err(
+      validationError(
+        "device.id",
+        "Removed replica identity cannot be automatically restored; use explicit recovery with a distinct identity",
+      ),
+    );
+  if (existing) {
+    await repo.flush([catalog.documentId]);
+    return ok(cloneDevice(existing));
+  }
+  catalog.change((doc) => {
+    doc[deviceRegistryKey(device.id)] = structuredClone(device);
+  });
+  await repo.flush([catalog.documentId]);
+  return ok(cloneDevice(catalog.doc()![deviceRegistryKey(device.id)]));
+}
+
 function cloneDevice(device: Device): Device {
   return {
     id: device.id,

@@ -147,7 +147,10 @@ async function readCatalogId(storagePath: string): Promise<string> {
       return response.value;
     }
 
-    if (response.error.message.includes("Daemon runtime is not ready")) {
+    if (
+      response.error.code === "PRECONDITION_FAILED" ||
+      response.error.message.includes("Daemon runtime is not ready")
+    ) {
       await sleep(100);
       continue;
     }
