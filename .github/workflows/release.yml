@@ -80,9 +80,7 @@ jobs:
       - name: Prepare Electron binary
         run: node scripts/install-electron-binary.mjs
 
-      - name: Check (lint + test)
-        env:
-          TODU_RUN_SYNC_SERVER_TESTS: "0"
+      - name: Check (lint + unit tests)
         run: make check-ci && make test
 
       - name: Build CLI binaries (linux)

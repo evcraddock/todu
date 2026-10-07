@@ -2,30 +2,44 @@ import fs from "node:fs";
 import net, { type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { createTodu } from "@todu/engine";
+import type { Todu } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDaemonRuntime } from "./runtime.js";
-
-const RELAY_PORT = 24421;
-const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
+import { startTestSyncServer } from "../../../scripts/test-helpers/sync-server.js";
+import { createDaemonRuntime, type DaemonRuntime } from "./runtime.js";
 
 describe("daemon event parity", () => {
   let tmpDir: string;
+  let runtime: DaemonRuntime | undefined;
+  let relay: Todu | undefined;
+  let client: JsonLineClient | undefined;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-events-"));
   });
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  afterEach(async () => {
+    try {
+      try {
+        await client?.close();
+      } finally {
+        try {
+          await runtime?.stop();
+        } finally {
+          await relay?.close();
+        }
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } finally {
+      client = undefined;
+      runtime = undefined;
+      relay = undefined;
+    }
   });
 
   it("emits data.changed for RPC domain mutations", async () => {
-    const runtime = createDaemonRuntime({ storagePath: tmpDir });
-
+    runtime = createDaemonRuntime({ storagePath: tmpDir });
     await runtime.start();
-
-    const client = await connectJsonLineClient(runtime.config().socketPath);
+    client = await connectJsonLineClient(runtime.config().socketPath);
 
     client.send({
       id: "sub-data-changed",
@@ -75,100 +89,73 @@ describe("daemon event parity", () => {
         },
       }),
     );
-
-    await client.close();
-    await runtime.stop();
   });
 
-  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
-    "emits sync.statusChanged on sync.stop and sync.start transitions",
-    async () => {
-      const relayDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-relay-"));
-      const relay = await createTodu({
-        storagePath: relayDir,
-        syncServer: true,
-        syncPort: RELAY_PORT,
-      });
+  it("emits sync.statusChanged on sync.stop and sync.start transitions", async () => {
+    const started = await startTestSyncServer(path.join(tmpDir, "relay"));
+    relay = started.server;
+    runtime = createDaemonRuntime({
+      storagePath: path.join(tmpDir, "runtime"),
+      remoteSync: { server: started.url },
+    });
+    await runtime.start();
+    client = await connectJsonLineClient(runtime.config().socketPath);
 
-      const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-sync-events-"));
-      const runtime = createDaemonRuntime({
-        storagePath: runtimeDir,
-        remoteSync: { server: `ws://localhost:${RELAY_PORT}` },
-      });
+    client.send({
+      id: "sub-sync-status",
+      method: "events.subscribe",
+      params: {
+        events: ["sync.statusChanged"],
+      },
+    });
 
-      try {
-        await runtime.start();
-        const client = await connectJsonLineClient(runtime.config().socketPath);
+    const subscribeResponse = await client.nextFrame();
+    expect(subscribeResponse).toEqual({
+      id: "sub-sync-status",
+      result: {
+        subscribed: ["sync.statusChanged"],
+      },
+    });
 
-        client.send({
-          id: "sub-sync-status",
-          method: "events.subscribe",
-          params: {
-            events: ["sync.statusChanged"],
-          },
-        });
+    client.send({
+      id: "sync-stop-for-event",
+      method: "sync.stop",
+      params: {},
+    });
 
-        const subscribeResponse = await client.nextFrame();
-        expect(subscribeResponse).toEqual({
-          id: "sub-sync-status",
-          result: {
-            subscribed: ["sync.statusChanged"],
-          },
-        });
+    const stopFrames = await client.collectUntil((collected) => {
+      const hasResponse = collected.some((frame) => frame.id === "sync-stop-for-event");
+      const hasDisconnectedEvent = collected.some(
+        (frame) =>
+          frame.event === "sync.statusChanged" &&
+          (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
+            "disconnected",
+      );
+      return hasResponse && hasDisconnectedEvent;
+    }, 5000);
 
-        client.send({
-          id: "sync-stop-for-event",
-          method: "sync.stop",
-          params: {},
-        });
+    expect(stopFrames.some((frame) => frame.id === "sync-stop-for-event")).toBe(true);
 
-        const stopFrames = await client.collectUntil((collected) => {
-          const hasResponse = collected.some((frame) => frame.id === "sync-stop-for-event");
-          const hasDisconnectedEvent = collected.some(
-            (frame) =>
-              frame.event === "sync.statusChanged" &&
-              (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
-                "disconnected",
-          );
-          return hasResponse && hasDisconnectedEvent;
-        }, 5000);
+    client.send({
+      id: "sync-start-for-event",
+      method: "sync.start",
+      params: {},
+    });
 
-        expect(stopFrames.some((frame) => frame.id === "sync-stop-for-event")).toBe(true);
+    const startFrames = await client.collectUntil((collected) => {
+      const hasResponse = collected.some((frame) => frame.id === "sync-start-for-event");
+      const hasConnectedEvent = collected.some(
+        (frame) =>
+          frame.event === "sync.statusChanged" &&
+          (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
+            "connected",
+      );
+      return hasResponse && hasConnectedEvent;
+    }, 5000);
 
-        client.send({
-          id: "sync-start-for-event",
-          method: "sync.start",
-          params: {},
-        });
-
-        const startFrames = await client.collectUntil((collected) => {
-          const hasResponse = collected.some((frame) => frame.id === "sync-start-for-event");
-          const hasConnectedEvent = collected.some(
-            (frame) =>
-              frame.event === "sync.statusChanged" &&
-              (frame.payload as { remote?: { state?: string } } | undefined)?.remote?.state ===
-                "connected",
-          );
-          return hasResponse && hasConnectedEvent;
-        }, 5000);
-
-        expect(startFrames.some((frame) => frame.id === "sync-start-for-event")).toBe(true);
-
-        await client.close();
-      } finally {
-        await runtime.stop();
-        await relay.close();
-        await waitForStorageSettled();
-        fs.rmSync(runtimeDir, { recursive: true, force: true });
-        fs.rmSync(relayDir, { recursive: true, force: true });
-      }
-    },
-  );
+    expect(startFrames.some((frame) => frame.id === "sync-start-for-event")).toBe(true);
+  });
 });
-
-async function waitForStorageSettled(delayMs = 100): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, delayMs));
-}
 
 interface JsonLineClient {
   send(frame: Record<string, unknown>): void;

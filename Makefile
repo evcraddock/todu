@@ -1,4 +1,4 @@
-.PHONY: build test test-sync-server-integration check check-ci typecheck pre-pr deps-outdated run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
+.PHONY: build test test-all test-integration test-sync-server-integration check check-ci typecheck pre-pr deps-outdated run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
@@ -30,7 +30,7 @@ build: node_modules ## Build all packages (core → engine → recurring-worker 
 test: node_modules ## Run unit tests only (fast, no Automerge/storage)
 	npm test
 
-test-all: node_modules ## Run all tests including integration tests
+test-all: node_modules ## Run all tests including integration and local sync-server tests
 	npm run test:all
 
 test-integration: node_modules ## Run integration tests only (Automerge/storage)

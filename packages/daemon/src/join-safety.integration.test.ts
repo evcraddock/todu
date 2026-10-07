@@ -5,14 +5,28 @@ import path from "node:path";
 import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
 import * as engine from "@todu/engine";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDaemonRuntime } from "./runtime.js";
-
-const RUN_SYNC_SERVER_TESTS = process.env.TODU_RUN_SYNC_SERVER_TESTS === "1";
+import { startTestSyncServer } from "../../../scripts/test-helpers/sync-server.js";
+import { createDaemonRuntime as createRuntime, type DaemonRuntime } from "./runtime.js";
 
 describe("join safety integration", () => {
   const tempDirs: string[] = [];
+  const runtimes: DaemonRuntime[] = [];
+  const relays: engine.Todu[] = [];
 
-  afterEach(() => {
+  function createDaemonRuntime(config: Parameters<typeof createRuntime>[0]): DaemonRuntime {
+    const runtime = createRuntime(config);
+    runtimes.push(runtime);
+    return runtime;
+  }
+
+  afterEach(async () => {
+    const stopped = await Promise.allSettled(runtimes.splice(0).map((runtime) => runtime.stop()));
+    const closed = await Promise.allSettled(relays.splice(0).map((relay) => relay.close()));
+    const failures = [...stopped, ...closed].flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    vi.restoreAllMocks();
+    if (failures.length > 0) throw new AggregateError(failures, "Join test cleanup failed");
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();
       if (dir) {
@@ -218,99 +232,84 @@ describe("join safety integration", () => {
     }
   });
 
-  (RUN_SYNC_SERVER_TESTS ? it : it.skip)(
-    "supports authority migration from source daemon to destination daemon",
-    async () => {
-      const relayDir = mkTmpDir(tempDirs, "todu-join-relay-");
-      const sourceDir = mkTmpDir(tempDirs, "todu-join-source-");
-      const destinationDir = mkTmpDir(tempDirs, "todu-join-destination-");
-      const relayPort = await reserveTcpPort();
+  it("joins through a relay and continues replication after the source daemon restarts", async () => {
+    const relayDir = mkTmpDir(tempDirs, "todu-join-relay-");
+    const sourceDir = mkTmpDir(tempDirs, "todu-join-source-");
+    const destinationDir = mkTmpDir(tempDirs, "todu-join-destination-");
+    const { server: relay, url } = await startTestSyncServer(relayDir);
+    relays.push(relay);
 
-      const relay = await engine.createTodu({
-        storagePath: relayDir,
-        syncServer: true,
-        syncPort: relayPort,
+    const sourceRuntime = createDaemonRuntime({
+      storagePath: sourceDir,
+      remoteSync: { server: url },
+    });
+
+    const destinationRuntime = createDaemonRuntime({
+      storagePath: destinationDir,
+      remoteSync: { server: url },
+    });
+
+    try {
+      await sourceRuntime.start();
+      await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
+
+      const sourceCatalogId = await readCatalogId(sourceRuntime.config().socketPath);
+
+      await sendRequest(sourceRuntime.config().socketPath, {
+        id: "source-project-create",
+        method: "project.create",
+        params: {
+          input: {
+            name: "migration-seed-project",
+          },
+        },
       });
 
-      const sourceRuntime = createDaemonRuntime({
-        storagePath: sourceDir,
-        role: "authority",
-        remoteSync: { server: `ws://localhost:${relayPort}` },
+      await destinationRuntime.start();
+      await waitForRemoteState(destinationRuntime.config().socketPath, "connected");
+      await waitForJoinCheckReady(destinationRuntime.config().socketPath, sourceCatalogId);
+
+      const joinResponse = await sendRequest(destinationRuntime.config().socketPath, {
+        id: "destination-join-source",
+        method: "sync.join",
+        params: {
+          catalogId: sourceCatalogId,
+        },
       });
 
-      const destinationRuntime = createDaemonRuntime({
-        storagePath: destinationDir,
-        role: "node",
-        remoteSync: { server: `ws://localhost:${relayPort}` },
+      expect(joinResponse).toMatchObject({
+        id: "destination-join-source",
+        result: {
+          mode: "join",
+          targetCatalogId: sourceCatalogId,
+          switched: true,
+          rolledBack: false,
+        },
       });
 
-      try {
-        await sourceRuntime.start();
-        await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
+      await waitForProjectByName(destinationRuntime.config().socketPath, "migration-seed-project");
 
-        const sourceCatalogId = await readCatalogId(sourceRuntime.config().socketPath);
+      await sourceRuntime.stop();
 
-        await sendRequest(sourceRuntime.config().socketPath, {
-          id: "source-project-create",
-          method: "project.create",
-          params: {
-            input: {
-              name: "migration-seed-project",
-            },
+      await sendRequest(destinationRuntime.config().socketPath, {
+        id: "destination-project-create-after-cutover",
+        method: "project.create",
+        params: {
+          input: {
+            name: "post-migration-project",
           },
-        });
+        },
+      });
 
-        await destinationRuntime.start();
-        await waitForRemoteState(destinationRuntime.config().socketPath, "connected");
-        await waitForJoinCheckReady(destinationRuntime.config().socketPath, sourceCatalogId);
-
-        const joinResponse = await sendRequest(destinationRuntime.config().socketPath, {
-          id: "destination-join-source",
-          method: "sync.join",
-          params: {
-            catalogId: sourceCatalogId,
-          },
-        });
-
-        expect(joinResponse).toMatchObject({
-          id: "destination-join-source",
-          result: {
-            mode: "join",
-            targetCatalogId: sourceCatalogId,
-            switched: true,
-            rolledBack: false,
-          },
-        });
-
-        await waitForProjectByName(
-          destinationRuntime.config().socketPath,
-          "migration-seed-project",
-        );
-
-        await sourceRuntime.stop();
-
-        await sendRequest(destinationRuntime.config().socketPath, {
-          id: "destination-project-create-after-cutover",
-          method: "project.create",
-          params: {
-            input: {
-              name: "post-migration-project",
-            },
-          },
-        });
-
-        await sourceRuntime.start();
-        await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
-        await waitForProjectByName(sourceRuntime.config().socketPath, "post-migration-project");
-      } finally {
-        await sourceRuntime.stop();
-        await destinationRuntime.stop();
-        await relay.close();
-        await sleep(150);
-      }
-    },
-    30000,
-  );
+      await sourceRuntime.start();
+      await waitForRemoteState(sourceRuntime.config().socketPath, "connected");
+      await waitForProjectByName(sourceRuntime.config().socketPath, "post-migration-project");
+    } finally {
+      await sourceRuntime.stop();
+      await destinationRuntime.stop();
+      await relay.close();
+    }
+  }, 30000);
 });
 
 function mkTmpDir(bucket: string[], prefix: string): string {
@@ -468,34 +467,6 @@ async function waitForCondition(
   }
 
   throw new Error(timeoutMessage);
-}
-
-async function reserveTcpPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-
-    server.once("error", (error) => {
-      reject(error);
-    });
-
-    server.listen(0, () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => {
-          reject(new Error("Failed to reserve TCP port"));
-        });
-        return;
-      }
-
-      server.close((closeError) => {
-        if (closeError) {
-          reject(closeError);
-          return;
-        }
-        resolve(address.port);
-      });
-    });
-  });
 }
 
 async function createAlternateCatalogDocument(storagePath: string): Promise<string> {

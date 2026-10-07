@@ -35,29 +35,17 @@ jobs:
       - name: Check (lint + format + typecheck)
         run: make check-ci
 
-      - name: Test
-        run: make test
-
       - name: Build
         run: make build
 
-      - name: Device registry integration tests
-        run: npm run test:all -- packages/engine/src/devices.integration.test.ts packages/daemon/src/protocol-conformance.integration.test.ts
-
-      - name: LAN sync listener integration tests
-        run: npm run test:all -- packages/engine/src/sync-listener.integration.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts
-
-      - name: Device enrollment integration tests
-        run: npm run test:all -- packages/engine/src/enrollment-storage.integration.test.ts packages/daemon/src/enrollment.integration.test.ts
-
-      - name: Sync provider checkpoint and field-group integration tests
-        run: npm run test:all -- packages/daemon/src/sync-worker-checkpoint.integration.test.ts packages/daemon/src/sync-field-groups.integration.test.ts
-
-      - name: Daemon shutdown integration tests
-        run: npm run test:daemon-shutdown-integration
-
-      - name: Desktop daemon startup integration tests
-        run: npm run test:all -- packages/electron/src/main/daemon-connection-manager.integration.test.ts packages/daemon/src/runtime.integration.test.ts
+      - name: Full test suite (unit + integration + sync servers)
+        env:
+          HOME: ${{ runner.temp }}/todu-test-home
+          XDG_CONFIG_HOME: ${{ runner.temp }}/todu-test-config
+          XDG_DATA_HOME: ${{ runner.temp }}/todu-test-data
+        run: |
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+          make test-all
 
   desktop:
     name: Desktop package (${{ matrix.os }})
