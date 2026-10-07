@@ -59,6 +59,7 @@ import type {
 import type { EnrollmentSource } from "./enrollment-peer.js";
 import type { UpcomingOccurrence } from "./recurring.js";
 import type { Storage } from "./storage.js";
+import type { SyncContentRecoveryStore } from "./sync-content-recovery.js";
 
 // ============================================================================
 // Config
@@ -358,6 +359,7 @@ export interface ToduInternalTools {
   syncRuntime: {
     /** Complete native local storage writes; does not wait for remote replication. */
     flush(): Promise<void>;
+    contentRecovery: SyncContentRecoveryStore;
     notes: SyncRuntimeNoteTools;
     actors: SyncRuntimeActorTools;
     commentProvenance: SyncRuntimeCommentProvenanceTools;

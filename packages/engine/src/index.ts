@@ -34,6 +34,7 @@ import {
   disposeRemoteSyncAdapter,
   isSyncServerAvailable,
 } from "./sync-client.js";
+import { createSyncContentRecoveryStore } from "./sync-content-recovery.js";
 import { type SyncListener, startSyncListener } from "./sync-listener.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespace } from "./tasks.js";
@@ -89,6 +90,12 @@ export {
   initJoinStorage,
 } from "./storage.js";
 export { addRemoteSyncAdapter, isSyncServerAvailable } from "./sync-client.js";
+export {
+  createSyncContentRecoveryStore,
+  type SyncContentRecovery,
+  type SyncContentRecoveryStore,
+} from "./sync-content-recovery.js";
+export { reconcileSyncTaskFieldGroup, syncTaskFieldGroupValuesEqual } from "./sync-field-groups.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   ActorNamespace,
@@ -478,6 +485,11 @@ export async function createTodu(
       },
       syncRuntime: {
         flush: () => storage.repo.flush(),
+        contentRecovery: createSyncContentRecoveryStore({
+          storagePath: resolvedConfig.storagePath,
+          catalogId: storage.catalog.documentId,
+          ephemeral: storage.ephemeral,
+        }),
         notes: noteNamespaces.syncRuntime,
         actors: createSyncRuntimeActorTools(storage.catalog),
         commentProvenance: createSyncRuntimeCommentProvenanceTools(storage.catalog, storage.repo),

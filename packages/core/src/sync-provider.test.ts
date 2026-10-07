@@ -15,16 +15,16 @@ import {
 } from "./sync-provider.js";
 
 describe("isSyncProviderApiVersionCompatible", () => {
-  it.each([3, 4])("accepts supported v%s API version", (apiVersion) => {
+  it.each([3, 4, 5])("accepts supported v%s API version", (apiVersion) => {
     expect(isSyncProviderApiVersionCompatible(apiVersion)).toBe(true);
   });
 
-  it("advertises v4 as the latest API", () => {
-    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V4);
+  it("advertises v5 as the latest API", () => {
+    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V5);
   });
 
   it("rejects unsupported API version", () => {
-    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V4 + 1)).toBe(false);
+    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V5 + 1)).toBe(false);
   });
 
   it("supports explicit supported version lists", () => {
@@ -34,11 +34,13 @@ describe("isSyncProviderApiVersionCompatible", () => {
 });
 
 describe("validateSyncProviderRegistration", () => {
-  it("rejects the defined v5 contract by default until host implementation exists", () => {
-    expect(validateSyncProviderRegistration(createValidV5Registration())).toMatchObject({
-      ok: false,
-      error: { code: "API_VERSION_MISMATCH" },
-    });
+  it("accepts v5 by default while an explicit legacy host policy still rejects it", () => {
+    expect(validateSyncProviderRegistration(createValidV5Registration()).ok).toBe(true);
+    expect(
+      validateSyncProviderRegistration(createValidV5Registration(), {
+        supportedApiVersions: [3, 4],
+      }),
+    ).toMatchObject({ ok: false, error: { code: "API_VERSION_MISMATCH" } });
   });
 
   it("validates v5 only when the caller explicitly advertises v5 support", () => {
@@ -109,7 +111,7 @@ describe("validateSyncProviderRegistration", () => {
 
   it("rejects provider with unsupported API version", () => {
     const registration = createValidV3Registration();
-    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V4 + 1) as never;
+    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V5 + 1) as never;
 
     const result = validateSyncProviderRegistration(registration);
 
@@ -121,8 +123,12 @@ describe("validateSyncProviderRegistration", () => {
     expect(result.error).toMatchObject({
       code: "API_VERSION_MISMATCH",
       details: {
-        providerApiVersion: SYNC_PROVIDER_API_VERSION_V4 + 1,
-        supportedApiVersions: [SYNC_PROVIDER_API_VERSION_V3, SYNC_PROVIDER_API_VERSION_V4],
+        providerApiVersion: SYNC_PROVIDER_API_VERSION_V5 + 1,
+        supportedApiVersions: [
+          SYNC_PROVIDER_API_VERSION_V3,
+          SYNC_PROVIDER_API_VERSION_V4,
+          SYNC_PROVIDER_API_VERSION_V5,
+        ],
       },
     });
   });

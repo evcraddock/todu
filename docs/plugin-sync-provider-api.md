@@ -29,13 +29,13 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `4`).
-- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3` and `4`).
+- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `5`).
+- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`, `4`, and `5`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
 - Provider API v2 compatibility has been removed.
-- API v5 is a defined, contract-only extension (`SYNC_PROVIDER_API_VERSION_V5`). It is **not** included in the latest enabled version or default host-supported set. The current daemon rejects v5 before worker registration; host application is follow-up task `task-f7cbd4f3`.
+- API v5 enables independent task field-group reconciliation and winning-value acknowledgments (`SYNC_PROVIDER_API_VERSION_V5`). V3/V4 providers must keep their explicit version declarations to retain their existing behavior; using the latest-version constant is an explicit opt-in to the latest contract.
 
 Use `validateSyncProviderRegistration(...)` during plugin load to enforce this gate.
 
@@ -55,9 +55,9 @@ Rules:
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
 
-## API v5: field-group task reconciliation (contract only)
+## API v5: field-group task reconciliation
 
-This section specifies the next host/provider contract; it does not describe implemented daemon behavior. v3/v4 payloads, conflict behavior, and acknowledgment signatures remain unchanged. `SyncProviderRegistration` includes the known v5 type, but `validateSyncProviderRegistration` rejects it by default. An implementing host must explicitly pass `supportedApiVersions: [3, 4, 5]` only after it implements the lifecycle below. Validation of method presence is not evidence of host implementation.
+The daemon implements this lifecycle for explicitly registered v5 providers. V3/V4 payloads, whole-task conflict behavior, and acknowledgment signatures remain unchanged. `validateSyncProviderRegistration` accepts v3/v4/v5 by default; an explicit `supportedApiVersions` override can restrict compatibility. A v4 registration exposing v5-shaped data does not opt into field-group processing.
 
 v5 inherits initialization, shutdown, push, comments, and opaque checkpoints from v4. It replaces the pull result and acknowledgment signature:
 
@@ -90,13 +90,15 @@ A `SyncAssigneeIdentity` requires a non-empty `externalAccountId` or `externalLo
 
 Each supplied group contains `base` (the last normalized value successfully mirrored on both sides), `remote` (the current normalized remote value), and optional `sourceTimestamp` (the source update clock). A missing base is invalid: do not invent an empty base. Establish an initial mirrored snapshot only after acknowledged bootstrap and verification that the persisted local/exported value equals the remote value, or after independently verifying equality. Bootstrap acknowledgment alone does not return per-group winning values.
 
+Content strings use the engine's existing outer-whitespace trimming convention and task title/body size limits. Providers must supply already-normalized values; v5 rejects noncanonical or oversized content rather than trimming/truncating it and falsely acknowledging a different mirrored value. Internal markdown is unchanged.
+
 Omit a whole group to leave it unchanged; within a supplied group, every field is required. A missing description is not a clear: normalize a deliberately absent body to `description: ""`. Empty label/assignee arrays explicitly clear those sets. Unknown groups, undefined groups, invalid statuses/priorities, partial values, and malformed timestamps fail validation. `validateSyncTaskFieldGroupUpdate(unknown)` returns a `Result` with a contextual field error; it validates shape only, not durable identity, actor authorization, or business policy.
 
 ### Identity and bootstrap
 
 An update requires canonical `externalId`, scoped to the binding/project supplied to `pull`. Optional branded `localTaskId` is an assertion, not permission to relink: the host must verify it agrees with the existing durable link and project. Missing, ambiguous, or contradictory identity fails the batch without acknowledgment; title equality is not identity.
 
-`tasks` is retained for bootstrap creates of unlinked records. Existing linked tasks use `taskUpdates`, not whole-task replacement. A batch must not repeat the same identity in either array or include it in both. `taskUpdates` is required even for empty pulls (`[]`). Unlinked bootstrap keeps the inherited v4 import rules, and the first group base requires successful acknowledgment plus verified local/remote equality. Comments retain v4 behavior; comment reconciliation, hard deletion, provider-specific mappings, and exact per-group clocks are outside this extension.
+`tasks` is retained for bootstrap creates of unlinked records and replay of interrupted bootstrap. An existing bootstrap identity is accepted only with an explicit remote `updatedAt` no newer than the current local clock; equal-timestamp detail repair retains v4 replay behavior, and newer local data is preserved. Newer whole-task replacements or existing identities without a replay clock are rejected. Incremental updates to linked tasks use `taskUpdates`. A batch must not repeat the same identity in either array or include it in both. `taskUpdates` is required even for empty pulls (`[]`). Unlinked bootstrap keeps the inherited v4 import rules, and the first group base requires successful acknowledgment plus verified local/remote equality. Comments retain v4 behavior; comment reconciliation, hard deletion, provider-specific mappings, and exact per-group clocks are outside this extension.
 
 ### Three-way decision rules
 
@@ -118,11 +120,11 @@ Assignment replacement is deferred when the host cannot project the complete loc
 
 ### Application, acknowledgment, and snapshot ordering
 
-The implementing host must:
+For v5, the daemon performs:
 
 1. Pull normalized bootstrap tasks, comments, field-group updates, and a proposed opaque checkpoint; validate the entire batch and resolve existing-task identities.
 2. Read current local values and reconcile each supplied group independently. Apply only selected remote changes through normal task validation, actor authorization, and imported-content approval paths. Preserve omitted groups. Produce exactly one task result per update, in input order, with outcomes for supplied groups or the explicit assignment deferral.
-3. Persist tasks/comments, provenance, and binding actor mappings. Await the native local storage flush barrier, as in v4.
+3. Persist tasks/comments, provenance, and binding actor mappings. Await the native local storage flush barrier, as in v4. Re-read each winning group and fail acknowledgment if an intervening edit or read failure means its value no longer matches the receipt.
 4. Call `acknowledgePull(binding, checkpoint, project, { taskResults })`, including `{ taskResults: [] }` for empty pulls. No acknowledgment is sent on validation, application, mapping-persistence, or flush failure.
 5. Only after acknowledgment succeeds, rebuild current exports and push for bidirectional bindings. Push-only/`none` bindings do not receive pull acknowledgment.
 
@@ -131,6 +133,14 @@ The implementing host must:
 For outcomes with `remoteWriteRequired: false`, the provider may commit the acknowledged value as its mirrored base. For local-wins outcomes, keep the previous base and durably stage the selected value for remote push; advance that group's base only after the remote write succeeds. Pull-only bindings must retain the previous base for local wins because no push follows. Deferred/omitted groups never advance their base. Retain deferred assignment reconciliation independently of the pull cursor and retry it with fresh remote values when mappings become complete. A provider that completes a read checkpoint while remote writes are pending must retain those writes independently of the pull cursor so they survive push failures and restart.
 
 A provider's v5 push must use staged group decisions rather than blindly replacing whole exported tasks. Recheck fresh export values against staged values before writing, so intervening local edits are not lost. Advance snapshots only to values actually confirmed on both sides; provider-side remote write success, not inherited `taskLinks`, establishes remote completion. Partial remote success advances only confirmed groups; failures retain the remaining pending work.
+
+### Interrupted content application recovery
+
+Title metadata and body details reside in separate Automerge documents. Before applying a selected remote content value, the engine atomically saves a bounded host-local recovery record under `sync-content-recovery/`, keyed by catalog and binding identity, with the task identity, before/selected values, preserved local clock, and source clock. Files use private permissions and are not replicated or exposed through daemon RPC. This is unfinished host application intent, **not** provider cursors or mirrored snapshots.
+
+Remote application preserves the original local task clock so one group does not manufacture a later local edit for another group's conflict decision. On retry/restart, the host reads fresh content and identity. It completes an interrupted content write only when the task clock is unchanged and both content components still match the recorded before/selected alternatives. It then reconciles the newly pulled remote value using the recovered source clock, so a newer remote edit is not replaced by a cached outcome. A distinct newer local content edit is reconciled normally and is never repaired back to the older value. A mixed partial value with an intervening clock change has ambiguous provenance and fails closed for explicit content resolution, rather than silently overwriting an edit or acknowledging incomplete content. No exact per-group clocks or cross-document transactions are introduced.
+
+Recovery records remain after application, mapping persistence, flush, or acknowledgment failure and are removed only after successful acknowledgment. Corrupt/unreadable records and storage write failures fail the binding safely. A failed cleanup after acknowledgment is reported and skips push; the committed provider read checkpoint is not rolled back. Fresh v5 push detail/comment read failures also skip push instead of using legacy empty-content fallbacks. Ephemeral engines keep recovery in memory; persistent daemon engines retain it across restart. Duplicate worker ownership is not solved by this record.
 
 Keep acknowledgment idempotent and replay-safe as in v4. The provider stages progress before acknowledgment and commits only the supplied binding/checkpoint; a successful commit followed by a callback error or crash must not discard pending remote writes. If application partially succeeded before failure, the next pull replays against fresh local values and the unchanged mirrored base. Do not cache a stale host outcome as a substitute for replay. Already-applied changes are not rolled back.
 
@@ -201,7 +211,7 @@ If push fails after a successful acknowledgment, the acknowledged pull remains c
 
 ### v3 compatibility
 
-API v3 remains supported with its original pull/push lifecycle and no host acknowledgment or new flush requirement. Legacy providers should declare `SYNC_PROVIDER_API_VERSION_V3` explicitly; the unversioned latest-version constant now advertises v4. A callback or checkpoint on a v3 registration does not opt it into v4 behavior. Registration must explicitly declare v4 to use acknowledged checkpoints. v2 remains unsupported. Existing v3 providers do not gain checkpoint safety until they adopt v4.
+API v3 remains supported with its original pull/push lifecycle and no host acknowledgment or new flush requirement. Legacy providers should declare `SYNC_PROVIDER_API_VERSION_V3` explicitly; the unversioned latest-version constant now advertises v5. V4 providers should likewise declare `SYNC_PROVIDER_API_VERSION_V4` explicitly. A callback or checkpoint on a v3 registration does not opt it into v4 behavior. Registration must explicitly declare v4 to use acknowledged checkpoints. v2 remains unsupported. Existing v3 providers do not gain checkpoint safety until they adopt v4.
 
 ## API v3 shared payload contract
 
@@ -440,4 +450,4 @@ Retry policy:
 
 ## Conflict resolution baseline
 
-The implemented v3/v4 provider sync conflict resolution baseline is whole-task `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs. The contract-only v5 extension specifies independent three-way field-group reconciliation above; it does not change current host behavior.
+The implemented v3/v4 provider sync conflict resolution baseline is whole-task `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs. Explicit v5 registrations use the independent three-way field-group reconciliation described above, without altering legacy v3/v4 behavior.
