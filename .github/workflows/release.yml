@@ -127,9 +127,9 @@ jobs:
             dist/installers/linux-unpacked/**
 
   build-macos:
-    name: Build macOS
+    name: Build macOS (Apple Silicon)
     needs: validate
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
@@ -153,19 +153,17 @@ jobs:
       - name: Prepare Electron binary
         run: node scripts/install-electron-binary.mjs
 
-      - name: Build CLI binaries (macOS)
+      - name: Build CLI binary (macOS arm64)
         run: |
+          node packages/electron/scripts/macos-support.mjs --require-macos
           npm run build
           mkdir -p dist/cli
-          bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
           bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
-          # Native binary for electron bundling
-          bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
 
       - name: Build Electron (macOS)
         run: |
           make build-electron
-          npm run --workspace=packages/electron dist:mac:dir -- --$(node -p process.arch)
+          npm run --workspace=packages/electron dist:mac:dir
           npm run --workspace=packages/electron validate:daemon-bundle:mac
           npm run --workspace=packages/electron dist:mac
 
@@ -174,7 +172,6 @@ jobs:
         with:
           name: cli-macos
           path: |
-            dist/cli/todu-cli-darwin-x64
             dist/cli/todu-cli-darwin-arm64
 
       - name: Upload Electron installers
@@ -182,8 +179,8 @@ jobs:
         with:
           name: electron-macos
           path: |
-            dist/installers/*.dmg
-            dist/installers/mac/**
+            dist/installers/*-mac-arm64.dmg
+            dist/installers/mac-arm64/**
 
   build-windows:
     name: Build Windows CLI
@@ -264,7 +261,7 @@ jobs:
               "Release v${VERSION}" \
               "" \
               "## Install" \
-              "- Desktop: download the platform installer from this release. The packaged app bundles the local daemon runtime." \
+              "- Desktop: download the platform installer from this release. macOS requires Apple Silicon (arm64). The packaged app bundles the local daemon runtime." \
               "- CLI (optional power-user companion): npm install -g @todu/cli@${CLI_VERSION}. Companion npm versions are independent of the desktop version.")
           fi
 
@@ -282,14 +279,12 @@ jobs:
           # CLI binaries
           cp artifacts/cli-linux/todu-cli-linux-x64 release-assets/
           cp artifacts/cli-linux/todu-cli-linux-arm64 release-assets/
-          cp artifacts/cli-macos/todu-cli-darwin-x64 release-assets/
           cp artifacts/cli-macos/todu-cli-darwin-arm64 release-assets/
           cp artifacts/cli-windows/todu-cli-windows-x64.exe release-assets/
 
           # Electron installers
           cp "artifacts/electron-linux/todu-${VERSION}-linux-x86_64.AppImage" release-assets/
           cp "artifacts/electron-linux/todu-${VERSION}-linux-amd64.deb" release-assets/
-          cp "artifacts/electron-macos/todu-${VERSION}-mac-x64.dmg" release-assets/
           cp "artifacts/electron-macos/todu-${VERSION}-mac-arm64.dmg" release-assets/
           cp desktop-versions.json release-assets/
 

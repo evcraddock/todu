@@ -15,6 +15,9 @@ const rootManifest = JSON.parse(readFileSync(path.join(rootDir, "package.json"),
 const config = parse(
   readFileSync(path.join(rootDir, "packages/electron/electron-builder.yml"), "utf8"),
 );
+const ci = parse(readFileSync(path.join(rootDir, ".github/workflows/ci.yml"), "utf8"));
+const release = parse(workflow);
+const makefile = readFileSync(path.join(rootDir, "Makefile"), "utf8");
 
 afterEach(() => {
   for (const directory of temporaryDirs.splice(0)) rmSync(directory, { recursive: true });
@@ -176,16 +179,165 @@ describe("desktop release metadata", () => {
     expect(workflow).not.toMatch(/@todu\/cli@\$\{VERSION\}/);
     expect(workflow).not.toMatch(/cp artifacts\/electron-.*\|\| true/);
     expect(workflow).not.toMatch(/cp artifacts\/electron-.*\*/);
-    for (const suffix of [
-      "linux-x86_64.AppImage",
-      "linux-amd64.deb",
-      "mac-x64.dmg",
-      "mac-arm64.dmg",
-    ])
+    for (const suffix of ["linux-x86_64.AppImage", "linux-amd64.deb", "mac-arm64.dmg"])
       expect(workflow).toContain(`${suffix}" release-assets/`);
-    expect(workflow.match(/cp "artifacts\/electron-/g)).toHaveLength(4);
+    expect(workflow.match(/cp "artifacts\/electron-/g)).toHaveLength(3);
     expect(workflow).toContain("validate:daemon-bundle:linux");
     expect(workflow).toContain("validate:daemon-bundle:mac");
+  });
+});
+
+describe("Apple Silicon-only macOS support", () => {
+  it("uses explicit native Linux and Apple Silicon desktop runners without losing validation", () => {
+    expect(ci.jobs.desktop.strategy.matrix.include).toEqual([
+      { os: "ubuntu-latest", platform: "linux", arch: "x64" },
+      { os: "macos-15", platform: "mac", arch: "arm64" },
+    ]);
+    const steps = ci.jobs.desktop.steps as Array<{
+      name: string;
+      run?: string;
+      env?: Record<string, string>;
+    }>;
+    const guard = steps.find((step) => step.name === "Verify native desktop architecture");
+    expect(guard?.env?.EXPECTED_ARCH).toMatch(/^\$\{\{ matrix\.arch \}\}$/);
+    expect(guard?.run).toContain("process.arch");
+    const build = steps.find((step) => step.name === "Build and validate native desktop package");
+    expect(build?.run).toMatch(
+      /dist:\$\{\{ matrix\.platform \}\}:dir -- --\$\{\{ matrix\.arch \}\}/,
+    );
+    expect(build?.run).toMatch(/validate:daemon-bundle:\$\{\{ matrix\.platform \}\}/);
+    for (const name of [
+      "Device enrollment integration tests",
+      "Sync provider checkpoint and field-group integration tests",
+      "Unix socket ownership and path boundary tests",
+      "LAN sync listener integration tests",
+    ])
+      expect(steps.some((step) => step.name === name)).toBe(true);
+    expect(
+      ci.jobs.check.steps.some((step: { run?: string }) => step.run?.includes("make test-all")),
+    ).toBe(true);
+  });
+
+  it("builds and collects only arm64 macOS artifacts while preserving other platforms", () => {
+    expect(release.jobs["build-macos"]["runs-on"]).toBe("macos-15");
+    expect(workflow).not.toMatch(/darwin-x64|mac-x64|macos-latest|macos-15-intel/);
+    expect(makefile).not.toContain("bun-darwin-x64");
+    for (const target of ["linux-x64", "linux-arm64", "darwin-arm64", "windows-x64"])
+      expect(workflow).toContain(`todu-cli-${target}`);
+    expect(config.mac.target).toEqual([{ target: "dmg", arch: ["arm64"] }]);
+    expect(config.linux.target).toEqual([
+      { target: "deb", arch: ["x64"] },
+      { target: "AppImage", arch: ["x64"] },
+    ]);
+    expect(config.win.target).toEqual([{ target: "nsis", arch: ["x64"] }]);
+    expect(manifest.scripts["dist:mac"]).toMatch(/--mac --arm64$/);
+    expect(manifest.scripts["dist:mac:dir"]).toMatch(/--mac dir --arm64$/);
+    expect(manifest.scripts["validate:daemon-bundle:mac"]).toContain("mac-arm64/todu.app");
+    expect(makefile).toContain("node packages/electron/scripts/macos-support.mjs");
+    expect(makefile).not.toContain("dist:mac:dir -- --$$(node -p process.arch)");
+    expect(workflow).toContain("sha256sum * > SHA256SUMS.txt");
+  });
+
+  it("rejects Intel/universal packaging overrides before packing and permits other targets", async () => {
+    const { beforePack, assertSupportedMacArch } = await import(
+      "../packages/electron/scripts/macos-support.mjs"
+    );
+    const { Arch } = await import("builder-util");
+    expect(config.beforePack).toBe("./scripts/macos-support.mjs");
+    expect(() => beforePack({ electronPlatformName: "darwin", arch: Arch.arm64 })).not.toThrow();
+    for (const arch of [Arch.x64, Arch.universal, Arch.ia32])
+      expect(() => beforePack({ electronPlatformName: "darwin", arch })).toThrow(
+        /Apple Silicon.*arm64/,
+      );
+    for (const platform of ["linux", "win32"])
+      expect(() => beforePack({ electronPlatformName: platform, arch: Arch.x64 })).not.toThrow();
+    expect(() => assertSupportedMacArch({ platform: "darwin", arch: "x64" })).toThrow(
+      /Apple Silicon/,
+    );
+    expect(() => assertSupportedMacArch({ platform: "darwin", arch: "arm64" })).not.toThrow();
+    expect(() => assertSupportedMacArch({ platform: "linux", arch: "x64" })).not.toThrow();
+  });
+
+  it("does not validate an old Intel bundle when the requested arm64 bundle is missing", () => {
+    const directory = releaseFixture();
+    mkdirSync(path.join(directory, "mac/todu.app"), { recursive: true });
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(rootDir, "packages/electron/scripts/validate-daemon-bundle.mjs"),
+        "--app-bundle",
+        path.join(directory, "mac-arm64/todu.app"),
+      ],
+      { encoding: "utf8" },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("App bundle not found");
+    expect(result.stderr).toContain("mac-arm64/todu.app");
+  });
+});
+
+function runMacInstaller({
+  arch,
+  hardwareArm64 = "0",
+  sysctlFails = false,
+}: {
+  arch: string;
+  hardwareArm64?: string;
+  sysctlFails?: boolean;
+}) {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "todu-mac-installer-"));
+  temporaryDirs.push(directory);
+  const bin = path.join(directory, "bin");
+  const download = path.join(directory, "download");
+  const log = path.join(directory, "commands.log");
+  mkdirSync(bin);
+  mkdirSync(download);
+  writeFileSync(log, "");
+  const mock = (name: string, body: string) =>
+    writeFileSync(
+      path.join(bin, name),
+      `#!/bin/bash\nprintf '%s\\n' "${name} $*" >> "$COMMAND_LOG"\n${body}\n`,
+      { mode: 0o755 },
+    );
+  mock("uname", `printf '%s\\n' '${arch}'`);
+  mock("sysctl", sysctlFails ? "exit 1" : `printf '%s\\n' '${hardwareArm64}'`);
+  mock("mktemp", 'printf "%s\\n" "$DOWNLOAD_DIR"');
+  mock("curl", "exit 91");
+  for (const command of ["rm", "hdiutil", "ditto", "shasum"]) mock(command, "exit 0");
+  const result = spawnSync("bash", [path.join(rootDir, "scripts/install-mac.sh"), "1.2.3"], {
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      HOME: directory,
+      COMMAND_LOG: log,
+      DOWNLOAD_DIR: download,
+    },
+    encoding: "utf8",
+  });
+  return { result, commands: readFileSync(log, "utf8") };
+}
+
+describe("macOS installer architecture eligibility", () => {
+  it.each([
+    { arch: "arm64", hardwareArm64: "1" },
+    { arch: "x86_64", hardwareArm64: "1" },
+  ])("selects arm64 on native or translated Apple Silicon: $arch", (options) => {
+    const { result, commands } = runMacInstaller(options);
+    expect(result.status).toBe(91);
+    expect(commands).toContain("todu-1.2.3-mac-arm64.dmg");
+    expect(commands).not.toContain("mac-x64");
+    expect(commands).not.toMatch(/^hdiutil|^ditto|^shasum/m);
+  });
+
+  it.each([
+    { arch: "x86_64", hardwareArm64: "0" },
+    { arch: "x86_64", sysctlFails: true },
+    { arch: "unknown" },
+  ])("rejects unsupported or unverified hardware before side effects: $arch $sysctlFails", (options) => {
+    const { result, commands } = runMacInstaller(options);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toMatch(/Apple Silicon.*arm64/);
+    expect(commands).not.toMatch(/^(curl|mktemp|rm|hdiutil|ditto|shasum)\b/m);
   });
 });
 

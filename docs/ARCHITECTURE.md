@@ -10,6 +10,8 @@ This document reflects the current architecture decisions from planning task #19
 
 The [single-dataset device-sync design](architecture/device-sync.md) adds optional direct LAN replication while retaining one dataset per daemon. The replicated device registry, explicitly enabled LAN listener, and local approval-based enrollment are implemented; registry-derived connections remain follow-up work. Named accounts, account-switching UI, registry authorization, complete-offline-replica machinery, and new automation ownership controls are not prerequisites. Enrollment into a different initialized dataset must be refused without replacement or merging.
 
+macOS distribution and native package validation support Apple Silicon (`arm64`) only; Linux/Windows targets and shared npm package behavior are unchanged. See [Release Process](release.md) for current artifact and platform support.
+
 Project context:
 - Greenfield
 - Not in production

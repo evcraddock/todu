@@ -1,4 +1,4 @@
-.PHONY: build test test-all test-integration test-sync-server-integration check check-ci typecheck pre-pr deps-outdated run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun
+.PHONY: build test test-all test-integration test-sync-server-integration check check-ci typecheck pre-pr deps-outdated run clean help dev dev-stop dev-status dev-logs dev-tail dev-electron build-electron build-cli-binary build-cli-binaries dist dist-linux dist-mac dist-win install version version-check node_modules check-bun check-macos-platform
 
 SOCKET    := ./.overmind.sock
 DEV_CONFIG := $(abspath .dev/config.yaml)
@@ -63,9 +63,14 @@ clean: ## Remove build artifacts
 # CLI Binary Builds
 # =============================================================================
 
-build-cli-binary: check-bun build ## Build standalone CLI binary for current platform
+build-cli-binary: check-bun build ## Build standalone CLI binary for current supported platform
+	node packages/electron/scripts/macos-support.mjs
 	@mkdir -p dist/cli
-	bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu
+	@if [ "$$(node -p process.platform)" = darwin ]; then \
+		bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu; \
+	else \
+		bun build --compile packages/cli/src/index.ts --outfile dist/cli/todu; \
+	fi
 	@node -e 'const fs = require("node:fs"); const platform = process.platform === "win32" ? "windows" : process.platform; const ext = process.platform === "win32" ? ".exe" : ""; fs.copyFileSync("dist/cli/todu", `dist/cli/todu-cli-$${platform}-$${process.arch}$${ext}`)'
 	@echo "Built: dist/cli/todu ($$(ls -lh dist/cli/todu | awk '{print $$5}'))"
 
@@ -73,7 +78,6 @@ build-cli-binaries: check-bun build ## Build standalone CLI binaries for all pla
 	@mkdir -p dist/cli
 	bun build --compile --target=bun-linux-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-x64
 	bun build --compile --target=bun-linux-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-linux-arm64
-	bun build --compile --target=bun-darwin-x64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-x64
 	bun build --compile --target=bun-darwin-arm64 packages/cli/src/index.ts --outfile dist/cli/todu-cli-darwin-arm64
 	bun build --compile --target=bun-windows-x64-baseline packages/cli/src/index.ts --outfile dist/cli/todu-cli-windows-x64.exe
 	@echo "Built all CLI binaries:"
@@ -165,8 +169,11 @@ dist-linux: build-cli-binary build-electron ## Build validated Linux installers 
 	npm run --workspace=packages/electron validate:daemon-bundle:linux
 	npm run --workspace=packages/electron dist:linux
 
-dist-mac: build-cli-binaries build-electron ## Build validated macOS installers (.dmg)
-	npm run --workspace=packages/electron dist:mac:dir -- --$$(node -p process.arch)
+check-macos-platform: node_modules ## Require native Apple Silicon Node.js for macOS package validation
+	node packages/electron/scripts/macos-support.mjs --require-macos
+
+dist-mac: check-macos-platform build-cli-binaries build-electron ## Build validated Apple Silicon macOS installers (.dmg)
+	npm run --workspace=packages/electron dist:mac:dir
 	npm run --workspace=packages/electron validate:daemon-bundle:mac
 	npm run --workspace=packages/electron dist:mac
 

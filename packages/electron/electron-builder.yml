@@ -16,6 +16,8 @@ files:
 extraMetadata:
   main: dist/main/index.js
 
+beforePack: ./scripts/macos-support.mjs
+
 # Bundle the matching platform/architecture CLI, not the build host's binary.
 # Linux
 linux:
@@ -48,14 +50,14 @@ deb:
   afterInstall: build/linux/after-install.sh
   afterRemove: build/linux/after-remove.sh
 
-# macOS
+# macOS — Apple Silicon only
 mac:
   extraResources:
     - from: "../../dist/cli/todu-cli-darwin-${arch}"
       to: cli/todu
   target:
     - target: dmg
-      arch: [x64, arm64]
+      arch: [arm64]
   category: public.app-category.productivity
   icon: build/icons/icon.icns
   hardenedRuntime: false

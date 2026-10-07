@@ -7,7 +7,7 @@ This is the recommended way to run the local todu daemon continuously.
 ## Recommendation
 
 - **Linux:** use `systemd --user`
-- **macOS:** use `launchd` (`LaunchAgents`)
+- **macOS (Apple Silicon only):** use `launchd` (`LaunchAgents`)
 
 After setup, verify with:
 
