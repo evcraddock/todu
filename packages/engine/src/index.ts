@@ -263,7 +263,6 @@ export async function createTodu(
 
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
-  let remoteStorageId: string | undefined;
   let enrollmentPeer: EnrollmentPeerConnection | null = null;
   const pendingEnrollmentPeers = new Set<EnrollmentPeerConnection>();
   let engineClosed = false;
@@ -346,7 +345,6 @@ export async function createTodu(
     if (!config?.remoteSync || remoteAdapter) return;
 
     const onPeerCandidate = (payload: PeerCandidatePayload): void => {
-      remoteStorageId = payload.peerMetadata?.storageId;
       resolvedConfig.syncLogger?.info("remote sync peer connected", {
         server: config.remoteSync?.server,
         peerId: payload.peerId,
@@ -433,13 +431,16 @@ export async function createTodu(
               new URL(config.remoteSync.server).href === enrollmentSyncUrl(source)
             ) {
               const deadline = Date.now() + 10_000;
-              while (
-                remoteStorageId !== source.approval.sourceDeviceId ||
-                !remoteAdapter?.remotePeerId
-              ) {
+              while (true) {
                 signal?.throwIfAborted();
                 if (engineClosed) throw new Error("Engine closed during enrollment");
-                if (remoteStorageId && remoteStorageId !== source.approval.sourceDeviceId)
+                const peerId = remoteAdapter?.remotePeerId;
+                // Native peer metadata survives a handshake that completed before SDK listeners were installed.
+                const storageId = peerId
+                  ? storage.repo.getStorageIdOfPeer(peerId)?.slice(0)
+                  : undefined;
+                if (storageId === source.approval.sourceDeviceId) break;
+                if (storageId)
                   throw new Error("Configured server is not the approved native source");
                 if (Date.now() >= deadline)
                   throw new Error("Configured source did not connect within 10000ms");

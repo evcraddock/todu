@@ -20,6 +20,7 @@ import {
 } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDaemonMethod } from "../../cli/src/daemon-transport.js";
+import * as engineStorage from "../../engine/src/storage.js";
 import { createPersistentRepo } from "../../engine/src/storage.js";
 import { createDaemonRuntime, type DaemonRuntime } from "./runtime.js";
 
@@ -185,7 +186,10 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
     );
   });
 
-  it("preserves an existing same-dataset replica, local data, provider state, and worker execution", async () => {
+  it.each([
+    "separate configured server",
+    "same configured source",
+  ])("preserves an existing same-dataset replica, data, provider state, and workers with %s", async (serverMode) => {
     const receiving = await source();
     const catalogId = receiving.instance.status().catalogId!;
     const clientPath = path.join(directory, "client");
@@ -213,7 +217,18 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
     fs.writeFileSync(path.join(clientPath, "provider-state.json"), "existing provider cursor");
     const workerStop = vi.fn();
     const workerStart = vi.fn(() => ({ stop: workerStop }));
-    const originalServer = `ws://127.0.0.1:${await reservePort()}`;
+    const makeRepo = engineStorage.createPersistentRepo;
+    let liveRepo: ReturnType<typeof createPersistentRepo> | undefined;
+    vi.spyOn(engineStorage, "createPersistentRepo").mockImplementation((storagePath) => {
+      const created = makeRepo(storagePath);
+      if (storagePath === clientPath) liveRepo = created;
+      return created;
+    });
+    const sourceSyncUrl = `${receiving.endpoint.replace("http:", "ws:")}/sync/${catalogId}`;
+    const originalServer =
+      serverMode === "same configured source"
+        ? sourceSyncUrl
+        : `ws://127.0.0.1:${await reservePort()}`;
     const joining = runtime("client", {
       remoteSync: { server: originalServer },
       assignedWorkerTypes: ["existing-worker"],
@@ -244,6 +259,16 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
     expect(workerStop).not.toHaveBeenCalled();
     expect(joining.config()).toEqual(originalConfig);
     expect(joining.config().remoteSync).toEqual({ server: originalServer });
+    expect(liveRepo).toBeDefined();
+    const sourceAdapters = () =>
+      liveRepo!.networkSubsystem.adapters.filter(
+        (adapter) => "url" in adapter && adapter.url === sourceSyncUrl,
+      );
+    expect(sourceAdapters()).toHaveLength(1);
+    expect(
+      await value<EnrollmentClientStatus>(joining, "sync.enroll", { endpoint: receiving.endpoint }),
+    ).toMatchObject({ stage: "active", deviceId: replica });
+    expect(sourceAdapters()).toHaveLength(1);
     expect(fs.readFileSync(path.join(clientPath, "provider-state.json"), "utf-8")).toBe(
       "existing provider cursor",
     );
