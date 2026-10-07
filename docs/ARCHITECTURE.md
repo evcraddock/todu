@@ -243,11 +243,11 @@ Baseline worker lifecycle states are:
 - Generic worker plugins use `WorkerPluginRegistration` from `@todu/core` and export `workerPlugin`.
 - Sync provider plugins use `SyncProviderRegistration` from `@todu/core` and export `syncProvider`.
 - Plugin load paths validate registrations at load time before worker registration.
-- Compatibility baseline for sync providers is API-version based (latest provider API version: `4`; host-supported provider API versions: `3` and `4`).
+- Compatibility baseline for sync providers is API-version based (latest enabled provider API version: `4`; host-supported provider API versions: `3` and `4`). API `5` defines a contract-only field-group extension and remains rejected by the daemon until host reconciliation is implemented.
 - API v4 providers return opaque pull checkpoints and commit read progress only after daemon application, actor-mapping persistence, and native local storage flush succeed. Acknowledgment precedes bidirectional push; failures retry unacknowledged pulls without waiting for remote peers. API v3 retains its legacy lifecycle without acknowledgment.
 - Daemon plugin modules resolve from `TODU_DAEMON_PLUGIN_PATHS` first, then `daemon.plugins.paths` in config. Absolute and dot-relative entries are filesystem paths, with dot-relative paths resolved from the config location; other entries are npm package specifiers.
 - Plugin load activation occurs at daemon startup and applies on daemon restart.
-- Conflict resolution baseline for provider sync is last-write-wins by `updatedAt`.
+- Implemented v3/v4 conflict resolution for provider sync is whole-task last-write-wins by `updatedAt`. The contract-only v5 extension specifies three-way reconciliation against mirrored snapshots for content, workflow, classification, and assignment, with remote-wins timestamp ties and acknowledged winning values. It does not implement host reconciliation or provider-specific mappings.
 - External sync uses a small synced core integration binding model consumed by sync provider plugins, and integration bindings are the sole core control plane for that work. Provider runtime internals remain local to the authority daemon host. See `docs/architecture/integrations.md`.
 - Author-facing contract details are documented in `docs/worker-plugin-api.md` and `docs/plugin-sync-provider-api.md`.
 - Product/plugin boundary policy is documented in `docs/adr/0001-plugin-boundaries-and-data-ownership.md`, `docs/architecture/plugins.md`, and `docs/architecture/integrations.md`.

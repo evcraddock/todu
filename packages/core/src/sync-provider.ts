@@ -1,3 +1,7 @@
+import type {
+  SyncProviderPullAcknowledgmentV5,
+  SyncTaskFieldGroupUpdate,
+} from "./sync-field-groups.js";
 import {
   type CommentSyncProvenance,
   err,
@@ -13,6 +17,8 @@ import {
 
 export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
 export const SYNC_PROVIDER_API_VERSION_V4 = 4 as const;
+/** Contract-only extension; not yet enabled in the daemon's supported version set. */
+export const SYNC_PROVIDER_API_VERSION_V5 = 5 as const;
 export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V4;
 export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
   SYNC_PROVIDER_API_VERSION_V3,
@@ -155,7 +161,23 @@ export interface SyncProviderV4 extends SyncProviderV3 {
   ): Promise<void>;
 }
 
-export type SyncProvider = SyncProviderV3 | SyncProviderV4;
+export interface SyncProviderPullResultV5 extends SyncProviderPullResultV4 {
+  /** Existing linked tasks only; bootstrap creates remain in tasks. */
+  taskUpdates: SyncTaskFieldGroupUpdate[];
+}
+
+export interface SyncProviderV5 extends Omit<SyncProviderV4, "pull" | "acknowledgePull"> {
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV5>;
+  /** Commit read progress after host persistence; use outcomes to stage remote writes. */
+  acknowledgePull(
+    binding: IntegrationBinding,
+    checkpoint: unknown,
+    project: Project,
+    acknowledgment: SyncProviderPullAcknowledgmentV5,
+  ): Promise<void>;
+}
+
+export type SyncProvider = SyncProviderV3 | SyncProviderV4 | SyncProviderV5;
 export type AnySyncProvider = SyncProvider;
 
 export interface SyncProviderRegistrationV3 {
@@ -172,7 +194,17 @@ export interface SyncProviderRegistrationV4 {
   provider: SyncProviderV4;
 }
 
-export type SyncProviderRegistration = SyncProviderRegistrationV3 | SyncProviderRegistrationV4;
+export interface SyncProviderRegistrationV5 {
+  manifest: SyncProviderManifest & {
+    apiVersion: typeof SYNC_PROVIDER_API_VERSION_V5;
+  };
+  provider: SyncProviderV5;
+}
+
+export type SyncProviderRegistration =
+  | SyncProviderRegistrationV3
+  | SyncProviderRegistrationV4
+  | SyncProviderRegistrationV5;
 export type AnySyncProviderRegistration = SyncProviderRegistration;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
@@ -226,6 +258,12 @@ export function isSyncProviderRegistrationV4(
   registration: AnySyncProviderRegistration,
 ): registration is SyncProviderRegistrationV4 {
   return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V4;
+}
+
+export function isSyncProviderRegistrationV5(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV5 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V5;
 }
 
 export function validateSyncProviderRegistration(
@@ -297,7 +335,8 @@ export function validateSyncProviderRegistration(
 
   if (
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3 &&
-    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V4
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V4 &&
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V5
   ) {
     return err(
       createSyncProviderValidationError(
@@ -359,7 +398,7 @@ export function validateSyncProviderRegistration(
   }
 
   const requiredMethods =
-    manifestApiVersion === SYNC_PROVIDER_API_VERSION_V4
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3
       ? REQUIRED_SYNC_PROVIDER_V4_METHODS
       : REQUIRED_SYNC_PROVIDER_V3_METHODS;
   for (const method of requiredMethods) {
@@ -375,6 +414,13 @@ export function validateSyncProviderRegistration(
         ),
       );
     }
+  }
+
+  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V5) {
+    return ok({
+      manifest: { name: manifestName, version: manifestVersion, apiVersion: manifestApiVersion },
+      provider: registration.provider as SyncProviderV5,
+    });
   }
 
   if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V4) {
