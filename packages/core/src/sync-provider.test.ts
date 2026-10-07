@@ -3,11 +3,14 @@ import {
   isSyncProviderApiVersionCompatible,
   isSyncProviderRegistrationV3,
   isSyncProviderRegistrationV4,
+  isSyncProviderRegistrationV5,
   SYNC_PROVIDER_API_VERSION,
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
+  SYNC_PROVIDER_API_VERSION_V5,
   type SyncProviderRegistrationV3,
   type SyncProviderRegistrationV4,
+  type SyncProviderRegistrationV5,
   validateSyncProviderRegistration,
 } from "./sync-provider.js";
 
@@ -31,6 +34,34 @@ describe("isSyncProviderApiVersionCompatible", () => {
 });
 
 describe("validateSyncProviderRegistration", () => {
+  it("rejects the defined v5 contract by default until host implementation exists", () => {
+    expect(validateSyncProviderRegistration(createValidV5Registration())).toMatchObject({
+      ok: false,
+      error: { code: "API_VERSION_MISMATCH" },
+    });
+  });
+
+  it("validates v5 only when the caller explicitly advertises v5 support", () => {
+    const registration = createValidV5Registration();
+    const result = validateSyncProviderRegistration(registration, { supportedApiVersions: [5] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected valid v5 registration");
+    expect(isSyncProviderRegistrationV5(result.value)).toBe(true);
+    expect(isSyncProviderRegistrationV4(result.value)).toBe(false);
+    expect(result.value.provider).toBe(registration.provider);
+  });
+
+  it("requires v5 acknowledgment when explicitly supported", () => {
+    const registration = createValidV5Registration();
+    registration.provider.acknowledgePull = undefined as never;
+    expect(
+      validateSyncProviderRegistration(registration, { supportedApiVersions: [5] }),
+    ).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_PROVIDER", details: { method: "acknowledgePull", apiVersion: 5 } },
+    });
+  });
+
   it("accepts v4 providers with a pull acknowledgment callback", () => {
     const registration = createValidV4Registration();
     const result = validateSyncProviderRegistration(registration);
@@ -197,6 +228,19 @@ describe("validateSyncProviderRegistration", () => {
     });
   });
 });
+
+function createValidV5Registration(): SyncProviderRegistrationV5 {
+  return {
+    manifest: { name: "github", version: "1.2.3", apiVersion: SYNC_PROVIDER_API_VERSION_V5 },
+    provider: {
+      ...createValidV4Registration().provider,
+      async pull() {
+        return { tasks: [], taskUpdates: [], checkpoint: null };
+      },
+      async acknowledgePull(_binding, _checkpoint, _project, _acknowledgment) {},
+    },
+  };
+}
 
 function createValidV4Registration(): SyncProviderRegistrationV4 {
   return {

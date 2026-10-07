@@ -40,6 +40,17 @@ describe("sync provider loading", () => {
     });
   });
 
+  it("rejects contract-only v5 before worker registration", async () => {
+    const result = await loadConfiguredPlugins({
+      modulePaths: ["/plugins/test.mjs"],
+      importModule: async () => createModule(5),
+    });
+    expect(result.loadedPlugins).toEqual([]);
+    expect(result.failures).toMatchObject([
+      { code: "INVALID_PROVIDER", details: { validationError: { code: "API_VERSION_MISMATCH" } } },
+    ]);
+  });
+
   it("rejects a v4 provider without acknowledgment before worker registration", async () => {
     const result = await loadConfiguredPlugins({
       modulePaths: ["/plugins/test.mjs"],

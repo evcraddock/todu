@@ -35,6 +35,7 @@ Compatibility is API-version based.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
 - Provider API v2 compatibility has been removed.
+- API v5 is a defined, contract-only extension (`SYNC_PROVIDER_API_VERSION_V5`). It is **not** included in the latest enabled version or default host-supported set. The current daemon rejects v5 before worker registration; host application is follow-up task `task-f7cbd4f3`.
 
 Use `validateSyncProviderRegistration(...)` during plugin load to enforce this gate.
 
@@ -53,6 +54,107 @@ Rules:
 - `name` must be non-empty.
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
+
+## API v5: field-group task reconciliation (contract only)
+
+This section specifies the next host/provider contract; it does not describe implemented daemon behavior. v3/v4 payloads, conflict behavior, and acknowledgment signatures remain unchanged. `SyncProviderRegistration` includes the known v5 type, but `validateSyncProviderRegistration` rejects it by default. An implementing host must explicitly pass `supportedApiVersions: [3, 4, 5]` only after it implements the lifecycle below. Validation of method presence is not evidence of host implementation.
+
+v5 inherits initialization, shutdown, push, comments, and opaque checkpoints from v4. It replaces the pull result and acknowledgment signature:
+
+```ts
+interface SyncProviderPullResultV5 extends SyncProviderPullResultV4 {
+  taskUpdates: SyncTaskFieldGroupUpdate[];
+}
+
+interface SyncProviderV5 extends Omit<SyncProviderV4, "pull" | "acknowledgePull"> {
+  pull(binding: IntegrationBinding, project: Project): Promise<SyncProviderPullResultV5>;
+  acknowledgePull(
+    binding: IntegrationBinding,
+    checkpoint: unknown,
+    project: Project,
+    acknowledgment: SyncProviderPullAcknowledgmentV5,
+  ): Promise<void>;
+}
+```
+
+### Independent normalized groups
+
+| Group | Complete value | Equality |
+| --- | --- | --- |
+| `content` | `{ title: string, description: string }` | Exact title/body strings; preserve markdown |
+| `workflow` | `{ status: TaskStatus }` | Normalized Todu status |
+| `classification` | `{ priority: TaskPriority, labels: string[] }` | Equal priority and label sets; order is irrelevant |
+| `assignment` | `{ assignees: SyncAssigneeIdentity[] }` | Equal stable external identity sets; order is irrelevant |
+
+A `SyncAssigneeIdentity` requires a non-empty `externalAccountId` or `externalLogin`. Prefer stable account IDs and use binding-local mappings to reconcile login aliases; do not compare display names, raw metadata, or emit local actor IDs. Providers normalize remote values and mirrored bases consistently. The host projects local actor assignments into the same identity space; incomplete mappings must never be treated as an empty or partial complete set.
+
+Each supplied group contains `base` (the last normalized value successfully mirrored on both sides), `remote` (the current normalized remote value), and optional `sourceTimestamp` (the source update clock). A missing base is invalid: do not invent an empty base. Establish an initial mirrored snapshot only after acknowledged bootstrap and verification that the persisted local/exported value equals the remote value, or after independently verifying equality. Bootstrap acknowledgment alone does not return per-group winning values.
+
+Omit a whole group to leave it unchanged; within a supplied group, every field is required. A missing description is not a clear: normalize a deliberately absent body to `description: ""`. Empty label/assignee arrays explicitly clear those sets. Unknown groups, undefined groups, invalid statuses/priorities, partial values, and malformed timestamps fail validation. `validateSyncTaskFieldGroupUpdate(unknown)` returns a `Result` with a contextual field error; it validates shape only, not durable identity, actor authorization, or business policy.
+
+### Identity and bootstrap
+
+An update requires canonical `externalId`, scoped to the binding/project supplied to `pull`. Optional branded `localTaskId` is an assertion, not permission to relink: the host must verify it agrees with the existing durable link and project. Missing, ambiguous, or contradictory identity fails the batch without acknowledgment; title equality is not identity.
+
+`tasks` is retained for bootstrap creates of unlinked records. Existing linked tasks use `taskUpdates`, not whole-task replacement. A batch must not repeat the same identity in either array or include it in both. `taskUpdates` is required even for empty pulls (`[]`). Unlinked bootstrap keeps the inherited v4 import rules, and the first group base requires successful acknowledgment plus verified local/remote equality. Comments retain v4 behavior; comment reconciliation, hard deletion, provider-specific mappings, and exact per-group clocks are outside this extension.
+
+### Three-way decision rules
+
+Compare the local and remote normalized group values against `base` before consulting clocks:
+
+| Local changed | Remote changed | Relationship | Resolution | Winner | Remote write required |
+| --- | --- | --- | --- | --- | --- |
+| No | No | Both equal base | `unchanged` | `equal` | No |
+| Yes | No | Different values | `local-only` | `local` | Yes |
+| No | Yes | Different values | `remote-only` | `remote` | No |
+| Yes | Yes | Equal new values | `converged` | `equal` | No |
+| Yes | Yes | Different new values | `conflict` | Newer timestamp, otherwise remote | Only if local wins |
+
+For true conflicts, compare timestamp instants, not ISO strings. Source timestamps must be valid RFC 3339 with timezone; omit a missing clock, rather than sending null or an invalid string. Local clocks are host-owned. The initial host may use the task-level `updatedAt` and providers may use record-level clocks; those clocks select a deterministic winner but do not prove which individual group changed last. Equal instants (including different timezone spellings) or either missing clock always select remote. Invalid supplied clocks fail the batch, not the tie fallback.
+
+Every true conflict has a `SyncTaskFieldGroupConflict` containing binding ID, local task ID, external ID, group, available local/remote timestamps, and the selection reason (`newer-timestamp`, `remote-wins-equal-timestamps`, or `remote-wins-missing-timestamp`). Its enclosing outcome carries the selected winner and winning value. Local-wins outcomes can only use `newer-timestamp`; conflict outcomes require diagnostic data. One-sided and equal-value changes are not conflicts and do not use timestamps to veto changes.
+
+Assignment replacement is deferred when the host cannot project the complete local set through authorized binding mappings. Return `deferred: { assignment: "incomplete-assignment-mapping" }`, omit the assignment outcome, preserve remote assignment and its mirrored base, and emit a warning. Other groups can still reconcile. A complete, intentionally empty mapped set is a valid clear. Providers must not interpret an omitted/deferred outcome as permission to write a partial exported assignee set.
+
+### Application, acknowledgment, and snapshot ordering
+
+The implementing host must:
+
+1. Pull normalized bootstrap tasks, comments, field-group updates, and a proposed opaque checkpoint; validate the entire batch and resolve existing-task identities.
+2. Read current local values and reconcile each supplied group independently. Apply only selected remote changes through normal task validation, actor authorization, and imported-content approval paths. Preserve omitted groups. Produce exactly one task result per update, in input order, with outcomes for supplied groups or the explicit assignment deferral.
+3. Persist tasks/comments, provenance, and binding actor mappings. Await the native local storage flush barrier, as in v4.
+4. Call `acknowledgePull(binding, checkpoint, project, { taskResults })`, including `{ taskResults: [] }` for empty pulls. No acknowledgment is sent on validation, application, mapping-persistence, or flush failure.
+5. Only after acknowledgment succeeds, rebuild current exports and push for bidirectional bindings. Push-only/`none` bindings do not receive pull acknowledgment.
+
+`SyncTaskFieldGroupResult` includes the verified `externalId`, branded `localTaskId`, and a partial map of group outcomes. Each outcome includes the selected `value`, `resolution`, `winner`, and `remoteWriteRequired`; conflicts also include diagnostics. The acknowledgment is a receipt of locally persisted application, **not** confirmation of a remote write or peer convergence.
+
+For outcomes with `remoteWriteRequired: false`, the provider may commit the acknowledged value as its mirrored base. For local-wins outcomes, keep the previous base and durably stage the selected value for remote push; advance that group's base only after the remote write succeeds. Pull-only bindings must retain the previous base for local wins because no push follows. Deferred/omitted groups never advance their base. Retain deferred assignment reconciliation independently of the pull cursor and retry it with fresh remote values when mappings become complete. A provider that completes a read checkpoint while remote writes are pending must retain those writes independently of the pull cursor so they survive push failures and restart.
+
+A provider's v5 push must use staged group decisions rather than blindly replacing whole exported tasks. Recheck fresh export values against staged values before writing, so intervening local edits are not lost. Advance snapshots only to values actually confirmed on both sides; provider-side remote write success, not inherited `taskLinks`, establishes remote completion. Partial remote success advances only confirmed groups; failures retain the remaining pending work.
+
+Keep acknowledgment idempotent and replay-safe as in v4. The provider stages progress before acknowledgment and commits only the supplied binding/checkpoint; a successful commit followed by a callback error or crash must not discard pending remote writes. If application partially succeeded before failure, the next pull replays against fresh local values and the unchanged mirrored base. Do not cache a stale host outcome as a substitute for replay. Already-applied changes are not rolled back.
+
+### Example: independent title and status edits
+
+```ts
+const update: SyncTaskFieldGroupUpdate = {
+  externalId: "tracker/project/123",
+  groups: {
+    content: {
+      base: { title: "Original", description: "Body" },
+      remote: { title: "Original", description: "Body" },
+      sourceTimestamp: "2026-06-01T12:00:00Z",
+    },
+    workflow: {
+      base: { status: "active" },
+      remote: { status: "done" },
+      sourceTimestamp: "2026-06-01T12:00:00Z",
+    },
+  },
+};
+```
+
+If the current local title is `Renamed` and status is still `active`, the content outcome is `{ value: { title: "Renamed", description: "Body" }, resolution: "local-only", winner: "local", remoteWriteRequired: true }`. The workflow outcome is `{ value: { status: "done" }, resolution: "remote-only", winner: "remote", remoteWriteRequired: false }`. Classification and assignment stay untouched. After local flush, acknowledgment permits committing the workflow snapshot, but the content snapshot stays at `Original` until the provider successfully pushes `Renamed`.
 
 ## API v4: acknowledged pull checkpoints
 
@@ -338,4 +440,4 @@ Retry policy:
 
 ## Conflict resolution baseline
 
-Provider sync conflict resolution baseline is `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs.
+The implemented v3/v4 provider sync conflict resolution baseline is whole-task `last-write-wins` based on `updatedAt` timestamps. Providers should preserve external timestamps where available and provide deterministic mapping behavior under repeated pull/push runs. The contract-only v5 extension specifies independent three-way field-group reconciliation above; it does not change current host behavior.
