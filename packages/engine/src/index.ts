@@ -7,6 +7,7 @@ import {
   ok,
   resolveSyncListenerConfig,
   storageError,
+  updateRemoteSyncSettings,
   validateDeviceEndpoint,
   validationError,
 } from "@todu/core";
@@ -111,6 +112,7 @@ export { DEFAULT_SYNC_PORT } from "./sync-server.js";
 export type {
   ActorNamespace,
   ApprovalNamespace,
+  ConfiguredServerStatus,
   DeviceNamespace,
   HabitNamespace,
   IntegrationNamespace,
@@ -149,11 +151,17 @@ export type {
 export async function createTodu(
   config: Pick<ToduConfig, "storagePath"> & Partial<Omit<ToduConfig, "storagePath">>,
 ): Promise<Todu> {
+  let serverSettings = {
+    ...(config.remoteSyncSettings ??
+      (config.remoteSync ? { ...config.remoteSync, enabled: true } : { enabled: false })),
+  };
+  let serverRunning = serverSettings.enabled && Boolean(serverSettings.server);
   const resolvedConfig: ToduConfig = {
     storagePath: config.storagePath,
     bootstrapOwnerActor: config.bootstrapOwnerActor,
     syncListener: config.syncListener,
     registeredPeerConnections: config.registeredPeerConnections,
+    remoteSyncSettings: serverSettings,
     syncLogger: config.syncLogger,
     remoteSyncWatchdogIntervalMs: config.remoteSyncWatchdogIntervalMs,
     remoteSyncAvailabilityTimeoutMs: config.remoteSyncAvailabilityTimeoutMs,
@@ -170,10 +178,10 @@ export async function createTodu(
 
   if (config.joinedStorage) {
     storage = config.joinedStorage;
-    if (config.remoteSync)
+    if (serverRunning && serverSettings.server)
       initialRemoteAdapter = addRemoteSyncAdapter(
         storage.repo,
-        config.remoteSync.server,
+        serverSettings.server,
         undefined,
         resolvedConfig.syncLogger,
       );
@@ -194,10 +202,10 @@ export async function createTodu(
     // remote document not in local storage — without a network peer,
     // repo.find() marks it "unavailable" and throws.
     const repo = createPersistentRepo(resolvedConfig.storagePath);
-    if (config?.remoteSync) {
+    if (serverRunning && serverSettings.server) {
       initialRemoteAdapter = addRemoteSyncAdapter(
         repo,
-        config.remoteSync.server,
+        serverSettings.server,
         undefined,
         resolvedConfig.syncLogger,
       );
@@ -233,7 +241,7 @@ export async function createTodu(
     local: { mode: localMode },
     remote: {
       state: "disconnected",
-      server: config?.remoteSync?.server,
+      server: serverSettings.server,
     },
   };
 
@@ -284,11 +292,18 @@ export async function createTodu(
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
   let enrollmentPeer: EnrollmentPeerConnection | null = null;
+  let sharedEnrollmentSource = config.enrollmentSource ?? null;
   let peerConnections: ReturnType<typeof createRosterPeerConnections> | null = null;
   const pendingEnrollmentPeers = new Set<EnrollmentPeerConnection>();
   let engineClosed = false;
   let remoteWatchdogTimer: ReturnType<typeof setInterval> | null = null;
   let remoteWatchdogRestarting = false;
+  let serverOperation: Promise<unknown> = Promise.resolve();
+  function controlServer<T>(operation: () => Promise<T>): Promise<T> {
+    const next = serverOperation.then(operation, operation);
+    serverOperation = next;
+    return next;
+  }
 
   function setRemoteState(
     state: SyncStatus["remote"]["state"],
@@ -314,7 +329,7 @@ export async function createTodu(
   }
 
   function startRemoteWatchdog(): void {
-    if (!config?.remoteSync || remoteWatchdogTimer) return;
+    if (!serverRunning || !serverSettings.server || remoteWatchdogTimer) return;
 
     remoteWatchdogTimer = setInterval(() => {
       void checkRemoteAdapterHealth();
@@ -329,20 +344,37 @@ export async function createTodu(
   }
 
   async function checkRemoteAdapterHealth(): Promise<void> {
-    if (!config?.remoteSync || !remoteAdapter || remoteWatchdogRestarting) return;
+    if (
+      !serverRunning ||
+      !serverSettings.server ||
+      !remoteAdapter ||
+      remoteWatchdogRestarting ||
+      engineClosed
+    )
+      return;
+    const expectedAdapter = remoteAdapter;
+    const server = serverSettings.server;
 
     reconcileRemoteAdapterState();
     if (syncStatus.remote.state !== "disconnected") return;
 
     const available = await isSyncServerAvailable(
-      config.remoteSync.server,
+      server,
       config.remoteSyncAvailabilityTimeoutMs ?? 200,
     );
-    if (!available || !remoteAdapter || syncStatus.remote.state !== "disconnected") return;
+    if (
+      !available ||
+      !serverRunning ||
+      engineClosed ||
+      remoteAdapter !== expectedAdapter ||
+      serverSettings.server !== server ||
+      syncStatus.remote.state !== "disconnected"
+    )
+      return;
 
     remoteWatchdogRestarting = true;
     resolvedConfig.syncLogger?.warn("remote sync watchdog restarting stale adapter", {
-      server: config.remoteSync.server,
+      server,
     });
 
     try {
@@ -350,7 +382,7 @@ export async function createTodu(
       startRemoteAdapter();
     } catch (error) {
       resolvedConfig.syncLogger?.warn("remote sync watchdog failed to replace stale adapter", {
-        server: config.remoteSync.server,
+        server,
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -363,28 +395,41 @@ export async function createTodu(
    * Non-blocking — the adapter retries automatically on disconnect.
    */
   function startRemoteAdapter(): void {
-    if (!config?.remoteSync || remoteAdapter || engineClosed) return;
-    peerConnections?.release(new URL(config.remoteSync.server).href);
+    if (!serverRunning || !serverSettings.server || remoteAdapter || engineClosed) return;
+    const server = serverSettings.server;
 
     const onPeerCandidate = (payload: PeerCandidatePayload): void => {
       resolvedConfig.syncLogger?.info("remote sync peer connected", {
-        server: config.remoteSync?.server,
+        server,
         peerId: payload.peerId,
       });
       setRemoteState("connected");
     };
+    const preserveLostServerRoles = (): void => {
+      void controlServer(async () => {
+        if (!engineClosed && remoteAdapter?.url === new URL(server).href)
+          await preserveServerPeerRoles();
+      }).catch((error: unknown) =>
+        resolvedConfig.syncLogger?.warn(
+          "cannot preserve peer/source role after server disconnect",
+          { error: String(error) },
+        ),
+      );
+    };
     const onPeerDisconnected = (payload: PeerDisconnectedPayload): void => {
       resolvedConfig.syncLogger?.warn("remote sync peer disconnected", {
-        server: config.remoteSync?.server,
+        server,
         peerId: payload.peerId,
       });
       setRemoteState("disconnected");
+      preserveLostServerRoles();
     };
     const onClose = (): void => {
       resolvedConfig.syncLogger?.warn("remote sync adapter closed", {
-        server: config.remoteSync?.server,
+        server,
       });
       setRemoteState("disconnected");
+      preserveLostServerRoles();
     };
     // Reuse the adapter created during init (before catalog load) to avoid
     // a duplicate WebSocket connection. Only create a new one on restart.
@@ -394,7 +439,7 @@ export async function createTodu(
     } else {
       remoteAdapter = addRemoteSyncAdapter(
         storage.repo,
-        config.remoteSync.server,
+        server,
         undefined,
         resolvedConfig.syncLogger,
       );
@@ -424,8 +469,48 @@ export async function createTodu(
     setRemoteState("disconnected", { forceNotify: options.manual !== false });
   }
 
+  async function preserveServerPeerRoles(): Promise<void> {
+    const adapter = remoteAdapter;
+    if (!adapter) return;
+    const waitForReady = isRemoteAdapterConnected(adapter);
+    await peerConnections?.detachServer(adapter.url, waitForReady);
+    const source = sharedEnrollmentSource;
+    if (
+      source &&
+      enrollmentSyncUrl(source) === adapter.url &&
+      !peerConnections?.find(source) &&
+      !enrollmentPeer
+    ) {
+      const candidate = createEnrollmentPeerConnection({
+        repo: storage.repo,
+        source,
+        logger: resolvedConfig.syncLogger,
+      });
+      pendingEnrollmentPeers.add(candidate);
+      try {
+        if (waitForReady) await candidate.ready();
+        if (engineClosed) throw new Error("Engine closed during server/source handoff");
+        if (sharedEnrollmentSource !== source) {
+          candidate.close();
+          return;
+        }
+        enrollmentPeer = candidate;
+      } catch (error) {
+        candidate.close();
+        throw error;
+      } finally {
+        pendingEnrollmentPeers.delete(candidate);
+      }
+    }
+    if (engineClosed) throw new Error("Engine closed during server/peer handoff");
+  }
+
+  function configuredServerUrl(): string | undefined {
+    return remoteAdapter?.url;
+  }
+
   // Auto-start remote sync if configured
-  if (config?.remoteSync) {
+  if (serverRunning) {
     startRemoteAdapter();
   }
 
@@ -472,6 +557,7 @@ export async function createTodu(
               const adapter = remoteAdapter;
               return {
                 source,
+                serverBacked: true,
                 ready: (signal) => readyConfiguredSource(source, signal),
                 close() {},
                 isClosed: () => remoteAdapter !== adapter,
@@ -489,7 +575,7 @@ export async function createTodu(
                 ready: (signal) => connection.ready(signal),
                 isClosed: () => enrollmentPeer !== connection || Boolean(connection.isClosed?.()),
                 close() {
-                  connection.close();
+                  if (!connection.isClosed?.()) connection.close();
                   if (enrollmentPeer === connection) enrollmentPeer = null;
                 },
               };
@@ -516,11 +602,9 @@ export async function createTodu(
               await managed.ready(signal);
               return ok(undefined);
             }
-            if (
-              config.remoteSync &&
-              new URL(config.remoteSync.server).href === enrollmentSyncUrl(source)
-            ) {
+            if (remoteAdapter && remoteAdapter.url === enrollmentSyncUrl(source)) {
               await readyConfiguredSource(source, signal);
+              sharedEnrollmentSource = source;
               return ok(undefined);
             }
             if (
@@ -579,6 +663,55 @@ export async function createTodu(
     recurring: createRecurringNamespace(storage.catalog, storage.repo),
     habit: createHabitNamespace(storage.catalog, storage.repo),
     sync: {
+      serverStatus: () => {
+        reconcileRemoteAdapterState();
+        return { ...serverSettings, running: serverRunning, state: syncStatus.remote.state };
+      },
+      configureServer: (input) =>
+        controlServer(async () => {
+          const settings = updateRemoteSyncSettings(serverSettings, input);
+          if (!settings.ok) return settings;
+          if (engineClosed)
+            return err(storageError("Cannot configure a server after engine shutdown"));
+          const previous = serverSettings;
+          const wasRunning = serverRunning;
+          try {
+            if (
+              remoteAdapter &&
+              (settings.value.server !== serverSettings.server || !settings.value.enabled)
+            ) {
+              await preserveServerPeerRoles();
+              stopRemoteAdapter();
+            }
+            serverSettings = settings.value;
+            resolvedConfig.remoteSyncSettings = serverSettings;
+            serverRunning = serverSettings.enabled && Boolean(serverSettings.server);
+            syncStatus.remote.server = serverSettings.server;
+            if (serverRunning) startRemoteAdapter();
+            else stopRemoteWatchdog();
+            notifySyncStatusListeners();
+            return ok({
+              ...serverSettings,
+              running: serverRunning,
+              state: syncStatus.remote.state,
+            });
+          } catch (error) {
+            serverSettings = previous;
+            resolvedConfig.remoteSyncSettings = previous;
+            serverRunning = wasRunning;
+            syncStatus.remote.server = previous.server;
+            try {
+              if (wasRunning) startRemoteAdapter();
+            } catch (restoreError) {
+              return err(
+                storageError(
+                  `Cannot configure or restore the server path: ${String(error)}; ${String(restoreError)}`,
+                ),
+              );
+            }
+            return err(storageError(`Cannot configure the server path: ${String(error)}`));
+          }
+        }),
       reloadPeers: async () => {
         try {
           if (!peerConnections)
@@ -588,19 +721,19 @@ export async function createTodu(
                 "Roster connections require a daemon-owned persistent engine",
               ),
             );
-          if (enrollmentPeer) {
+          const source = enrollmentPeer?.source ?? sharedEnrollmentSource;
+          if (source) {
             const device =
-              storage.catalog.doc()?.[
-                deviceRegistryKey(enrollmentPeer.source.approval.sourceDeviceId)
-              ];
+              storage.catalog.doc()?.[deviceRegistryKey(source.approval.sourceDeviceId)];
             if (
               device?.removed ||
               (device?.endpoint &&
                 !validateDeviceEndpoint(device.endpoint) &&
-                new URL(device.endpoint).origin !== new URL(enrollmentPeer.source.endpoint).origin)
+                new URL(device.endpoint).origin !== new URL(source.endpoint).origin)
             ) {
-              enrollmentPeer.close();
+              enrollmentPeer?.close();
               enrollmentPeer = null;
+              sharedEnrollmentSource = null;
             }
           }
           return peerConnections.reload();
@@ -612,12 +745,19 @@ export async function createTodu(
         reconcileRemoteAdapterState();
         return syncStatus;
       },
-      start: async () => {
-        startRemoteAdapter();
-      },
-      stop: async () => {
-        stopRemoteAdapter();
-      },
+      start: () =>
+        controlServer(async () => {
+          if (engineClosed) throw new Error("Cannot start a server after engine shutdown");
+          serverRunning = Boolean(serverSettings.server);
+          startRemoteAdapter();
+        }),
+      stop: () =>
+        controlServer(async () => {
+          await preserveServerPeerRoles();
+          serverRunning = false;
+          stopRemoteAdapter();
+          stopRemoteWatchdog();
+        }),
       onStatusChange(callback: (status: SyncStatus) => void): () => void {
         syncStatusListeners.add(callback);
         return () => syncStatusListeners.delete(callback);
@@ -642,6 +782,11 @@ export async function createTodu(
       // Stop remote adapter first to avoid reconnect attempts during shutdown
       stopRemoteAdapter();
       stopRemoteWatchdog();
+      await serverOperation.catch((error: unknown) => {
+        resolvedConfig.syncLogger?.warn("server control failed during engine shutdown", {
+          error: String(error),
+        });
+      });
       // repo.shutdown() handles disconnecting remaining network adapters.
       await storage.close();
       if (syncServer) {
@@ -653,8 +798,7 @@ export async function createTodu(
 
   if (
     config.enrollmentSource &&
-    (!config.remoteSync ||
-      new URL(config.remoteSync.server).href !== enrollmentSyncUrl(config.enrollmentSource))
+    configuredServerUrl() !== enrollmentSyncUrl(config.enrollmentSource)
   ) {
     enrollmentPeer = createEnrollmentPeerConnection({
       repo: storage.repo,

@@ -38,6 +38,7 @@ import type {
   RecurringId,
   RecurringTemplate,
   RemoteSyncConfig,
+  RemoteSyncSettings,
   Result,
   SyncListenerConfig,
   Task,
@@ -118,6 +119,8 @@ export interface ToduConfig {
    * Use ws://localhost:3030 via `make dev`.
    */
   remoteSync?: RemoteSyncConfig;
+  /** Local server intent, including a disabled destination retained for later enablement. */
+  remoteSyncSettings?: RemoteSyncSettings;
 
   /**
    * Remote sync watchdog polling interval in milliseconds.
@@ -289,7 +292,14 @@ export interface SyncStatus {
   };
 }
 
+export interface ConfiguredServerStatus extends RemoteSyncSettings {
+  running: boolean;
+  state: RemoteSyncState;
+}
+
 export interface SyncNamespace {
+  serverStatus(): ConfiguredServerStatus;
+  configureServer(input: unknown): Promise<Result<ConfiguredServerStatus>>;
   /** Explicitly refresh peer targets; completion is not proof of synchronization. */
   reloadPeers(): Promise<Result<import("./peer-connections.js").PeerReloadReport>>;
   /** Start remote multi-device sync connection. */
@@ -484,6 +494,8 @@ export function createStubNamespaces(config: ToduConfig): Omit<Todu, "close" | "
       history: stub,
     },
     sync: {
+      serverStatus: () => ({ enabled: false, running: false, state: "disconnected" }),
+      configureServer: stub,
       reloadPeers: async () => ({
         ok: true,
         value: { added: 0, retained: 0, removed: 0, errors: [] },

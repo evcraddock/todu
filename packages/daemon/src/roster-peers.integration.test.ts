@@ -170,6 +170,74 @@ describe("daemon roster snapshots and private reload", () => {
     for (const result of vi.mocked(createEnrollmentPeerConnection).mock.results)
       expect(result.value.close).toHaveBeenCalledOnce();
   });
+  it("persists server controls over private RPC without disposing direct peers, and retains disabled settings on restart", async () => {
+    const configPath = path.join(directory, "config.yaml");
+    const settings = { server: "ws://127.0.0.1:1", enabled: false };
+    fs.writeFileSync(
+      configPath,
+      "# Keep local settings\nsync:\n  remote:\n    server: ws://127.0.0.1:1\n    enabled: false\n",
+    );
+    const initial = await storage.initBootstrapStorage(directory);
+    initial.catalog.change((doc) => {
+      doc[deviceRegistryKey(id)] = { id, name: "Fixture", endpoint: "http://peer.invalid:24377" };
+    });
+    const catalogId = initial.catalog.documentId;
+    await initial.close();
+    runtime = createDaemonRuntime({
+      storagePath: directory,
+      configPath,
+      remoteSyncSettings: settings,
+      assignedWorkerTypes: [],
+      logLevel: "error",
+    });
+    await runtime.start();
+    const peer = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
+    const invoke = (update?: Record<string, unknown>) =>
+      invokeDaemonMethod({
+        socketPath: runtime!.config().socketPath,
+        method: update ? "sync.serverConfigure" : "sync.serverStatus",
+        params: update ? { settings: update, configPath } : {},
+      });
+    expect(await invoke()).toMatchObject({
+      ok: true,
+      value: { server: settings.server, enabled: false, running: false },
+    });
+    expect(await invoke({ enabled: true })).toMatchObject({
+      ok: true,
+      value: { enabled: true, running: true },
+    });
+    expect(await invoke({ server: "ws://127.0.0.1:2" })).toMatchObject({
+      ok: true,
+      value: { server: "ws://127.0.0.1:2" },
+    });
+    expect(await invoke({ enabled: false })).toMatchObject({
+      ok: true,
+      value: { enabled: false, running: false },
+    });
+    expect(peer.close).not.toHaveBeenCalled();
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+    expect(runtime.status().catalogId).toBe(catalogId);
+    expect(runtime.config().remoteSyncSettings).toEqual({
+      server: "ws://127.0.0.1:2",
+      enabled: false,
+    });
+    expect(fs.readFileSync(configPath, "utf8")).toContain("# Keep local settings");
+    await runtime.stop();
+    runtime = createDaemonRuntime({
+      storagePath: directory,
+      configPath,
+      remoteSyncSettings: runtime.config().remoteSyncSettings,
+      assignedWorkerTypes: [],
+      logLevel: "error",
+    });
+    await runtime.start();
+    expect(await invoke()).toMatchObject({
+      ok: true,
+      value: { server: "ws://127.0.0.1:2", enabled: false, running: false },
+    });
+    expect(runtime.status().catalogId).toBe(catalogId);
+    expect(await rpc()).toMatchObject({ ok: true, value: { retained: 1, added: 0 } });
+  });
   it("does not attach roster adapters or create a dataset during pristine pending startup", async () => {
     expect(prepareEnrollmentStorage({ storagePath: directory }).ok).toBe(true);
     runtime = createDaemonRuntime({

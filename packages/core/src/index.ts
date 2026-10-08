@@ -2,6 +2,7 @@ export * from "./config.js";
 export * from "./constants.js";
 export * from "./enrollment.js";
 export * from "./enrollment-endpoint.js";
+export * from "./remote-sync-settings.js";
 export * from "./schedule.js";
 export * from "./schema.js";
 export * from "./sync-field-groups.js";

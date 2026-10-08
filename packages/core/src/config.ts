@@ -62,7 +62,7 @@ export interface ToduFileConfig {
     remote?: {
       /** WebSocket URL of the remote sync server (e.g. "wss://sync.todu.sh") */
       server?: string;
-      /** Whether remote sync is enabled (default: false) */
+      /** Whether remote sync is enabled (defaults to true when a server is configured). */
       enabled?: boolean;
     };
   };
@@ -140,6 +140,12 @@ export interface RemoteSyncConfig {
   server: string;
 }
 
+/** Local server intent, retaining the configured destination even when disabled. */
+export interface RemoteSyncSettings {
+  server?: string;
+  enabled: boolean;
+}
+
 export interface ConfigResolutionOptions {
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
@@ -188,22 +194,23 @@ export function resolveRemoteSyncConfig(
   config: ToduFileConfig,
   options: ConfigResolutionOptions = {},
 ): RemoteSyncConfig | null {
+  const settings = resolveRemoteSyncSettings(config, options);
+  return settings.server && settings.enabled ? { server: settings.server } : null;
+}
+
+/** Resolve local server intent with the existing file/environment precedence. */
+export function resolveRemoteSyncSettings(
+  config: ToduFileConfig,
+  options: ConfigResolutionOptions = {},
+): RemoteSyncSettings {
   const env = options.env ?? process.env;
-  const serverEnv = resolveEnvValue(env, TODU_SYNC_SERVER_ENV);
+  const server = resolveEnvValue(env, TODU_SYNC_SERVER_ENV) ?? config.sync?.remote?.server;
   const enabledEnv = resolveEnvValue(env, TODU_SYNC_ENABLED_ENV);
-
-  const server = serverEnv ?? config.sync?.remote?.server;
-
-  // Default enabled to true when a server is configured — if someone
-  // sets a sync server URL, they obviously want sync enabled.
   const enabled =
     enabledEnv !== null
       ? enabledEnv === "true" || enabledEnv === "1"
-      : (config.sync?.remote?.enabled ?? true);
-
-  if (!server || !enabled) return null;
-
-  return { server };
+      : (config.sync?.remote?.enabled ?? Boolean(server));
+  return { ...(server ? { server } : {}), enabled };
 }
 
 /**

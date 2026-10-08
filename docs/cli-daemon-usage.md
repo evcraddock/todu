@@ -206,6 +206,28 @@ The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id
 
 This supplies incoming transport for enrollment and native replication. Listener enablement alone does not publish an address or refresh other daemons' target snapshots. Publish a reachable endpoint and explicitly reload peers after the roster update reaches them. Do not retire a working server until actual direct-peer operation has been verified.
 
+## Optional sync server controls
+
+The configured server is optional and independent of direct peers, the LAN listener, and local work. Use private local commands to manage its saved settings and apply them without restarting the daemon:
+
+```bash
+todu sync server status
+todu --format json sync server status
+todu sync server set --url ws://localhost:3030
+todu sync server disable
+todu sync server enable
+```
+
+`set` changes only the saved destination, retaining an existing enablement policy. A first URL with no saved policy follows the legacy enabled-by-default behavior. `disable` saves `sync.remote.enabled: false`, retains the URL, and stops only the configured-server role. `enable` requires a saved URL and restores that role, including after disabled startup. These settings are machine-local and are not inherited from another device through enrollment.
+
+The connected daemon owns the update to its actual configuration file. Use its matching `--config`/`TODU_CONFIG` context; a mismatch is refused rather than writing another installation's file. Updates preserve YAML comments, listener bindings, relative data paths, provider configuration, worker assignments, and unknown settings. Genuine `TODU_SYNC_SERVER`/`TODU_SYNC_ENABLED` overrides retain precedence; conflicting changes are refused with guidance to update the service environment and restart. Managed daemon startup does not turn file values into artificial environment overrides.
+
+Status separates effective configured enablement (including environment precedence), runtime server-role intent, and observed server connection state. It is not dataset readiness or remote durability evidence. Existing `sync start|stop|restart` remains runtime-only and does not save a new policy; an explicit runtime start may temporarily run a retained disabled destination until restart. Directly editing YAML still requires a daemon restart.
+
+Server disable/repoint/loss preserves independent peers and listening. A roster/source role that borrowed the server transport is handed to the existing native peer connection handling using its already-selected endpoint, not a fresh roster reconciliation. A live handoff is verified before disposing its old transport; a failed handoff reports an error and retains that transport. If the same destination also serves as a direct peer or approved source, disabling the server role does **not** stop all traffic to that destination. No new retry scheduler or background roster watcher is introduced.
+
+This is not a global pause or listener shutdown. Do not retire a real server until actual direct-peer operation is verified; retain its configuration for fallback. Local tests and mocks do not establish real-device synchronization or failure recovery.
+
 ## Roster peer connections
 
 At startup or pristine dataset activation, the daemon connects through native adapters to other active roster entries with advertised endpoints, excluding self and removed/endpoint-less entries. Configured-server and matching enrollment links are reused where appropriate. Unavailable targets use existing transport retry handling and do not block local work.

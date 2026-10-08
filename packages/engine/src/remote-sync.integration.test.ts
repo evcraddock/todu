@@ -207,6 +207,62 @@ describe("remote sync", () => {
     expect(todu.sync.status().remote.state).toBe("disconnected");
   });
 
+  it("retains a disabled destination, enables it live, and preserves identity/data on disable and enable", async () => {
+    const server = await openRelay();
+    const connect = vi.spyOn(WebSocketClientAdapter.prototype, "connect");
+    todu = await createTodu({
+      storagePath: path.join(tmpDir, "client"),
+      remoteSyncSettings: { server, enabled: false },
+    });
+    expect(connect).not.toHaveBeenCalled();
+    expect(todu.sync.serverStatus()).toEqual({
+      server,
+      enabled: false,
+      running: false,
+      state: "disconnected",
+    });
+    const catalog = todu.sync.getCatalogId();
+    const id = await todu.device.localId();
+    const project = await todu.project.create({ name: "Keep local project" });
+    expect(project.ok).toBe(true);
+    expect((await todu.sync.configureServer({ enabled: true })).ok).toBe(true);
+    await waitForRemoteState(todu, "connected");
+    await todu.sync.configureServer({ enabled: true });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect((await todu.sync.configureServer({ enabled: false })).ok).toBe(true);
+    expect(todu.sync.serverStatus()).toEqual({
+      server,
+      enabled: false,
+      running: false,
+      state: "disconnected",
+    });
+    expect((await todu.sync.configureServer({ enabled: true })).ok).toBe(true);
+    await waitForRemoteState(todu, "connected");
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(todu.sync.getCatalogId()).toBe(catalog);
+    expect(await todu.device.localId()).toEqual(id);
+    if (project.ok) expect((await todu.project.get(project.value.id)).ok).toBe(true);
+  });
+  it("rejects enabling a malformed saved destination without changing disabled intent", async () => {
+    todu = await createTodu({
+      storagePath: tmpDir,
+      remoteSyncSettings: { server: "invalid legacy destination", enabled: false },
+    });
+    expect((await todu.sync.configureServer({ enabled: true })).ok).toBe(false);
+    expect(todu.sync.serverStatus()).toMatchObject({
+      server: "invalid legacy destination",
+      enabled: false,
+      running: false,
+    });
+  });
+  it("rejects invalid server updates without changing the active connection", async () => {
+    const server = await openRelay();
+    todu = await createTodu({ storagePath: path.join(tmpDir, "client"), remoteSync: { server } });
+    await waitForRemoteState(todu, "connected");
+    const status = todu.sync.serverStatus();
+    expect((await todu.sync.configureServer({ server: "not a URL" })).ok).toBe(false);
+    expect(todu.sync.serverStatus()).toEqual(status);
+  });
   it("start() and stop() are no-ops without remoteSync configuration", async () => {
     todu = await createTodu({ storagePath: tmpDir });
     await todu.sync.start();

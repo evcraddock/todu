@@ -17,6 +17,8 @@ export interface EnrollmentPeerConnection {
   ready(signal?: AbortSignal): Promise<void>;
   close(): void;
   isClosed?(): boolean;
+  /** A roster role borrowing the configured server's adapter. */
+  serverBacked?: boolean;
 }
 export function enrollmentSyncUrl(source: EnrollmentSource): string {
   const url = new URL(source.approval.syncPath, source.endpoint);

@@ -142,6 +142,61 @@ describe("explicit roster snapshots", () => {
     expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
     expect(JSON.stringify(manager.reload())).not.toContain("secret");
   });
+  it("hands off only cached server-backed roles without rereading roster edits or touching other peers", async () => {
+    const { manager, put, existing } = setup();
+    const borrowed = {
+      source: {} as EnrollmentSource,
+      serverBacked: true,
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    existing.mockImplementation((source) =>
+      source.approval.sourceDeviceId === peer().id ? borrowed : undefined,
+    );
+    put(peer());
+    put({ id: createDeviceId("other"), name: "Other", endpoint: "http://other.lan:24377" });
+    manager.reload();
+    const other = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
+    put({ id: createDeviceId("new"), name: "Not refreshed", endpoint: "http://new.lan" });
+    await manager.detachServer("ws://peer.lan:24377/sync/catalog", true);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
+    const promoted = vi.mocked(createEnrollmentPeerConnection).mock.results[1].value;
+    expect(promoted.ready).toHaveBeenCalledOnce();
+    expect(other.close).not.toHaveBeenCalled();
+    expect(borrowed.close).toHaveBeenCalledOnce();
+    await manager.detachServer("ws://peer.lan:24377/sync/catalog", true);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
+    manager.close();
+    expect(other.close).toHaveBeenCalledOnce();
+    expect(promoted.close).toHaveBeenCalledOnce();
+  });
+  it("keeps the borrowed role available when a connected-server handoff fails", async () => {
+    const { manager, put, existing } = setup();
+    const borrowed = {
+      source: {} as EnrollmentSource,
+      serverBacked: true,
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    existing.mockReturnValue(borrowed);
+    put(peer());
+    manager.reload();
+    const replacement = {
+      source: {} as EnrollmentSource,
+      ready: vi.fn(async () => {
+        throw new Error("Native handshake failed");
+      }),
+      close: vi.fn(),
+    };
+    vi.mocked(createEnrollmentPeerConnection).mockReturnValueOnce(replacement);
+    await expect(manager.detachServer("ws://peer.lan:24377/sync/catalog", true)).rejects.toThrow(
+      "Native handshake failed",
+    );
+    expect(borrowed.close).not.toHaveBeenCalled();
+    expect(replacement.close).toHaveBeenCalledOnce();
+    expect(manager.reload()).toMatchObject({ ok: true, value: { retained: 1 } });
+    manager.close();
+  });
   it("closes owned links once and refuses reload after close", () => {
     const { manager, put } = setup();
     put(peer());

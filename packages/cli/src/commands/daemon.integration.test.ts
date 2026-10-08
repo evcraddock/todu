@@ -86,6 +86,46 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
     expect(jsonOutput.reason).toContain("Daemon unavailable at socket");
   });
 
+  it("lets a managed daemon control legacy file-backed server settings without synthetic environment overrides", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-server-managed-"));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-server-home-"));
+    const configPath = path.join(tmpDir, "config.yaml");
+    fs.writeFileSync(
+      configPath,
+      "# Keep local configuration\nsync:\n  remote:\n    server: ws://127.0.0.1:1\ndaemon:\n  workers:\n    assigned: []\nunknown: keep\n",
+    );
+    const env = { TODU_SYNC_SERVER: "", TODU_SYNC_ENABLED: "" };
+    function command(args: string[]) {
+      const result = runCli(["--config", configPath, ...args], { env });
+      expect(result.status, result.stderr).toBe(0);
+      return result.stdout;
+    }
+    command(["daemon", "start"]);
+    const catalogId = JSON.parse(command(["--format", "json", "daemon", "status"])).status
+      .catalogId;
+    expect(JSON.parse(command(["--format", "json", "sync", "server", "status"]))).toMatchObject({
+      enabled: true,
+      running: true,
+      server: "ws://127.0.0.1:1",
+    });
+    command(["sync", "server", "disable"]);
+    command(["daemon", "restart"]);
+    expect(JSON.parse(command(["--format", "json", "sync", "server", "status"]))).toMatchObject({
+      enabled: false,
+      running: false,
+      server: "ws://127.0.0.1:1",
+    });
+    command(["sync", "server", "enable"]);
+    expect(JSON.parse(command(["--format", "json", "sync", "server", "status"]))).toMatchObject({
+      enabled: true,
+      running: true,
+    });
+    expect(JSON.parse(command(["--format", "json", "daemon", "status"])).status.catalogId).toBe(
+      catalogId,
+    );
+    expect(fs.readFileSync(configPath, "utf8")).toContain("# Keep local configuration");
+    expect(fs.readFileSync(configPath, "utf8")).toContain("unknown: keep");
+  });
   it("daemon status reports running daemon details", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-test-"));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-daemon-home-"));
