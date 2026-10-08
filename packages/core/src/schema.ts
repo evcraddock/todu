@@ -131,13 +131,16 @@ export interface TaskDetailDocument {
   descriptionApproval?: ImportedContentApproval;
 }
 
+/** Stored notes may predate edit timestamps; the engine normalizes them on read. */
+export type StoredNote = Omit<Note, "updatedAt"> & { updatedAt?: string };
+
 /**
  * Notes document (partition bucket).
  * Each bucket stores a subset of notes to reduce write contention and history growth.
  */
 export interface NotesDocument {
   /** Notes for this bucket */
-  notes: Note[];
+  notes: StoredNote[];
 }
 
 /**

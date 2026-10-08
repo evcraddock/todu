@@ -384,10 +384,22 @@ Pulled comments are `ImportedCommentInput[]` with structured `author?: ExternalA
 The runtime reconciles pulled comments with local notes using a partial-by-default model:
 
 - comments with an `externalId` not present locally are created as new notes and linked through structured comment provenance, not user-visible tags
-- comments matching an existing local note are updated if the external `updatedAt` is newer than the local `createdAt`
+- comments matching an existing local note are updated only if the external edit timestamp (`updatedAt`, falling back to `createdAt`) is newer than the local note's `updatedAt`; comparisons use timestamp instants, and equal/older replays do not overwrite local edits
 - local synced notes whose external IDs are absent from a partial pull are preserved
 - local synced notes are deleted only when their external ID appears in `deletedComments`, or when their `externalTaskId` appears in `completeCommentExternalTaskIds` and their external ID is absent from the complete comment snapshot for that task/thread
 - existing notes with legacy `sync:externalId:*` tags are resolved lazily into provenance records when encountered; notes without sync tags are not rewritten by this migration
+
+### Note edit timestamps
+
+The host supplies `ExportedCommentInput.updatedAt` for all supported provider API versions (v3/v4/v5). It is the note's content/authorship edit clock, not its creation time, provenance `lastMirroredAt`, approval time, or sync-cycle time. The payload field remains optional for contract compatibility, but current host exports always populate it.
+
+- New local notes initialize `updatedAt` to `createdAt`. Imported notes preserve normalized external `createdAt` and `updatedAt`; missing external edit time falls back to external creation time.
+- Actual local content or author-actor changes advance `updatedAt` without changing `createdAt`. The local clock is at least one millisecond later than the previous edit clock, including same-millisecond edits and wall-clock rollback. A validated explicit input timestamp is preserved instead of replaced by the host's current time.
+- No-op content/authorship updates, tag changes (including legacy sync-link tags), and approval/provenance bookkeeping do not advance the edit clock. Timestamp-only updates are supported for imported clock corrections.
+- Old persisted notes without `updatedAt` expose a stable fallback equal to their `createdAt` on get/list/export. Existing migrations and subsequent writes preserve/backfill it; no manual migration, schema-version bump, or eager startup scan of note buckets is required.
+- A newer imported edit writes the external update clock and preserves the local creation time. Equal/older imports leave local content/authorship/approval and edit time unchanged. Providers should preserve publisher edit timestamps for deterministic replay and freshness comparison.
+
+These timestamps are conflict-resolution inputs, not evidence of distributed causality or remote persistence. Explicit comment deletions and complete-snapshot deletion behavior are unchanged; this does not add task field-group reconciliation to comments.
 
 ### Comment provenance migration path
 

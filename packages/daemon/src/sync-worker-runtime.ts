@@ -1289,6 +1289,7 @@ async function applyImportedComments(
           entityId: taskId,
           tags: [],
           createdAt: normalizeImportedCommentTimestamp(pulled, "createdAt"),
+          updatedAt: normalizeImportedCommentTimestamp(pulled, "updatedAt"),
         });
         if (!createResult.ok) {
           throw new Error(
@@ -1312,13 +1313,14 @@ async function applyImportedComments(
           pulled,
           pulled.updatedAt !== undefined ? "updatedAt" : "createdAt",
         );
-        const localCreatedAt = localNote.createdAt;
+        const localUpdatedAt = localNote.updatedAt;
 
-        if (externalUpdatedAt > localCreatedAt) {
+        if (Date.parse(externalUpdatedAt) > Date.parse(localUpdatedAt)) {
           const updateResult = await todu.note.update(localNote.id, {
             content: truncate(pulled.body, MAX_NOTE_CONTENT_LENGTH),
             authorActorId: authorResolution?.actor.id,
             contentApproval: approval,
+            updatedAt: externalUpdatedAt,
           });
           if (!updateResult.ok) {
             throw new Error(
@@ -1424,6 +1426,7 @@ async function buildPushPayloadsV3(params: {
             localNoteId: comment.id,
             body: comment.content,
             createdAt: comment.createdAt,
+            updatedAt: comment.updatedAt,
             ...(provenance?.sourceUrl !== undefined ? { sourceUrl: provenance.sourceUrl } : {}),
             ...(provenance !== undefined
               ? { provenance, externalId: provenance.externalCommentId }

@@ -94,7 +94,7 @@ type MutableLegacyTask = TaskListDocument["tasks"][number] & {
   assignees?: string[];
 };
 
-type MutableLegacyNote = Note & {
+type MutableLegacyNote = NotesDocument["notes"][number] & {
   author?: string;
   authorActorId?: string;
 };
@@ -202,6 +202,7 @@ function cloneNote(note: MutableLegacyNote): Note {
     author: note.author ?? "user",
     tags: [...(note.tags ?? [])],
     createdAt: note.createdAt,
+    updatedAt: note.updatedAt ?? note.createdAt,
   };
 
   if (note.authorActorId !== undefined) {

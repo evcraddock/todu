@@ -843,6 +843,10 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
     const createdAtError = validateISODate("createdAt", input.createdAt);
     if (createdAtError) return createdAtError;
   }
+  if (input.updatedAt !== undefined) {
+    const updatedAtError = validateISODate("updatedAt", input.updatedAt);
+    if (updatedAtError) return updatedAtError;
+  }
 
   if (input.authorActorId !== undefined) {
     const actorIdError = validateActorId("authorActorId", input.authorActorId);
@@ -861,11 +865,17 @@ export function validateCreateNoteInput(input: CreateNoteInput): ValidationError
 }
 
 export function validateUpdateNoteInput(input: UpdateNoteInput): ValidationError | null {
+  if (input.updatedAt !== undefined) {
+    const updatedAtError = validateISODate("updatedAt", input.updatedAt);
+    if (updatedAtError) return updatedAtError;
+  }
+
   if (
     input.content === undefined &&
     input.tags === undefined &&
     input.authorActorId === undefined &&
-    input.contentApproval === undefined
+    input.contentApproval === undefined &&
+    input.updatedAt === undefined
   ) {
     return validationError("input", "At least one field must be provided");
   }

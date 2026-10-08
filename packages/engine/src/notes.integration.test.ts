@@ -120,6 +120,139 @@ describe("note namespace", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  describe("timestamps", () => {
+    it("initializes local clocks and preserves normalized imported timestamps", async () => {
+      const local = await todu.note.create({ content: "Local" });
+      if (!local.ok) throw new Error("create failed");
+      expect(local.value.updatedAt).toBe(local.value.createdAt);
+
+      const imported = await todu.note.create({
+        content: "Imported",
+        createdAt: "2021-04-17T14:30:00Z",
+        updatedAt: "2021-04-18T10:00:00+02:00",
+      });
+      if (!imported.ok) throw new Error("create failed");
+      expect(imported.value.createdAt).toBe("2021-04-17T14:30:00.000Z");
+      expect(imported.value.updatedAt).toBe("2021-04-18T08:00:00.000Z");
+      const creationOnly = await todu.note.create({
+        content: "Old",
+        createdAt: imported.value.createdAt,
+      });
+      if (!creationOnly.ok) throw new Error("create failed");
+      expect(creationOnly.value.updatedAt).toBe(creationOnly.value.createdAt);
+    });
+
+    it("advances content and author clocks even within one millisecond or after clock rollback", async () => {
+      const actor = await todu.actor.create({
+        id: createActorId("actor-editor"),
+        displayName: "Editor",
+      });
+      if (!actor.ok) throw new Error("actor create failed");
+      const created = await todu.note.create({
+        content: "Original",
+        updatedAt: "2099-01-01T00:00:00Z",
+      });
+      if (!created.ok) throw new Error("create failed");
+      const edited = await todu.note.update(created.value.id, { content: "Edited" });
+      if (!edited.ok) throw new Error("update failed");
+      expect(edited.value.updatedAt).toBe("2099-01-01T00:00:00.001Z");
+      const authorEdit = await todu.note.update(created.value.id, {
+        authorActorId: actor.value.id,
+      });
+      if (!authorEdit.ok) throw new Error("update failed");
+      expect(authorEdit.value.updatedAt).toBe("2099-01-01T00:00:00.002Z");
+      expect(authorEdit.value.createdAt).toBe(created.value.createdAt);
+    });
+
+    it("keeps timestamps stable for no-op content, tags, and approval bookkeeping", async () => {
+      const created = await todu.note.create({ content: "Original" });
+      if (!created.ok) throw new Error("create failed");
+      const edited = await todu.note.update(created.value.id, {
+        content: "  Original  ",
+        authorActorId: created.value.authorActorId,
+        tags: ["sync:externalId:remote"],
+        contentApproval: { state: "notRequired" },
+      });
+      if (!edited.ok) throw new Error("update failed");
+      expect(edited.value.updatedAt).toBe(created.value.updatedAt);
+    });
+
+    it("preserves supplied edit clocks and creation time across update and restart", async () => {
+      const created = await todu.note.create({
+        content: "Imported",
+        createdAt: "2021-04-17T14:30:00Z",
+      });
+      if (!created.ok) throw new Error("create failed");
+      const edited = await todu.note.update(created.value.id, {
+        content: "Remote edit",
+        updatedAt: "2021-04-18T10:00:00+02:00",
+      });
+      if (!edited.ok) throw new Error("update failed");
+      expect(edited.value.updatedAt).toBe("2021-04-18T08:00:00.000Z");
+      expect(edited.value.createdAt).toBe(created.value.createdAt);
+      await todu.close();
+      todu = await createTodu({ storagePath: tmpDir });
+      expect(await todu.note.get(created.value.id)).toEqual(edited);
+      const clockOnly = await todu.note.update(created.value.id, {
+        updatedAt: "2021-04-19T08:00:00Z",
+      });
+      if (!clockOnly.ok) throw new Error("update failed");
+      expect(clockOnly.value.content).toBe("Remote edit");
+      expect(clockOnly.value.updatedAt).toBe("2021-04-19T08:00:00.000Z");
+    });
+
+    it("loads current-schema legacy buckets using a stable fallback and persists it on update", async () => {
+      const created = await todu.note.create({
+        content: "Legacy",
+        createdAt: "2021-04-17T14:30:00Z",
+      });
+      if (!created.ok) throw new Error("create failed");
+      const catalogId = todu.sync.getCatalogId();
+      await todu.close();
+      const repo = new Repo({ storage: new NodeFSStorageAdapter(tmpDir) });
+      try {
+        const catalog = await repo.find<CatalogDocument>(catalogId);
+        const bucketId = Object.values(catalog.doc()!.notesBucketDocIds)[0];
+        const bucket = await repo.find<ReturnType<typeof createNotesDocument>>(
+          bucketId as DocumentId,
+        );
+        bucket.change((doc) => {
+          delete doc.notes[0].updatedAt;
+        });
+        await repo.flush();
+      } finally {
+        await repo.shutdown();
+      }
+      for (let restart = 0; restart < 2; restart += 1) {
+        todu = await createTodu({ storagePath: tmpDir });
+        const loaded = await todu.note.get(created.value.id);
+        if (!loaded.ok) throw new Error("get failed");
+        expect(loaded.value.updatedAt).toBe(created.value.createdAt);
+        const listed = await todu.note.list();
+        if (!listed.ok) throw new Error("list failed");
+        expect(listed.value[0].updatedAt).toBe(created.value.createdAt);
+        if (restart === 0) await todu.close();
+      }
+      const edited = await todu.note.update(created.value.id, { tags: ["legacy"] });
+      if (!edited.ok) throw new Error("update failed");
+      expect(edited.value.updatedAt).toBe(created.value.createdAt);
+      await todu.close();
+      const storedRepo = new Repo({ storage: new NodeFSStorageAdapter(tmpDir) });
+      try {
+        const catalog = await storedRepo.find<CatalogDocument>(catalogId);
+        const bucketId = Object.values(catalog.doc()!.notesBucketDocIds)[0];
+        const bucket = await storedRepo.find<ReturnType<typeof createNotesDocument>>(
+          bucketId as DocumentId,
+        );
+        expect(bucket.doc()?.notes[0].updatedAt).toBe(created.value.createdAt);
+      } finally {
+        await storedRepo.shutdown();
+      }
+      todu = await createTodu({ storagePath: tmpDir });
+      expect(await todu.note.get(created.value.id)).toEqual(edited);
+    });
+  });
+
   describe("create", () => {
     it("creates a standalone note (journal entry)", async () => {
       const result = await todu.note.create({ content: "Today was productive" });
@@ -871,7 +1004,9 @@ describe("note namespace", () => {
       expect(journalBucket).toBe("journal:2021-04");
     });
 
-    it("migrates legacy notesDocId data into partition buckets", async () => {
+    it.each([
+      1, 3,
+    ])("migrates legacy notesDocId timestamps into partition buckets (schema %s)", async (version) => {
       await todu.close();
       await new Promise((r) => setTimeout(r, 50));
 
@@ -881,7 +1016,7 @@ describe("note namespace", () => {
       const catalogHandle = repo.create<CatalogDocument>();
       const legacyNotesHandle = repo.create<ReturnType<typeof createNotesDocument>>();
       const legacyTemplate = createNotesDocument();
-      const legacyNote: Note = {
+      const legacyNote: ReturnType<typeof createNotesDocument>["notes"][number] = {
         id: createNoteId("note-legacy"),
         content: "Legacy note",
         author: "user",
@@ -892,11 +1027,16 @@ describe("note namespace", () => {
       legacyNotesHandle.change((doc) => {
         doc.notes = legacyTemplate.notes;
         doc.notes.push(legacyNote);
+        doc.notes.push({
+          ...legacyNote,
+          id: createNoteId("note-legacy-edited"),
+          updatedAt: "2026-02-25T12:00:00.000Z",
+        });
       });
 
       catalogHandle.change((doc) => {
         const empty = createEmptyCatalog();
-        doc.version = empty.version;
+        doc.version = version;
         doc.projects = empty.projects;
         doc.labels = empty.labels;
         doc.taskListDocIds = empty.taskListDocIds;
@@ -906,7 +1046,7 @@ describe("note namespace", () => {
         doc.recurringTemplates = empty.recurringTemplates;
         doc.habits = empty.habits;
         doc.habitLogDocIds = empty.habitLogDocIds;
-        doc.settings = empty.settings;
+        doc.settings = { ...empty.settings, schemaVersion: version };
       });
 
       fs.writeFileSync(path.join(tmpDir, "todu-catalog.id"), catalogHandle.documentId, "utf-8");
@@ -919,6 +1059,12 @@ describe("note namespace", () => {
       expect(notes.ok).toBe(true);
       if (!notes.ok) return;
       expect(notes.value.map((note) => note.id)).toContain(legacyNote.id);
+      expect(notes.value.find((note) => note.id === legacyNote.id)?.updatedAt).toBe(
+        legacyNote.createdAt,
+      );
+      expect(notes.value.find((note) => note.id === "note-legacy-edited")?.updatedAt).toBe(
+        "2026-02-25T12:00:00.000Z",
+      );
 
       await todu.close();
       await new Promise((r) => setTimeout(r, 50));
@@ -927,6 +1073,11 @@ describe("note namespace", () => {
       const catalogDoc = await readCatalogDocument(tmpDir);
       expect(catalogDoc.notesDocId).toBeUndefined();
       expect(catalogDoc.noteBucketByNoteId).toEqual({});
+      const reloaded = await todu.note.list();
+      if (!reloaded.ok) throw new Error("list failed");
+      expect(reloaded.value.find((note) => note.id === "note-legacy-edited")?.updatedAt).toBe(
+        "2026-02-25T12:00:00.000Z",
+      );
     });
 
     it("clears legacy note bucket indexes and still updates notes", async () => {

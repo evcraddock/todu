@@ -1106,6 +1106,15 @@ describe("validateNoteContent", () => {
 });
 
 describe("validateCreateNoteInput", () => {
+  it("accepts imported edit timestamps and rejects invalid ones", () => {
+    expect(
+      validateCreateNoteInput({ content: "Imported", updatedAt: "2026-04-01T12:00:00Z" }),
+    ).toBeNull();
+    expect(validateCreateNoteInput({ content: "Imported", updatedAt: "invalid" })?.field).toBe(
+      "updatedAt",
+    );
+  });
+
   it("accepts standalone note (journal)", () => {
     expect(validateCreateNoteInput({ content: "Today was productive" })).toBeNull();
   });
@@ -1197,6 +1206,14 @@ describe("validateCreateNoteInput", () => {
 });
 
 describe("validateUpdateNoteInput", () => {
+  it("accepts timestamp-only updates and rejects invalid edit timestamps", () => {
+    expect(validateUpdateNoteInput({ updatedAt: "2026-04-01T12:00:00Z" })).toBeNull();
+    expect(validateUpdateNoteInput({ updatedAt: "invalid" })?.field).toBe("updatedAt");
+    expect(validateUpdateNoteInput({ content: "Edit", updatedAt: "invalid" })?.field).toBe(
+      "updatedAt",
+    );
+  });
+
   it("accepts content update", () => {
     expect(validateUpdateNoteInput({ content: "Updated content" })).toBeNull();
   });

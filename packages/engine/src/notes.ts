@@ -15,6 +15,7 @@ import {
   notFound,
   ok,
   type Result,
+  type StoredNote,
   type TaskListDocument,
   type UpdateNoteInput,
   validateCreateNoteInput,
@@ -392,6 +393,7 @@ export function createNoteNamespaces(
     const createdAt = input.createdAt
       ? new Date(input.createdAt).toISOString()
       : new Date().toISOString();
+    const updatedAt = input.updatedAt ? new Date(input.updatedAt).toISOString() : createdAt;
     const content = input.content.trim();
     const note: Note = {
       id,
@@ -399,6 +401,7 @@ export function createNoteNamespaces(
       author: input.author ?? "user",
       tags: input.tags ?? [],
       createdAt,
+      updatedAt,
       contentApproval: normalizeContentApproval(content, input.contentApproval),
     };
     if (authorActorId !== undefined) note.authorActorId = authorActorId;
@@ -516,6 +519,16 @@ export function createNoteNamespaces(
 
       location.handle.change((doc) => {
         const note = doc.notes[location.index];
+        const contentChanged = input.content !== undefined && input.content.trim() !== note.content;
+        const authorChanged =
+          input.authorActorId !== undefined && input.authorActorId !== note.authorActorId;
+        const previousTimestamp = note.updatedAt ?? note.createdAt;
+        note.updatedAt =
+          input.updatedAt !== undefined
+            ? new Date(input.updatedAt).toISOString()
+            : contentChanged || authorChanged
+              ? new Date(Math.max(Date.now(), Date.parse(previousTimestamp) + 1)).toISOString()
+              : previousTimestamp;
         if (input.content !== undefined) {
           note.content = input.content.trim();
           note.contentApproval = normalizeContentApproval(note.content, input.contentApproval);
@@ -575,13 +588,14 @@ export function createNoteNamespaces(
   return { namespace, syncRuntime: { createWithId } };
 }
 
-function toStorageNote(n: Note): Note {
+function toStorageNote(n: StoredNote): Note {
   const note: Note = {
     id: n.id,
     content: n.content,
     author: n.author,
     tags: [...n.tags],
     createdAt: n.createdAt,
+    updatedAt: n.updatedAt ?? n.createdAt,
     contentApproval: normalizeStoredNoteContentApproval(n.content, n.contentApproval),
   };
 
@@ -592,6 +606,6 @@ function toStorageNote(n: Note): Note {
   return note;
 }
 
-function cloneNote(n: Note): Note {
+function cloneNote(n: StoredNote): Note {
   return toStorageNote(n);
 }
