@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { CatalogDocument } from "@todu/core";
 import { createDeviceId, deviceRegistryKey } from "@todu/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { reserveTcpPort } from "../../../scripts/test-helpers/sync-server.js";
 import { createTodu } from "./index.js";
 import { initBootstrapStorage, type Storage } from "./storage.js";
@@ -29,6 +29,7 @@ describe("native exchange across shared server role changes", () => {
     "stop",
     "disable",
     "repoint",
+    "loss cycle",
   ])("keeps actual exchange through %s, re-enable, peer removal and shutdown", async (action) => {
     directory = fs.mkdtempSync(path.join(os.tmpdir(), "todu-native-server-role-"));
     source = await initBootstrapStorage(path.join(directory, "source"));
@@ -52,7 +53,9 @@ describe("native exchange across shared server role changes", () => {
       };
     });
     await local.close();
+    const warn = vi.fn();
     client = await createTodu({
+      syncLogger: { info: vi.fn(), warn },
       storagePath: path.join(directory, "client"),
       remoteSync: { server: url },
       registeredPeerConnections: true,
@@ -72,6 +75,50 @@ describe("native exchange across shared server role changes", () => {
         .toBe(true);
     };
     await exchange("before");
+    if (action === "loss cycle") {
+      const states: string[] = [];
+      const unsubscribe = client.sync.onStatusChange((status) => states.push(status.remote.state));
+      try {
+        await listener.close();
+        listener = undefined;
+        await expect.poll(() => states.at(-1), { timeout: 5000 }).toBe("disconnected");
+        const restarted = await startSyncListener({
+          repo: source.repo,
+          catalogId,
+          config: { enabled: true, bind: "127.0.0.1", port },
+        });
+        if (!restarted.ok) throw new Error(restarted.error.message);
+        listener = restarted.value;
+        await expect.poll(() => states.at(-1), { timeout: 5000 }).toBe("connected");
+        await exchange("after recovery");
+        const failures = () =>
+          warn.mock.calls.filter(([, context]) => JSON.stringify(context).includes("ECONNREFUSED"))
+            .length;
+        const before = failures();
+        await listener.close();
+        listener = undefined;
+        await expect.poll(() => states.at(-1), { timeout: 5000 }).toBe("disconnected");
+        await expect.poll(failures, { timeout: 5000 }).toBeGreaterThan(before);
+        expect(client.sync.serverStatus()).toMatchObject({
+          enabled: true,
+          running: true,
+          state: "disconnected",
+        });
+        expect(client.sync.status().remote.state).toBe("disconnected");
+        expect(await client.sync.reloadPeers()).toMatchObject({
+          ok: true,
+          value: { retained: 1, added: 0 },
+        });
+        expect((await client.project.create({ name: "local while lost" })).ok).toBe(true);
+        expect(await client.project.list()).toMatchObject({
+          ok: true,
+          value: expect.arrayContaining([expect.objectContaining({ name: "local while lost" })]),
+        });
+      } finally {
+        unsubscribe();
+      }
+      return;
+    }
     if (action === "stop") await client.sync.stop();
     else
       expect(

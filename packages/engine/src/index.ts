@@ -294,6 +294,7 @@ export async function createTodu(
   let enrollmentPeer: EnrollmentPeerConnection | null = null;
   let borrowedServerPeer: EnrollmentPeerConnection | null = null;
   let removeServerCallbacks = (): void => {};
+  let unsubscribeBorrowedServer = (): void => {};
   let sharedEnrollmentSource = config.enrollmentSource ?? null;
   let peerConnections: ReturnType<typeof createRosterPeerConnections> | null = null;
   const pendingEnrollmentPeers = new Set<EnrollmentPeerConnection>();
@@ -324,11 +325,16 @@ export async function createTodu(
 
   function reconcileRemoteAdapterState(): void {
     if (borrowedServerPeer) remoteAdapter = borrowedServerPeer.getAdapter?.() ?? null;
-    if (!remoteAdapter) return;
+    setRemoteState(
+      remoteAdapter && isRemoteAdapterConnected(remoteAdapter) ? "connected" : "disconnected",
+    );
+  }
 
-    if (isRemoteAdapterConnected(remoteAdapter)) {
-      setRemoteState("connected");
-    }
+  function observeBorrowedServer(): void {
+    unsubscribeBorrowedServer();
+    unsubscribeBorrowedServer =
+      borrowedServerPeer?.onChange?.(reconcileRemoteAdapterState) ?? (() => {});
+    reconcileRemoteAdapterState();
   }
 
   function startRemoteWatchdog(): void {
@@ -450,6 +456,7 @@ export async function createTodu(
       if (available && existing?.retain) {
         borrowedServerPeer = existing.retain();
         remoteAdapter = available;
+        observeBorrowedServer();
       } else
         remoteAdapter = addRemoteSyncAdapter(
           storage.repo,
@@ -484,6 +491,8 @@ export async function createTodu(
 
     removeServerCallbacks();
     removeServerCallbacks = () => {};
+    unsubscribeBorrowedServer();
+    unsubscribeBorrowedServer = () => {};
     if (borrowedServerPeer) {
       borrowedServerPeer.close();
       borrowedServerPeer = null;
@@ -525,6 +534,7 @@ export async function createTodu(
       enrollmentPeer = adopted ? connection.retain!() : connection;
     borrowedServerPeer = connection.retain!();
     remoteAdapter = adapter;
+    observeBorrowedServer();
     if (!adopted && !enrollmentPeer) connection.close();
   }
 
@@ -598,6 +608,7 @@ export async function createTodu(
                 ready: (signal) => connection.ready(signal),
                 retain: () => connection.retain!(),
                 getAdapter: () => connection.getAdapter?.() ?? null,
+                onChange: (callback) => connection.onChange?.(callback) ?? (() => {}),
                 isClosed: () => enrollmentPeer !== connection || Boolean(connection.isClosed?.()),
                 close() {
                   if (!connection.isClosed?.()) connection.close();

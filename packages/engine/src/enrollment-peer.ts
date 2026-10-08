@@ -22,6 +22,7 @@ export interface EnrollmentPeerConnection {
   /** Independent lifetime for another role sharing this native channel. */
   retain?(): EnrollmentPeerConnection;
   getAdapter?(): WebSocketClientAdapter | null;
+  onChange?(callback: () => void): () => void;
 }
 export function enrollmentSyncUrl(source: EnrollmentSource): string {
   const url = new URL(source.approval.syncPath, source.endpoint);
@@ -43,6 +44,10 @@ export function createEnrollmentPeerConnection(options: {
   let failure: string | undefined;
   let closed = false;
   let handshakeStartedAt = Date.now();
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const callback of listeners) callback();
+  };
 
   function connect(): void {
     handshakeStartedAt = Date.now();
@@ -66,6 +71,7 @@ export function createEnrollmentPeerConnection(options: {
     options.adapter = undefined;
     adapter = next;
     verified = storageId === source.approval.sourceDeviceId;
+    notify();
     const peerCandidate = next.peerCandidate.bind(next);
     next.peerCandidate = (peerId, metadata) => {
       if (closed) return;
@@ -94,6 +100,7 @@ export function createEnrollmentPeerConnection(options: {
       verified = true;
       failure = undefined;
       peerCandidate(peerId, metadata);
+      notify();
     };
     next.onError = (event) => {
       const error = "error" in event ? event.error : event;
@@ -112,6 +119,7 @@ export function createEnrollmentPeerConnection(options: {
     };
     next.on("peer-disconnected", () => {
       verified = false;
+      notify();
     });
   }
   connect();
@@ -123,6 +131,7 @@ export function createEnrollmentPeerConnection(options: {
     try {
       if (adapter) disposeRemoteSyncAdapter(repo, adapter);
       adapter = null;
+      notify();
       connect();
     } catch (error) {
       failure = `Cannot replace enrollment source adapter: ${String(error)}`;
@@ -135,10 +144,21 @@ export function createEnrollmentPeerConnection(options: {
   function lease(): EnrollmentPeerConnection {
     references++;
     let released = false;
+    const subscriptions = new Set<() => void>();
     return {
       source,
       isClosed: () => closed || released,
       getAdapter: () => (released ? null : adapter),
+      onChange(callback) {
+        if (closed || released) return () => {};
+        const listener = () => callback();
+        subscriptions.add(listener);
+        listeners.add(listener);
+        return () => {
+          subscriptions.delete(listener);
+          listeners.delete(listener);
+        };
+      },
       retain() {
         if (closed || released) throw new Error("Cannot retain a closed native peer channel");
         return lease();
@@ -159,6 +179,8 @@ export function createEnrollmentPeerConnection(options: {
       close() {
         if (released) return;
         released = true;
+        for (const callback of subscriptions) listeners.delete(callback);
+        subscriptions.clear();
         if (--references > 0 || closed) return;
         closed = true;
         clearInterval(watchdog);
