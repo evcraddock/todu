@@ -346,6 +346,8 @@ export interface Note {
   entityId?: string;
   tags: string[];
   createdAt: string;
+  /** Content/authorship edit time; legacy notes fall back to creation time. */
+  updatedAt: string;
 }
 
 // ============================================================================
@@ -487,6 +489,7 @@ export interface CreateNoteInput {
   entityId?: string;
   tags?: string[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UpdateNoteInput {
@@ -494,6 +497,7 @@ export interface UpdateNoteInput {
   tags?: string[];
   authorActorId?: ActorId;
   contentApproval?: ImportedContentApproval;
+  updatedAt?: string;
 }
 
 export interface NoteFilter {

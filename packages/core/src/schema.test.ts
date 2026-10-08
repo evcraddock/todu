@@ -9,7 +9,12 @@ import {
   DEFAULT_OWNER_ACTOR_ID,
   SCHEMA_VERSION,
 } from "./schema.js";
-import { createActorId, createIntegrationBindingId, createProjectId } from "./types.js";
+import {
+  createActorId,
+  createIntegrationBindingId,
+  createNoteId,
+  createProjectId,
+} from "./types.js";
 
 describe("schema", () => {
   it("exports schema version", () => {
@@ -97,6 +102,25 @@ describe("schema", () => {
   });
 
   describe("createNotesDocument", () => {
+    it("accepts legacy persisted notes and preserves explicit edit clocks", () => {
+      const doc = createNotesDocument();
+      const legacy = {
+        id: createNoteId("note-old"),
+        content: "Old",
+        author: "user",
+        tags: [],
+        createdAt: "2021-04-17T14:30:00.000Z",
+      };
+      doc.notes.push(legacy);
+      doc.notes.push({
+        ...legacy,
+        id: createNoteId("note-edited"),
+        updatedAt: "2021-04-18T08:00:00.000Z",
+      });
+      expect(doc.notes[0].updatedAt).toBeUndefined();
+      expect(doc.notes[1].updatedAt).toBe("2021-04-18T08:00:00.000Z");
+    });
+
     it("creates an empty notes document", () => {
       const doc = createNotesDocument();
       expect(doc.notes).toEqual([]);

@@ -1139,7 +1139,10 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
-  it("pull creates new comments as notes when externalId is not present locally", async () => {
+  it.each([
+    undefined,
+    "2026-03-11T10:00:00+02:00",
+  ])("pull preserves creation/edit clocks on new comments (updatedAt=%s)", async (updatedAt) => {
     const project = createProject();
     const task = createTask(project.id, { externalId: "gh-task-1" });
     const binding = createBinding(project.id, { strategy: "pull" });
@@ -1150,6 +1153,7 @@ describe("sync-worker-runtime", () => {
         body: "New comment from GitHub",
         author: { externalLogin: "octocat", displayName: "octocat" },
         createdAt: "2026-03-10T10:00:00Z",
+        updatedAt,
       },
     ];
     const provider = createProvider({
@@ -1195,6 +1199,7 @@ describe("sync-worker-runtime", () => {
         entityId: task.id,
         tags: [],
         createdAt: "2026-03-10T10:00:00.000Z",
+        updatedAt: updatedAt ? "2026-03-11T08:00:00.000Z" : "2026-03-10T10:00:00.000Z",
       }),
     );
 
@@ -3593,6 +3598,7 @@ function createNote(overrides: Partial<Note> & { content: string }): Note {
     entityId: overrides.entityId,
     tags: overrides.tags ?? [],
     createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? overrides.createdAt ?? now,
   };
 }
 
@@ -3855,6 +3861,7 @@ function createTodu(
         entityId?: string;
         tags?: string[];
         createdAt?: string;
+        updatedAt?: string;
       }) => {
         const note: Note = {
           id: createNoteId(`note-${String(noteIdCounter++).padStart(3, "0")}`),
@@ -3866,6 +3873,7 @@ function createTodu(
           entityId: input.entityId,
           tags: input.tags ?? [],
           createdAt: input.createdAt ?? new Date(0).toISOString(),
+          updatedAt: input.updatedAt ?? input.createdAt ?? new Date(0).toISOString(),
         };
         notes.push(note);
         return ok(note);
@@ -3880,10 +3888,19 @@ function createTodu(
         tags?: string[];
         authorActorId?: Note["authorActorId"];
         contentApproval?: Note["contentApproval"];
+        updatedAt?: string;
       },
     ) => {
       const note = notes.find((n) => n.id === id);
       if (!note) return ok(undefined);
+      const edited =
+        (input.content !== undefined && input.content !== note.content) ||
+        (input.authorActorId !== undefined && input.authorActorId !== note.authorActorId);
+      note.updatedAt =
+        input.updatedAt ??
+        (edited
+          ? new Date(Math.max(Date.now(), Date.parse(note.updatedAt) + 1)).toISOString()
+          : note.updatedAt);
       if (input.content !== undefined) note.content = input.content;
       if (input.tags !== undefined) note.tags = input.tags;
       if (input.authorActorId !== undefined) note.authorActorId = input.authorActorId;

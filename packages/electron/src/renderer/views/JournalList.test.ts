@@ -18,6 +18,7 @@ function makeNote(overrides: Partial<Note> = {}): Note {
     author: "user",
     tags: [],
     createdAt: "2026-02-13T10:00:00Z",
+    updatedAt: "2026-02-13T10:00:00Z",
     ...overrides,
   };
 }

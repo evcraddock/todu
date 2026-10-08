@@ -113,6 +113,7 @@ function makeNote(overrides: Partial<Note> = {}): Note {
     entityId: "task-1",
     tags: [],
     createdAt: "2026-03-14T15:00:00.000Z",
+    updatedAt: "2026-03-14T15:00:00.000Z",
     ...overrides,
   };
 }
