@@ -87,6 +87,8 @@ export async function runDaemonEntrypoint(): Promise<void> {
       role: daemonRole,
       socketPath: daemonSocketPath,
       remoteSync: remoteSync ?? undefined,
+      remoteSyncSettings: fileConfig.remoteSyncSettings,
+      configPath: fileConfig.configPath,
       syncListener: fileConfig.syncListener,
       bootstrapOwnerActor: fileConfig.bootstrapOwnerActor ?? undefined,
       logLevel: daemonLogLevel,

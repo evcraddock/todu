@@ -43,6 +43,8 @@ export function createEnrollmentRuntime(options: {
   getTodu(): Todu | null;
   isRunning(): boolean;
   activateTodu(todu: Todu): void;
+  /** Reconcile settings and publish atomically against local configuration operations. */
+  coordinateActivation?(todu: Todu, publish: () => void): Promise<void>;
   createTodu(input: {
     joinedStorage: Storage;
     enrollmentSource: EnrollmentSource;
@@ -148,14 +150,20 @@ export function createEnrollmentRuntime(options: {
         signal,
       );
       if (!attached.ok) throw new Error(JSON.stringify(attached.error));
-      signal.throwIfAborted();
-      if (!options.isRunning()) throw new Error("Daemon stopped before pending catalog activation");
-      const local = readEnrollmentState(options.storagePath);
-      if (!local || local.mode !== "pending")
-        throw new Error("Pending setup changed before catalog activation");
-      commitEnrollmentCatalog(options.storagePath, { ...local, approval: sourceInfo.approval });
-      options.activateTodu(joined);
-      pending = null;
+      const activated = joined;
+      const publish = () => {
+        signal.throwIfAborted();
+        if (!options.isRunning())
+          throw new Error("Daemon stopped before pending catalog activation");
+        const local = readEnrollmentState(options.storagePath);
+        if (!local || local.mode !== "pending")
+          throw new Error("Pending setup changed before catalog activation");
+        commitEnrollmentCatalog(options.storagePath, { ...local, approval: sourceInfo.approval });
+        options.activateTodu(activated);
+        pending = null;
+      };
+      if (options.coordinateActivation) await options.coordinateActivation(activated, publish);
+      else publish();
       const reloaded = await joined.sync.reloadPeers();
       if (!reloaded.ok)
         options.logger.warn("enrolled roster peer reload failed", { error: reloaded.error });

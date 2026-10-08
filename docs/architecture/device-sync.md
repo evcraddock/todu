@@ -127,8 +127,17 @@ Roster edits still synchronize as catalog data, but do not change a running targ
 
 The command reports adapter-target reconciliation, not successful connection, document completeness, or remote persistence. Removing an entry affects managed links on refresh; it does not revoke arbitrary native transport access. Pending pristine startup and thin clients do not own roster connections. No new primary election, forwarding protocol, retry scheduler, or live roster watcher is introduced.
 
+## Optional Server Management
+
+Private `todu sync server status|set|enable|disable` commands retain and update machine-local `sync.remote` settings, applying them to the current engine without a daemon restart or Repo replacement. Disabled settings retain the destination for later explicit enablement; legacy URL-only configurations remain enabled by default. Existing `sync start|stop|restart` controls remain runtime-only. See [CLI server controls](../cli-daemon-usage.md#optional-sync-server-controls) for configuration context, environment precedence, and status semantics.
+
+Server changes/failures preserve independent peer/listener/local paths and existing identities, provider state, and worker assignments. Cached roster or approved-source roles borrowing a configured-server transport use existing native peer handling when that server role is removed or lost; no new roster edits are applied without explicit reload. A destination can retain traffic through its peer/source role after its server role is disabled. This does not implement a global pause, sharing filter, authorization layer, or new replication/retry protocol. Enrollment does not copy a source machine's server destination or credentials.
+
+### Manual Peer/Server Verification
+
+After separately approved deployment/actions, observe actual exchange with both paths configured, explicitly disable the server role on test devices so a separate relay cannot mask direct-peer failures, and verify bidirectional edits/local operations. Observe server loss and re-enablement, restart with disabled settings, and unchanged listener/worker/provider settings and identities. If a server endpoint is also a direct peer/source, account for that remaining role rather than assuming the URL has no traffic. Do not retire a working server or change production configuration based on local/mock or CI evidence alone. Record observed outcomes separately from still-unverified real-device behavior.
+
 ## Follow-up Work
-- `task-e0d9e744`: Optional server management alongside direct peers.
 - `task-75b82848`: Persisted synchronization pause/resume.
 - `task-8cc052e1`: Accurate synchronization status without unsupported completeness or durability claims.
 - `task-fe7f362e`: Distinct-replica recovery and rollout documentation.
@@ -145,7 +154,7 @@ Preserve provider credentials and runtime internals locally. A replicated datase
 
 Listener tests cover disabled defaults, explicit addresses and ports, current-catalog routing, refused remote administration, occupied-port/unavailable-address failures, private local operation after failures, bidirectional native exchange between established persistent replicas, preserved identities/settings/worker assignments, and resource cleanup on close/restart.
 
-Enrollment tests also cover inert pristine startup, stable native identity initialization, approval and bidirectional native exchange, same-dataset data/settings/worker preservation, empty different-dataset refusal, metadata-only pending/denied/expired responses, wrong-catalog approval rejection, lost-response deduplication, partial durable approval, cancellation/abandonment, and restart. New roster coverage tests local selection, startup/activation, explicit reload, link reuse/removal, identity checks, and cleanup with simple mocked peer boundaries, including one local daemon/private RPC fixture. Existing integration tests remain intact. These checks do not prove real cross-device synchronization; manual production verification is described below. Tests do not expose the operator's LAN.
+Enrollment tests also cover inert pristine startup, stable native identity initialization, approval and bidirectional native exchange, same-dataset data/settings/worker preservation, empty different-dataset refusal, metadata-only pending/denied/expired responses, wrong-catalog approval rejection, lost-response deduplication, partial durable approval, cancellation/abandonment, and restart. Roster coverage tests local selection, startup/activation, explicit reload, link reuse/removal, identity checks, and cleanup with simple mocked peer boundaries, including one local daemon/private RPC fixture. Optional-server coverage adds saved destination/enablement, configuration preservation/overrides/errors, disabled-startup enablement, private RPC, and actual engine reuse/ownership boundaries with mocked transports; existing real local-server fixtures remain in use. Existing integration tests remain intact. These checks do not prove real cross-device synchronization; manual production verification is described below. Tests do not expose the operator's LAN.
 
 ### Manual Production Verification
 

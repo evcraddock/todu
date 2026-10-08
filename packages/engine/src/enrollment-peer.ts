@@ -17,6 +17,12 @@ export interface EnrollmentPeerConnection {
   ready(signal?: AbortSignal): Promise<void>;
   close(): void;
   isClosed?(): boolean;
+  /** A roster role borrowing the configured server's adapter. */
+  serverBacked?: boolean;
+  /** Independent lifetime for another role sharing this native channel. */
+  retain?(): EnrollmentPeerConnection;
+  getAdapter?(): WebSocketClientAdapter | null;
+  onChange?(callback: () => void): () => void;
 }
 export function enrollmentSyncUrl(source: EnrollmentSource): string {
   const url = new URL(source.approval.syncPath, source.endpoint);
@@ -29,6 +35,8 @@ export function createEnrollmentPeerConnection(options: {
   repo: Repo;
   source: EnrollmentSource;
   logger?: SyncAdapterEventLogger;
+  /** Transfer an existing channel without opening a competing socket. */
+  adapter?: WebSocketClientAdapter;
 }): EnrollmentPeerConnection {
   const { repo, source, logger } = options;
   let adapter: WebSocketClientAdapter | null = null;
@@ -36,13 +44,34 @@ export function createEnrollmentPeerConnection(options: {
   let failure: string | undefined;
   let closed = false;
   let handshakeStartedAt = Date.now();
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const callback of listeners) callback();
+  };
 
   function connect(): void {
     handshakeStartedAt = Date.now();
     verified = false;
     failure = undefined;
-    const next = addRemoteSyncAdapter(repo, enrollmentSyncUrl(source), 2_000, logger);
+    const next =
+      options.adapter ?? addRemoteSyncAdapter(repo, enrollmentSyncUrl(source), 2_000, logger);
+    const storageId = next.remotePeerId
+      ? repo.getStorageIdOfPeer(next.remotePeerId)?.slice(0)
+      : undefined;
+    if (options.adapter && storageId && next.remotePeerId) {
+      if (storageId !== source.approval.sourceDeviceId)
+        throw new Error("Configured server is not the selected native source");
+      assertNativePeerIdentity({
+        repo,
+        localId: source.approval.deviceId,
+        peerId: next.remotePeerId,
+        storageId,
+      });
+    }
+    options.adapter = undefined;
     adapter = next;
+    verified = storageId === source.approval.sourceDeviceId;
+    notify();
     const peerCandidate = next.peerCandidate.bind(next);
     next.peerCandidate = (peerId, metadata) => {
       if (closed) return;
@@ -71,6 +100,7 @@ export function createEnrollmentPeerConnection(options: {
       verified = true;
       failure = undefined;
       peerCandidate(peerId, metadata);
+      notify();
     };
     next.onError = (event) => {
       const error = "error" in event ? event.error : event;
@@ -89,6 +119,7 @@ export function createEnrollmentPeerConnection(options: {
     };
     next.on("peer-disconnected", () => {
       verified = false;
+      notify();
     });
   }
   connect();
@@ -100,6 +131,7 @@ export function createEnrollmentPeerConnection(options: {
     try {
       if (adapter) disposeRemoteSyncAdapter(repo, adapter);
       adapter = null;
+      notify();
       connect();
     } catch (error) {
       failure = `Cannot replace enrollment source adapter: ${String(error)}`;
@@ -108,30 +140,56 @@ export function createEnrollmentPeerConnection(options: {
   }, 2_000);
   watchdog.unref();
 
-  return {
-    source,
-    isClosed: () => closed,
-    async ready(signal) {
-      signal?.throwIfAborted();
-      if (closed) throw new Error("Enrollment source connection was closed");
-      const deadline = Date.now() + 10_000;
-      while (!verified) {
+  let references = 0;
+  function lease(): EnrollmentPeerConnection {
+    references++;
+    let released = false;
+    const subscriptions = new Set<() => void>();
+    return {
+      source,
+      isClosed: () => closed || released,
+      getAdapter: () => (released ? null : adapter),
+      onChange(callback) {
+        if (closed || released) return () => {};
+        const listener = () => callback();
+        subscriptions.add(listener);
+        listeners.add(listener);
+        return () => {
+          subscriptions.delete(listener);
+          listeners.delete(listener);
+        };
+      },
+      retain() {
+        if (closed || released) throw new Error("Cannot retain a closed native peer channel");
+        return lease();
+      },
+      async ready(signal) {
         signal?.throwIfAborted();
-        if (closed) throw new Error("Enrollment source connection was closed");
-        if (failure) throw new Error(failure);
-        if (Date.now() >= deadline)
-          throw new Error("Approved source did not complete its native handshake within 10000ms");
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-    },
-    close() {
-      if (closed) return;
-      closed = true;
-      clearInterval(watchdog);
-      if (adapter) {
-        disposeRemoteSyncAdapter(repo, adapter);
-        adapter = null;
-      }
-    },
-  };
+        if (closed || released) throw new Error("Enrollment source connection was closed");
+        const deadline = Date.now() + 10_000;
+        while (!verified) {
+          signal?.throwIfAborted();
+          if (closed || released) throw new Error("Enrollment source connection was closed");
+          if (failure) throw new Error(failure);
+          if (Date.now() >= deadline)
+            throw new Error("Approved source did not complete its native handshake within 10000ms");
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      },
+      close() {
+        if (released) return;
+        released = true;
+        for (const callback of subscriptions) listeners.delete(callback);
+        subscriptions.clear();
+        if (--references > 0 || closed) return;
+        closed = true;
+        clearInterval(watchdog);
+        if (adapter) {
+          disposeRemoteSyncAdapter(repo, adapter);
+          adapter = null;
+        }
+      },
+    };
+  }
+  return lease();
 }

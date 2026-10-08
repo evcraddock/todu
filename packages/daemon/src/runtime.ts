@@ -6,7 +6,9 @@ import {
   err,
   ok,
   type RemoteSyncConfig,
+  type RemoteSyncSettings,
   type Result,
+  resolveConfigPath,
   resolveStoragePath,
   type SyncListenerConfig,
 } from "@todu/core";
@@ -41,6 +43,7 @@ import {
   DEFAULT_DAEMON_REQUEST_TIMEOUT_MS,
   DEFAULT_DAEMON_VERSION,
 } from "./rpc.js";
+import { createServerSettingsRuntime } from "./server-settings-runtime.js";
 import { type LoadedConfiguredPlugin, loadConfiguredPlugins } from "./sync-plugin-loader.js";
 import {
   createSyncPluginWorkerRuntime,
@@ -81,6 +84,8 @@ export interface DaemonRuntimeConfig {
   storagePath?: string;
   role?: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  remoteSyncSettings?: RemoteSyncSettings;
+  configPath?: string;
   syncListener?: SyncListenerConfig;
   bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath?: string;
@@ -102,6 +107,8 @@ export interface ResolvedDaemonRuntimeConfig {
   storagePath: string;
   role: DaemonRole;
   remoteSync?: RemoteSyncConfig;
+  remoteSyncSettings: RemoteSyncSettings;
+  configPath: string;
   syncListener?: SyncListenerConfig;
   bootstrapOwnerActor?: BootstrapOwnerActor;
   socketPath: string;
@@ -161,6 +168,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     storagePath: resolvedStoragePath,
     role: config.role ?? "node",
     remoteSync: config.remoteSync,
+    remoteSyncSettings:
+      config.remoteSyncSettings ??
+      (config.remoteSync ? { ...config.remoteSync, enabled: true } : { enabled: false }),
+    configPath: resolveConfigPath(config.configPath),
     syncListener: config.syncListener,
     bootstrapOwnerActor: config.bootstrapOwnerActor,
     socketPath: resolvedSocketPath,
@@ -400,6 +411,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     getTodu: () => todu,
     isRunning: () => runtimeStatus.state === "running",
     createTodu: (input) => createHostOwnedTodu(input),
+    coordinateActivation: (joined, publish) => serverSettingsRuntime.activate(joined, publish),
     activateTodu(joinedTodu) {
       todu = joinedTodu;
       runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();
@@ -409,6 +421,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     },
     logger: runtimeLogger.child("enrollment"),
   });
+  const serverSettingsRuntime = createServerSettingsRuntime({
+    configPath: resolvedConfig.configPath,
+    initialSettings: resolvedConfig.remoteSyncSettings,
+    env: { ...process.env },
+    getTodu: () => todu,
+    isRunning: () => runtimeStatus.state === "running" && !joinPromise,
+    onConfigured(settings) {
+      resolvedConfig.remoteSyncSettings = settings;
+      resolvedConfig.remoteSync =
+        settings.enabled && settings.server ? { server: settings.server } : undefined;
+    },
+  });
   const defaultNamespaceHandlers = mergeNamespaceHandlerSets(
     mergeNamespaceHandlerSets(
       mergeNamespaceHandlerSets(
@@ -417,7 +441,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       ),
       enrollment.handlers,
     ),
-    createWorkerNamespaceHandlers(),
+    mergeNamespaceHandlerSets(createWorkerNamespaceHandlers(), serverSettingsRuntime.handlers),
   );
 
   const rpcLogger = runtimeLogger.child("rpc");
@@ -811,6 +835,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       enrollmentSource: input?.enrollmentSource ?? enrollment.initialSource(),
       enrollmentHttpHandler: enrollment.handleHttp,
       remoteSync: resolvedConfig.remoteSync,
+      remoteSyncSettings: resolvedConfig.remoteSyncSettings,
       syncListener: resolvedConfig.syncListener,
       registeredPeerConnections: true,
       bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
@@ -884,6 +909,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
             return parsedRequest.error;
           }
 
+          if (serverSettingsRuntime.isBusy())
+            return createProtocolErrorFrame(
+              request.id,
+              createProtocolError(
+                "CONFLICT",
+                "Server configuration is in progress; retry the dataset switch afterward",
+              ),
+            );
           if (joinPromise) {
             return createProtocolErrorFrame(
               request.id,
@@ -1382,6 +1415,8 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         storagePath: resolvedConfig.storagePath,
         role: resolvedConfig.role,
         remoteSync: resolvedConfig.remoteSync,
+        remoteSyncSettings: { ...resolvedConfig.remoteSyncSettings },
+        configPath: resolvedConfig.configPath,
         syncListener: resolvedConfig.syncListener,
         bootstrapOwnerActor: resolvedConfig.bootstrapOwnerActor,
         socketPath: resolvedConfig.socketPath,

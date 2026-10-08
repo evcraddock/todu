@@ -71,7 +71,7 @@ Electron┘
 - Peers remain equal; a listening daemon is not a master. Explicit enrollment exchanges bounded metadata through the shared listener, then attaches native replication after local approval. Each daemon loads advertised roster endpoints when its dataset becomes active; `todu sync peers reload` explicitly refreshes targets without restarting. Existing native transport handles synchronization and reconnection; no roster watcher or connection-election protocol is added.
 - The registry supplies connection metadata, not transport authorization. Reachable peers are not authenticated, and the route is not a document allowlist.
 - Private daemon RPC and administration remain on the local socket; the shared LAN HTTP listener exposes no administrative API.
-- Listener configuration defaults to disabled and binding errors do not prevent local daemon operation. Server settings and worker assignments are unchanged.
+- Listener configuration defaults to disabled and binding errors do not prevent local daemon operation. Explicit private server controls update machine-local destination/enablement without restarting or replacing the Repo, retaining disabled destinations for fallback. Server changes/failures preserve independent peer/listener/local paths; cached peer/source roles borrowing a server transport use existing native handling without applying new roster edits. Legacy `sync start|stop|restart` remains runtime-only. Worker assignments and existing native sharing boundaries are unchanged.
 
 ```
 daemon(A) <--> relay <--> daemon(B) <--> relay <--> daemon(C)

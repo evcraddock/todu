@@ -94,6 +94,37 @@ export function createRosterPeerConnections(options: {
         options.logger?.warn("roster peer reload warning", { error });
       return ok(report);
     },
+    serverSources(url: string): EnrollmentSource[] {
+      return [...links.values()]
+        .filter((link) => link.connection.serverBacked && enrollmentSyncUrl(link.source) === url)
+        .map((link) => link.source);
+    },
+    findByUrl(url: string): EnrollmentPeerConnection | undefined {
+      return [...links.values()].find(
+        (link) => !link.connection.isClosed?.() && enrollmentSyncUrl(link.source) === url,
+      )?.connection;
+    },
+    adoptServer(url: string, connection: EnrollmentPeerConnection): boolean {
+      if (closed) throw new Error("Roster connections are closed");
+      if (
+        [...links.values()].some(
+          (link) =>
+            link.connection.serverBacked &&
+            enrollmentSyncUrl(link.source) === url &&
+            link.source.approval.sourceDeviceId !== connection.source.approval.sourceDeviceId,
+        )
+      )
+        throw new Error("Cannot adopt a different native source identity");
+      let adopted = false;
+      for (const [id, link] of links) {
+        if (!link.connection.serverBacked || enrollmentSyncUrl(link.source) !== url) continue;
+        const lease = adopted ? connection.retain!() : connection;
+        links.set(id, { source: link.source, connection: lease });
+        adopted = true;
+        link.connection.close();
+      }
+      return adopted;
+    },
     find(source: EnrollmentSource): EnrollmentPeerConnection | undefined {
       const link = links.get(source.approval.sourceDeviceId);
       return link &&

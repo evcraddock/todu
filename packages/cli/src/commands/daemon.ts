@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveRemoteSyncConfig } from "@todu/core";
 import { runDaemonEntrypoint } from "@todu/daemon";
 import type { Command } from "commander";
 import { withActivityIndicator } from "../activity-indicator.js";
@@ -64,7 +63,6 @@ interface DaemonCommandContext {
   storagePath: string;
   socketPath: string;
   daemonPidPath: string;
-  remoteSyncServer: string | null;
   assignedWorkersEnvValue: string | undefined;
   pluginPathsEnvValue: string | undefined;
   pluginConfigEnvValue: string | undefined;
@@ -859,7 +857,6 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
   const configPath = getConfigPath(configOpt);
   const fileConfig = loadConfig(configPath);
   const storagePath = resolveDataDir(configPath, fileConfig, { env: process.env });
-  const remoteSync = resolveRemoteSyncConfig(fileConfig, { env: process.env });
   const assignedWorkers = resolveDaemonAssignedWorkers(fileConfig);
   const pluginPaths = resolveDaemonPluginPaths(configPath, fileConfig);
   const pluginConfig = resolveDaemonPluginConfig(fileConfig);
@@ -869,7 +866,6 @@ function resolveDaemonCommandContext(program: Command): DaemonCommandContext {
     storagePath,
     socketPath: resolveDaemonSocketPath(storagePath),
     daemonPidPath: path.join(storagePath, DIRECT_PID_FILENAME),
-    remoteSyncServer: remoteSync?.server ?? null,
     assignedWorkersEnvValue: assignedWorkers.value,
     pluginPathsEnvValue: pluginPaths.value,
     pluginConfigEnvValue: pluginConfig.value,
@@ -887,11 +883,6 @@ function createDaemonChildEnv(context: DaemonCommandContext): NodeJS.ProcessEnv 
     TODU_CONFIG: context.configPath,
     TODU_DATA_DIR: context.storagePath,
   };
-
-  if (context.remoteSyncServer) {
-    childEnv.TODU_SYNC_SERVER = context.remoteSyncServer;
-    childEnv.TODU_SYNC_ENABLED = "1";
-  }
 
   if (context.socketPath) {
     childEnv.TODU_DAEMON_SOCKET = context.socketPath;

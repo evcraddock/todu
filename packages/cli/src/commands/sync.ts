@@ -10,6 +10,7 @@ import {
   renderListenerStatus,
 } from "./sync-listener.js";
 import { registerSyncPeerCommands } from "./sync-peers.js";
+import { registerSyncServerCommands } from "./sync-server.js";
 
 interface SyncStatus {
   listener?: ListenerStatus;
@@ -44,6 +45,7 @@ export function registerSyncCommands(program: Command, invokeDaemon: CliDaemonIn
   registerSyncListenerCommands(sync, program, invokeDaemon);
   registerSyncEnrollmentCommands(sync, program, invokeDaemon);
   registerSyncPeerCommands(sync, program, invokeDaemon);
+  registerSyncServerCommands(sync, program, invokeDaemon);
 
   sync
     .command("status")

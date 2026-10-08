@@ -142,6 +142,68 @@ describe("explicit roster snapshots", () => {
     expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
     expect(JSON.stringify(manager.reload())).not.toContain("secret");
   });
+  it("hands off only cached server-backed roles without rereading roster edits or touching other peers", async () => {
+    const { manager, put, existing } = setup();
+    const borrowed = {
+      source: {} as EnrollmentSource,
+      serverBacked: true,
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    existing.mockImplementation((source) =>
+      source.approval.sourceDeviceId === peer().id ? borrowed : undefined,
+    );
+    put(peer());
+    put({ id: createDeviceId("other"), name: "Other", endpoint: "http://other.lan:24377" });
+    manager.reload();
+    const other = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
+    put({ id: createDeviceId("new"), name: "Not refreshed", endpoint: "http://new.lan" });
+    const url = "ws://peer.lan:24377/sync/catalog";
+    const promoted = {
+      source: manager.serverSources(url)[0],
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    expect(manager.adoptServer(url, promoted)).toBe(true);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+    expect(other.close).not.toHaveBeenCalled();
+    expect(borrowed.close).toHaveBeenCalledOnce();
+    expect(manager.adoptServer(url, promoted)).toBe(false);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+    manager.close();
+    expect(other.close).toHaveBeenCalledOnce();
+    expect(promoted.close).toHaveBeenCalledOnce();
+  });
+  it("keeps the borrowed role available when adoption identifies a different source", async () => {
+    const { manager, put, existing } = setup();
+    const borrowed = {
+      source: {} as EnrollmentSource,
+      serverBacked: true,
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    existing.mockReturnValue(borrowed);
+    put(peer());
+    manager.reload();
+    const replacement = {
+      source: {
+        ...manager.serverSources("ws://peer.lan:24377/sync/catalog")[0],
+        approval: {
+          ...manager.serverSources("ws://peer.lan:24377/sync/catalog")[0].approval,
+          sourceDeviceId: createDeviceId("different"),
+        },
+      },
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    expect(() => manager.adoptServer("ws://peer.lan:24377/sync/catalog", replacement)).toThrow(
+      "different native source identity",
+    );
+    expect(borrowed.close).not.toHaveBeenCalled();
+    expect(replacement.close).not.toHaveBeenCalled();
+    expect(manager.reload()).toMatchObject({ ok: true, value: { retained: 1 } });
+    manager.close();
+  });
   it("closes owned links once and refuses reload after close", () => {
     const { manager, put } = setup();
     put(peer());
