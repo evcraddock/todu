@@ -1,5 +1,20 @@
 # @todu/tui
 
+## 0.26.2
+
+### Patch Changes
+
+- Update the repository lockfile's transitive `shell-quote` dependency to 1.12.0, resolving GHSA-pqg4-j6r4-53mv within the existing React DevTools and Changesets dependency ranges. Published packages do not include this workspace lockfile; downstream installations resolve their own transitive dependencies.
+- 4bd7407: Show early terminal startup feedback while the UI loads. Distinguish Home loading, ready, refresh, and failure states, and avoid showing empty task sections before the initial daemon request succeeds.
+- Updated dependencies [6d1dee3]
+- Updated dependencies [2d3c8f1]
+- Updated dependencies [2dfa2f1]
+- Updated dependencies [6bdb4ab]
+- Updated dependencies [a0008a4]
+- Updated dependencies [7411098]
+- Updated dependencies [fc80b1f]
+  - @todu/core@0.25.0
+
 ## 0.26.1
 
 ### Patch Changes
