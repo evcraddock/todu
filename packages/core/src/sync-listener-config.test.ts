@@ -11,7 +11,7 @@ describe("LAN sync listener configuration", () => {
     expect(resolveSyncListenerConfig(config)).toEqual({ ok: true, value: null });
   });
 
-  it("defaults only the port, not the bind address", () => {
+  it("validates persisted settings without rediscovering a missing bind at daemon startup", () => {
     expect(resolveSyncListenerConfig({ enabled: true, bind: "192.168.1.10" })).toEqual({
       ok: true,
       value: { bind: "192.168.1.10", port: 24377 },

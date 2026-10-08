@@ -169,7 +169,7 @@ See [Device Sync Design](architecture/device-sync.md) for the roadmap and truste
 The local daemon can accept native Automerge peer connections without a separate sync service. Listening is disabled by default and uses the existing dataset/Repo; it does not change the configured server or activate workers.
 
 ```bash
-todu sync listener enable --bind 192.168.1.10
+todu sync listener enable
 todu sync listener enable --bind 192.168.1.10 --port 24400
 todu daemon restart
 todu sync listener status
@@ -187,7 +187,11 @@ sync:
     port: 24377
 ```
 
-Supply a literal IPv4/IPv6 address assigned to this machine. There is no implicit interface or hostname-based binding. The default port is `24377`; zero/ephemeral ports and automatic port substitution are refused. Explicit all-interface addresses are supported but expose every matching interface; IPv6 bindings do not implicitly listen on IPv4.
+`enable` normally needs no address argument. It reuses a saved bind (including a deliberately configured disabled listener) or selects a local LAN address, then reports and saves the concrete address/port. `--bind <literal-address>` is an optional override. Port precedence is `--port`, saved port, then `24377`. Invalid saved or supplied addresses/ports fail validation rather than being silently replaced; zero/ephemeral ports and automatic port substitution are refused. Hostnames are not bind addresses.
+
+Selection uses actual local interface information on Linux and Apple Silicon macOS, not interface names or a hardcoded subnet. Non-internal RFC1918 IPv4 addresses (`10/8`, `172.16/12`, `192.168/16`) are considered first, then unique-local IPv6 (`fc00::/7`) if no IPv4 candidate exists. A single distinct candidate is selected directly. With multiple candidates in the preferred family, the OS-selected route source must match one of them; otherwise enablement fails with candidates and an actionable `--bind` override. Route-source lookup uses a short-lived connected UDP socket to the documentation-reserved `192.0.2.1` or `2001:db8::1`, sends no data, has a one-second deadline, and closes the socket. Interface enumeration order never breaks ties. Wildcard, loopback, link-local, public, and multicast addresses are never selected automatically.
+
+Detection happens only during explicit enablement when no saved/overridden bind exists. Daemon startup and enrollment reuse the persisted address; there is no address watcher or silent rebind after network changes. An unavailable saved address requires an explicit override and restart. Explicit all-interface addresses (`0.0.0.0` or `::`) remain supported but expose every matching interface; IPv6 bindings do not implicitly listen on IPv4. Automatic selection and private addressing do not establish network trust.
 
 Configuration commands preserve other settings and YAML comments. They do **not** change a running listener or restart the daemon: restart explicitly to apply, using the same configuration context as the daemon. `--config` selects the file to edit; a service-managed daemon still reads the configuration selected by its service. Registry endpoint metadata is not automatically edited.
 
@@ -247,8 +251,8 @@ On a genuinely pristine installation, **before first daemon/desktop startup**:
 
 ```bash
 todu sync enrollment prepare
-# Explicit local configuration; pending startup will not bind a catalog listener yet.
-todu sync listener enable --bind 192.168.1.20 --port 24377
+# Explicit opt-in selects the LAN address; pending startup has no catalog listener yet.
+todu sync listener enable
 todu daemon start
 todu sync enroll http://mac-mini.lan:24377
 todu sync enrollment status
@@ -256,7 +260,7 @@ todu sync enrollment status
 
 Preparation creates only machine-local pending state, not a default catalog. Pending startup obtains/persists the native replica ID automatically but has no live dataset or document connection and runs no plugins, workers, or host processing. Domain commands remain unavailable until approval and valid catalog attachment. If a daemon/service already started normally, even an empty dataset is initialized and cannot be replaced by this command. Do not delete existing storage to force pristine eligibility.
 
-Enrollment automatically supplies the local advertised endpoint from its published roster metadata or concrete listener address/port. No extra address argument is needed normally. A wildcard binding requires a published endpoint or an explicit override:
+Enrollment automatically supplies the local advertised endpoint from its published roster metadata or saved concrete listener address/port, including an address automatically selected by `sync listener enable`. No extra address argument is needed normally. A wildcard binding requires a published endpoint or an explicit override:
 
 ```bash
 todu sync enroll http://mac-mini.lan:24377 --advertise http://laptop.lan:24377
