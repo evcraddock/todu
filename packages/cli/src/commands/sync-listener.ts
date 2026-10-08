@@ -1,6 +1,6 @@
-import { resolveSyncListenerConfig, type SyncListenerConfig } from "@todu/core";
+import { resolveSyncListenerEnableConfig, type SyncListenerConfig } from "@todu/core";
 import type { Command } from "commander";
-import { getConfigPath, saveSyncListenerConfig } from "../config.js";
+import { getConfigPath, loadConfig, saveSyncListenerConfig } from "../config.js";
 import { type CliDaemonInvoker, formatDaemonCommandError } from "../daemon-command-client.js";
 import { formatJSON } from "../format.js";
 
@@ -15,7 +15,9 @@ export interface ListenerStatus {
 export function renderListenerStatus(listener: ListenerStatus | undefined): void {
   console.log(`LAN Listener: ${listener?.state ?? "disabled"}`);
   if (listener?.bind && listener.port)
-    console.log(`Bind:         ${listener.bind}:${listener.port}`);
+    console.log(
+      `Bind:         ${listener.bind.includes(":") ? `[${listener.bind}]` : listener.bind}:${listener.port}`,
+    );
   if (listener?.syncPath) console.log(`Sync route:   ${listener.syncPath}`);
   if (listener?.error) console.log(`Error:        ${listener.error}`);
 }
@@ -42,21 +44,34 @@ export function registerSyncListenerCommands(
     });
   listener
     .command("enable")
-    .description("Save opt-in LAN listener settings; requires an explicit daemon restart")
-    .option("--bind <address>", "explicit literal IPv4/IPv6 bind address")
-    .option("--port <number>", "listening port (default: 24377)")
-    .action((options: { bind?: string; port?: string }) => {
-      const result = resolveSyncListenerConfig({
-        enabled: true,
+    .description(
+      "Save opt-in LAN listener settings with automatic address selection; restart required",
+    )
+    .option(
+      "--bind <address>",
+      "optional literal IPv4/IPv6 override (otherwise reuse saved bind or detect LAN address)",
+    )
+    .option("--port <number>", "listening port (otherwise saved port or default: 24377)")
+    .action(async (options: { bind?: string; port?: string }) => {
+      const configPath = getConfigPath(program.opts().config as string | undefined);
+      let saved: SyncListenerConfig | undefined;
+      try {
+        saved = loadConfig(configPath).sync?.listener;
+      } catch (error) {
+        console.error(`Error: cannot read listener settings in ${configPath}: ${String(error)}`);
+        process.exitCode = 1;
+        return;
+      }
+      const result = await resolveSyncListenerEnableConfig({
         bind: options.bind,
         port: options.port === undefined ? undefined : Number(options.port),
+        saved,
       });
       if (!result.ok) {
         console.error(`Error: ${result.error.field}: ${result.error.message}`);
         process.exitCode = 1;
         return;
       }
-      if (!result.value) return;
       saveSettings(program, { enabled: true, ...result.value });
     });
   listener
@@ -76,13 +91,26 @@ function saveSettings(program: Command, settings: SyncListenerConfig): void {
   }
   const message =
     "Settings saved; restart the local daemon explicitly to apply. No runtime listener was changed.";
+  const warning =
+    "Trusted LAN only: HTTP/WebSocket transport is unencrypted and unauthenticated. A private IP does not establish network trust.";
   if (program.opts().format === "json") {
-    console.log(formatJSON({ configPath, listener: settings, restartRequired: true, message }));
+    console.log(
+      formatJSON({
+        configPath,
+        listener: settings,
+        restartRequired: true,
+        message,
+        ...(settings.enabled ? { warning } : {}),
+      }),
+    );
   } else {
     console.log(`Config:       ${configPath}`);
     console.log(message);
     if (settings.enabled) {
-      console.log("Trusted LAN only: HTTP/WebSocket transport is unencrypted and unauthenticated.");
+      console.log(
+        `Bind:         ${settings.bind?.includes(":") ? `[${settings.bind}]` : settings.bind}:${settings.port}`,
+      );
+      console.log(warning);
     }
   }
 }

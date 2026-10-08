@@ -1,5 +1,7 @@
 # Implementation Plan: Shared-Roster Connections
 
+> Historical scope note: `task-639ba101` corrects listener enablement to select a local LAN address when no saved bind or explicit override exists. This plan's exclusions apply to roster/enrollment processing, not the explicit `sync listener enable` command. Background address tracking and implicit listener enablement remain out of scope. See the [current listener selection rule](../cli-daemon-usage.md#opt-in-lan-sync-listener).
+
 ## Work Summary
 
 - Task: `task-b8e0cfb5` — Connect devices using the shared roster.

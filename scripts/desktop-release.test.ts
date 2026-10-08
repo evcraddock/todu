@@ -210,9 +210,22 @@ describe("Apple Silicon-only macOS support", () => {
       "Device enrollment integration tests",
       "Sync provider checkpoint and field-group integration tests",
       "Unix socket ownership and path boundary tests",
-      "LAN sync listener integration tests",
+      "LAN sync listener selection and integration tests",
     ])
       expect(steps.some((step) => step.name === name)).toBe(true);
+    const listenerTests = steps.find(
+      (step) => step.name === "LAN sync listener selection and integration tests",
+    );
+    for (const suite of [
+      "packages/core/src/sync-listener-enable.test.ts",
+      "packages/core/src/sync-listener-config.test.ts",
+      "packages/core/src/enrollment-endpoint.test.ts",
+      "packages/cli/src/commands/sync-listener.test.ts",
+      "packages/engine/src/sync-listener.integration.test.ts",
+      "packages/daemon/src/sync-listener.integration.test.ts",
+      "packages/cli/src/sync-listener-config.integration.test.ts",
+    ])
+      expect(listenerTests?.run).toContain(suite);
     expect(
       ci.jobs.check.steps.some((step: { run?: string }) => step.run?.includes("make test-all")),
     ).toBe(true);

@@ -86,7 +86,7 @@ export const DEFAULT_SYNC_LISTENER_PORT = 24377;
 /** Explicit, machine-local LAN listener settings; never replicated. */
 export interface SyncListenerConfig {
   enabled?: boolean;
-  /** Literal IPv4/IPv6 address; there is no implicit bind address. */
+  /** Persisted literal IPv4/IPv6 address, selected or overridden during explicit CLI enablement. */
   bind?: string;
   /** Integer from 1 through 65535; zero/ephemeral binding is not supported. */
   port?: number;
@@ -120,7 +120,8 @@ export function resolveSyncListenerConfig(
     return err({
       type: "validation",
       field: "sync.listener.bind",
-      message: "Listening requires an explicit literal IPv4 or IPv6 bind address",
+      message:
+        "Listening requires a saved literal IPv4 or IPv6 bind address; use sync listener enable to select one",
     });
   }
   const port = config.port === undefined ? DEFAULT_SYNC_LISTENER_PORT : config.port;

@@ -37,10 +37,10 @@ After the dataset is already migrated, changing this config later does not rewri
 
 ## Optional LAN listener
 
-Listening is disabled unless the daemon's local config explicitly enables `sync.listener` with a literal IPv4/IPv6 `bind` address. The port defaults to `24377`; unavailable addresses and occupied ports produce listener errors without rebinding or disabling private local operations.
+Listening remains opt-in. `todu sync listener enable` reuses saved settings or automatically selects and saves a concrete local LAN address; `--bind <literal-address>` is an optional override. Selection prefers non-internal private IPv4, then unique-local IPv6, using the OS route source to disambiguate multiple candidates rather than interface names/order. Unavailable or unresolved networking reports an actionable override; it never substitutes a wildcard. See the [documented selection rule](cli-daemon-usage.md#opt-in-lan-sync-listener). The port uses the explicit override, saved value, or default `24377`. The daemon uses only the saved literal binding; unavailable addresses and occupied ports produce listener errors without rebinding or disabling private local operations.
 
 ```bash
-todu sync listener enable --bind 192.168.1.10
+todu sync listener enable
 todu daemon restart
 todu sync listener status
 ```
@@ -57,7 +57,7 @@ Existing `sync start|stop|restart` stays runtime-only. Healthy independent direc
 
 ## Pristine enrollment before service startup
 
-For a new replica of an existing dataset, run `todu sync enrollment prepare` in the service's actual config/data context **before enabling the service or starting the desktop/daemon for the first time**. Explicitly configure the joining service's local listener before requesting enrollment. Its published endpoint or concrete bind address/port supplies the advertised address; wildcard binds need a published endpoint or `--advertise <base-endpoint>`. Pending setup need not already have a running catalog listener. Then start the daemon and request enrollment with `todu sync enroll http://known-peer.lan:24377`. Inspect/approve the request locally on that listening peer. Pending startup keeps a native persistent identity but has no live catalog, configured-server document adapter, plugins, workers, or host processing. No throwaway catalog is created.
+For a new replica of an existing dataset, run `todu sync enrollment prepare` in the service's actual config/data context **before enabling the service or starting the desktop/daemon for the first time**. Explicitly enable the joining service's local listener with `todu sync listener enable` before requesting enrollment; normal setup selects its LAN address without `--bind`. Its published endpoint or saved concrete bind address/port supplies the advertised address; wildcard binds need a published endpoint or `--advertise <base-endpoint>`. Pending setup need not already have a running catalog listener. Then start the daemon and request enrollment with `todu sync enroll http://known-peer.lan:24377`. Inspect/approve the request locally on that listening peer. Pending startup keeps a native persistent identity but has no live catalog, configured-server document adapter, plugins, workers, or host processing. No throwaway catalog is created.
 
 An already initialized empty installation is not pristine. Same-dataset replicas can enroll through their existing daemon; different datasets are refused unchanged. Do not change a service data directory or delete its storage merely to bypass refusal. Environment overrides such as `TODU_DATA_DIR` and `TODU_DAEMON_SOCKET` must match the service when preparing and issuing commands.
 

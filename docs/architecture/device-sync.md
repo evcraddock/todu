@@ -10,7 +10,7 @@ The replicated device registry, opt-in LAN listener, local approval-based enroll
 
 Make a dedicated Automerge sync server optional by allowing equal Todu peers on a trusted LAN to synchronize directly. A listening daemon is not a master, account server, or replacement central service. Existing server-based deployments remain supported.
 
-One daemon owns one persistent Repo and one dataset rooted by its catalog document ID. CLI, TUI, and Electron remain local clients; they do not gain persistent Repos, account selectors, or LAN listeners. Multiple active datasets, automatic dataset merging, destructive replacement, internet traversal, and automatic discovery are out of scope.
+One daemon owns one persistent Repo and one dataset rooted by its catalog document ID. CLI, TUI, and Electron remain local clients; they do not gain persistent Repos, account selectors, or LAN listeners. Multiple active datasets, automatic dataset merging, destructive replacement, internet traversal, and automatic peer discovery are out of scope. Local address selection during explicit listener enablement is supported; it is not peer discovery or background address tracking.
 
 ## Native Automerge Responsibilities
 
@@ -54,7 +54,11 @@ There is no remote daemon RPC, administration, approval endpoint, or public data
 
 ## Listener Configuration and Endpoint Layout
 
-Listening is disabled by default. It requires `enabled: true` and an explicit literal IPv4/IPv6 bind address. Hostname resolution is not used for binding. The configurable port defaults to `24377`; ports must be integers from 1 through 65535. Port zero, automatic port substitution, and automatic interface selection are not supported.
+Listening is disabled by default. `todu sync listener enable` explicitly opts in and saves a concrete local address: `--bind` overrides a saved bind, which otherwise takes precedence over address detection. Port precedence is `--port`, saved port, then `24377`. Supplied/saved values remain strictly validated; ports must be integers from 1 through 65535. Hostname binding, port zero, and automatic port substitution are not supported.
+
+The [selection rule](../cli-daemon-usage.md#opt-in-lan-sync-listener) uses actual local interface information on Linux and Apple Silicon macOS. It prefers non-internal RFC1918 IPv4, then unique-local IPv6 when no IPv4 candidate exists. A sole candidate is accepted; multiple candidates require a matching OS-selected route source. The bounded connect-only UDP route lookup sends no data. No wildcard, loopback, link-local, public, or multicast address is inferred, and unresolved ambiguity reports an explicit override rather than guessing by interface order. Private addressing is not proof of trust.
+
+Selection occurs only during the explicit enable command. Daemon startup still requires `enabled: true` and the saved literal IPv4/IPv6 address; it never discovers/rebinds interfaces or changes settings after an address change. Configured overrides, including deliberate wildcard binds, remain unchanged.
 
 ```yaml
 sync:
@@ -81,7 +85,7 @@ The existing loopback-only SDK sync-server helper and configured dedicated-serve
 ## Local Controls
 
 ```bash
-todu sync listener enable --bind 192.168.1.10
+todu sync listener enable
 todu sync listener enable --bind 192.168.1.10 --port 24400
 todu daemon restart
 todu sync listener status
@@ -98,7 +102,7 @@ Before moving to an untrusted network, disable listening and explicitly restart,
 
 ## Managed Enrollment
 
-The joining device supplies one known HTTP(S) source endpoint, not catalog or storage IDs. Its advertised listener endpoint is taken from its published local roster entry or explicit concrete listener configuration; `--advertise <base-endpoint>` is an optional override for wildcard bindings or a different advertised address. New requests require an endpoint and explicitly enabled local listener configuration; existing journals and endpoint-less entries remain readable. No interface discovery or implicit listener enablement occurs. Todu obtains its persistent native identity and sends readable registration metadata. The receiving daemon lists and approves or denies requests through its private local socket for its current catalog. Names, endpoints, and IDs are not authenticated identities.
+The joining device supplies one known HTTP(S) source endpoint, not catalog or storage IDs. Its advertised listener endpoint is taken from its published local roster entry or explicit concrete listener configuration; `--advertise <base-endpoint>` is an optional override for wildcard bindings or a different advertised address. New requests require an endpoint and explicitly enabled local listener configuration; existing journals and endpoint-less entries remain readable. Enrollment performs no interface discovery or implicit listener enablement; it reuses the concrete settings saved by explicit listener enablement, including automatically selected addresses. Todu obtains its persistent native identity and sends readable registration metadata. The receiving daemon lists and approves or denies requests through its private local socket for its current catalog. Names, endpoints, and IDs are not authenticated identities.
 
 For pristine storage, run `todu sync enrollment prepare` before first daemon/desktop startup, start the daemon, then run `todu sync enroll http://known-peer.lan:24377`. Pending startup has a persistent Repo identity but no live catalog, outbound document adapters, plugin loading, workers, or host template processing. Ordinary bootstrap and domain RPC cannot create a substitute dataset. Existing same-dataset replicas use their current engine and keep their native IDs, data, server configuration, provider state, assignments, and worker execution.
 
@@ -152,7 +156,7 @@ Preserve provider credentials and runtime internals locally. A replicated datase
 
 ## Verification
 
-Listener tests cover disabled defaults, explicit addresses and ports, current-catalog routing, refused remote administration, occupied-port/unavailable-address failures, private local operation after failures, bidirectional native exchange between established persistent replicas, preserved identities/settings/worker assignments, and resource cleanup on close/restart.
+Listener tests cover no-argument enablement, private IPv4/unique-local IPv6 selection, route-source disambiguation and lookup cleanup, unavailable/ambiguous networking, saved/explicit precedence, comment-preserving persistence and enrollment endpoint reuse, explicit restart-to-apply behavior, disabled defaults, explicit addresses and ports, current-catalog routing, refused remote administration, occupied-port/unavailable-address failures, private local operation after failures, bidirectional native exchange between established persistent replicas, preserved identities/settings/worker assignments, and resource cleanup on close/restart.
 
 Enrollment tests also cover inert pristine startup, stable native identity initialization, approval and bidirectional native exchange, same-dataset data/settings/worker preservation, empty different-dataset refusal, metadata-only pending/denied/expired responses, wrong-catalog approval rejection, lost-response deduplication, partial durable approval, cancellation/abandonment, and restart. Roster coverage tests local selection, startup/activation, explicit reload, link reuse/removal, identity checks, and cleanup with simple mocked peer boundaries, including one local daemon/private RPC fixture. Optional-server coverage adds saved destination/enablement, configuration preservation/overrides/errors, disabled-startup enablement, private RPC, and actual engine reuse/ownership boundaries with mocked transports; existing real local-server fixtures remain in use. Existing integration tests remain intact. These checks do not prove real cross-device synchronization; manual production verification is described below. Tests do not expose the operator's LAN.
 
