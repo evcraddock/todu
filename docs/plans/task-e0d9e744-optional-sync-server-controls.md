@@ -82,7 +82,7 @@ todu sync server enable
 
 ## Stage 4 — Documentation, Checks, and Delivery Gates
 
-**Status:** documentation and local checks complete. Exact-head CI, independent review, merge approval, and closure gates pending.
+**Status:** first-head CI passed, but independent review requested changes for native shared-channel handoff and pending activation races. Both fixes and focused regressions are implemented; final checks, updated exact-head CI/re-review, merge approval, and closure gates pending.
 
 - Update `docs/architecture/device-sync.md`, `docs/cli-daemon-usage.md`, `docs/daemon-service-operations.md`, and relevant architecture wording; add package Changesets without applying versions or publishing.
 - Explain runtime-only versus persisted server controls, environment overrides, peer/listener independence, native sharing/trust limitations, and fallback re-enablement. Include a short manual checklist that prevents a dedicated server from masking direct-peer failures. Retiring a real server remains separately approved.
@@ -94,8 +94,9 @@ todu sync server enable
 ## Local Verification Evidence
 
 - `make check` and isolated `make pre-pr` pass; 1,248 unit tests/107 files.
-- Two final built isolated `make test-all` runs pass: 1,896 tests/162 files each, zero skips and no unhandled-error/storage-race signatures. Earlier full passes and focused runs are retained in `/tmp/todu-e0d9e744-logs/`.
-- Config/CLI checks began red. Temporarily suppressing the real engine handoff makes six of eight reuse-boundary cases fail; restoring it passes. Mock transports cover borrowed server/peer/source ownership, connection loss, adapter-creation failure, explicit source removal/reload, and cleanup—not real-device exchange.
+- First-head built isolated `make test-all` runs passed 1,896 tests/162 files, but review proved mocks missed a native routing failure and pending activation race. Two final fixed built isolated suites pass 1,904 tests/163 files each, zero skips, without unhandled-error/storage-race signatures; updated `make check` and `make pre-pr` also pass. Evidence is retained in `/tmp/todu-e0d9e744-logs/`; updated exact-head CI/re-review remain required.
+- First-head config/CLI and handoff mocks had red/green evidence, but they did not establish native routing. R1 now retains the original native adapter in place with independently released role lifetimes; re-enable shares it instead of opening a competing socket. Three actual two-Repo/loopback-listener regressions assert exchange after stop/disable/repoint, re-enable, and peer removal. Deliberately opening an overlapping replacement socket instead of adopting the old one makes actual post-stop exchange time out; restoring adoption passes. This is local native evidence, not production convergence proof.
+- R2 serializes latest-settings reconciliation and engine publication against configuration operations. Five barrier-controlled cases through existing real enrollment fixtures cover disable/enable/repoint, apply failure, and shutdown. Suppressing both fixes makes seven selected cases fail (one passes for safe shutdown; other tests are filtered out), and restoring them passes.
 - One actual local daemon/private-RPC fixture covers offline-server controls without dropping independent peers; built managed CLI startup, disabled restart, and re-enable retain legacy file policy and catalog identity. YAML preservation, environment mismatch, symlinks/permissions, save failure, and runtime-only intent restoration are covered locally.
 - Managed startup no longer promotes file server settings into artificial environment overrides; genuine inherited overrides retain precedence. Explicit peer reload also clears removed/retargeted cached source roles so future server operations do not resurrect them.
 - `.dev/config.yaml` remains the pre-existing loopback-only change, excluded from the task. The running dev environment, live integrations, production settings/data, release versions, and deployments remain untouched. Actual device exchange/recovery and real-server retirement remain separately authorized manual work.

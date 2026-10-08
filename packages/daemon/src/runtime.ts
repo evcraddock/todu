@@ -411,6 +411,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     getTodu: () => todu,
     isRunning: () => runtimeStatus.state === "running",
     createTodu: (input) => createHostOwnedTodu(input),
+    coordinateActivation: (joined, publish) => serverSettingsRuntime.activate(joined, publish),
     activateTodu(joinedTodu) {
       todu = joinedTodu;
       runtimeStatus.catalogId = joinedTodu.sync.getCatalogId();

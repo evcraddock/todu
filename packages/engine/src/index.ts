@@ -292,6 +292,8 @@ export async function createTodu(
   // Remote sync adapter — set up if configured, null when stopped
   let remoteAdapter: WebSocketClientAdapter | null = null;
   let enrollmentPeer: EnrollmentPeerConnection | null = null;
+  let borrowedServerPeer: EnrollmentPeerConnection | null = null;
+  let removeServerCallbacks = (): void => {};
   let sharedEnrollmentSource = config.enrollmentSource ?? null;
   let peerConnections: ReturnType<typeof createRosterPeerConnections> | null = null;
   const pendingEnrollmentPeers = new Set<EnrollmentPeerConnection>();
@@ -321,6 +323,7 @@ export async function createTodu(
   }
 
   function reconcileRemoteAdapterState(): void {
+    if (borrowedServerPeer) remoteAdapter = borrowedServerPeer.getAdapter?.() ?? null;
     if (!remoteAdapter) return;
 
     if (isRemoteAdapterConnected(remoteAdapter)) {
@@ -349,6 +352,7 @@ export async function createTodu(
       !serverSettings.server ||
       !remoteAdapter ||
       remoteWatchdogRestarting ||
+      borrowedServerPeer ||
       engineClosed
     )
       return;
@@ -437,16 +441,32 @@ export async function createTodu(
       remoteAdapter = initialRemoteAdapter;
       initialRemoteAdapter = null;
     } else {
-      remoteAdapter = addRemoteSyncAdapter(
-        storage.repo,
-        server,
-        undefined,
-        resolvedConfig.syncLogger,
-      );
+      const existing =
+        peerConnections?.findByUrl(new URL(server).href) ??
+        (enrollmentPeer && enrollmentSyncUrl(enrollmentPeer.source) === new URL(server).href
+          ? enrollmentPeer
+          : undefined);
+      const available = existing?.getAdapter?.();
+      if (available && existing?.retain) {
+        borrowedServerPeer = existing.retain();
+        remoteAdapter = available;
+      } else
+        remoteAdapter = addRemoteSyncAdapter(
+          storage.repo,
+          server,
+          undefined,
+          resolvedConfig.syncLogger,
+        );
     }
     remoteAdapter.on("peer-candidate", onPeerCandidate);
     remoteAdapter.on("peer-disconnected", onPeerDisconnected);
     remoteAdapter.on("close", onClose);
+    const observed = remoteAdapter;
+    removeServerCallbacks = () => {
+      observed.removeListener("peer-candidate", onPeerCandidate);
+      observed.removeListener("peer-disconnected", onPeerDisconnected);
+      observed.removeListener("close", onClose);
+    };
 
     reconcileRemoteAdapterState();
     startRemoteWatchdog();
@@ -455,16 +475,20 @@ export async function createTodu(
   /**
    * Remove the remote adapter only after all adapter-owned resources are disposed.
    */
-  function stopRemoteAdapter(options: { manual?: boolean } = {}): void {
-    if (!remoteAdapter) return;
+  function stopRemoteAdapter(options: { manual?: boolean; keepAlive?: boolean } = {}): void {
+    if (!remoteAdapter && !borrowedServerPeer) return;
 
     if (options.manual !== false) {
       stopRemoteWatchdog();
     }
 
-    const adapter = remoteAdapter;
-    disposeRemoteSyncAdapter(storage.repo, adapter);
-
+    removeServerCallbacks();
+    removeServerCallbacks = () => {};
+    if (borrowedServerPeer) {
+      borrowedServerPeer.close();
+      borrowedServerPeer = null;
+    } else if (remoteAdapter && !options.keepAlive)
+      disposeRemoteSyncAdapter(storage.repo, remoteAdapter);
     remoteAdapter = null;
     setRemoteState("disconnected", { forceNotify: options.manual !== false });
   }
@@ -472,37 +496,36 @@ export async function createTodu(
   async function preserveServerPeerRoles(): Promise<void> {
     const adapter = remoteAdapter;
     if (!adapter) return;
-    const waitForReady = isRemoteAdapterConnected(adapter);
-    await peerConnections?.detachServer(adapter.url, waitForReady);
-    const source = sharedEnrollmentSource;
-    if (
-      source &&
-      enrollmentSyncUrl(source) === adapter.url &&
-      !peerConnections?.find(source) &&
-      !enrollmentPeer
-    ) {
-      const candidate = createEnrollmentPeerConnection({
-        repo: storage.repo,
-        source,
-        logger: resolvedConfig.syncLogger,
-      });
-      pendingEnrollmentPeers.add(candidate);
-      try {
-        if (waitForReady) await candidate.ready();
-        if (engineClosed) throw new Error("Engine closed during server/source handoff");
-        if (sharedEnrollmentSource !== source) {
-          candidate.close();
-          return;
-        }
-        enrollmentPeer = candidate;
-      } catch (error) {
-        candidate.close();
-        throw error;
-      } finally {
-        pendingEnrollmentPeers.delete(candidate);
-      }
-    }
+    if (borrowedServerPeer) return;
+    const sources = peerConnections?.serverSources(adapter.url) ?? [];
+    const shared = sharedEnrollmentSource;
+    if (shared && enrollmentSyncUrl(shared) === adapter.url && !enrollmentPeer)
+      sources.push(shared);
+    if (!sources.length) return;
+    if (isRemoteAdapterConnected(adapter))
+      for (const source of sources) await readyConfiguredSource(source);
     if (engineClosed) throw new Error("Engine closed during server/peer handoff");
+    const current = peerConnections?.serverSources(adapter.url) ?? [];
+    const source = current[0] ?? (sharedEnrollmentSource === shared ? shared : null);
+    if (!source) return;
+    const connection = createEnrollmentPeerConnection({
+      repo: storage.repo,
+      source,
+      logger: resolvedConfig.syncLogger,
+      adapter,
+    });
+    stopRemoteAdapter({ keepAlive: true });
+    const adopted = peerConnections?.adoptServer(adapter.url, connection) ?? false;
+    if (
+      sharedEnrollmentSource === shared &&
+      shared &&
+      enrollmentSyncUrl(shared) === adapter.url &&
+      !enrollmentPeer
+    )
+      enrollmentPeer = adopted ? connection.retain!() : connection;
+    borrowedServerPeer = connection.retain!();
+    remoteAdapter = adapter;
+    if (!adopted && !enrollmentPeer) connection.close();
   }
 
   function configuredServerUrl(): string | undefined {
@@ -573,6 +596,8 @@ export async function createTodu(
               return {
                 source,
                 ready: (signal) => connection.ready(signal),
+                retain: () => connection.retain!(),
+                getAdapter: () => connection.getAdapter?.() ?? null,
                 isClosed: () => enrollmentPeer !== connection || Boolean(connection.isClosed?.()),
                 close() {
                   if (!connection.isClosed?.()) connection.close();

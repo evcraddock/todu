@@ -158,19 +158,23 @@ describe("explicit roster snapshots", () => {
     manager.reload();
     const other = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
     put({ id: createDeviceId("new"), name: "Not refreshed", endpoint: "http://new.lan" });
-    await manager.detachServer("ws://peer.lan:24377/sync/catalog", true);
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
-    const promoted = vi.mocked(createEnrollmentPeerConnection).mock.results[1].value;
-    expect(promoted.ready).toHaveBeenCalledOnce();
+    const url = "ws://peer.lan:24377/sync/catalog";
+    const promoted = {
+      source: manager.serverSources(url)[0],
+      ready: vi.fn(async () => {}),
+      close: vi.fn(),
+    };
+    expect(manager.adoptServer(url, promoted)).toBe(true);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
     expect(other.close).not.toHaveBeenCalled();
     expect(borrowed.close).toHaveBeenCalledOnce();
-    await manager.detachServer("ws://peer.lan:24377/sync/catalog", true);
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
+    expect(manager.adoptServer(url, promoted)).toBe(false);
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
     manager.close();
     expect(other.close).toHaveBeenCalledOnce();
     expect(promoted.close).toHaveBeenCalledOnce();
   });
-  it("keeps the borrowed role available when a connected-server handoff fails", async () => {
+  it("keeps the borrowed role available when adoption identifies a different source", async () => {
     const { manager, put, existing } = setup();
     const borrowed = {
       source: {} as EnrollmentSource,
@@ -182,18 +186,21 @@ describe("explicit roster snapshots", () => {
     put(peer());
     manager.reload();
     const replacement = {
-      source: {} as EnrollmentSource,
-      ready: vi.fn(async () => {
-        throw new Error("Native handshake failed");
-      }),
+      source: {
+        ...manager.serverSources("ws://peer.lan:24377/sync/catalog")[0],
+        approval: {
+          ...manager.serverSources("ws://peer.lan:24377/sync/catalog")[0].approval,
+          sourceDeviceId: createDeviceId("different"),
+        },
+      },
+      ready: vi.fn(async () => {}),
       close: vi.fn(),
     };
-    vi.mocked(createEnrollmentPeerConnection).mockReturnValueOnce(replacement);
-    await expect(manager.detachServer("ws://peer.lan:24377/sync/catalog", true)).rejects.toThrow(
-      "Native handshake failed",
+    expect(() => manager.adoptServer("ws://peer.lan:24377/sync/catalog", replacement)).toThrow(
+      "different native source identity",
     );
     expect(borrowed.close).not.toHaveBeenCalled();
-    expect(replacement.close).toHaveBeenCalledOnce();
+    expect(replacement.close).not.toHaveBeenCalled();
     expect(manager.reload()).toMatchObject({ ok: true, value: { retained: 1 } });
     manager.close();
   });

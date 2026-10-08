@@ -36,7 +36,6 @@ export function createRosterPeerConnections(options: {
     DeviceId,
     { source: EnrollmentSource; connection: EnrollmentPeerConnection }
   >();
-  const pending = new Set<EnrollmentPeerConnection>();
   let closed = false;
   return {
     reload(): Result<PeerReloadReport> {
@@ -95,38 +94,36 @@ export function createRosterPeerConnections(options: {
         options.logger?.warn("roster peer reload warning", { error });
       return ok(report);
     },
-    async detachServer(url: string, waitForReady: boolean): Promise<void> {
-      const replacements: Array<{
-        id: DeviceId;
-        previous: EnrollmentPeerConnection;
-        connection: EnrollmentPeerConnection;
-      }> = [];
-      try {
-        for (const [id, link] of links) {
-          if (!link.connection.serverBacked || enrollmentSyncUrl(link.source) !== url) continue;
-          const connection = createEnrollmentPeerConnection({
-            repo: options.repo,
-            source: link.source,
-            logger: options.logger,
-          });
-          pending.add(connection);
-          replacements.push({ id, previous: link.connection, connection });
-          if (waitForReady) await connection.ready();
-        }
-        if (closed) throw new Error("Engine closed during server/peer handoff");
-        for (const { id, previous, connection } of replacements) {
-          const link = links.get(id);
-          if (link?.connection === previous) {
-            links.set(id, { source: link.source, connection });
-            previous.close();
-          } else connection.close();
-        }
-      } catch (error) {
-        for (const replacement of replacements) replacement.connection.close();
-        throw error;
-      } finally {
-        for (const replacement of replacements) pending.delete(replacement.connection);
+    serverSources(url: string): EnrollmentSource[] {
+      return [...links.values()]
+        .filter((link) => link.connection.serverBacked && enrollmentSyncUrl(link.source) === url)
+        .map((link) => link.source);
+    },
+    findByUrl(url: string): EnrollmentPeerConnection | undefined {
+      return [...links.values()].find(
+        (link) => !link.connection.isClosed?.() && enrollmentSyncUrl(link.source) === url,
+      )?.connection;
+    },
+    adoptServer(url: string, connection: EnrollmentPeerConnection): boolean {
+      if (closed) throw new Error("Roster connections are closed");
+      if (
+        [...links.values()].some(
+          (link) =>
+            link.connection.serverBacked &&
+            enrollmentSyncUrl(link.source) === url &&
+            link.source.approval.sourceDeviceId !== connection.source.approval.sourceDeviceId,
+        )
+      )
+        throw new Error("Cannot adopt a different native source identity");
+      let adopted = false;
+      for (const [id, link] of links) {
+        if (!link.connection.serverBacked || enrollmentSyncUrl(link.source) !== url) continue;
+        const lease = adopted ? connection.retain!() : connection;
+        links.set(id, { source: link.source, connection: lease });
+        adopted = true;
+        link.connection.close();
       }
+      return adopted;
     },
     find(source: EnrollmentSource): EnrollmentPeerConnection | undefined {
       const link = links.get(source.approval.sourceDeviceId);
@@ -147,8 +144,6 @@ export function createRosterPeerConnections(options: {
       if (closed) return;
       closed = true;
       const errors: unknown[] = [];
-      for (const connection of pending) connection.close();
-      pending.clear();
       for (const link of links.values()) {
         try {
           link.connection.close();

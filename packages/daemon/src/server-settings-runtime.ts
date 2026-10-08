@@ -27,10 +27,22 @@ export function createServerSettingsRuntime(options: {
   getTodu(): Todu | null;
   isRunning(): boolean;
   onConfigured(settings: RemoteSyncSettings): void;
-}): { handlers: DaemonRpcNamespaceHandlers; isBusy(): boolean } {
+}): {
+  handlers: DaemonRpcNamespaceHandlers;
+  isBusy(): boolean;
+  activate(todu: Todu, publish: () => void): Promise<void>;
+} {
   let settings = { ...options.initialSettings };
   let operation: Promise<unknown> = Promise.resolve();
   let pending = 0;
+  function enqueue<T>(action: () => Promise<T>): Promise<T> {
+    pending++;
+    const next = operation.then(action, action);
+    operation = next;
+    return next.finally(() => {
+      pending--;
+    });
+  }
   function status() {
     return {
       configPath: options.configPath,
@@ -161,20 +173,21 @@ export function createServerSettingsRuntime(options: {
   }
   return {
     isBusy: () => pending > 0,
+    activate: (todu, publish) =>
+      enqueue(async () => {
+        const result = await todu.sync.configureServer(settings);
+        if (!result.ok)
+          throw new Error(
+            `Cannot apply current server settings before enrollment activation: ${JSON.stringify(result.error)}`,
+          );
+        if (!options.isRunning())
+          throw new Error("Daemon stopped before server settings activation");
+        publish();
+      }),
     handlers: {
       sync: {
         serverStatus: (request) => createProtocolSuccessFrame(request.id, status()),
-        serverConfigure: (request) => {
-          pending++;
-          const next = operation.then(
-            () => configure(request),
-            () => configure(request),
-          );
-          operation = next;
-          return next.finally(() => {
-            pending--;
-          });
-        },
+        serverConfigure: (request) => enqueue(() => configure(request)),
       },
     },
   };

@@ -9,8 +9,11 @@ import {
   type DeviceId,
   type EnrollmentClientStatus,
   type EnrollmentRequest,
+  err,
   type Project,
+  storageError,
 } from "@todu/core";
+import * as engine from "@todu/engine";
 import {
   beginCatalogJoinSwitch,
   createEnrollmentPeerConnection,
@@ -19,6 +22,7 @@ import {
   readEnrollmentState,
 } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 import { invokeDaemonMethod } from "../../cli/src/daemon-transport.js";
 import * as engineStorage from "../../engine/src/storage.js";
 import { createPersistentRepo } from "../../engine/src/storage.js";
@@ -105,6 +109,87 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
             : [],
       );
   }
+
+  it.each([
+    "disable",
+    "enable",
+    "repoint",
+    "failed apply",
+    "shutdown",
+  ])("coordinates %s with barrier-held pristine engine construction", async (action) => {
+    const receiving = await source();
+    const clientPath = prepare();
+    const configPath = path.join(clientPath, "config.yaml");
+    const settings = { server: "ws://127.0.0.1:1", enabled: action === "disable" };
+    fs.writeFileSync(
+      configPath,
+      `sync:\n  remote:\n    server: ${settings.server}\n    enabled: ${settings.enabled}\n`,
+    );
+    const joining = runtime("client", { configPath, remoteSyncSettings: settings });
+    await joining.start();
+    const release = Promise.withResolvers<void>();
+    let constructed: engine.Todu | undefined;
+    const create = engine.createTodu;
+    vi.spyOn(engine, "createTodu").mockImplementation(async (config) => {
+      const created = await create(config);
+      if (config.storagePath === clientPath && config.joinedStorage) {
+        constructed = created;
+        await release.promise;
+      }
+      return created;
+    });
+    try {
+      const requested = await value<EnrollmentClientStatus>(joining, "sync.enroll", {
+        endpoint: receiving.endpoint,
+      });
+      await value(receiving.instance, "sync.enrollmentApprove", { requestId: requested.requestId });
+      await expect.poll(() => Boolean(constructed), { timeout: 15000 }).toBe(true);
+      expect(joining.status().catalogId).toBeUndefined();
+      const update =
+        action === "disable"
+          ? { enabled: false }
+          : action === "enable"
+            ? { enabled: true }
+            : { server: "ws://127.0.0.1:2" };
+      const expected = { ...settings, ...update };
+      expect(
+        await value(joining, "sync.serverConfigure", { settings: update, configPath }),
+      ).toMatchObject({ ...expected, running: false });
+      expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
+      expect(joining.config().remoteSyncSettings).toEqual(expected);
+      if (action === "failed apply") {
+        vi.spyOn(constructed!.sync, "configureServer").mockResolvedValueOnce(
+          err(storageError("Injected activation settings failure")),
+        );
+        const close = vi.spyOn(constructed!, "close");
+        release.resolve();
+        await expect.poll(() => close.mock.calls.length, { timeout: 15000 }).toBe(1);
+        expect(joining.status().catalogId).toBeUndefined();
+        expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+      } else if (action === "shutdown") {
+        const stop = joining.stop();
+        release.resolve();
+        await stop;
+        expect(joining.status().catalogId).toBeUndefined();
+        expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+      } else {
+        release.resolve();
+        await active(joining, receiving.instance.status().catalogId!);
+        expect(await value(joining, "sync.serverStatus")).toMatchObject({
+          ...expected,
+          running: expected.enabled,
+        });
+        expect(constructed!.sync.serverStatus()).toMatchObject({
+          ...expected,
+          running: expected.enabled,
+        });
+      }
+      expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
+      expect(joining.config().remoteSyncSettings).toEqual(expected);
+    } finally {
+      release.resolve();
+    }
+  });
 
   it("keeps pristine startup inert, then attaches the approved catalog and replicates both ways without enabling workers", async () => {
     const receiving = await source();

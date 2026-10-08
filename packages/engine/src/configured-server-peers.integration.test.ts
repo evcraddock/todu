@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { Repo } from "@automerge/automerge-repo/slim";
+import { Repo } from "@automerge/automerge-repo/slim";
 import type { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { createDeviceId, deviceRegistryKey } from "@todu/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,16 +36,32 @@ vi.mock("./sync-client.js", async (original) => ({
 vi.mock("./enrollment-peer.js", async (original) => ({
   ...(await original<typeof import("./enrollment-peer.js")>()),
   createEnrollmentPeerConnection: vi.fn(
-    (options: { source: import("./enrollment-peer.js").EnrollmentSource }) => {
+    (options: {
+      source: import("./enrollment-peer.js").EnrollmentSource;
+      adapter?: WebSocketClientAdapter;
+    }) => {
       let closed = false;
-      return {
-        source: options.source,
-        ready: vi.fn(async () => {}),
-        close: vi.fn(() => {
-          closed = true;
-        }),
-        isClosed: () => closed,
-      };
+      let references = 0;
+      function lease(): import("./enrollment-peer.js").EnrollmentPeerConnection {
+        references++;
+        let released = false;
+        return {
+          source: options.source,
+          ready: vi.fn(async () => {}),
+          retain: lease,
+          getAdapter: () => (closed ? null : (options.adapter ?? null)),
+          close: vi.fn(() => {
+            if (released) return;
+            released = true;
+            if (--references === 0) {
+              closed = true;
+              options.adapter?.disconnect();
+            }
+          }),
+          isClosed: () => closed || released,
+        };
+      }
+      return lease();
     },
   ),
 }));
@@ -69,6 +85,9 @@ describe("configured server and cached peer role independence", () => {
     const storage = await initBootstrapStorage(directory);
     const catalogId = storage.catalog.documentId;
     const peer = createDeviceId("fixture-peer");
+    vi.spyOn(Repo.prototype, "getStorageIdOfPeer").mockReturnValue(
+      peer as ReturnType<Repo["getStorageIdOfPeer"]>,
+    );
     const endpoint = "http://127.0.0.1:1";
     storage.catalog.change((doc) => {
       doc[deviceRegistryKey(peer)] = { id: peer, name: "Fixture", endpoint };
@@ -101,10 +120,12 @@ describe("configured server and cached peer role independence", () => {
           )
         ).ok,
       ).toBe(true);
-    expect(adapter.socket?.readyState).toBe(3);
+    expect(adapter.socket?.readyState).toBe(1);
     expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
     const direct = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
-    expect(direct.ready).toHaveBeenCalledOnce();
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ adapter }),
+    );
     expect(direct.close).not.toHaveBeenCalled();
     expect(await todu!.sync.reloadPeers()).toMatchObject({
       ok: true,
@@ -147,6 +168,9 @@ describe("configured server and cached peer role independence", () => {
     const catalogId = storage.catalog.documentId;
     const deviceId = createDeviceId((await storage.repo.storageId())!);
     const sourceDeviceId = createDeviceId("fixture-source");
+    vi.spyOn(Repo.prototype, "getStorageIdOfPeer").mockReturnValue(
+      sourceDeviceId as ReturnType<Repo["getStorageIdOfPeer"]>,
+    );
     const endpoint = "http://127.0.0.1:1";
     storage.catalog.change((doc) => {
       doc[deviceRegistryKey(sourceDeviceId)] = { id: sourceDeviceId, name: "Source", endpoint };
