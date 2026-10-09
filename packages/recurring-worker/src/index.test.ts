@@ -1,9 +1,18 @@
+import { readFileSync } from "node:fs";
 import { ok } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RECURRING_WORKER_INTERVAL_MS, workerPlugin } from "./index.js";
 
 describe("recurring-worker plugin", () => {
+  it("reports the installed package version", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+
+    expect(workerPlugin.manifest.version).toBe(manifest.version);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
