@@ -371,7 +371,12 @@ describe("daemon vs engine parity", () => {
       params: {},
     });
 
-    expect(rpcStatus.result).toEqual(engineStatus);
+    // Only activated daemon engines own automatic endpoint publication.
+    expect(engineStatus.listener.publication).toBeUndefined();
+    expect(rpcStatus.result).toEqual({
+      ...engineStatus,
+      listener: { ...engineStatus.listener, publication: { state: "unavailable" } },
+    });
 
     await engine.sync.start();
     await engine.sync.stop();

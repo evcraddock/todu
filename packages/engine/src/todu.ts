@@ -273,6 +273,8 @@ export interface SyncListenerStatus {
   port?: number;
   syncPath?: string;
   error?: string;
+  /** Publication is metadata, not proof of remote connection or synchronization. */
+  publication?: import("./listener-publication.js").ListenerPublicationStatus;
 }
 
 export interface SyncStatus {
@@ -380,6 +382,8 @@ export interface ToduInternalTools {
     attachSource(source: EnrollmentSource, signal?: AbortSignal): Promise<Result<void>>;
   };
   syncRuntime: {
+    /** Activate publication/roster observation only after the daemon commits its active dataset. */
+    activateDeviceNetworking(): Promise<Result<import("./peer-connections.js").PeerReloadReport>>;
     /** Complete native local storage writes; does not wait for remote replication. */
     flush(): Promise<void>;
     contentRecovery: SyncContentRecoveryStore;

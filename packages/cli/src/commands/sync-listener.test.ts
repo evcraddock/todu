@@ -103,6 +103,57 @@ describe("LAN listener CLI", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("reuses a saved advertised endpoint and persists a normalized explicit override without RPC", async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      sync: { listener: { bind: "0.0.0.0", advertise: "https://old.lan/" } },
+    });
+    const { run, invoke } = setup();
+    await run(["sync", "listener", "enable"]);
+    expect(saveSyncListenerConfig).toHaveBeenLastCalledWith(
+      { enabled: true, bind: "0.0.0.0", port: 24377, advertise: "https://old.lan" },
+      "/test/config.yaml",
+    );
+    await run(["sync", "listener", "enable", "--advertise", "http://new.lan:24400/"]);
+    expect(saveSyncListenerConfig).toHaveBeenLastCalledWith(
+      { enabled: true, bind: "0.0.0.0", port: 24377, advertise: "http://new.lan:24400" },
+      "/test/config.yaml",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+    expect(os.networkInterfaces).not.toHaveBeenCalled();
+  });
+  it.each([
+    "http://0.0.0.0:24377",
+    "http://[::]:24377",
+    "http://peer.lan/path",
+    "",
+  ])("refuses unusable advertised override %s without saving or probing", async (advertise) => {
+    const { run } = setup();
+    await run(["sync", "listener", "enable", "--advertise", advertise]);
+    expect(process.exitCode).toBe(1);
+    expect(saveSyncListenerConfig).not.toHaveBeenCalled();
+    expect(os.networkInterfaces).not.toHaveBeenCalled();
+  });
+  it("renders publication failures separately from a successfully listening socket", async () => {
+    const { run, invoke, log } = setup();
+    invoke.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        listener: {
+          state: "listening",
+          bind: "127.0.0.1",
+          port: 24400,
+          syncPath: "/sync/current",
+          publication: { state: "error", error: "Receipt write failed" },
+        },
+        local: { mode: "standalone" },
+        remote: { state: "disconnected" },
+      },
+    } as Awaited<ReturnType<typeof invoke>>);
+    await run(["sync", "listener", "status"]);
+    expect(log.mock.calls.flat().join(" ")).toContain("LAN Listener: listening");
+    expect(log.mock.calls.flat().join(" ")).toContain("Publication:  error");
+    expect(log.mock.calls.flat().join(" ")).toContain("Receipt write failed");
+  });
   it("detects a missing address while preserving the saved port", async () => {
     vi.mocked(loadConfig).mockReturnValue({ sync: { listener: { port: 24400 } } });
     const { run } = setup();
@@ -156,7 +207,9 @@ describe("LAN listener CLI", () => {
       ?.helpInformation();
     expect(help).toContain("automatic address selection");
     expect(help).toContain("optional literal IPv4/IPv6 override");
-    expect(help).toContain("saved port or default: 24377");
+    expect(help?.replace(/\s+/g, " ")).toContain("saved port or default: 24377");
+    expect(help).toContain("--advertise <endpoint>");
+    expect(help).toContain("published automatically after restart");
   });
 
   it("renders IPv6 bind addresses with unambiguous port formatting", async () => {

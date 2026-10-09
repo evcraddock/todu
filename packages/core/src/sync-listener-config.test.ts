@@ -22,6 +22,32 @@ describe("LAN sync listener configuration", () => {
     });
   });
 
+  it("normalizes an explicit advertised endpoint independently of the bind address", () => {
+    expect(
+      resolveSyncListenerConfig({
+        enabled: true,
+        bind: "0.0.0.0",
+        advertise: "https://mini.lan:24400/",
+      }),
+    ).toEqual({
+      ok: true,
+      value: { bind: "0.0.0.0", port: 24377, advertise: "https://mini.lan:24400" },
+    });
+  });
+
+  it.each([
+    "",
+    "http://0.0.0.0:24377",
+    "http://[::]:24377",
+    "http://peer.lan/path",
+    "http://user:secret@peer.lan",
+    "ws://peer.lan:24377",
+  ])("rejects an unusable advertised override: %s", (advertise) => {
+    expect(
+      resolveSyncListenerConfig({ enabled: true, bind: "127.0.0.1", advertise }),
+    ).toMatchObject({ ok: false, error: { field: "sync.listener.advertise" } });
+  });
+
   it.each([
     "127.0.0.1",
     "::1",

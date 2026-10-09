@@ -21,6 +21,7 @@ import {
   registerHabitProcessor,
   type Storage,
   type Todu,
+  type ToduWithInternalTools,
 } from "@todu/engine";
 import { createCoreNamespaceHandlers, mergeNamespaceHandlerSets } from "./core-rpc-adapters.js";
 import { createEnrollmentRuntime } from "./enrollment-runtime.js";
@@ -846,6 +847,16 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     });
   }
 
+  async function activateDeviceNetworking(instance: Todu): Promise<void> {
+    const result = await (
+      instance as ToduWithInternalTools
+    ).__internal.syncRuntime.activateDeviceNetworking();
+    if (!result.ok)
+      runtimeLogger.warn("Device networking activation failed; local operations remain available", {
+        error: result.error,
+      });
+  }
+
   async function startInternal(): Promise<DaemonRuntimeStatus> {
     runtimeStatus.state = "starting";
     runtimeLogger.info("daemon runtime start requested", {
@@ -867,9 +878,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       runtimeStatus.transport = endpoint;
 
       if (startedTodu) {
-        const reloaded = await startedTodu.sync.reloadPeers();
-        if (!reloaded.ok)
-          runtimeLogger.warn("roster peer startup failed", { error: reloaded.error });
+        await activateDeviceNetworking(startedTodu);
         await loadConfiguredPluginWorkers();
         attachEventSubscriptions(startedTodu);
         startRegisteredWorkers();
@@ -1123,6 +1132,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       attachEventSubscriptions(joinedTodu);
       startRegisteredWorkers();
       tx.commit();
+      await activateDeviceNetworking(joinedTodu);
 
       return {
         mode: "join",
@@ -1140,6 +1150,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         todu = restoredTodu;
         runtimeStatus.catalogId = restoredTodu.sync.getCatalogId();
         restoredCatalogId = runtimeStatus.catalogId;
+        await activateDeviceNetworking(restoredTodu);
         attachEventSubscriptions(restoredTodu);
         startRegisteredWorkers();
       } catch (restoreError) {

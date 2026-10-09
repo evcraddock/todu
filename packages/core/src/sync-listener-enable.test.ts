@@ -80,6 +80,21 @@ describe("explicit listener enablement address resolution", () => {
     });
   });
 
+  it("preserves a saved advertisement through detection and prefers an explicit advertised override", async () => {
+    interfaces("192.168.4.12");
+    expect(
+      await resolveSyncListenerEnableConfig({ saved: { advertise: "https://saved.lan:24400" } }),
+    ).toEqual({
+      ok: true,
+      value: { bind: "192.168.4.12", port: 24377, advertise: "https://saved.lan:24400" },
+    });
+    expect(
+      await resolveSyncListenerEnableConfig({
+        saved: { advertise: "https://saved.lan:24400" },
+        advertise: "http://explicit.lan:24500/",
+      }),
+    ).toMatchObject({ ok: true, value: { advertise: "http://explicit.lan:24500" } });
+  });
   it("prefers IPv4 on a dual-stack LAN and deduplicates addresses", async () => {
     interfaces("fd12::abcd", "10.42.1.2", "10.42.1.2");
     expect(await resolveSyncListenerEnableConfig({})).toMatchObject({
