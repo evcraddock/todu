@@ -9,7 +9,7 @@ import {
   type Result,
   type ValidationError,
 } from "./types.js";
-import { validateActorDisplayName, validateActorId } from "./validation.js";
+import { validateActorDisplayName, validateActorId, validateDeviceEndpoint } from "./validation.js";
 
 const CURRENT_CONFIG_DIRNAME = "todu";
 
@@ -90,11 +90,14 @@ export interface SyncListenerConfig {
   bind?: string;
   /** Integer from 1 through 65535; zero/ephemeral binding is not supported. */
   port?: number;
+  /** Optional reachable HTTP(S) base endpoint override; never changes binding. */
+  advertise?: string;
 }
 
 export interface ResolvedSyncListenerConfig {
   bind: string;
   port: number;
+  advertise?: string;
 }
 
 export function resolveSyncListenerConfig(
@@ -131,6 +134,22 @@ export function resolveSyncListenerConfig(
       field: "sync.listener.port",
       message: "Expected an integer port from 1 through 65535; no automatic port substitution",
     });
+  }
+  if (config.advertise !== undefined) {
+    const invalid = validateDeviceEndpoint(config.advertise);
+    if (
+      typeof config.advertise !== "string" ||
+      invalid ||
+      ["0.0.0.0", "[::]"].includes(new URL(config.advertise).hostname)
+    ) {
+      return err({
+        type: "validation",
+        field: "sync.listener.advertise",
+        message:
+          "Expected a reachable HTTP(S) base endpoint without credentials, path, query, fragment, or wildcard address",
+      });
+    }
+    return ok({ bind: config.bind, port, advertise: new URL(config.advertise).origin });
   }
   return ok({ bind: config.bind, port });
 }

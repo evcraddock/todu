@@ -20,6 +20,7 @@ export function resolveEnrollmentEndpoint(options: {
   const { bind, port } = configured.value;
   const endpoint =
     options.override ??
+    configured.value.advertise ??
     options.published ??
     `http://${bind.includes(":") ? `[${bind}]` : bind}:${port}`;
   const error = validateDeviceEndpoint(endpoint);

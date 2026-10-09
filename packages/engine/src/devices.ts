@@ -96,6 +96,7 @@ function cloneDevice(device: Device): Device {
 export function createDeviceNamespace(options: {
   catalog: DocHandle<CatalogDocument>;
   localDeviceId?: DeviceId;
+  setLocalEndpoint?: (endpoint: string | null) => Promise<Result<Device>>;
 }): DeviceNamespace {
   const { catalog, localDeviceId } = options;
 
@@ -136,6 +137,8 @@ export function createDeviceNamespace(options: {
       if (error) return err(error);
       const device = getDevice(id);
       if (!device.ok) return device;
+      if (id === localDeviceId && options.setLocalEndpoint)
+        return options.setLocalEndpoint(endpoint);
       catalog.change((doc) => {
         if (endpoint === null) delete doc[deviceRegistryKey(id)].endpoint;
         else doc[deviceRegistryKey(id)].endpoint = new URL(endpoint).origin;

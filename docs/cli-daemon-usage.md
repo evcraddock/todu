@@ -156,7 +156,7 @@ todu device remove <enrolled-storage-id>
 
 Naming and endpoint commands default to the daemon's automatically supplied persistent native Repo storage ID. Explicit IDs target another existing registry entry; removal requires an explicit ID. IDs are not transient connection peer IDs, physical hardware identities, or authenticated credentials. Listing does not establish that a device is online or fully synchronized.
 
-Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration. Daemons read advertised roster endpoints when their dataset becomes active; use `todu sync peers reload` after roster changes arrive to refresh running connections.
+Names default to the hostname and can be changed to a readable name of up to 100 characters. Endpoints accept HTTP(S) base URLs without credentials, paths, queries, or fragments. Exactly one of `--url` or `--clear` is required. An endpoint is shared metadata only: it cannot enable a listener, change its bind interfaces, or alter local server/worker settings. LAN listening requires separate explicit local configuration. Activated daemons automatically reconcile received roster endpoint/removal changes through the existing native peer manager. `todu sync peers reload` remains available for diagnosis, not required for ordinary setup. Local manual URL updates/clears preserve that deliberate intent across listener restarts.
 
 Existing replicas initialize membership idempotently in place, preserving catalog and native storage IDs, data paths, configured server behavior, and worker assignments. Pending join storage does not self-enroll, even after restart. There is no generic add command: new replica membership requires the local approval-based enrollment flow below. An existing `sync join` operation is not membership approval.
 
@@ -193,7 +193,7 @@ Selection uses actual local interface information on Linux and Apple Silicon mac
 
 Detection happens only during explicit enablement when no saved/overridden bind exists. Daemon startup and enrollment reuse the persisted address; there is no address watcher or silent rebind after network changes. An unavailable saved address requires an explicit override and restart. Explicit all-interface addresses (`0.0.0.0` or `::`) remain supported but expose every matching interface; IPv6 bindings do not implicitly listen on IPv4. Automatic selection and private addressing do not establish network trust.
 
-Configuration commands preserve other settings and YAML comments. They do **not** change a running listener or restart the daemon: restart explicitly to apply, using the same configuration context as the daemon. `--config` selects the file to edit; a service-managed daemon still reads the configuration selected by its service. Registry endpoint metadata is not automatically edited.
+Configuration commands preserve other settings and YAML comments. They do **not** change a running listener or restart the daemon: restart explicitly to apply, using the same configuration context as the daemon. `--config` selects the file to edit; a service-managed daemon still reads the configuration selected by its service. Saving configuration alone does not publish metadata. After successful binding and committed dataset activation, the daemon automatically publishes its actual HTTP base endpoint to the existing native local roster entry; it never reenrolls missing/removed entries or advertises provisional setup. Publication failures are reported separately without disabling local work.
 
 Disable listening with:
 
@@ -208,7 +208,11 @@ The native WebSocket endpoint is `ws://<address>:<port>/sync/<current-catalog-id
 
 **Trusted LAN only:** HTTP/WebSocket transport is unencrypted and unauthenticated. The registry is not an access-control list; any reachable peer knowing the catalog path can attempt native replication. Restrict exposure through the operator's network configuration. No authentication, encrypted pairing, internet traversal, or per-document sharing filter is provided.
 
-This supplies incoming transport for enrollment and native replication. Listener enablement alone does not publish an address or refresh other daemons' target snapshots. Publish a reachable endpoint and explicitly reload peers after the roster update reaches them. Do not retire a working server until actual direct-peer operation has been verified.
+For established same-dataset replicas, normal setup is enable, explicit restart, then status. No manual IP URL, endpoint setter, reenrollment, or peer reload is normally needed. Keep an existing server/source transport available long enough for endpoint metadata to reach other replicas; this is not discovery of isolated peers. Already-running peers automatically consume relevant roster changes. Do not retire a working server until separately approved actual direct-peer operation has been verified.
+
+An optional `sync listener enable --advertise https://mini.lan:24400` saves a reachable HTTP(S) base endpoint override independently of binding. Precedence is saved explicit advertisement, deliberate published metadata, then actual concrete binding. Wildcards are never automatically advertised. Dataset/native-ID-scoped local ownership lets the daemon update/withdraw only its automatic endpoints; manual URLs and deliberate clears remain authoritative unless an explicit saved advertisement is applied. Use listener disable plus restart for temporary automatic withdrawal; `device endpoint --clear` deliberately suppresses automatic publication. Stopping a configured daemon retains offline endpoint metadata for reconnect.
+
+`sync listener status` also reports publication as `published`, `manual`, `suppressed`, `unavailable`, or `error`, with endpoint/error details. A listening socket, published endpoint, and successful connection are distinct observations; none alone proves complete synchronization.
 
 ## Optional sync server controls
 
@@ -228,7 +232,7 @@ The connected daemon owns the update to its actual configuration file. Use its m
 
 Status separates effective configured enablement (including environment precedence), runtime server-role intent, and observed server connection state. It is not dataset readiness or remote durability evidence. Existing `sync start|stop|restart` remains runtime-only and does not save a new policy; an explicit runtime start may temporarily run a retained disabled destination until restart. Directly editing YAML still requires a daemon restart.
 
-Server disable/repoint/loss preserves independent peers and listening. A roster/source role that borrowed the server transport is handed to the existing native peer connection handling using its already-selected endpoint, not a fresh roster reconciliation. A live shared channel is identity-checked and retained in place with independent role lifetimes, not replaced by an overlapping socket. Re-enabling the same configured destination shares that native channel; only the final role release disposes it. Validation failures are reported without retiring the existing channel. If the same destination also serves as a direct peer or approved source, disabling the server role does **not** stop all traffic to that destination. No new retry scheduler or background roster watcher is introduced.
+Server disable/repoint/loss preserves independent peers and listening. A roster/source role that borrowed the server transport is handed to the existing native peer connection handling using its already-selected endpoint, not a fresh roster reconciliation. A live shared channel is identity-checked and retained in place with independent role lifetimes, not replaced by an overlapping socket. Re-enabling the same configured destination shares that native channel; only the final role release disposes it. Validation failures are reported without retiring the existing channel. If the same destination also serves as a direct peer or approved source, disabling the server role does **not** stop all traffic to that destination. No new retry scheduler is introduced; relevant roster metadata is automatically reconciled independently of configured-server role changes.
 
 This is not a global pause or listener shutdown. Do not retire a real server until actual direct-peer operation is verified; retain its configuration for fallback. Local tests and mocks do not establish real-device synchronization or failure recovery.
 
@@ -241,7 +245,7 @@ todu sync peers reload
 todu --format json sync peers reload
 ```
 
-Reload rereads the local shared roster without restarting. It retains unchanged links, adds targets, and disposes removed/replaced managed connections. Roster edits do not automatically change running connections. The report counts target changes, not online peers or synchronized documents. Reload does not edit the local listener, advertised address, server configuration, or worker assignments. Removal is not transport revocation, and `sync stop` is not a global peer pause.
+Reload rereads the local shared roster without restarting. It retains unchanged links, adds targets, and disposes removed/replaced managed connections. Relevant received roster endpoint/removal changes automatically trigger coalesced reconciliation after dataset activation; unrelated catalog/name changes do not. The report counts target changes, not online peers or synchronized documents. Reload does not edit the local listener, advertised address, server configuration, or worker assignments. Removal is not transport revocation, and `sync stop` is not a global peer pause.
 
 ## Locally approved device enrollment
 
@@ -260,7 +264,7 @@ todu sync enrollment status
 
 Preparation creates only machine-local pending state, not a default catalog. Pending startup obtains/persists the native replica ID automatically but has no live dataset or document connection and runs no plugins, workers, or host processing. Domain commands remain unavailable until approval and valid catalog attachment. If a daemon/service already started normally, even an empty dataset is initialized and cannot be replaced by this command. Do not delete existing storage to force pristine eligibility.
 
-Enrollment automatically supplies the local advertised endpoint from its published roster metadata or saved concrete listener address/port, including an address automatically selected by `sync listener enable`. No extra address argument is needed normally. A wildcard binding requires a published endpoint or an explicit override:
+Enrollment automatically supplies the local advertised endpoint from a saved explicit listener advertisement, published roster metadata, or saved concrete listener address/port, including an address automatically selected by `sync listener enable`. Request-specific `--advertise` overrides take first precedence. No extra address argument is needed normally. A wildcard binding requires a published endpoint or an explicit override:
 
 ```bash
 todu sync enroll http://mac-mini.lan:24377 --advertise http://laptop.lan:24377

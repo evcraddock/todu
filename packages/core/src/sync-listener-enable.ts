@@ -13,6 +13,7 @@ export async function resolveSyncListenerEnableConfig(options: {
   bind?: string;
   port?: number;
   saved?: SyncListenerConfig;
+  advertise?: string;
 }): Promise<Result<ResolvedSyncListenerConfig, ValidationError>> {
   const bind = options.bind !== undefined ? options.bind : options.saved?.bind;
   const port = options.port !== undefined ? options.port : options.saved?.port;
@@ -20,13 +21,14 @@ export async function resolveSyncListenerEnableConfig(options: {
     enabled: true,
     bind: bind === undefined ? "127.0.0.1" : bind,
     port,
+    advertise: options.advertise !== undefined ? options.advertise : options.saved?.advertise,
   });
   if (!validated.ok) return validated;
   if (!validated.value) throw new Error("Explicit listener enablement resolved as disabled");
   if (bind !== undefined) return ok(validated.value);
   const detected = await detectLanAddress();
   if (!detected.ok) return detected;
-  return ok({ bind: detected.value, port: validated.value.port });
+  return ok({ ...validated.value, bind: detected.value });
 }
 
 async function detectLanAddress(): Promise<Result<string, ValidationError>> {

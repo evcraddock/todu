@@ -5,6 +5,7 @@ import {
   deviceRegistryKey,
   err,
   ok,
+  type Result,
   resolveSyncListenerConfig,
   storageError,
   updateRemoteSyncSettings,
@@ -24,8 +25,9 @@ import {
 import { createHabitNamespace } from "./habits.js";
 import { createIntegrationNamespace } from "./integrations.js";
 import { createLabelNamespace } from "./labels.js";
+import { createListenerPublication } from "./listener-publication.js";
 import { createNoteNamespaces } from "./notes.js";
-import { createRosterPeerConnections } from "./peer-connections.js";
+import { createRosterPeerConnections, type PeerReloadReport } from "./peer-connections.js";
 import { createProjectNamespace } from "./projects.js";
 import { createRecurringNamespace } from "./recurring.js";
 import {
@@ -253,11 +255,21 @@ export async function createTodu(
   }
 
   let syncListener: SyncListener | null = null;
+  let networkingActivated = false;
+  let publication: ReturnType<typeof createListenerPublication> | null = null;
+  let activation: Promise<Result<PeerReloadReport>> | null = null;
+  let stopRosterObservation = (): void => {};
   const listenerConfig = resolveSyncListenerConfig(config.syncListener);
   const reportListenerError = (message: string): void => {
     syncStatus.listener = { ...syncStatus.listener, state: "error", error: message };
     resolvedConfig.syncLogger?.warn("LAN sync listener unavailable", { error: message });
     notifySyncStatusListeners();
+    if (networkingActivated && !engineClosed)
+      void applyListenerPublication().catch((error: unknown) =>
+        resolvedConfig.syncLogger?.warn("Cannot withdraw unavailable listener endpoint", {
+          error: String(error),
+        }),
+      );
   };
   if (!listenerConfig.ok) {
     reportListenerError(
@@ -554,6 +566,58 @@ export async function createTodu(
   const noteNamespace = noteNamespaces.namespace;
 
   const localStorageId = await storage.repo.storageId();
+  if (config.registeredPeerConnections && !storage.ephemeral && localStorageId) {
+    publication = createListenerPublication({
+      repo: storage.repo,
+      catalog: storage.catalog,
+      localId: createDeviceId(localStorageId),
+    });
+  }
+
+  async function applyListenerPublication(): Promise<void> {
+    if (!publication || engineClosed) return;
+    const result = await publication.apply(syncStatus.listener, config.syncListener);
+    syncStatus.listener.publication = result.ok
+      ? result.value
+      : { state: "error", error: result.error.message };
+    if (!result.ok)
+      resolvedConfig.syncLogger?.warn(
+        "Listener endpoint publication failed; local operations remain available",
+        { error: result.error.message },
+      );
+    notifySyncStatusListeners();
+  }
+
+  function activateDeviceNetworking(): Promise<Result<PeerReloadReport>> {
+    if (engineClosed || !peerConnections || !publication)
+      return Promise.resolve(
+        err(storageError("Device networking requires an active daemon-owned persistent engine")),
+      );
+    activation ??= (async () => {
+      await applyListenerPublication();
+      if (engineClosed)
+        return err(storageError("Engine closed during device networking activation"));
+      networkingActivated = true;
+      stopRosterObservation = peerConnections!.observe(() => {
+        void todu.sync
+          .reloadPeers()
+          .then((result) => {
+            if (!result.ok && !engineClosed)
+              resolvedConfig.syncLogger?.warn("Automatic roster reconciliation failed", {
+                error: result.error,
+              });
+          })
+          .catch((error: unknown) =>
+            resolvedConfig.syncLogger?.warn("Automatic roster reconciliation failed", {
+              error: String(error),
+            }),
+          );
+      });
+      return todu.sync.reloadPeers();
+    })();
+    return activation;
+  }
+
   async function readyConfiguredSource(
     source: import("./enrollment-peer.js").EnrollmentSource,
     signal?: AbortSignal,
@@ -672,6 +736,7 @@ export async function createTodu(
         },
       },
       syncRuntime: {
+        activateDeviceNetworking,
         flush: () => storage.repo.flush(),
         contentRecovery: createSyncContentRecoveryStore({
           storagePath: resolvedConfig.storagePath,
@@ -688,6 +753,20 @@ export async function createTodu(
       catalog: storage.catalog,
       localDeviceId:
         !storage.ephemeral && localStorageId ? createDeviceId(localStorageId) : undefined,
+      setLocalEndpoint: publication
+        ? async (endpoint) => {
+            const result = await publication!.setEndpoint(endpoint);
+            if (networkingActivated) {
+              syncStatus.listener.publication = result.ok
+                ? result.value.endpoint
+                  ? { state: "manual", endpoint: result.value.endpoint }
+                  : { state: "suppressed" }
+                : { state: "error", error: result.error.message };
+              notifySyncStatusListeners();
+            }
+            return result;
+          }
+        : undefined,
     }),
     actor: createActorNamespace(storage.catalog),
     project: createProjectNamespace(storage.catalog),
@@ -748,35 +827,38 @@ export async function createTodu(
             return err(storageError(`Cannot configure the server path: ${String(error)}`));
           }
         }),
-      reloadPeers: async () => {
-        try {
-          if (!peerConnections)
-            return err(
-              validationError(
-                "sync.peers",
-                "Roster connections require a daemon-owned persistent engine",
-              ),
-            );
-          const source = enrollmentPeer?.source ?? sharedEnrollmentSource;
-          if (source) {
-            const device =
-              storage.catalog.doc()?.[deviceRegistryKey(source.approval.sourceDeviceId)];
-            if (
-              device?.removed ||
-              (device?.endpoint &&
-                !validateDeviceEndpoint(device.endpoint) &&
-                new URL(device.endpoint).origin !== new URL(source.endpoint).origin)
-            ) {
-              enrollmentPeer?.close();
-              enrollmentPeer = null;
-              sharedEnrollmentSource = null;
+      reloadPeers: () =>
+        controlServer(async () => {
+          try {
+            if (engineClosed)
+              return err(storageError("Cannot reload roster peers after engine shutdown"));
+            if (!peerConnections)
+              return err(
+                validationError(
+                  "sync.peers",
+                  "Roster connections require a daemon-owned persistent engine",
+                ),
+              );
+            const source = enrollmentPeer?.source ?? sharedEnrollmentSource;
+            if (source) {
+              const device =
+                storage.catalog.doc()?.[deviceRegistryKey(source.approval.sourceDeviceId)];
+              if (
+                device?.removed ||
+                (device?.endpoint &&
+                  !validateDeviceEndpoint(device.endpoint) &&
+                  new URL(device.endpoint).origin !== new URL(source.endpoint).origin)
+              ) {
+                enrollmentPeer?.close();
+                enrollmentPeer = null;
+                sharedEnrollmentSource = null;
+              }
             }
+            return peerConnections.reload();
+          } catch (error) {
+            return err(storageError(`Cannot reload roster peers: ${String(error)}`));
           }
-          return peerConnections.reload();
-        } catch (error) {
-          return err(storageError(`Cannot reload roster peers: ${String(error)}`));
-        }
-      },
+        }),
       status: () => {
         reconcileRemoteAdapterState();
         return syncStatus;
@@ -805,6 +887,9 @@ export async function createTodu(
     },
     async close() {
       engineClosed = true;
+      stopRosterObservation();
+      await activation;
+      await publication?.close();
       peerConnections?.close();
       for (const peer of pendingEnrollmentPeers) peer.close();
       pendingEnrollmentPeers.clear();

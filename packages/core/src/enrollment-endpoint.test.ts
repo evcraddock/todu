@@ -33,6 +33,19 @@ describe("enrollment advertised endpoint", () => {
       }),
     ).toEqual({ ok: true, value: "https://new.lan" });
   });
+  it("reuses the saved advertised override before published metadata, while a request override still wins", () => {
+    const configured = { enabled: true, bind: "0.0.0.0", advertise: "https://saved.lan:24400" };
+    expect(
+      resolveEnrollmentEndpoint({ listener: configured, published: "http://old.lan:24377" }),
+    ).toEqual({ ok: true, value: "https://saved.lan:24400" });
+    expect(
+      resolveEnrollmentEndpoint({
+        listener: configured,
+        published: "http://old.lan:24377",
+        override: "https://request.lan",
+      }),
+    ).toEqual({ ok: true, value: "https://request.lan" });
+  });
   it.each(["0.0.0.0", "::"])("requires an advertised endpoint for wildcard binding %s", (bind) => {
     expect(resolveEnrollmentEndpoint({ listener: { enabled: true, bind } })).toMatchObject({
       ok: false,

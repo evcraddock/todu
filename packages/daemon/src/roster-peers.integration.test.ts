@@ -30,7 +30,7 @@ vi.mock("../../engine/src/enrollment-peer.js", async (original) => ({
 }));
 
 /** One real local daemon; peer adapters are mocked and never contact remote devices. */
-describe("daemon roster snapshots and private reload", () => {
+describe("daemon automatic roster reconciliation and private reload", () => {
   let directory: string;
   let runtime: DaemonRuntime | undefined;
   beforeEach(() => {
@@ -52,7 +52,7 @@ describe("daemon roster snapshots and private reload", () => {
       params: {},
     });
   }
-  it("loads persisted targets at startup and changes them only on explicit reload", async () => {
+  it("loads persisted targets and automatically reconciles changed endpoints while manual reload stays idempotent", async () => {
     const initial = await storage.initBootstrapStorage(directory);
     initial.catalog.change((doc) => {
       doc[deviceRegistryKey(id)] = { id, name: "Fixture", endpoint: "http://peer.invalid:24377" };
@@ -90,22 +90,24 @@ describe("daemon roster snapshots and private reload", () => {
         endpoint: "http://second.invalid:24377",
       };
     });
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
-    expect(await rpc()).toMatchObject({ ok: true, value: { added: 1, retained: 1, removed: 0 } });
+    await expect.poll(() => vi.mocked(createEnrollmentPeerConnection).mock.calls.length).toBe(2);
+    expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 2, removed: 0 } });
     const firstLink = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
     catalog.change((doc) => {
       doc[deviceRegistryKey(id)].endpoint = "http://changed.invalid:24377";
     });
-    expect(firstLink.close).not.toHaveBeenCalled();
-    expect(await rpc()).toMatchObject({ ok: true, value: { added: 1, retained: 1, removed: 1 } });
+    await expect.poll(() => vi.mocked(firstLink.close).mock.calls.length).toBe(1);
+    await expect.poll(() => vi.mocked(createEnrollmentPeerConnection).mock.calls.length).toBe(3);
+    expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 2, removed: 0 } });
     expect(firstLink.close).toHaveBeenCalledOnce();
     expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 2, removed: 0 } });
     expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(3);
     catalog.change((doc) => {
       doc[deviceRegistryKey(second)].removed = true;
     });
-    expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 1, removed: 1 } });
+    const secondLink = vi.mocked(createEnrollmentPeerConnection).mock.results[1].value;
+    await expect.poll(() => vi.mocked(secondLink.close).mock.calls.length).toBe(1);
+    expect(await rpc()).toMatchObject({ ok: true, value: { added: 0, retained: 1, removed: 0 } });
     expect(runtime.config()).toEqual(config);
     await runtime.stop();
     for (const result of vi.mocked(createEnrollmentPeerConnection).mock.results)
@@ -147,7 +149,8 @@ describe("daemon roster snapshots and private reload", () => {
     };
     expect(await host!.__internal.enrollment.attachSource(source)).toMatchObject({ ok: true });
     const original = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
-    expect(await rpc()).toMatchObject({ ok: true, value: { retained: 1, added: 1, removed: 0 } });
+    await expect.poll(() => vi.mocked(createEnrollmentPeerConnection).mock.calls.length).toBe(2);
+    expect(await rpc()).toMatchObject({ ok: true, value: { retained: 2, added: 0, removed: 0 } });
     expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(2);
     expect(
       vi.mocked(createEnrollmentPeerConnection).mock.results[1].value.source.approval
@@ -158,9 +161,14 @@ describe("daemon roster snapshots and private reload", () => {
         ? host!.device.remove(second)
         : host!.device.setEndpoint(second, "http://changed-address.invalid:24377")),
     ).toMatchObject({ ok: true });
+    const changedLink = vi.mocked(createEnrollmentPeerConnection).mock.results[1].value;
+    await expect.poll(() => vi.mocked(changedLink.close).mock.calls.length).toBe(1);
+    await expect
+      .poll(() => vi.mocked(createEnrollmentPeerConnection).mock.calls.length)
+      .toBe(change === "removal" ? 2 : 3);
     expect(await rpc()).toMatchObject({
       ok: true,
-      value: { retained: 1, added: change === "removal" ? 0 : 1, removed: 1 },
+      value: { retained: change === "removal" ? 1 : 2, added: 0, removed: 0 },
     });
     expect(original.close).not.toHaveBeenCalled();
     expect(await host!.__internal.enrollment.attachSource(source)).toMatchObject({ ok: true });

@@ -145,6 +145,12 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
       await value(receiving.instance, "sync.enrollmentApprove", { requestId: requested.requestId });
       await expect.poll(() => Boolean(constructed), { timeout: 15000 }).toBe(true);
       expect(joining.status().catalogId).toBeUndefined();
+      const activateNetworking = vi.spyOn(
+        (constructed as engine.ToduWithInternalTools).__internal.syncRuntime,
+        "activateDeviceNetworking",
+      );
+      expect(activateNetworking).not.toHaveBeenCalled();
+      expect(constructed!.sync.status().listener.publication).toBeUndefined();
       const update =
         action === "disable"
           ? { enabled: false }
@@ -166,15 +172,22 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
         await expect.poll(() => close.mock.calls.length, { timeout: 15000 }).toBe(1);
         expect(joining.status().catalogId).toBeUndefined();
         expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+        expect(activateNetworking).not.toHaveBeenCalled();
       } else if (action === "shutdown") {
         const stop = joining.stop();
         release.resolve();
         await stop;
         expect(joining.status().catalogId).toBeUndefined();
         expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+        expect(activateNetworking).not.toHaveBeenCalled();
       } else {
         release.resolve();
         await active(joining, receiving.instance.status().catalogId!);
+        expect(activateNetworking).toHaveBeenCalledOnce();
+        expect(constructed!.sync.status().listener.publication).toMatchObject({
+          state: "manual",
+          endpoint: `http://127.0.0.1:${clientPort}`,
+        });
         expect(await value(joining, "sync.serverStatus")).toMatchObject({
           ...expected,
           running: expected.enabled,
@@ -211,6 +224,11 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
     const prepared = await value<EnrollmentClientStatus>(joining, "sync.enrollmentStatus");
     expect(prepared).toMatchObject({ stage: "prepared", deviceId: expect.any(String) });
     expect(joining.status().catalogId).toBeUndefined();
+    expect(await rpc(joining, "sync.status")).toMatchObject({
+      ok: false,
+      error: { code: "PRECONDITION_FAILED" },
+    });
+    expect(fs.existsSync(path.join(clientPath, "todu-catalog.id"))).toBe(false);
     expect(workerStart).not.toHaveBeenCalled();
     expect(await rpc(joining, "project.list")).toMatchObject({
       ok: false,

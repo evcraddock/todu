@@ -164,9 +164,13 @@ export function createEnrollmentRuntime(options: {
       };
       if (options.coordinateActivation) await options.coordinateActivation(activated, publish);
       else publish();
-      const reloaded = await joined.sync.reloadPeers();
-      if (!reloaded.ok)
-        options.logger.warn("enrolled roster peer reload failed", { error: reloaded.error });
+      const activatedNetworking = await (
+        joined as ToduWithInternalTools
+      ).__internal.syncRuntime.activateDeviceNetworking();
+      if (!activatedNetworking.ok)
+        options.logger.warn("enrolled device networking activation failed", {
+          error: activatedNetworking.error,
+        });
     } catch (error) {
       connection.close();
       if (joined) await joined.close();

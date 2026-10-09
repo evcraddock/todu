@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { DocHandle, Repo } from "@automerge/automerge-repo/slim";
 import {
   type CatalogDocument,
@@ -34,19 +35,23 @@ const peer = (endpoint = "http://peer.lan:24377"): DeviceRegistryEntry => ({
 });
 function setup() {
   const doc = createEmptyCatalog();
+  const events = new EventEmitter();
   const catalog = {
     documentId: "catalog",
     doc: () => doc,
+    on: events.on.bind(events),
+    off: events.off.bind(events),
   } as unknown as DocHandle<CatalogDocument>;
   const existing = vi.fn<(source: EnrollmentSource) => EnrollmentPeerConnection | undefined>();
   const manager = createRosterPeerConnections({ catalog, repo: {} as Repo, localId, existing });
   const put = (device: DeviceRegistryEntry) => {
     doc[deviceRegistryKey(device.id)] = device;
+    events.emit("change");
   };
-  return { doc, manager, put, existing };
+  return { doc, manager, put, existing, events };
 }
 
-describe("explicit roster snapshots", () => {
+describe("roster reconciliation and activation-scoped observation", () => {
   beforeEach(() => {
     vi.mocked(createEnrollmentPeerConnection).mockClear();
   });
@@ -79,7 +84,7 @@ describe("explicit roster snapshots", () => {
       }),
     );
   });
-  it("does not watch the roster; refresh is explicit and idempotent", () => {
+  it("does not observe before activation; explicit refresh remains idempotent", () => {
     const { manager, put } = setup();
     manager.reload();
     put(peer());
@@ -101,6 +106,43 @@ describe("explicit roster snapshots", () => {
     expect(link?.close).not.toHaveBeenCalled();
     expect(manager.reload()).toMatchObject({ ok: true, value: { removed: 1 } });
     expect(link?.close).toHaveBeenCalledTimes(1);
+  });
+  it("coalesces relevant roster changes and ignores names, self, and unchanged catalog events", async () => {
+    const { manager, put, events } = setup();
+    const reconcile = vi.fn(() => {
+      manager.reload();
+    });
+    const stop = manager.observe(reconcile);
+    put(peer());
+    put(peer("http://updated.lan:24400"));
+    expect(reconcile).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(reconcile).toHaveBeenCalledOnce();
+    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+    put({ ...peer("http://updated.lan:24400"), name: "Renamed only" });
+    put({ id: localId, name: "Local", endpoint: "http://self.lan:24377" });
+    events.emit("change");
+    await Promise.resolve();
+    expect(reconcile).toHaveBeenCalledOnce();
+    put({ ...peer(), removed: true });
+    stop();
+    await Promise.resolve();
+    expect(reconcile).toHaveBeenCalledOnce();
+    expect(events.listenerCount("change")).toBe(0);
+    manager.close();
+  });
+  it("unsubscribes and cancels queued observation on close, including late activation", async () => {
+    const { manager, put, events } = setup();
+    const reconcile = vi.fn();
+    manager.observe(reconcile);
+    put(peer());
+    manager.close();
+    await Promise.resolve();
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(events.listenerCount("change")).toBe(0);
+    manager.observe(reconcile)();
+    expect(events.listenerCount("change")).toBe(0);
+    expect(manager.reload()).toMatchObject({ ok: false });
   });
   it("disposes a changed endpoint before attaching its replacement", () => {
     const { manager, put } = setup();

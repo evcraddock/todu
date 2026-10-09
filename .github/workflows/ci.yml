@@ -94,5 +94,5 @@ jobs:
         run: npm run test:all -- packages/daemon/src/sync-worker-checkpoint.integration.test.ts packages/daemon/src/sync-field-groups.integration.test.ts
       - name: Unix socket ownership and path boundary tests
         run: npm run test:all -- packages/daemon/src/transport.integration.test.ts
-      - name: LAN sync listener selection and integration tests
-        run: npm run test:all -- packages/core/src/sync-listener-enable.test.ts packages/core/src/sync-listener-config.test.ts packages/core/src/enrollment-endpoint.test.ts packages/cli/src/commands/sync-listener.test.ts packages/engine/src/sync-listener.integration.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts
+      - name: LAN sync listener selection, publication, and native direct setup tests
+        run: npm run test:all -- packages/core/src/sync-listener-enable.test.ts packages/core/src/sync-listener-config.test.ts packages/core/src/enrollment-endpoint.test.ts packages/cli/src/commands/sync-listener.test.ts packages/engine/src/sync-listener.integration.test.ts packages/engine/src/listener-publication.integration.test.ts packages/engine/src/peer-connections.test.ts packages/daemon/src/sync-listener.integration.test.ts packages/daemon/src/listener-setup.integration.test.ts packages/daemon/src/roster-peers.integration.test.ts packages/cli/src/sync-listener-config.integration.test.ts

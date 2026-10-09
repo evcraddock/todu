@@ -24,7 +24,7 @@ export interface PeerReloadReport {
   errors: string[];
 }
 
-/** Snapshot-to-adapter wiring only; no roster subscription or additional retry scheduler. */
+/** Native roster target reconciliation; observation is opt-in for activated daemon engines. */
 export function createRosterPeerConnections(options: {
   catalog: DocHandle<CatalogDocument>;
   repo: Repo;
@@ -37,7 +37,44 @@ export function createRosterPeerConnections(options: {
     { source: EnrollmentSource; connection: EnrollmentPeerConnection }
   >();
   let closed = false;
+  const observations = new Set<() => void>();
   return {
+    observe(reconcile: () => void): () => void {
+      if (closed) return () => {};
+      let stopped = false;
+      let pending = false;
+      const snapshot = (): string => {
+        const doc = options.catalog.doc();
+        if (!doc) return "";
+        return JSON.stringify(
+          getDeviceRegistryEntries(doc)
+            .filter((device) => device.id !== options.localId)
+            .map((device) => [device.id, device.endpoint ?? null, device.removed ?? false])
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+        );
+      };
+      let previous = snapshot();
+      const changed = (): void => {
+        if (stopped || closed) return;
+        const current = snapshot();
+        if (current === previous) return;
+        previous = current;
+        if (pending) return;
+        pending = true;
+        queueMicrotask(() => {
+          pending = false;
+          if (!stopped && !closed) reconcile();
+        });
+      };
+      options.catalog.on("change", changed);
+      const stop = (): void => {
+        stopped = true;
+        options.catalog.off("change", changed);
+        observations.delete(stop);
+      };
+      observations.add(stop);
+      return stop;
+    },
     reload(): Result<PeerReloadReport> {
       if (closed) return err(storageError("Cannot reload roster peers after engine shutdown"));
       const doc = options.catalog.doc();
@@ -143,6 +180,7 @@ export function createRosterPeerConnections(options: {
     close(): void {
       if (closed) return;
       closed = true;
+      for (const stop of observations) stop();
       const errors: unknown[] = [];
       for (const link of links.values()) {
         try {

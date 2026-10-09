@@ -210,11 +210,12 @@ describe("Apple Silicon-only macOS support", () => {
       "Device enrollment integration tests",
       "Sync provider checkpoint and field-group integration tests",
       "Unix socket ownership and path boundary tests",
-      "LAN sync listener selection and integration tests",
+      "LAN sync listener selection, publication, and native direct setup tests",
     ])
       expect(steps.some((step) => step.name === name)).toBe(true);
     const listenerTests = steps.find(
-      (step) => step.name === "LAN sync listener selection and integration tests",
+      (step) =>
+        step.name === "LAN sync listener selection, publication, and native direct setup tests",
     );
     for (const suite of [
       "packages/core/src/sync-listener-enable.test.ts",
@@ -222,7 +223,11 @@ describe("Apple Silicon-only macOS support", () => {
       "packages/core/src/enrollment-endpoint.test.ts",
       "packages/cli/src/commands/sync-listener.test.ts",
       "packages/engine/src/sync-listener.integration.test.ts",
+      "packages/engine/src/listener-publication.integration.test.ts",
+      "packages/engine/src/peer-connections.test.ts",
       "packages/daemon/src/sync-listener.integration.test.ts",
+      "packages/daemon/src/listener-setup.integration.test.ts",
+      "packages/daemon/src/roster-peers.integration.test.ts",
       "packages/cli/src/sync-listener-config.integration.test.ts",
     ])
       expect(listenerTests?.run).toContain(suite);
