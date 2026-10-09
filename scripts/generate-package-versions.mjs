@@ -9,6 +9,7 @@ const repoRoot = join(root, "..");
 const generators = [
   "packages/cli/generate-version.mjs",
   "packages/tui/generate-version.mjs",
+  "packages/recurring-worker/generate-version.mjs",
 ];
 
 for (const generator of generators) {

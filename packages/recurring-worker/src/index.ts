@@ -1,12 +1,13 @@
 import type { WorkerPluginRegistration } from "@todu/core";
 import type { Todu } from "@todu/engine";
+import { VERSION } from "./version.js";
 
 export const DEFAULT_RECURRING_WORKER_INTERVAL_MS = 30_000;
 
 export const workerPlugin: WorkerPluginRegistration = {
   manifest: {
     name: "recurring-worker",
-    version: "1.0.0",
+    version: VERSION,
     worker: {
       type: "recurring",
       requiredDomains: ["recurring", "task"],

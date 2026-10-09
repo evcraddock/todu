@@ -4,7 +4,7 @@ The recurring worker is an optional daemon plugin that turns due recurring templ
 
 ## Distribution status
 
-`@todu/recurring-worker@0.1.1` is published on npm and contains the same built worker files as the current source checkout. Pin this exact version: the package is currently excluded from the normal Changesets release flow and does not receive automatic package updates.
+`@todu/recurring-worker@0.1.1` is published on npm. Pin this exact version: the package is currently excluded from the normal Changesets release flow and does not receive automatic package updates. The current source checkout fixes manifest version reporting; the existing published artifact still reports `1.0.0` instead of its package version `0.1.1`. This reporting mismatch alone does not indicate a worker execution failure.
 
 ## Requirements
 
@@ -148,6 +148,20 @@ Confirm `recurring` is present under `daemon.workers.assigned`, then restart the
 ### Runtime is `running` but no task appears
 
 Confirm the template is active, due in its configured timezone, and points to an active project. Wait at least one worker interval and inspect daemon logs for `recurring worker process returned error` or `recurring worker run failed`.
+
+## Source builds and version reporting
+
+The source worker manifest derives its version from `packages/recurring-worker/package.json`. `generate-version.mjs` writes the tracked `src/version.ts` constant before package build and typecheck; repository versioning (`npm run version-packages`) also refreshes it. Do not edit the generated constant manually. The compiled package includes this constant, so loading the packed worker requires no source checkout or runtime JSON import.
+
+To verify a source change without publishing, installing, starting a worker, or contacting a daemon:
+
+```bash
+make build
+npm test -- packages/recurring-worker/src/index.test.ts scripts/recurring-worker-version.test.ts
+npm run test:all -- scripts/recurring-worker-package.integration.test.ts
+```
+
+The package test packs the existing build without running lifecycle scripts, extracts it into a temporary directory, and compares the exported manifest version with the packed metadata using isolated home/config/data paths. It does not start the worker runtime. These checks do not update the published npm package or the live daemon. The worker remains private and ignored by Changesets; publishing a corrected artifact requires a separate approval.
 
 ## Updates
 
