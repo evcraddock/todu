@@ -29,13 +29,13 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `5`).
-- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`, `4`, and `5`).
+- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `6`).
+- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`, `4`, `5`, and `6`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
 - Provider API v2 compatibility has been removed.
-- API v5 enables independent task field-group reconciliation and winning-value acknowledgments (`SYNC_PROVIDER_API_VERSION_V5`). V3/V4 providers must keep their explicit version declarations to retain their existing behavior; using the latest-version constant is an explicit opt-in to the latest contract.
+- API v5 enables independent task field-group reconciliation and winning-value acknowledgments (`SYNC_PROVIDER_API_VERSION_V5`). API v6 adds scoped local identity/lifecycle observations and guarded cancellation exclusions (`SYNC_PROVIDER_API_VERSION_V6`), retaining v5 field-group semantics. Existing v3/v4/v5 providers must keep their explicit version declarations to retain their existing behavior; using the latest-version constant is an explicit opt-in to the latest contract.
 
 Use `validateSyncProviderRegistration(...)` during plugin load to enforce this gate.
 
@@ -55,9 +55,65 @@ Rules:
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
 
+## API v6: scoped local task context during pull
+
+V6 is an explicit versioned opt-in, not an extra argument silently added to v3/v4/v5. Its manifest declares `apiVersion: SYNC_PROVIDER_API_VERSION_V6`; hosts supporting only v3/v4/v5 reject it at load time. Do not fall back to stale cancellation caches or blanket missing-target suppression on an unsupported host. Keep the provider on its previous API until host support is deployed through a separately approved rollout.
+
+```ts
+interface SyncLocalTaskQuery {
+  readonly localTaskId?: TaskId;
+  readonly externalId?: string;
+  readonly sourceUrl?: string;
+}
+
+interface SyncProviderPullContext {
+  readonly bindingId: IntegrationBindingId;
+  readonly projectId: ProjectId;
+  readonly observedAt: string;
+  readonly resolveTask: (query: SyncLocalTaskQuery) => SyncLocalTaskResolution;
+}
+
+interface SyncProviderPullResultV6 extends SyncProviderPullResultV5 {
+  cancelledTaskExclusions: { readonly observationToken: string }[];
+}
+
+interface SyncProviderV6 extends Omit<SyncProviderV5, "pull"> {
+  pull(binding: IntegrationBinding, project: Project, context: SyncProviderPullContext): Promise<SyncProviderPullResultV6>;
+}
+```
+
+### Scope, identity, and unavailable state
+
+The daemon reads fresh task metadata for the bound project before each eligible pull, including pending-batch replay. `resolveTask` requires at least one nonempty selector; every supplied selector must agree. It returns one of:
+
+- `found`: an immutable observation containing branded `localTaskId`, `projectId`, optional `externalId`/`sourceUrl`, actual Todu `status` (cancellation is spelled `canceled`), `updatedAt`, and a host-issued `observationToken`.
+- `missing`: no matching record in a successfully read scoped project. This is not evidence about unrelated projects, remote deletion, or permission to skip a remote target.
+- `ambiguous`: duplicate external identities/source references, including when a local ID appears to disambiguate them.
+- `unknown`: `invalid-query`, `identity-mismatch`, or `context-expired`. A failed local task read aborts the cycle before pull instead of fabricating an empty context.
+
+The context exposes no task title/body, comments, actor IDs, mutable task objects, or engine/storage operations. It cannot query another project. It is a snapshot, not a live subscription or revision history. `observedAt` is diagnostic; neither it nor the task clock proves ongoing cancellation. The resolver expires when pull settles, and saved references then return `context-expired`.
+
+### Declaring and verifying cancellation exclusions
+
+A provider may exclude an unavailable remote issue/comment thread only when it has an unambiguous, linked, currently `canceled` local observation. It must report each such decision in `cancelledTaskExclusions`, including exclusions reused from pending work. Missing, active/reopened, ambiguous, unknown, or unlinked tasks do not qualify. Authentication/permission/transient errors remain errors; the provider still owns remote error classification. The host does not inspect HTTP responses, and trusted providers are responsible for reporting every cancellation-based omission rather than silently advancing past it.
+
+The result must contain `cancelledTaskExclusions: []` even when no decisions depend on cancellation. Receipts authorize no writes. An excluded identity must not also appear in returned bootstrap tasks, field-group updates, comments, deleted comments, or complete comment snapshots; the host rejects such overlaps before application. Exclusion does not delete local tasks/comments, recreate remote records, clear links, or establish a field-group baseline.
+
+Tokens are opaque and valid only for their issuing binding and pull invocation. Invented, foreign-cycle, duplicate, or non-cancelled receipts fail. The host revalidates scope, dataset-host identity, task identity/source linkage, status, clock, and identity uniqueness before application, then again after local application, actor-mapping persistence, flush, and winning-value verification immediately before invoking acknowledgment. Binding project/provider/target/strategy/enablement changes also fail the decision. Normal host-owned actor-mapping additions are not mistaken for a scope change.
+
+Reopening, relinking, disappearance, duplicate identity, or an intervening edit rejects the stale decision without acknowledgment or push. Already-persisted unrelated imports are not rolled back; normal v5 replay/guards preserve them and newer local edits. Even a same-millisecond status or identity change is detected by value comparison. The acknowledgment invocation is the freshness boundary. A private engine verifier loads the relevant native document handles, then checks live catalog references, project/binding scope, task identity/status/clock, and uniqueness directly from those handles. No await or provider callback occurs between those authoritative reads/checks and callback invocation. This also catches reactivation after an asynchronous daemon task-list read captured an older snapshot. The contract does not lock local editing for the duration of an asynchronous acknowledgment or establish distributed atomicity. A later reopening is handled with fresh context in the next cycle; acknowledgment never authorizes a persistent cancellation cache.
+
+### Durable pending work and strategies
+
+Keep original provider-owned pending payloads, identities, and opaque checkpoint boundaries after context/application/flush/acknowledgment failure. After retry/restart, reevaluate all cancellation exclusions against the new context and attach newly issued tokens before returning the pending batch. Previously persisted tokens are not authorization and are rejected, even if the task is still cancelled. If a task has reopened, retain the pending work and report the unavailable target instead of advancing the cursor or recreating/relinking records. This context does not migrate v4 batches to field-group reconciliation or initialize unknown field-group bases; those are separate host adoption/recovery capabilities.
+
+V6 acknowledgment remains `acknowledgePull(binding, checkpoint, project, { taskResults })` with exactly the v5 persistence/receipt semantics. Exclusions themselves are not persisted-value or two-sided mirroring receipts. Pull-only bindings receive context and acknowledgment without requiring a push to seed history. Bidirectional bindings acknowledge before push. Push-only, disabled, and `none` bindings do not receive pull context. V3/V4/V5 keep their original pull argument counts, reconciliation, checkpoint/acknowledgment signatures, and retry behavior; payload extensions on an older registration do not opt it in.
+
+For Forgejo adoption, resolve the saved local ID plus external identity/source reference before applying a cancellation exception to a missing issue/comment endpoint. Keep errors for active/reactivated records and access/transient failures. Host fixture tests demonstrate the contract, including the narrowly scoped private engine verification boundary approved for this task. No Forgejo adapter change, live cleanup, deployment, daemon restart, or npm publication is performed by this host implementation.
+
 ## API v5: field-group task reconciliation
 
-The daemon implements this lifecycle for explicitly registered v5 providers. V3/V4 payloads, whole-task conflict behavior, and acknowledgment signatures remain unchanged. `validateSyncProviderRegistration` accepts v3/v4/v5 by default; an explicit `supportedApiVersions` override can restrict compatibility. A v4 registration exposing v5-shaped data does not opt into field-group processing.
+The daemon implements this lifecycle for explicitly registered v5 providers. V3/V4 payloads, whole-task conflict behavior, and acknowledgment signatures remain unchanged. `validateSyncProviderRegistration` accepts v3/v4/v5/v6 by default; an explicit `supportedApiVersions` override can restrict compatibility. A v4 registration exposing v5-shaped data does not opt into field-group processing.
 
 v5 inherits initialization, shutdown, push, comments, and opaque checkpoints from v4. It replaces the pull result and acknowledgment signature:
 

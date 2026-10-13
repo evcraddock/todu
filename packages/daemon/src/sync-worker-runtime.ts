@@ -24,13 +24,17 @@ import {
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
+  SYNC_PROVIDER_API_VERSION_V6,
   type SyncAssigneeIdentity,
   type SyncProviderPullResultV4,
   type SyncProviderPullResultV5,
+  type SyncProviderPullResultV6,
   type SyncProviderPushCommentLink,
   type SyncProviderPushTaskLink,
+  type SyncProviderV3,
   type SyncProviderV4,
   type SyncProviderV5,
+  type SyncProviderV6,
   type SyncTaskFieldGroupResult,
   type Task,
   type ToduError,
@@ -44,6 +48,7 @@ import {
   prepareSyncFieldGroupPull,
   verifySyncFieldGroupResults,
 } from "./sync-field-group-pull.js";
+import { createLocalTaskPullGuard } from "./sync-local-task-context.js";
 import type { WorkerRuntime } from "./workers.js";
 
 const DEFAULT_SYNC_INTERVAL_SECONDS = 300;
@@ -315,10 +320,39 @@ export function createSyncPluginWorkerRuntime(
         }
 
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
-          const pullResult = await options.provider.pull(binding, project);
+          const localTaskGuard =
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6
+              ? await createLocalTaskPullGuard({
+                  todu: activeTodu,
+                  binding,
+                  isCurrentHost: () => options.getTodu() === activeTodu,
+                })
+              : null;
+          const pullResult = await (async () => {
+            try {
+              return localTaskGuard
+                ? await (options.provider as SyncProviderV6).pull(
+                    binding,
+                    project,
+                    localTaskGuard.context,
+                  )
+                : await (options.provider as SyncProviderV3 | SyncProviderV4 | SyncProviderV5).pull(
+                    binding,
+                    project,
+                  );
+            } finally {
+              localTaskGuard?.expire();
+            }
+          })();
+          if (localTaskGuard)
+            await localTaskGuard.verifyAndRun(
+              pullResult as SyncProviderPullResultV6,
+              async () => {},
+            );
           const fieldGroupProvider =
-            providerApiVersion === SYNC_PROVIDER_API_VERSION_V5
-              ? (options.provider as SyncProviderV5)
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6
+              ? (options.provider as SyncProviderV5 | SyncProviderV6)
               : null;
           const acknowledgedProvider =
             providerApiVersion === SYNC_PROVIDER_API_VERSION_V4
@@ -421,12 +455,19 @@ export function createSyncPluginWorkerRuntime(
                 results: taskResults,
                 actors: fieldGroupActors,
               });
-              await fieldGroupProvider.acknowledgePull(
-                binding,
-                (pullResult as SyncProviderPullResultV5).checkpoint,
-                project,
-                { taskResults },
-              );
+              const acknowledge = () =>
+                fieldGroupProvider.acknowledgePull(
+                  binding,
+                  (pullResult as SyncProviderPullResultV5).checkpoint,
+                  project,
+                  { taskResults },
+                );
+              if (localTaskGuard)
+                await localTaskGuard.verifyAndRun(
+                  pullResult as SyncProviderPullResultV6,
+                  acknowledge,
+                );
+              else await acknowledge();
               await clearAcknowledgedContentRecovery({
                 todu: getToduWithInternals(activeTodu),
                 binding,
@@ -448,7 +489,9 @@ export function createSyncPluginWorkerRuntime(
             actorState,
             project,
             logger: runtimeLogger,
-            requireCompleteReads: providerApiVersion === SYNC_PROVIDER_API_VERSION_V5,
+            requireCompleteReads:
+              providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
+              providerApiVersion === SYNC_PROVIDER_API_VERSION_V6,
           });
           const pushResult = await options.provider.push(binding, pushPayloads, project);
           if (
@@ -462,7 +505,8 @@ export function createSyncPluginWorkerRuntime(
           await applyPushTaskLinks({
             todu: activeTodu,
             links: pushResult.taskLinks,
-            ...(providerApiVersion === SYNC_PROVIDER_API_VERSION_V5
+            ...(providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6
               ? { guardProjectId: project.id }
               : {}),
           });

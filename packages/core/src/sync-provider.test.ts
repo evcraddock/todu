@@ -4,27 +4,30 @@ import {
   isSyncProviderRegistrationV3,
   isSyncProviderRegistrationV4,
   isSyncProviderRegistrationV5,
+  isSyncProviderRegistrationV6,
   SYNC_PROVIDER_API_VERSION,
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
+  SYNC_PROVIDER_API_VERSION_V6,
   type SyncProviderRegistrationV3,
   type SyncProviderRegistrationV4,
   type SyncProviderRegistrationV5,
+  type SyncProviderRegistrationV6,
   validateSyncProviderRegistration,
 } from "./sync-provider.js";
 
 describe("isSyncProviderApiVersionCompatible", () => {
-  it.each([3, 4, 5])("accepts supported v%s API version", (apiVersion) => {
+  it.each([3, 4, 5, 6])("accepts supported v%s API version", (apiVersion) => {
     expect(isSyncProviderApiVersionCompatible(apiVersion)).toBe(true);
   });
 
-  it("advertises v5 as the latest API", () => {
-    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V5);
+  it("advertises v6 as the latest API", () => {
+    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V6);
   });
 
   it("rejects unsupported API version", () => {
-    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V5 + 1)).toBe(false);
+    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V6 + 1)).toBe(false);
   });
 
   it("supports explicit supported version lists", () => {
@@ -34,6 +37,32 @@ describe("isSyncProviderApiVersionCompatible", () => {
 });
 
 describe("validateSyncProviderRegistration", () => {
+  it("requires explicit v6 opt-in and rejects unsupported hosts", () => {
+    const registration: SyncProviderRegistrationV6 = {
+      ...createValidV5Registration(),
+      manifest: { name: "github", version: "1.2.3", apiVersion: 6 },
+      provider: {
+        ...createValidV5Registration().provider,
+        async pull(_binding, _project, _context) {
+          return { tasks: [], taskUpdates: [], checkpoint: null, cancelledTaskExclusions: [] };
+        },
+      },
+    };
+    const result = validateSyncProviderRegistration(registration);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected v6 registration");
+    expect(isSyncProviderRegistrationV6(result.value)).toBe(true);
+    expect(isSyncProviderRegistrationV5(result.value)).toBe(false);
+    expect(result.value.provider).toBe(registration.provider);
+    expect(
+      validateSyncProviderRegistration(registration, { supportedApiVersions: [3, 4, 5] }),
+    ).toMatchObject({ ok: false, error: { code: "API_VERSION_MISMATCH" } });
+    registration.provider.acknowledgePull = undefined as never;
+    expect(validateSyncProviderRegistration(registration)).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_PROVIDER", details: { method: "acknowledgePull", apiVersion: 6 } },
+    });
+  });
   it("accepts v5 by default while an explicit legacy host policy still rejects it", () => {
     expect(validateSyncProviderRegistration(createValidV5Registration()).ok).toBe(true);
     expect(
@@ -111,7 +140,7 @@ describe("validateSyncProviderRegistration", () => {
 
   it("rejects provider with unsupported API version", () => {
     const registration = createValidV3Registration();
-    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V5 + 1) as never;
+    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V6 + 1) as never;
 
     const result = validateSyncProviderRegistration(registration);
 
@@ -123,11 +152,12 @@ describe("validateSyncProviderRegistration", () => {
     expect(result.error).toMatchObject({
       code: "API_VERSION_MISMATCH",
       details: {
-        providerApiVersion: SYNC_PROVIDER_API_VERSION_V5 + 1,
+        providerApiVersion: SYNC_PROVIDER_API_VERSION_V6 + 1,
         supportedApiVersions: [
           SYNC_PROVIDER_API_VERSION_V3,
           SYNC_PROVIDER_API_VERSION_V4,
           SYNC_PROVIDER_API_VERSION_V5,
+          SYNC_PROVIDER_API_VERSION_V6,
         ],
       },
     });

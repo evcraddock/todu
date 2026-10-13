@@ -2,6 +2,10 @@ import type {
   SyncProviderPullAcknowledgmentV5,
   SyncTaskFieldGroupUpdate,
 } from "./sync-field-groups.js";
+import type {
+  SyncCancelledTaskExclusion,
+  SyncProviderPullContext,
+} from "./sync-local-task-context.js";
 import {
   type CommentSyncProvenance,
   err,
@@ -18,11 +22,13 @@ import {
 export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
 export const SYNC_PROVIDER_API_VERSION_V4 = 4 as const;
 export const SYNC_PROVIDER_API_VERSION_V5 = 5 as const;
-export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V5;
+export const SYNC_PROVIDER_API_VERSION_V6 = 6 as const;
+export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V6;
 export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
+  SYNC_PROVIDER_API_VERSION_V6,
 ] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
@@ -177,7 +183,20 @@ export interface SyncProviderV5 extends Omit<SyncProviderV4, "pull" | "acknowled
   ): Promise<void>;
 }
 
-export type SyncProvider = SyncProviderV3 | SyncProviderV4 | SyncProviderV5;
+export interface SyncProviderPullResultV6 extends SyncProviderPullResultV5 {
+  /** Every cancellation-based exclusion must cite a receipt from this pull invocation. */
+  cancelledTaskExclusions: SyncCancelledTaskExclusion[];
+}
+
+export interface SyncProviderV6 extends Omit<SyncProviderV5, "pull"> {
+  pull(
+    binding: IntegrationBinding,
+    project: Project,
+    context: SyncProviderPullContext,
+  ): Promise<SyncProviderPullResultV6>;
+}
+
+export type SyncProvider = SyncProviderV3 | SyncProviderV4 | SyncProviderV5 | SyncProviderV6;
 export type AnySyncProvider = SyncProvider;
 
 export interface SyncProviderRegistrationV3 {
@@ -201,10 +220,16 @@ export interface SyncProviderRegistrationV5 {
   provider: SyncProviderV5;
 }
 
+export interface SyncProviderRegistrationV6 {
+  manifest: SyncProviderManifest & { apiVersion: typeof SYNC_PROVIDER_API_VERSION_V6 };
+  provider: SyncProviderV6;
+}
+
 export type SyncProviderRegistration =
   | SyncProviderRegistrationV3
   | SyncProviderRegistrationV4
-  | SyncProviderRegistrationV5;
+  | SyncProviderRegistrationV5
+  | SyncProviderRegistrationV6;
 export type AnySyncProviderRegistration = SyncProviderRegistration;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
@@ -264,6 +289,12 @@ export function isSyncProviderRegistrationV5(
   registration: AnySyncProviderRegistration,
 ): registration is SyncProviderRegistrationV5 {
   return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V5;
+}
+
+export function isSyncProviderRegistrationV6(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV6 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V6;
 }
 
 export function validateSyncProviderRegistration(
@@ -336,7 +367,8 @@ export function validateSyncProviderRegistration(
   if (
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3 &&
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V4 &&
-    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V5
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V5 &&
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V6
   ) {
     return err(
       createSyncProviderValidationError(
@@ -414,6 +446,13 @@ export function validateSyncProviderRegistration(
         ),
       );
     }
+  }
+
+  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V6) {
+    return ok({
+      manifest: { name: manifestName, version: manifestVersion, apiVersion: manifestApiVersion },
+      provider: registration.provider as SyncProviderV6,
+    });
   }
 
   if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V5) {
