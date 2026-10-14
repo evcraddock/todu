@@ -42,6 +42,7 @@ validateWorkerPluginRegistration(workerPlugin)
 
 `createRuntime(context)` receives:
 
+- `capabilities?.awaitableStop` — explicit host support for asynchronous worker completion. Check for `true` before creating an async-stop runtime; missing/false means an older or unsupported host.
 - `getTodu()` — returns active daemon-owned todu host (or `null` if unavailable).
 - `logger` — daemon logger interface for plugin logging.
 - `config` — plugin settings object (`daemon.plugins.config.<pluginName>`).
@@ -53,6 +54,32 @@ validateWorkerPluginRegistration(workerPlugin)
 - Daemon registers worker using plugin-provided worker manifest.
 - Daemon starts/stops worker using normal worker lifecycle and gating.
 - Plugin can be installed/removed without daemon/core package dependency changes.
+
+### Awaitable stop opt-in
+
+A handle's `stop()` returns `void` for legacy synchronous cleanup or a `Promise<void>` for completion-aware cleanup. Existing synchronous plugins need no capability check or changes, but must release their resources before returning. An async-stop implementation must first verify `context.capabilities?.awaitableStop === true` in `createRuntime`, before allocating timers or starting work. On unsupported hosts, refuse activation with a clear error or provide a genuinely synchronous fallback; returning a promise that an older host ignores is not safe negotiation.
+
+```ts
+createRuntime(context) {
+  if (context.capabilities?.awaitableStop !== true) {
+    throw new Error("This worker requires awaitable-stop host support");
+  }
+  return {
+    start() {
+      // Start work and track its completion; do not allocate more work after stop.
+      return {
+        async stop() {
+          // Cancel future scheduling, await admitted work, then release resources.
+        },
+      };
+    },
+  };
+}
+```
+
+The host requests stop for all active workers, waits for their returned completions and admitted RPC handlers, and only then closes the engine. Pending asynchronous stops retain their current worker snapshot until completion; the synchronous `transitionWorkerState` result is not a completion receipt. Repeated stop requests share completion. Reactivation or conflicting transitions while cleanup is pending are rejected; failed cleanup remains visible and prevents reuse or a dataset switch rather than opening another engine over unconfirmed storage.
+
+Reject the stop promise on cleanup failure. Do not swallow rejection, detach untracked cleanup, or force process exit. The existing direct CLI deadline remains unchanged; an uncooperative worker/provider may still exhaust it and fail. This capability does not add a universal abort signal, remote durability guarantee, or cancellation of arbitrary third-party work. The host cannot discover background work a legacy plugin hides after a synchronous return.
 
 ## Configuration
 

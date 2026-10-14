@@ -32,7 +32,7 @@ export interface WorkerManifest {
 }
 
 export interface WorkerRuntimeHandle {
-  stop(): void;
+  stop(): void | Promise<void>;
 }
 
 export interface WorkerRuntime {

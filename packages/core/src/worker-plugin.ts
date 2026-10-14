@@ -27,7 +27,7 @@ export interface WorkerPluginManifest {
 }
 
 export interface WorkerPluginRuntimeHandle {
-  stop(): void;
+  stop(): void | Promise<void>;
 }
 
 export interface WorkerPluginRuntime {
@@ -42,6 +42,8 @@ export interface WorkerPluginHostLogger {
 }
 
 export interface WorkerPluginHostContext {
+  /** Async-stop plugins must check this capability before allocating runtime resources. */
+  capabilities?: Readonly<{ awaitableStop?: boolean }>;
   getTodu: () => unknown | null;
   logger: WorkerPluginHostLogger;
   config: Record<string, unknown>;
