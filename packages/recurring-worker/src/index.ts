@@ -16,12 +16,17 @@ export const workerPlugin: WorkerPluginRegistration = {
   },
 
   createRuntime(context) {
+    if (context.capabilities?.awaitableStop !== true) {
+      throw new Error("Recurring worker requires a host with awaitable-stop support");
+    }
     const intervalMs = resolveIntervalMs(context.config);
 
     return {
       start() {
         let stopped = false;
         let running = false;
+        let currentRun: Promise<void> | null = null;
+        let stopPromise: Promise<void> | null = null;
         let timer: ReturnType<typeof setInterval> | null = null;
 
         const runOnce = async (trigger: "startup" | "interval") => {
@@ -63,23 +68,23 @@ export const workerPlugin: WorkerPluginRegistration = {
         };
 
         timer = setInterval(() => {
-          void runOnce("interval");
+          if (!stopped && !running) currentRun = runOnce("interval");
         }, intervalMs);
 
-        void runOnce("startup");
+        currentRun = runOnce("startup");
 
         return {
           stop() {
-            if (stopped) {
-              return;
-            }
-
+            if (stopPromise) return stopPromise;
             stopped = true;
-
             if (timer) {
               clearInterval(timer);
               timer = null;
             }
+            stopPromise = (async () => {
+              await currentRun;
+            })();
+            return stopPromise;
           },
         };
       },

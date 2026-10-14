@@ -27,6 +27,7 @@ describe("recurring-worker plugin", () => {
     const runtime = workerPlugin.createRuntime({
       getTodu: () => createTodu(recurringProcess),
       logger: createLogger(),
+      capabilities: { awaitableStop: true },
       config: {
         intervalSeconds: 2,
       },
@@ -53,6 +54,7 @@ describe("recurring-worker plugin", () => {
     const runtime = workerPlugin.createRuntime({
       getTodu: () => createTodu(recurringProcess),
       logger: createLogger(),
+      capabilities: { awaitableStop: true },
       config: {
         intervalSeconds: -1,
       },
@@ -72,6 +74,60 @@ describe("recurring-worker plugin", () => {
     handle.stop();
   });
 
+  it.each([
+    undefined,
+    { awaitableStop: false },
+  ])("refuses unsupported hosts before allocating resources (%j)", (capabilities) => {
+    const getTodu = vi.fn();
+    expect(() =>
+      workerPlugin.createRuntime({ getTodu, logger: createLogger(), config: {}, capabilities }),
+    ).toThrow("requires a host with awaitable-stop support");
+    expect(getTodu).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    "startup",
+    "interval",
+  ])("waits for %s work on repeated stop and prevents new cycles", async (phase) => {
+    const deferred = createDeferred<void>();
+    const process = vi.fn().mockResolvedValue(ok([]));
+    if (phase === "startup")
+      process.mockImplementationOnce(async () => {
+        await deferred.promise;
+        return ok([]);
+      });
+    const runtime = workerPlugin.createRuntime({
+      getTodu: () => createTodu(process),
+      logger: createLogger(),
+      capabilities: { awaitableStop: true },
+      config: { intervalMs: 100 },
+    });
+    const handle = runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    if (phase === "interval") {
+      process.mockImplementationOnce(async () => {
+        await deferred.promise;
+        return ok([]);
+      });
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    const calls = process.mock.calls.length;
+    const first = handle.stop();
+    expect(handle.stop()).toBe(first);
+    let completed = false;
+    const stop = Promise.resolve(first).then(() => {
+      completed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(completed).toBe(false);
+    expect(process).toHaveBeenCalledTimes(calls);
+    deferred.resolve();
+    await stop;
+    expect(completed).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not run overlapping process cycles", async () => {
     const deferred = createDeferred<void>();
     const recurringProcess = vi.fn().mockImplementation(async () => {
@@ -82,6 +138,7 @@ describe("recurring-worker plugin", () => {
     const runtime = workerPlugin.createRuntime({
       getTodu: () => createTodu(recurringProcess),
       logger: createLogger(),
+      capabilities: { awaitableStop: true },
       config: {
         intervalMs: 100,
       },

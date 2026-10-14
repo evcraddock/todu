@@ -141,6 +141,84 @@ describe("sync-worker-runtime", () => {
     expect(provider.shutdown).toHaveBeenCalledTimes(1);
   });
 
+  it("shares a rejected stop promise and surfaces provider cleanup failure", async () => {
+    const provider = createProvider();
+    const project = createProject();
+    const binding = createBinding(project.id);
+    const todu = createTodu(project, [], [binding]);
+    const logger = createLogger();
+    vi.mocked(provider.shutdown).mockRejectedValue(new Error("Injected provider cleanup failure"));
+    const handle = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/fixture",
+      authorityId: "fixture",
+      provider,
+      getTodu: () => todu.instance,
+      logger,
+      config: {
+        enabled: true,
+        intervalMs: 100,
+        retryInitialMs: 100,
+        retryMaxMs: 100,
+        settings: {},
+      },
+    }).start();
+    await vi.advanceTimersByTimeAsync(0);
+    const first = handle.stop();
+    expect(handle.stop()).toBe(first);
+    await expect(Promise.resolve(first)).rejects.toThrow("Injected provider cleanup failure");
+    expect(provider.shutdown).toHaveBeenCalledOnce();
+    expect(logger.error).toHaveBeenCalledWith(
+      "sync plugin shutdown failed",
+      expect.objectContaining({ error: "Injected provider cleanup failure" }),
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("drains admitted binding work without starting another binding or scheduling retries", async () => {
+    const provider = createProvider();
+    const project = createProject();
+    const bindings = [
+      createBinding(project.id, { id: "ibind-first" }),
+      createBinding(project.id, { id: "ibind-second" }),
+    ];
+    const todu = createTodu(project, [], bindings);
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(provider.pull).mockImplementationOnce(async () => {
+      await pending;
+      return { tasks: [], comments: [] };
+    });
+    const handle = createSyncPluginWorkerRuntime({
+      pluginName: "github",
+      pluginVersion: "1.0.0",
+      modulePath: "/fixture",
+      authorityId: "fixture",
+      provider,
+      getTodu: () => todu.instance,
+      logger: createLogger(),
+      config: {
+        enabled: true,
+        intervalMs: 100,
+        retryInitialMs: 100,
+        retryMaxMs: 100,
+        settings: {},
+      },
+    }).start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(provider.pull).toHaveBeenCalledOnce();
+    const stopping = handle.stop();
+    expect(provider.shutdown).not.toHaveBeenCalled();
+    release();
+    await stopping;
+    expect(provider.pull).toHaveBeenCalledOnce();
+    expect(provider.shutdown).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("passes binding options through to providers on the first sync cycle", async () => {
     const provider = createProvider();
     const project = createProject();

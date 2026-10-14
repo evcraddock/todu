@@ -199,6 +199,11 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
   let syncStatusSubscriptionCleanup: (() => void) | null = null;
   const workerRuntimes = new Map<string, WorkerRegistration["runtime"]>();
   const activeWorkerRuntimeHandles = new Map<string, WorkerRuntimeHandle>();
+  const pendingWorkerStops = new Map<
+    string,
+    Promise<Result<RegisteredWorkerSnapshot, WorkerRegistryError>>
+  >();
+  const failedWorkerStops = new Map<string, WorkerRegistryError>();
   const loadedPlugins = new Map<string, LoadedConfiguredPlugin>();
 
   const runtimeStatus: DaemonRuntimeStatus = {
@@ -542,6 +547,16 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       });
     }
 
+    if (
+      pendingWorkerStops.has(normalizedWorkerType) ||
+      failedWorkerStops.has(normalizedWorkerType)
+    ) {
+      return err({
+        code: "STOP_FAILED",
+        message: `Worker cleanup is pending or failed: ${normalizedWorkerType}`,
+      });
+    }
+
     const assignmentGateResult = applyWorkerAssignmentGating(normalizedWorkerType);
     if (!assignmentGateResult.ok) {
       return assignmentGateResult;
@@ -588,8 +603,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         "running",
       );
       if (!transitionResult.ok) {
-        runtimeHandle.stop();
-        activeWorkerRuntimeHandles.delete(dependencyGateResult.value.manifest.type);
+        stopWorkerExecution(dependencyGateResult.value.manifest.type);
         return transitionResult;
       }
 
@@ -635,6 +649,10 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       });
     }
 
+    const failure = failedWorkerStops.get(worker.manifest.type);
+    if (failure) return err(failure);
+    if (pendingWorkerStops.has(worker.manifest.type)) return ok(worker);
+
     const runtimeHandle = activeWorkerRuntimeHandles.get(worker.manifest.type);
 
     if (!runtimeHandle) {
@@ -645,42 +663,44 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       return ok(worker);
     }
 
-    try {
-      runtimeHandle.stop();
+    const completed = (): Result<RegisteredWorkerSnapshot, WorkerRegistryError> => {
+      pendingWorkerStops.delete(worker.manifest.type);
       activeWorkerRuntimeHandles.delete(worker.manifest.type);
-
-      const transitionResult = workerRegistry.transition(worker.manifest.type, "stopped");
-      if (!transitionResult.ok) {
-        return transitionResult;
-      }
-
-      runtimeLogger.info("worker stopped", {
-        workerType: worker.manifest.type,
-      });
-
-      return transitionResult;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const transitionResult = workerRegistry.transition(worker.manifest.type, "error", {
-        errorMessage,
-      });
-      if (transitionResult.ok) {
-        activeWorkerRuntimeHandles.delete(worker.manifest.type);
-      }
-
+      const result = workerRegistry.transition(worker.manifest.type, "stopped");
+      if (!result.ok) return failed(result.error.message);
+      runtimeLogger.info("worker stopped", { workerType: worker.manifest.type });
+      return result;
+    };
+    const failed = (error: unknown): Result<RegisteredWorkerSnapshot, WorkerRegistryError> => {
+      pendingWorkerStops.delete(worker.manifest.type);
+      activeWorkerRuntimeHandles.delete(worker.manifest.type);
+      const errorMessage = getErrorMessage(error);
+      workerRegistry.transition(worker.manifest.type, "error", { errorMessage });
+      const failure: WorkerRegistryError = {
+        code: "STOP_FAILED",
+        message: `Worker failed to stop: ${worker.manifest.type}: ${errorMessage}`,
+        details: { workerType: worker.manifest.type, errorMessage },
+      };
+      failedWorkerStops.set(worker.manifest.type, failure);
       runtimeLogger.error("worker stop failed", {
         workerType: worker.manifest.type,
         error: errorMessage,
       });
+      return err(failure);
+    };
 
-      return err({
-        code: "STOP_FAILED",
-        message: `Worker failed to stop: ${worker.manifest.type}`,
-        details: {
-          workerType: worker.manifest.type,
-          errorMessage,
-        },
-      });
+    try {
+      const completion = runtimeHandle.stop();
+      if (completion !== undefined) {
+        pendingWorkerStops.set(
+          worker.manifest.type,
+          Promise.resolve(completion).then(completed, failed),
+        );
+        return ok(worker);
+      }
+      return completed();
+    } catch (error) {
+      return failed(error);
     }
   }
 
@@ -701,10 +721,15 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
   }
 
-  function stopActiveWorkers(): void {
-    const activeWorkerTypes = Array.from(activeWorkerRuntimeHandles.keys()).sort();
-    for (const workerType of activeWorkerTypes) {
+  async function stopActiveWorkers(): Promise<void> {
+    for (const workerType of Array.from(activeWorkerRuntimeHandles.keys()).sort()) {
       stopWorkerExecution(workerType);
+    }
+    await Promise.all(pendingWorkerStops.values());
+    if (failedWorkerStops.size > 0) {
+      throw new Error(
+        Array.from(failedWorkerStops.values(), (failure) => failure.message).join("; "),
+      );
     }
   }
 
@@ -774,6 +799,7 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         let workerRuntime: WorkerRegistration["runtime"];
         try {
           workerRuntime = loadedPlugin.createRuntime({
+            capabilities: Object.freeze({ awaitableStop: true }),
             getTodu: () => todu,
             logger: runtimeLogger.child(`plugin.${loadedPlugin.manifest.name}`),
             config: pluginConfig,
@@ -893,7 +919,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
 
       return cloneStatus();
     } catch (error) {
-      stopActiveWorkers();
+      try {
+        await stopActiveWorkers();
+      } catch (cleanupError) {
+        shutdownFailure = { error: cleanupError };
+        runtimeLogger.error("worker cleanup failed after daemon start failure", {
+          error: getErrorMessage(cleanupError),
+        });
+      }
       clearEventSubscriptions();
       await enrollment.stop();
       await safeStopTransport(transport);
@@ -1116,11 +1149,18 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
     }
 
     const targetDocumentId = targetCatalogId as DocumentId;
+    try {
+      await stopActiveWorkers();
+    } catch (error) {
+      throw createProtocolError("JOIN_FAILED", "Worker shutdown failed before dataset switch", {
+        stage: "worker-stop",
+        error: getErrorMessage(error),
+      });
+    }
     const tx = beginCatalogJoinSwitch(resolvedConfig.storagePath, targetDocumentId);
     const previousTodu = todu;
 
     try {
-      stopActiveWorkers();
       clearEventSubscriptions();
       todu = null;
       await previousTodu.close();
@@ -1282,9 +1322,19 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
         try {
           const requestsDrained = rpcRouter.stop();
           await enrollment.stop();
-          stopActiveWorkers();
           clearEventSubscriptions();
-          await transport.stop(() => requestsDrained);
+          const drained = await Promise.allSettled([
+            stopActiveWorkers(),
+            transport.stop(() => requestsDrained),
+          ]);
+          const failures = drained.filter((result) => result.status === "rejected");
+          if (failures.length === 1) throw failures[0].reason;
+          if (failures.length > 1) {
+            throw new AggregateError(
+              failures.map((result) => result.reason),
+              "Daemon shutdown drain failed",
+            );
+          }
           // An accepted join may replace the engine while requests are draining.
           const currentTodu = todu;
           todu = null;
@@ -1349,6 +1399,14 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
       state,
       details,
     ): Result<RegisteredWorkerSnapshot, WorkerRegistryError> {
+      const stopFailure = failedWorkerStops.get(workerType.trim());
+      if (stopFailure) return err(stopFailure);
+      if (state !== "stopped" && pendingWorkerStops.has(workerType.trim())) {
+        return err({
+          code: "STOP_FAILED",
+          message: `Worker stop is still pending: ${workerType.trim()}`,
+        });
+      }
       if (state !== "running") {
         if (state === "stopped") {
           return stopWorkerExecution(workerType);
@@ -1360,6 +1418,12 @@ export function createDaemonRuntime(config: DaemonRuntimeConfig = {}): DaemonRun
           const stopResult = stopWorkerExecution(worker.manifest.type);
           if (!stopResult.ok) {
             return stopResult;
+          }
+          if (pendingWorkerStops.has(worker.manifest.type)) {
+            return err({
+              code: "STOP_FAILED",
+              message: `Worker stop is still pending: ${worker.manifest.type}`,
+            });
           }
         }
 

@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import * as engine from "@todu/engine";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDaemonRuntime } from "./runtime.js";
 import {
   createNoopWorkerRuntime,
@@ -546,52 +547,53 @@ describe("createDaemonRuntime worker registration entrypoints", () => {
     await runtime.stop();
   });
 
-  it("returns STOP_FAILED and transitions worker to error when stop throws", async () => {
+  it("preserves STOP_FAILED and refuses successful daemon shutdown after worker stop throws", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-daemon-worker-runtime-test-"));
-
+    const createTodu = engine.createTodu;
+    let ownedTodu: engine.Todu | undefined;
+    const factory = vi.spyOn(engine, "createTodu").mockImplementation(async (options) => {
+      ownedTodu = await createTodu(options);
+      return ownedTodu;
+    });
     const runtime = createDaemonRuntime({
       storagePath: tmpDir,
       enabledWorkerDomains: ["recurring", "task", "sync"],
       workerRegistrations: [
         {
-          manifest: {
-            type: "recurring",
-            requiredDomains: ["recurring"],
-          },
+          manifest: { type: "recurring", requiredDomains: ["recurring"] },
           runtime: {
-            start() {
-              return {
-                stop() {
-                  throw new Error("stop boom");
-                },
-              };
-            },
+            start: () => ({
+              stop() {
+                throw new Error("stop boom");
+              },
+            }),
           },
         },
       ],
     });
-
-    await runtime.start();
-
-    const stopResult = runtime.transitionWorkerState("recurring", "stopped");
-    expect(stopResult.ok).toBe(false);
-    if (stopResult.ok) {
-      throw new Error("Expected stop transition to fail when runtime stop throws");
-    }
-
-    expect(stopResult.error).toMatchObject({
-      code: "STOP_FAILED",
-      details: {
-        workerType: "recurring",
+    try {
+      await runtime.start();
+      const stopResult = runtime.transitionWorkerState("recurring", "stopped");
+      expect(stopResult).toMatchObject({
+        ok: false,
+        error: {
+          code: "STOP_FAILED",
+          details: { workerType: "recurring", errorMessage: "stop boom" },
+        },
+      });
+      expect(runtime.getWorker("recurring")).toMatchObject({
+        state: "error",
         errorMessage: "stop boom",
-      },
-    });
-
-    expect(runtime.getWorker("recurring")).toMatchObject({
-      state: "error",
-      errorMessage: "stop boom",
-    });
-
-    await runtime.stop();
+      });
+      await expect(runtime.stop()).rejects.toThrow("Worker failed to stop: recurring: stop boom");
+      await expect(runtime.start()).rejects.toThrow("Previous daemon shutdown failed");
+    } finally {
+      try {
+        await expect(runtime.stop()).rejects.toThrow("stop boom");
+      } finally {
+        factory.mockRestore();
+        await ownedTodu?.close();
+      }
+    }
   });
 });

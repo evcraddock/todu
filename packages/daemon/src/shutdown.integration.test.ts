@@ -4,7 +4,7 @@ import net, { type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
+import { type CatalogDocument, createEmptyCatalog, type Note, type Task } from "@todu/core";
 import * as engine from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startDaemonProcess } from "./process.js";
@@ -380,6 +380,156 @@ describe("connected-client shutdown", () => {
     expect(logs).toContain("CLEAN_STOP");
     expect(logs.indexOf("HANDLER_COMPLETED")).toBeLessThan(logs.indexOf("CLEAN_STOP"));
     expect(fs.existsSync(path.join(tmpDir, "daemon.sock"))).toBe(false);
+  }, 10_000);
+
+  it.each(
+    ["shutdown", "initialize", "pull", "acknowledge", "push"].flatMap((phase) =>
+      [false, true].map((disconnected) => ({ phase, disconnected })),
+    ),
+  )("drains provider $phase before natural exit (disconnected=$disconnected) and preserves history", async ({
+    phase,
+    disconnected,
+  }) => {
+    const rootDir = fileURLToPath(new URL("../../../", import.meta.url));
+    const pluginPath = path.join(tmpDir, "shutdown-provider.mjs");
+    const releasePath = path.join(tmpDir, "release-provider");
+    const configPath = path.join(tmpDir, "config.yaml");
+    let originalTask: Task;
+    let originalNote: Note;
+    const seeded = await engine.createTodu({ storagePath: tmpDir });
+    try {
+      const project = await seeded.project.create({ name: "Provider shutdown fixture" });
+      if (!project.ok) throw new Error(project.error.message);
+      const binding = await seeded.integration.create({
+        provider: "shutdown-fixture",
+        projectId: project.value.id,
+        targetKind: "repository",
+        targetRef: "fixture/local",
+        enabled: true,
+        strategy: phase === "push" ? "push" : "pull",
+      });
+      if (!binding.ok) throw new Error(binding.error.message);
+      const task = await seeded.task.create({
+        projectId: project.value.id,
+        title: "Retained task",
+        description: "Retained description",
+        status: "done",
+      });
+      if (!task.ok) throw new Error(task.error.message);
+      originalTask = task.value;
+      const note = await seeded.note.create({
+        entityType: "task",
+        entityId: task.value.id,
+        content: "Retained note",
+      });
+      if (!note.ok) throw new Error(note.error.message);
+      originalNote = note.value;
+    } finally {
+      await seeded.close();
+    }
+    fs.writeFileSync(configPath, "sync:\n  remote:\n    enabled: false\n");
+    fs.writeFileSync(
+      pluginPath,
+      `import fs from "node:fs";
+       async function gate(phase) {
+         console.log("PHASE_ENTERED:" + phase);
+         if (phase === ${JSON.stringify(phase)}) {
+           while (!fs.existsSync(${JSON.stringify(releasePath)}))
+             await new Promise((resolve) => setTimeout(resolve, 20));
+         }
+         console.log("PHASE_COMPLETED:" + phase);
+       }
+       export const syncProvider = {
+         manifest: { name: "shutdown-fixture", version: "1.0.0", apiVersion: 4 },
+         provider: {
+           name: "shutdown-fixture", version: "1.0.0",
+           async initialize() { await gate("initialize"); },
+           async pull() { await gate("pull"); return { tasks: [], comments: [], checkpoint: "fixture" }; },
+           async acknowledgePull() { await gate("acknowledge"); },
+           async push() { await gate("push"); return { taskLinks: [], commentLinks: [] }; },
+           async shutdown() { await gate("shutdown"); },
+         },
+       };`,
+    );
+    releaseWork = () => fs.writeFileSync(releasePath, "released");
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([name]) => !name.startsWith("TODU_")),
+    );
+    const spawningAt = performance.now();
+    child = spawn(
+      process.execPath,
+      ["--import", "tsx", path.join(rootDir, "packages/daemon/src/entrypoint.ts")],
+      {
+        cwd: rootDir,
+        env: {
+          ...env,
+          HOME: tmpDir,
+          XDG_CONFIG_HOME: path.join(tmpDir, "config"),
+          XDG_DATA_HOME: path.join(tmpDir, "data"),
+          TODU_CONFIG: configPath,
+          TODU_DATA_DIR: tmpDir,
+          TODU_SYNC_ENABLED: "false",
+          TODU_DAEMON_PLUGIN_PATHS: pluginPath,
+          TODU_DAEMON_ASSIGNED_WORKERS: "shutdown-fixture-sync",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let logs = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      logs += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      logs += chunk.toString();
+    });
+    childExit = new Promise((resolve, reject) => {
+      child?.once("error", reject);
+      child?.once("close", (code, signal) => resolve({ code, signal }));
+    });
+    const readyMarker =
+      phase === "shutdown" ? "sync plugin cycle completed" : `PHASE_ENTERED:${phase}`;
+    await vi.waitFor(() => expect(logs).toContain(readyMarker), { timeout: 5_000 });
+    const spawnToReadyMs = performance.now() - spawningAt;
+    const client = await connect(path.join(tmpDir, "daemon.sock"));
+    const read = frameReader(client);
+    const statusAt = performance.now();
+    const status = await request({ client, read, method: "daemon.status", params: {} });
+    const statusRpcMs = performance.now() - statusAt;
+    expect(status.result).toMatchObject({ state: "running", healthy: true });
+    console.info(
+      "SHUTDOWN_STARTUP_TIMING",
+      JSON.stringify({ phase, disconnected, spawnToReadyMs, statusRpcMs }),
+    );
+    await request({
+      client,
+      read,
+      method: "events.subscribe",
+      params: { events: ["data.changed"] },
+    });
+    if (disconnected) client.destroy();
+    child.kill("SIGTERM");
+    if (phase === "shutdown")
+      await vi.waitFor(() => expect(logs).toContain("PHASE_ENTERED:shutdown"));
+    await delay(350);
+    expect(child.exitCode).toBeNull();
+    expect(logs).not.toContain('"message":"daemon process stopped"');
+    releaseWork();
+    expect(await within(childExit, 2_000)).toEqual({ code: 0, signal: null });
+    expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeGreaterThan(-1);
+    expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeLessThan(
+      logs.indexOf('"message":"daemon process stopped"'),
+    );
+    expect(logs).not.toMatch(/UnhandledPromiseRejection|shutdown failed|storage.*race/);
+    expect(fs.existsSync(path.join(tmpDir, "daemon.sock"))).toBe(false);
+    const reopened = await engine.createTodu({ storagePath: tmpDir });
+    try {
+      const task = await reopened.task.get(originalTask.id);
+      expect(task.ok && task.value).toEqual(originalTask);
+      const note = await reopened.note.get(originalNote.id);
+      expect(note.ok && note.value).toEqual(originalNote);
+    } finally {
+      await reopened.close();
+    }
   }, 10_000);
 
   it("propagates process shutdown failures without firing the successful stopped hook", async () => {

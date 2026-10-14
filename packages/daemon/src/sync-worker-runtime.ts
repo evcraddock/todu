@@ -211,7 +211,8 @@ export function createSyncPluginWorkerRuntime(
       let stopped = false;
       let running = false;
       let initialized = false;
-      let pendingShutdown = false;
+      let cycle: Promise<void> | null = null;
+      let stopPromise: Promise<void> | null = null;
       let retryAttempt = 0;
       let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -221,7 +222,7 @@ export function createSyncPluginWorkerRuntime(
         }
 
         timer = setTimeoutFn(() => {
-          void runCycle();
+          if (!stopped && !running) cycle = runCycle();
         }, delayMs);
       };
 
@@ -235,12 +236,13 @@ export function createSyncPluginWorkerRuntime(
         try {
           await options.provider.shutdown();
         } catch (error) {
-          runtimeLogger.warn("sync plugin shutdown failed", {
+          runtimeLogger.error("sync plugin shutdown failed", {
             pluginName: options.pluginName,
             pluginVersion: options.pluginVersion,
             modulePath: options.modulePath,
             error: error instanceof Error ? error.message : String(error),
           });
+          throw error;
         }
       };
 
@@ -557,6 +559,7 @@ export function createSyncPluginWorkerRuntime(
           }
 
           for (const binding of bindingsResult.value) {
+            if (stopped) break;
             try {
               await runBindingCycle(activeTodu, binding, startedAt);
             } catch (error) {
@@ -569,6 +572,7 @@ export function createSyncPluginWorkerRuntime(
             }
           }
 
+          if (stopped) return;
           retryAttempt = 0;
           runtimeLogger.info("sync plugin cycle completed", {
             pluginName: options.pluginName,
@@ -597,11 +601,6 @@ export function createSyncPluginWorkerRuntime(
           scheduleNext(delayMs);
         } finally {
           running = false;
-
-          if (stopped && pendingShutdown) {
-            pendingShutdown = false;
-            void shutdownProvider();
-          }
         }
       };
 
@@ -609,23 +608,17 @@ export function createSyncPluginWorkerRuntime(
 
       return {
         stop() {
-          if (stopped) {
-            return;
-          }
-
+          if (stopPromise) return stopPromise;
           stopped = true;
-
           if (timer) {
             clearTimeoutFn(timer);
             timer = null;
           }
-
-          if (running) {
-            pendingShutdown = true;
-            return;
-          }
-
-          void shutdownProvider();
+          stopPromise = (async () => {
+            await cycle;
+            await shutdownProvider();
+          })();
+          return stopPromise;
         },
       };
     },

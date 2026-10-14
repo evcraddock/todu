@@ -151,6 +151,10 @@ Confirm the template is active, due in its configured timezone, and points to an
 
 ## Source builds and version reporting
 
+The source worker now requires the host's explicit `capabilities.awaitableStop` support before allocating runtime resources. Its stop handle cancels future intervals and waits for admitted startup/interval processing before completing. Older hosts without that capability refuse source-worker activation with a clear error; a promise ignored by an old host is not a safe fallback. See [Worker Plugin API](worker-plugin-api.md#awaitable-stop-opt-in).
+
+This adoption is a **source change only**. The published `@todu/recurring-worker@0.1.1` still uses its legacy synchronous stop and does not provide an in-flight-work completion promise. Upgrading the daemon alone cannot add that guarantee to the installed legacy artifact. The worker remains private/Changesets-ignored; updating publication, installation, and the verified compatibility matrix requires a separately approved release.
+
 The source worker manifest derives its version from `packages/recurring-worker/package.json`. `generate-version.mjs` writes the tracked `src/version.ts` constant before package build and typecheck; repository versioning (`npm run version-packages`) also refreshes it. Do not edit the generated constant manually. The compiled package includes this constant, so loading the packed worker requires no source checkout or runtime JSON import.
 
 To verify a source change without publishing, installing, starting a worker, or contacting a daemon:
