@@ -1,5 +1,13 @@
 # @todu/engine
 
+## 0.24.2
+
+### Patch Changes
+
+- Add a narrow private lifecycle verifier that checks live binding/task metadata and invokes the host continuation without an intervening await, closing the asynchronous-read freshness gap for cancellation exclusions. Providers receive no engine/storage access; this is not a distributed lock and does not cover asynchronous acknowledgment completion.
+- Updated dependencies
+  - @todu/core@0.26.0
+
 ## 0.24.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @todu/core
 
+## 0.26.0
+
+### Minor Changes
+
+- Add explicit sync-provider API v6 contracts for read-only, binding/project-scoped local task identity and lifecycle observations, unambiguous resolution, and invocation-local cancellation exclusion receipts. Preserve v3/v4/v5 negotiation and behavior.
+
 ## 0.25.2
 
 ### Patch Changes
