@@ -108,11 +108,11 @@ See [npm trusted-publishing documentation](https://docs.npmjs.com/trusted-publis
 
 ## Internal workspace dependencies
 
-Current Todu packages use workspace-local `@todu/*` dependencies with `"*"` ranges. Changesets can publish a package independently when only that package changes.
+Most Todu packages use workspace-local `@todu/*` dependencies with `"*"` ranges. The API v6 release sets explicit minimums for packages requiring the new contracts or lifecycle verifier: `@todu/engine@0.24.2` requires `@todu/core@^0.26.0`, and `@todu/daemon@0.26.0` requires `@todu/core@^0.26.0` and `@todu/engine@^0.24.2`. These ranges prevent older dependencies from satisfying the new host requirements while continuing to resolve the compatible local workspaces. Changesets can publish a package independently when no dependent range updates are needed.
 
 When a package makes an incompatible change that affects dependents, add changesets for the dependents too. For example, if `@todu/core` changes in a way that requires CLI updates, include changesets for both `@todu/core` and `@todu/cli`.
 
-`updateInternalDependencies` is configured as `patch`, but `"*"` ranges are intentionally broad. Human package selection in each changeset is the compatibility gate.
+`updateInternalDependencies` is configured as `patch`; Changesets updates constrained internal ranges when required. Remaining `"*"` ranges are intentionally broad. Human package selection and required minimum dependency ranges are the compatibility gate.
 
 ## Generated version sources
 

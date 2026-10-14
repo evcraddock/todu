@@ -1,5 +1,17 @@
 # @todu/daemon
 
+## 0.26.0
+
+### Minor Changes
+
+- Support opt-in API v6 pull context and fail-closed cancellation exclusions so verified cancelled unavailable targets do not block unrelated synchronization. Refresh observations per eligible pull and revalidate exclusions before application and after persistence/flush at acknowledgment invocation. Preserve legacy provider behavior, identity guards, approvals, pending-pull replay, and retry/error visibility. Forgejo adoption remains separate.
+
+### Patch Changes
+
+- Updated dependencies
+  - @todu/core@0.26.0
+  - @todu/engine@0.24.2
+
 ## 0.25.1
 
 ### Patch Changes
