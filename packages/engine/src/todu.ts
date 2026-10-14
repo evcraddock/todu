@@ -41,6 +41,7 @@ import type {
   RemoteSyncSettings,
   Result,
   SyncListenerConfig,
+  SyncLocalTaskObservation,
   Task,
   TaskFilter,
   TaskId,
@@ -382,6 +383,13 @@ export interface ToduInternalTools {
     attachSource(source: EnrollmentSource, signal?: AbortSignal): Promise<Result<void>>;
   };
   syncRuntime: {
+    /** Verify scoped live lifecycle metadata and immediately invoke a host-only continuation. */
+    withCurrentTaskLifecycle(params: {
+      binding: IntegrationBinding;
+      observations: readonly SyncLocalTaskObservation[];
+      isCurrentHost: () => boolean;
+      run: () => Promise<void>;
+    }): Promise<Result<void>>;
     /** Activate publication/roster observation only after the daemon commits its active dataset. */
     activateDeviceNetworking(): Promise<Result<import("./peer-connections.js").PeerReloadReport>>;
     /** Complete native local storage writes; does not wait for remote replication. */

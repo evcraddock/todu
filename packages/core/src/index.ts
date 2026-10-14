@@ -7,6 +7,7 @@ export * from "./schedule.js";
 export * from "./schema.js";
 export * from "./sync-field-groups.js";
 export * from "./sync-listener-enable.js";
+export * from "./sync-local-task-context.js";
 export * from "./sync-provider.js";
 export * from "./types.js";
 export * from "./validation.js";

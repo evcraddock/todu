@@ -48,6 +48,7 @@ import {
   isSyncServerAvailable,
 } from "./sync-client.js";
 import { createSyncContentRecoveryStore } from "./sync-content-recovery.js";
+import { createSyncLifecycleGuard } from "./sync-lifecycle-guard.js";
 import { type SyncListener, startSyncListener } from "./sync-listener.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
 import { createTaskNamespaces } from "./tasks.js";
@@ -742,6 +743,11 @@ export async function createTodu(
           storagePath: resolvedConfig.storagePath,
           catalogId: storage.catalog.documentId,
           ephemeral: storage.ephemeral,
+        }),
+        withCurrentTaskLifecycle: createSyncLifecycleGuard({
+          catalog: storage.catalog,
+          repo: storage.repo,
+          isClosed: () => engineClosed,
         }),
         tasks: taskNamespaces.syncRuntime,
         notes: noteNamespaces.syncRuntime,
