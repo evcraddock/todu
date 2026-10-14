@@ -1,6 +1,6 @@
 {
   "name": "@todu/daemon",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "description": "Daemon runtime foundation for todu",
   "type": "module",
   "main": "./dist/index.js",
@@ -26,8 +26,8 @@
     "@automerge/automerge": "3.5.0",
     "@automerge/automerge-repo": "2.5.6",
     "@automerge/automerge-repo-storage-nodefs": "2.5.6",
-    "@todu/core": "^0.26.0",
-    "@todu/engine": "^0.24.2",
+    "@todu/core": "^0.27.0",
+    "@todu/engine": "^0.24.3",
     "yaml": "^2.8.2"
   },
   "publishConfig": {

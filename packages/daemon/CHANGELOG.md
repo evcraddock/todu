@@ -1,5 +1,17 @@
 # @todu/daemon
 
+## 0.27.0
+
+### Minor Changes
+
+- Advertise awaitable-stop support and drain admitted worker/provider and RPC work before engine close or successful shutdown logging. Preserve pending/failure visibility, refuse unsafe reactivation/reuse/join, and surface cleanup errors without changing provider API v3/v4/v5/v6 or the existing CLI deadline.
+
+### Patch Changes
+
+- Updated dependencies
+  - @todu/core@0.27.0
+  - @todu/engine@0.24.3
+
 ## 0.26.0
 
 ### Minor Changes

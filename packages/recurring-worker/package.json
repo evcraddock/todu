@@ -1,7 +1,6 @@
 {
   "name": "@todu/recurring-worker",
-  "version": "0.1.1",
-  "private": true,
+  "version": "0.2.0",
   "description": "Standalone recurring automation worker plugin for todu daemon",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,8 +21,8 @@
     "typecheck": "tsgo -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
-    "@todu/core": "*",
-    "@todu/engine": "*"
+    "@todu/core": "^0.27.0",
+    "@todu/engine": "^0.24.3"
   },
   "publishConfig": {
     "access": "public"

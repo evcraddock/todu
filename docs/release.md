@@ -7,7 +7,7 @@ Todu uses two release paths:
 
 ## NPM package releases with Changesets
 
-Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, and `@todu/tui`.
+Use Changesets for published npm packages such as `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, `@todu/tui`, and `@todu/recurring-worker`.
 
 ### Release command infers and versions locally
 
@@ -57,7 +57,7 @@ When the locally-created version PR lands on `main`, the `NPM Release` workflow 
 
 The `release` job uses GitHub OIDC (`id-token: write`) instead of a long-lived npm token. Its existing Node 24 runtime supplies an npm CLI compatible with trusted publishing; npm requires version 11.5.1 or later and Node 22.14.0 or later. Keep publishing on GitHub-hosted runners. Changesets delegates publication to `npm publish`, which exchanges the job's OIDC identity for short-lived package publishing credentials. Public package releases from this public repository also receive npm provenance automatically.
 
-Configure a trusted publisher separately in the npm package settings for each published workspace: `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, and `@todu/tui`. Select **GitHub Actions** and enter:
+Configure a trusted publisher separately in the npm package settings for each published workspace: `@todu/core`, `@todu/engine`, `@todu/daemon`, `@todu/cli`, `@todu/tui`, and `@todu/recurring-worker`. Select **GitHub Actions** and enter:
 
 | Field | Value |
 |-------|-------|
@@ -98,17 +98,17 @@ To recover a failed release:
 
 Record the successful workflow URL and registry results in the task handoff. A saved npm connection, successful build, or local regression test does not prove publication succeeded.
 
-OIDC credentials need no periodic token rotation. Audit the five package connections when changing repository ownership, workflow filenames, runners, or deployment environments. A connection's provider and required identity fields cannot be changed after creation; replacing one requires an explicitly approved removal and recreation. If an OIDC release fails, compare these settings first rather than adding a broad token or weakening 2FA.
+OIDC credentials need no periodic token rotation. Audit the six package connections when changing repository ownership, workflow filenames, runners, or deployment environments. A connection's provider and required identity fields cannot be changed after creation; replacing one requires an explicitly approved removal and recreation. If an OIDC release fails, compare these settings first rather than adding a broad token or weakening 2FA.
 
 See [npm trusted-publishing documentation](https://docs.npmjs.com/trusted-publishers/) for requirements and troubleshooting.
 
 ## Ignored workspaces
 
-`@todu/electron` and `@todu/recurring-worker` are ignored by Changesets. The existing `@todu/recurring-worker@0.1.1` npm package can be used as a pinned single-machine plugin, but it does not receive updates through the normal release workflow. A future recurring-worker update must be intentional: remove the workspace's private flag, add it back to the Changesets publish set, add an appropriate changeset, and verify npm installation and automatic occurrence generation before publishing.
+`@todu/electron` remains private and ignored by Changesets. The approved completion-aware shutdown release intentionally restores `@todu/recurring-worker` to the public publish set at `0.2.0`, removes its private flag, versions it with Changesets, and verifies clean npm installation/automatic generation/direct lifecycle before publication. Its npm trusted-publisher connection must authorize this repository's `npm-release.yml`; maintainer setup is required if that connection is missing. Do not substitute a token, weaken 2FA, or assume the existing five package connections also authorize this package. See [Recurring Worker Installation](recurring-worker-installation.md) for required host capability, exact compatibility set, and legacy-artifact limitations.
 
 ## Internal workspace dependencies
 
-Most Todu packages use workspace-local `@todu/*` dependencies with `"*"` ranges. The API v6 release sets explicit minimums for packages requiring the new contracts or lifecycle verifier: `@todu/engine@0.24.2` requires `@todu/core@^0.26.0`, and `@todu/daemon@0.26.0` requires `@todu/core@^0.26.0` and `@todu/engine@^0.24.2`. These ranges prevent older dependencies from satisfying the new host requirements while continuing to resolve the compatible local workspaces. Changesets can publish a package independently when no dependent range updates are needed.
+Most Todu packages use workspace-local `@todu/*` dependencies with `"*"` ranges. The API v6 release sets explicit minimums for packages requiring the new contracts or lifecycle verifier: `@todu/engine@0.24.2` requires `@todu/core@^0.26.0`, and `@todu/daemon@0.26.0` requires `@todu/core@^0.26.0` and `@todu/engine@^0.24.2`. These ranges prevent older dependencies from satisfying the new host requirements while continuing to resolve the compatible local workspaces. The completion-aware release aligns engine `0.24.3` with core `^0.27.0`; daemon `0.27.0` and recurring worker `0.2.0` require core `^0.27.0` and engine `^0.24.3`. The worker additionally requires the actual host's explicit `awaitableStop` capability; dependency/version metadata is not a substitute for that runtime negotiation. Changesets can publish a package independently when no dependent range updates are needed.
 
 When a package makes an incompatible change that affects dependents, add changesets for the dependents too. For example, if `@todu/core` changes in a way that requires CLI updates, include changesets for both `@todu/core` and `@todu/cli`.
 
@@ -116,7 +116,7 @@ When a package makes an incompatible change that affects dependents, add changes
 
 ## Generated version sources
 
-`@todu/cli` and `@todu/tui` compile their package version into `src/version.ts`. After Changesets updates package versions, run:
+`@todu/cli`, `@todu/tui`, and `@todu/recurring-worker` compile their package version into `src/version.ts`. After Changesets updates package versions, run:
 
 ```bash
 node scripts/generate-package-versions.mjs

@@ -35,19 +35,19 @@ describe("recurring-worker version generation", () => {
   it("regenerates versions before build, typecheck, and repository versioning", () => {
     const manifest = JSON.parse(readFileSync(path.join(packageDir, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
-      private: boolean;
+      private?: boolean;
     };
     expect(manifest.scripts.prebuild).toBe("node generate-version.mjs");
     expect(manifest.scripts.pretypecheck).toBe("node generate-version.mjs");
     expect(
       readFileSync(path.join(rootDir, "scripts/generate-package-versions.mjs"), "utf8"),
     ).toContain('"packages/recurring-worker/generate-version.mjs"');
-    expect(manifest.private).toBe(true);
+    expect(manifest.private).not.toBe(true);
     const changesets = JSON.parse(
       readFileSync(path.join(rootDir, ".changeset/config.json"), "utf8"),
     ) as {
       ignore: string[];
     };
-    expect(changesets.ignore).toContain("@todu/recurring-worker");
+    expect(changesets.ignore).not.toContain("@todu/recurring-worker");
   });
 });
