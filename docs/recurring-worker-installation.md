@@ -1,55 +1,47 @@
 # Recurring Worker Installation
 
-The recurring worker is an optional daemon plugin that turns due recurring templates into tasks automatically. Recurring templates remain available without it, but occurrences must then be generated manually.
+The optional recurring worker turns due templates into tasks automatically. Without it, templates remain available but occurrences require manual generation.
 
-## Distribution status
+## Release and compatibility
 
-`@todu/recurring-worker@0.1.1` is published on npm. Pin this exact version: the package is currently excluded from the normal Changesets release flow and does not receive automatic package updates. The current source checkout fixes manifest version reporting; the existing published artifact still reports `1.0.0` instead of its package version `0.1.1`. This reporting mismatch alone does not indicate a worker execution failure.
+The `0.2.0` release intentionally restores `@todu/recurring-worker` to the normal Changesets npm flow. Its manifest reports the package version, and stop drains admitted startup/interval processing after cancelling future intervals. It requires the host's explicit `capabilities.awaitableStop === true`; an older host is refused before runtime resources are allocated. Version numbers alone are not the negotiation mechanism. See [Worker Plugin API](worker-plugin-api.md#awaitable-stop-opt-in).
 
-## Requirements
+The release compatibility set is:
 
-- Node.js 20 or newer
-- npm
-- A Todu CLI installation with a local daemon
-- Worker type `recurring` assigned to exactly one daemon for the dataset
+| Package | Version |
+| --- | --- |
+| Node / npm used in local validation | `24.16.0` / `11.13.0` |
+| `@todu/cli` (unchanged published CLI) | `0.25.2` |
+| `@todu/core` | `0.27.0` |
+| `@todu/engine` | `0.24.3` |
+| `@todu/daemon` | `0.27.0` |
+| `@todu/recurring-worker` | `0.2.0` |
 
-## Current published versions
+The daemon and worker declare minimum compatible core/engine ranges; engine aligns its core dependency. The host/engine pin Automerge `3.5.0` and Repo `2.5.6`. Do not add the obsolete Automerge `3.3.2` override from the historical `0.1.1` setup. Normal npm installation must run the engine's required Repo repair postinstall script.
 
-The following source-checkout-free setup was verified with Node `24.16.0`, npm `11.13.0`, `@todu/cli@0.24.0`, `@todu/daemon@0.23.2`, `@todu/engine@0.23.6`, `@todu/core@0.23.2`, and `@todu/recurring-worker@0.1.1`:
+**Release metadata is not publication evidence.** Before using the commands below, verify every exact version, registry integrity and dist-tag against the approved release. The local package regression installs the four packed candidates plus the published CLI into a clean temporary npm project, without workspace symlinks; it is candidate-installation evidence, not proof those versions have reached npm or your running daemon.
+
+## Install the verified release
+
+Stop an existing managed daemon gracefully **before** replacing installed files. An affected older daemon may hang, and the stock direct CLI escalates to SIGKILL after ten seconds. The deployment procedure must use a positively identified owned process and a non-escalating graceful stop; if it does not exit, pause rather than force-kill, delete locks/data, or claim storage completion. A later healthy start is not proof that a previously forced stop completed its writes.
+
+Once the existing process has exited, install the exact verified set in the existing Node/npm environment:
 
 ```bash
 npm install -g \
-  @todu/cli@0.24.0 \
-  @todu/recurring-worker@0.1.1 \
-  @automerge/automerge@3.3.2
-
-RECURRING_WORKER_ENTRY="$(npm root -g)/@todu/recurring-worker/dist/index.js"
-todu plugin install "$RECURRING_WORKER_ENTRY"
-todu plugin config recurring-worker --set '{"intervalSeconds":30}'
+  @todu/cli@0.25.2 \
+  @todu/core@0.27.0 \
+  @todu/engine@0.24.3 \
+  @todu/daemon@0.27.0 \
+  @todu/recurring-worker@0.2.0
 ```
 
-The explicit Automerge installation keeps the daemon and engine on the same runtime version. The absolute npm entrypoint works around package-name plugin resolution in `@todu/cli@0.24.0`.
-
-## Package-name installation after the compatibility fixes are released
-
-CLI and daemon releases containing the npm plugin resolution and Automerge alignment fixes support the shorter installation path:
+For a fresh setup only, register the plugin and assign `recurring` to exactly one daemon for the dataset. Preserve other assignments:
 
 ```bash
-npm install -g @todu/cli@latest @todu/recurring-worker@0.1.1
 todu plugin install @todu/recurring-worker
 todu plugin config recurring-worker --set '{"intervalSeconds":30}'
 ```
-
-Confirm the installed versions before relying on this form:
-
-```bash
-todu --version
-npm list -g --depth=0 @todu/cli @todu/recurring-worker
-```
-
-## Assign and activate the worker
-
-Add `recurring` to the assigned worker types in `~/.config/todu/config.yaml`. Preserve any other existing assignments:
 
 ```yaml
 daemon:
@@ -58,115 +50,44 @@ daemon:
       - recurring
 ```
 
-Restart the daemon so it loads the plugin and assignment:
+An existing npm-installed worker keeps its entrypoint across package replacement; do not add a second source/npm entry with the same worker type. Configuration/assignment/path migrations require their own scoped approval. After the approved installation:
 
 ```bash
-todu daemon restart
-```
-
-Plugin installation and configuration changes do not affect the running daemon until restart.
-
-## Verify activation
-
-Check the daemon and plugin:
-
-```bash
+todu daemon start
 todu daemon status
 todu plugin list
+npm list -g --depth=0 @todu/cli @todu/daemon @todu/recurring-worker
 ```
 
-The recurring plugin should report:
+Confirm the actual CLI-to-daemon/core/engine module resolution as well as top-level package metadata. The daemon must be healthy on the original catalog/socket, and the worker must be running/OK with manifest `0.2.0`. Runtime version fields may report `dev`; they do not replace artifact/version verification.
 
-- kind `worker-plugin`
-- worker type `recurring`
-- runtime state `running`
-- status `ok`
+## Candidate installation regression
 
-To verify automatic generation, create a disposable project and a template due today:
+After building the candidate:
 
 ```bash
-todu project create --name "Recurring Worker Test"
-todu recurring create \
-  --title "Generated by recurring worker" \
-  --schedule "FREQ=DAILY" \
-  --project "Recurring Worker Test" \
-  --timezone "America/Chicago" \
-  --start-date "$(date +%F)"
+npm run test:all -- scripts/recurring-worker-package.integration.test.ts
 ```
 
-Wait at least one configured worker interval, then check the project without manually generating occurrences:
+The regression packs core/engine/daemon/worker, installs their actual archives plus published CLI `0.25.2` in disposable HOME/config/data paths, executes required installation scripts, verifies module resolution and unsupported-host refusal, and runs the real direct CLI lifecycle. It automatically generates an occurrence, restarts with a persistent subscribed client, checks the same catalog/new PID/no duplicate occurrence, stops after client disconnection without forced termination, and reopens exact task/description/note data. It uses no source-checkout plugin, production dataset, real provider, or manual occurrence-generation call. Separate source shutdown regressions cover admitted work and cleanup/storage/RPC failure propagation.
+
+Successful local exit/persistence does not establish remote durability or resolve historical startup stalls. Long-running uncooperative work can still exhaust the existing stop allowance; no universal abort support is implied.
+
+## Legacy artifact and source builds
+
+Published `0.1.1` remains historical: its manifest reports `1.0.0` and its synchronous stop does not provide an in-flight completion promise. A daemon upgrade cannot retrofit this guarantee into that already loaded artifact. Explicit worker replacement and restart are required; do not install `0.2.0` into an older unsupported host and expect a safe fallback.
+
+Source version generation reads `packages/recurring-worker/package.json` and writes `src/version.ts` before build/typecheck and repository versioning. The compiled package needs no runtime JSON import or source checkout. Verify source metadata separately with:
 
 ```bash
-todu task list --project "Recurring Worker Test"
-```
-
-A generated task should have the template title, today's `scheduledDate`, and a `templateId`.
-
-## Recorded verification result
-
-The published-version compatibility setup loaded the npm-installed worker from its absolute `node_modules` entrypoint, reported runtime state `running`, and generated task `sched-f4623dcde577` automatically from template `rec-3de488ed` within one configured interval. A second isolated installation built with the package-name resolution and Automerge alignment fixes loaded `@todu/recurring-worker` directly, reported runtime state `running`, and generated task `sched-45564e5a3325` automatically from template `rec-6729be0c`. Both tests used temporary config and data directories and did not access the existing Todu dataset or source-checkout worker.
-
-## Migrate from a source-checkout plugin
-
-Install and validate the npm package before replacing the source path. The running daemon continues using the already loaded source plugin until restart.
-
-For the currently published versions:
-
-```bash
-npm install -g @todu/recurring-worker@0.1.1 @automerge/automerge@3.3.2
-NPM_ENTRY="$(npm root -g)/@todu/recurring-worker/dist/index.js"
-todu plugin install "$NPM_ENTRY"
-todu plugin remove /absolute/path/to/source/packages/recurring-worker/dist/index.js
-todu daemon restart
-todu plugin list
-```
-
-Use exact paths when removing one of two configured copies of the same plugin name. Do not restart while both entries are configured because both declare worker type `recurring`.
-
-If verification fails, restore the previous entry and restart:
-
-```bash
-todu plugin remove "$NPM_ENTRY"
-todu plugin install /absolute/path/to/source/packages/recurring-worker/dist/index.js
-todu daemon restart
+make build
+npm test -- scripts/recurring-worker-version.test.ts packages/recurring-worker/src/index.test.ts
 ```
 
 ## Troubleshooting
 
-### Runtime is `not-loaded`
-
-Check daemon logs for `IMPORT_FAILED`. With `@todu/cli@0.24.0`, register the absolute npm entrypoint instead of `@todu/recurring-worker`.
-
-### Daemon reports `Automerge.use() not called`
-
-A fresh dependency resolution selected different Automerge runtimes for the daemon and engine. For the tested published versions, install `@automerge/automerge@3.3.2` at the same npm installation level as the CLI. Later daemon releases pin the compatible runtime directly.
-
-### Runtime is `blocked`
-
-Confirm `recurring` is present under `daemon.workers.assigned`, then restart the daemon. Also check the reported blocked reason for missing `recurring` or `task` domain capabilities.
-
-### Runtime is `running` but no task appears
-
-Confirm the template is active, due in its configured timezone, and points to an active project. Wait at least one worker interval and inspect daemon logs for `recurring worker process returned error` or `recurring worker run failed`.
-
-## Source builds and version reporting
-
-The source worker now requires the host's explicit `capabilities.awaitableStop` support before allocating runtime resources. Its stop handle cancels future intervals and waits for admitted startup/interval processing before completing. Older hosts without that capability refuse source-worker activation with a clear error; a promise ignored by an old host is not a safe fallback. See [Worker Plugin API](worker-plugin-api.md#awaitable-stop-opt-in).
-
-This adoption is a **source change only**. The published `@todu/recurring-worker@0.1.1` still uses its legacy synchronous stop and does not provide an in-flight-work completion promise. Upgrading the daemon alone cannot add that guarantee to the installed legacy artifact. The worker remains private/Changesets-ignored; updating publication, installation, and the verified compatibility matrix requires a separately approved release.
-
-The source worker manifest derives its version from `packages/recurring-worker/package.json`. `generate-version.mjs` writes the tracked `src/version.ts` constant before package build and typecheck; repository versioning (`npm run version-packages`) also refreshes it. Do not edit the generated constant manually. The compiled package includes this constant, so loading the packed worker requires no source checkout or runtime JSON import.
-
-To verify a source change without publishing, installing, starting a worker, or contacting a daemon:
-
-```bash
-make build
-npm test -- packages/recurring-worker/src/index.test.ts scripts/recurring-worker-version.test.ts
-npm run test:all -- scripts/recurring-worker-package.integration.test.ts
-```
-
-The package test packs the existing build without running lifecycle scripts, extracts it into a temporary directory, and compares the exported manifest version with the packed metadata using isolated home/config/data paths. It does not start the worker runtime. These checks do not update the published npm package or the live daemon. The worker remains private and ignored by Changesets; publishing a corrected artifact requires a separate approval.
-
-## Updates
-
-Because `@todu/recurring-worker` is not in the normal npm release flow, do not assume `@latest` tracks repository changes. Keep `0.1.1` pinned until an intentional recurring-worker release is announced. After any package update, restart the daemon and repeat the activation and generation checks above.
+- **Unsupported host / runtime creation failure:** install the compatible completion-aware host, confirm actual module resolution, and use its negotiated capability; do not remove the worker's check.
+- **Not loaded / `IMPORT_FAILED`:** inspect the configured package/absolute entrypoint and prevent duplicate worker registrations.
+- **Blocked:** check existing assignment and required `recurring`/`task` domains; changing ownership/assignment is not part of package installation.
+- **Running but no occurrence:** confirm an active due template and active project, wait one configured interval, and inspect reported generation errors. Do not use production task creation as a deployment smoke test.
+- **Stop timeout or cleanup failure:** pause and preserve evidence; do not force recovery, repeat signals, or claim unconfirmed writes completed.

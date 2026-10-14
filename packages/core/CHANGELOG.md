@@ -1,5 +1,11 @@
 # @todu/core
 
+## 0.27.0
+
+### Minor Changes
+
+- Add explicitly negotiated `capabilities.awaitableStop` and awaitable worker stop return types, preserving synchronous legacy contracts and safe refusal of unsupported hosts.
+
 ## 0.26.0
 
 ### Minor Changes

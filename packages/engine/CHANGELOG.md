@@ -1,5 +1,13 @@
 # @todu/engine
 
+## 0.24.3
+
+### Patch Changes
+
+- Align the core dependency minimum with `0.27.0` for the completion-aware host/worker release. No engine runtime implementation changes.
+- Updated dependencies
+  - @todu/core@0.27.0
+
 ## 0.24.2
 
 ### Patch Changes

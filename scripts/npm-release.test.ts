@@ -40,11 +40,23 @@ describe("npm trusted publishing", () => {
     "daemon",
     "cli",
     "tui",
+    "recurring-worker",
   ])("matches the trusted GitHub repository for @todu/%s", (packageName) => {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, "packages", packageName, "package.json"), "utf8"),
     ) as { repository: { url: string }; private?: boolean };
     expect(manifest.private).not.toBe(true);
     expect(manifest.repository.url).toBe("https://github.com/evcraddock/todu.git");
+  });
+
+  it.each([
+    "daemon",
+    "recurring-worker",
+  ])("requires completion-aware dependency minimums for @todu/%s", (packageName) => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(rootDir, "packages", packageName, "package.json"), "utf8"),
+    ) as { dependencies: Record<string, string> };
+    expect(manifest.dependencies["@todu/core"]).toBe("^0.27.0");
+    expect(manifest.dependencies["@todu/engine"]).toBe("^0.24.3");
   });
 });
