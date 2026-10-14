@@ -363,6 +363,7 @@ export function createTaskNamespaces(
       input: CreateTaskInput,
       overrideTaskId?: TaskId,
       templateId?: string,
+      syncGuard?: (list: TaskListDocument) => Result<void>,
     ): Promise<Result<TaskWithDetail>> {
       const validationErr = validateCreateTaskInput(input);
       if (validationErr) return err(validationErr);
@@ -418,6 +419,23 @@ export function createTaskNamespaces(
 
       // Add to task list document
       const listHandle = await getOrCreateTaskListDoc(input.projectId);
+      if (syncGuard) {
+        const checked = syncGuard(listHandle.doc()!);
+        if (!checked.ok) return checked;
+        const liveProject = catalog.doc()?.projects.find((row) => row.id === input.projectId);
+        if (
+          !liveProject ||
+          catalog.doc()?.taskListDocIds[input.projectId] !== listHandle.documentId
+        )
+          return err(validationError("syncPrecondition", "Bootstrap project changed"));
+        const missingActor = findMissingActorId(input.assigneeActorIds ?? []);
+        if (missingActor) return err(notFound("actor", missingActor));
+        const authorization = validateAuthorizedAssigneeActorIds(
+          liveProject,
+          input.assigneeActorIds ?? [],
+        );
+        if (authorization) return err(authorization);
+      }
       listHandle.change((doc) => {
         doc.tasks.push(task);
       });
@@ -590,8 +608,9 @@ export function createTaskNamespaces(
       id: TaskId;
       input: UpdateTaskInput;
       expected?: TaskWithDetail;
+      validateContext?: () => Result<void>;
     }): Promise<Result<TaskWithDetail>> {
-      const { id, input, expected } = params;
+      const { id, input, expected, validateContext } = params;
       if (expected && input.updatedAt !== undefined)
         return err(
           validationError("updatedAt", "Guarded sync writes preserve the observed task clock"),
@@ -647,7 +666,11 @@ export function createTaskNamespaces(
       const detailHandle = detailDocId
         ? await repo.find<TaskDetailDocument>(detailDocId as DocumentId)
         : undefined;
-      // No awaits follow this guard before either document is mutated.
+      // No awaits follow these guards before either document is mutated.
+      if (validateContext) {
+        const checked = validateContext();
+        if (!checked.ok) return checked;
+      }
       if (expected) {
         const liveList = result.listHandle.doc();
         const liveTask = liveList?.tasks[result.index];
@@ -930,7 +953,26 @@ export function createTaskNamespaces(
   };
   return {
     namespace: { ...operations, update: (id, input) => operations.update({ id, input }) },
-    syncRuntime: { updateIfCurrent: (params) => operations.update(params) },
+    syncRuntime: {
+      updateIfCurrent: (params) => operations.update(params),
+      createIfUnlinked: ({ input, validateContext }) =>
+        operations.create(input, undefined, undefined, (list) => {
+          const checked = validateContext();
+          if (!checked.ok) return checked;
+          if (
+            !input.externalId ||
+            list.tasks.some(
+              (task) =>
+                task.externalId === input.externalId ||
+                (input.sourceUrl !== undefined && task.sourceUrl === input.sourceUrl),
+            )
+          )
+            return err(
+              validationError("syncPrecondition", "Bootstrap identity appeared or is ambiguous"),
+            );
+          return ok(undefined);
+        }),
+    },
   };
 }
 

@@ -3,6 +3,7 @@ import {
   type ImportedTaskInput,
   type IntegrationBinding,
   type Project,
+  type Result,
   SYNC_TASK_FIELD_GROUPS,
   type SyncAssigneeIdentity,
   type SyncProviderPullResultV5,
@@ -228,6 +229,10 @@ export async function applySyncFieldGroupUpdates(params: {
   updates: SyncTaskFieldGroupUpdate[];
   actors: FieldGroupActors;
   logger: DaemonLogger;
+  strictContentRecovery?: boolean;
+  beforeTask?: (task: TaskWithDetail) => void;
+  mutationGuard?: (task: TaskWithDetail) => () => Result<void>;
+  onApplied?: (task: TaskWithDetail) => void;
 }): Promise<SyncTaskFieldGroupResult[]> {
   const { todu, binding, actors, logger } = params;
   const recovery = todu.__internal.syncRuntime.contentRecovery;
@@ -237,6 +242,8 @@ export async function applySyncFieldGroupUpdates(params: {
   const results: SyncTaskFieldGroupResult[] = [];
   for (const update of params.updates) {
     let local = await readLinkedTask({ todu, binding, update });
+    params.beforeTask?.(local);
+    const validateContext = params.mutationGuard?.(local);
     let contentTimestamp: string | undefined = local.updatedAt;
     const pending = records.find(
       (row) => row.localTaskId === local.id && row.externalId === update.externalId,
@@ -245,14 +252,20 @@ export async function applySyncFieldGroupUpdates(params: {
       update.groups.content &&
       pending &&
       isPartialRecoveryContent(local, pending) &&
-      local.updatedAt !== pending.localTimestamp
+      (params.strictContentRecovery || local.updatedAt !== pending.localTimestamp)
     ) {
       throw new Error(
         `interrupted content has an intervening edit with ambiguous provenance: task=${local.id}; resolve the content before retrying`,
       );
     }
     if (update.groups.content && pending && canResumeContent(local, pending)) {
-      local = await applyContent({ todu, task: local, selected: pending.after, binding });
+      local = await applyContent({
+        todu,
+        task: local,
+        selected: pending.after,
+        binding,
+        validateContext,
+      });
       contentTimestamp = pending.sourceTimestamp;
     }
     const result: SyncTaskFieldGroupResult = {
@@ -321,7 +334,13 @@ export async function applySyncFieldGroupUpdates(params: {
           });
           const saved = await recovery.write(binding.id, records);
           if (!saved.ok) throw new Error(JSON.stringify(saved.error));
-          local = await applyContent({ todu, task: local, selected: outcome.value, binding });
+          local = await applyContent({
+            todu,
+            task: local,
+            selected: outcome.value,
+            binding,
+            validateContext,
+          });
         }
       } else if (group === "workflow") {
         const outcome = decide({
@@ -357,12 +376,15 @@ export async function applySyncFieldGroupUpdates(params: {
         id: local.id,
         input: patch,
         expected: local,
+        validateContext,
       });
       if (!applied.ok)
         throw new Error(
           `field-group task update failed: task=${local.id} ${JSON.stringify(applied.error)}`,
         );
+      local = applied.value;
     }
+    params.onApplied?.(local);
     results.push(result);
   }
   return results;
@@ -452,6 +474,7 @@ async function applyContent(params: {
   task: TaskWithDetail;
   selected: SyncTaskFieldGroupValues["content"];
   binding: IntegrationBinding;
+  validateContext?: () => Result<void>;
 }): Promise<TaskWithDetail> {
   const { todu, task, selected, binding } = params;
   const patch: UpdateTaskInput = {};
@@ -465,6 +488,7 @@ async function applyContent(params: {
     id: task.id,
     input: patch,
     expected: task,
+    validateContext: params.validateContext,
   });
   if (!result.ok)
     throw new Error(

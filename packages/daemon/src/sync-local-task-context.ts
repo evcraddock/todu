@@ -6,6 +6,7 @@ import type {
   SyncLocalTaskResolution,
   SyncProviderPullContext,
   SyncProviderPullResultV6,
+  SyncProviderPullResultV7,
   Task,
 } from "@todu/core";
 import type { Todu, ToduWithInternalTools } from "@todu/engine";
@@ -76,11 +77,13 @@ async function listScopedTasks(todu: Todu, binding: IntegrationBinding): Promise
   return result.value.map((task) => ({ ...task }));
 }
 
+type ScopedPull = SyncProviderPullResultV6 | SyncProviderPullResultV7;
+
 export interface LocalTaskPullGuard {
   context: SyncProviderPullContext;
   expire(): void;
-  validate(pull: SyncProviderPullResultV6): void;
-  verifyAndRun<T>(pull: SyncProviderPullResultV6, action: () => Promise<T>): Promise<T>;
+  validate(pull: ScopedPull): void;
+  verifyAndRun<T>(pull: ScopedPull, action: () => Promise<T>): Promise<T>;
 }
 
 /** Snapshot receipts authorize only declared cancellation exclusions, never mutations. */
@@ -108,7 +111,7 @@ export async function createLocalTaskPullGuard(params: {
     },
   });
 
-  function exclusions(pull: SyncProviderPullResultV6): SyncLocalTaskObservation[] {
+  function exclusions(pull: ScopedPull): SyncLocalTaskObservation[] {
     if (!Array.isArray(pull.cancelledTaskExclusions))
       throw new Error("sync provider v6 pull requires cancelledTaskExclusions");
     const seen = new Set<string>();
@@ -122,7 +125,7 @@ export async function createLocalTaskPullGuard(params: {
     });
   }
 
-  function validate(pull: SyncProviderPullResultV6): void {
+  function validate(pull: ScopedPull): void {
     const excluded = new Set(exclusions(pull).map((task) => task.externalId));
     if (!Array.isArray(pull.tasks) || !Array.isArray(pull.taskUpdates))
       throw new Error("sync provider v6 pull requires tasks and taskUpdates arrays");
@@ -143,7 +146,7 @@ export async function createLocalTaskPullGuard(params: {
       active = false;
     },
     validate,
-    async verifyAndRun<T>(pull: SyncProviderPullResultV6, action: () => Promise<T>): Promise<T> {
+    async verifyAndRun<T>(pull: ScopedPull, action: () => Promise<T>): Promise<T> {
       validate(pull);
       const currentBinding = await todu.integration.get(binding.id);
       if (

@@ -123,7 +123,7 @@ export function validateSyncTaskFieldGroupUpdate(
       return err(validationError(`groups.${group}`, `Task field group ${group} must be an object`));
     }
     for (const side of ["base", "remote"] as const) {
-      if (!isGroupValue(group as SyncTaskFieldGroup, candidate[side])) {
+      if (!isSyncTaskFieldGroupValue(group as SyncTaskFieldGroup, candidate[side])) {
         return err(
           validationError(
             `groups.${group}.${side}`,
@@ -134,7 +134,7 @@ export function validateSyncTaskFieldGroupUpdate(
     }
     if (
       Object.hasOwn(candidate, "sourceTimestamp") &&
-      !isSourceTimestamp(candidate.sourceTimestamp)
+      !isSyncSourceTimestamp(candidate.sourceTimestamp)
     ) {
       return err(
         validationError(
@@ -155,7 +155,7 @@ function isIdentity(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isSourceTimestamp(value: unknown): boolean {
+export function isSyncSourceTimestamp(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const match =
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
@@ -173,7 +173,7 @@ function isSourceTimestamp(value: unknown): boolean {
   );
 }
 
-function isGroupValue(group: SyncTaskFieldGroup, value: unknown): boolean {
+export function isSyncTaskFieldGroupValue(group: SyncTaskFieldGroup, value: unknown): boolean {
   if (!isRecord(value)) return false;
   switch (group) {
     case "content":

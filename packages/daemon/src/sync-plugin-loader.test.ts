@@ -17,6 +17,13 @@ function createModule(apiVersion: number, acknowledge = true) {
           return { taskLinks: [], commentLinks: [] };
         },
         ...(acknowledge ? { async acknowledgePull() {} } : {}),
+        ...(apiVersion === 7
+          ? {
+              async recoveryState() {
+                return { state: "ready" };
+              },
+            }
+          : {}),
       },
     },
   };
@@ -24,7 +31,7 @@ function createModule(apiVersion: number, acknowledge = true) {
 
 describe("sync provider loading", () => {
   it.each([
-    3, 4, 5, 6,
+    3, 4, 5, 6, 7,
   ])("loads supported API v%s and preserves its declared version", async (apiVersion) => {
     const module = createModule(apiVersion, apiVersion >= 4);
     const result = await loadConfiguredPlugins({
@@ -40,10 +47,10 @@ describe("sync provider loading", () => {
     });
   });
 
-  it("rejects unsupported v7 before worker registration", async () => {
+  it("rejects unsupported v8 before worker registration", async () => {
     const result = await loadConfiguredPlugins({
       modulePaths: ["/plugins/test.mjs"],
-      importModule: async () => createModule(7),
+      importModule: async () => createModule(8),
     });
     expect(result.loadedPlugins).toEqual([]);
     expect(result.failures).toMatchObject([

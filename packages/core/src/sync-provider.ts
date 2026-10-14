@@ -2,6 +2,7 @@ import type {
   SyncProviderPullAcknowledgmentV5,
   SyncTaskFieldGroupUpdate,
 } from "./sync-field-groups.js";
+import type { SyncProviderV7 } from "./sync-initialization.js";
 import type {
   SyncCancelledTaskExclusion,
   SyncProviderPullContext,
@@ -23,12 +24,14 @@ export const SYNC_PROVIDER_API_VERSION_V3 = 3 as const;
 export const SYNC_PROVIDER_API_VERSION_V4 = 4 as const;
 export const SYNC_PROVIDER_API_VERSION_V5 = 5 as const;
 export const SYNC_PROVIDER_API_VERSION_V6 = 6 as const;
-export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V6;
+export const SYNC_PROVIDER_API_VERSION_V7 = 7 as const;
+export const SYNC_PROVIDER_API_VERSION = SYNC_PROVIDER_API_VERSION_V7;
 export const SYNC_PROVIDER_SUPPORTED_API_VERSIONS = [
   SYNC_PROVIDER_API_VERSION_V3,
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
   SYNC_PROVIDER_API_VERSION_V6,
+  SYNC_PROVIDER_API_VERSION_V7,
 ] as const;
 
 export const SYNC_CONFLICT_RESOLUTION_POLICIES = ["last-write-wins"] as const;
@@ -196,7 +199,12 @@ export interface SyncProviderV6 extends Omit<SyncProviderV5, "pull"> {
   ): Promise<SyncProviderPullResultV6>;
 }
 
-export type SyncProvider = SyncProviderV3 | SyncProviderV4 | SyncProviderV5 | SyncProviderV6;
+export type SyncProvider =
+  | SyncProviderV3
+  | SyncProviderV4
+  | SyncProviderV5
+  | SyncProviderV6
+  | SyncProviderV7;
 export type AnySyncProvider = SyncProvider;
 
 export interface SyncProviderRegistrationV3 {
@@ -225,11 +233,17 @@ export interface SyncProviderRegistrationV6 {
   provider: SyncProviderV6;
 }
 
+export interface SyncProviderRegistrationV7 {
+  manifest: SyncProviderManifest & { apiVersion: typeof SYNC_PROVIDER_API_VERSION_V7 };
+  provider: SyncProviderV7;
+}
+
 export type SyncProviderRegistration =
   | SyncProviderRegistrationV3
   | SyncProviderRegistrationV4
   | SyncProviderRegistrationV5
-  | SyncProviderRegistrationV6;
+  | SyncProviderRegistrationV6
+  | SyncProviderRegistrationV7;
 export type AnySyncProviderRegistration = SyncProviderRegistration;
 
 export const SYNC_PROVIDER_VALIDATION_ERROR_CODES = [
@@ -295,6 +309,12 @@ export function isSyncProviderRegistrationV6(
   registration: AnySyncProviderRegistration,
 ): registration is SyncProviderRegistrationV6 {
   return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V6;
+}
+
+export function isSyncProviderRegistrationV7(
+  registration: AnySyncProviderRegistration,
+): registration is SyncProviderRegistrationV7 {
+  return registration.manifest.apiVersion === SYNC_PROVIDER_API_VERSION_V7;
 }
 
 export function validateSyncProviderRegistration(
@@ -368,7 +388,8 @@ export function validateSyncProviderRegistration(
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3 &&
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V4 &&
     manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V5 &&
-    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V6
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V6 &&
+    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V7
   ) {
     return err(
       createSyncProviderValidationError(
@@ -430,9 +451,11 @@ export function validateSyncProviderRegistration(
   }
 
   const requiredMethods =
-    manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3
-      ? REQUIRED_SYNC_PROVIDER_V4_METHODS
-      : REQUIRED_SYNC_PROVIDER_V3_METHODS;
+    manifestApiVersion === SYNC_PROVIDER_API_VERSION_V7
+      ? [...REQUIRED_SYNC_PROVIDER_V4_METHODS, "recoveryState"]
+      : manifestApiVersion !== SYNC_PROVIDER_API_VERSION_V3
+        ? REQUIRED_SYNC_PROVIDER_V4_METHODS
+        : REQUIRED_SYNC_PROVIDER_V3_METHODS;
   for (const method of requiredMethods) {
     if (typeof providerRecord[method] !== "function") {
       return err(
@@ -446,6 +469,13 @@ export function validateSyncProviderRegistration(
         ),
       );
     }
+  }
+
+  if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V7) {
+    return ok({
+      manifest: { name: manifestName, version: manifestVersion, apiVersion: manifestApiVersion },
+      provider: registration.provider as SyncProviderV7,
+    });
   }
 
   if (manifestApiVersion === SYNC_PROVIDER_API_VERSION_V6) {

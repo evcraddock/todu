@@ -1,5 +1,6 @@
 import {
   type ApprovalListFilter,
+  type ConfirmSyncWorkflowIntentInput,
   type CreateActorInput,
   type CreateHabitInput,
   type CreateIntegrationBindingInput,
@@ -21,6 +22,7 @@ import {
   type IntegrationBindingFilter,
   type NoteFilter,
   ok,
+  type PrepareSyncWorkflowIntentInput,
   type ProjectFilter,
   type RecurringFilter,
   type Result,
@@ -35,7 +37,7 @@ import {
   type UpdateRecurringInput,
   type UpdateTaskInput,
 } from "@todu/core";
-import type { Todu } from "@todu/engine";
+import type { Todu, ToduWithInternalTools } from "@todu/engine";
 import {
   createProtocolError,
   createProtocolErrorFrame,
@@ -216,6 +218,28 @@ export function createCoreNamespaceHandlers(
       }),
     },
     integration: {
+      prepareWorkflowIntent: method(async (request, todu) => {
+        const tools = (todu as ToduWithInternalTools).__internal?.syncRuntime.workflowIntent;
+        if (!tools)
+          throw createProtocolError(
+            "UNSUPPORTED_CAPABILITY",
+            "Workflow intent support unavailable",
+          );
+        return tools.prepare(
+          getRequiredObjectParam<PrepareSyncWorkflowIntentInput>(request, "input"),
+        );
+      }),
+      confirmWorkflowIntent: method(async (request, todu) => {
+        const tools = (todu as ToduWithInternalTools).__internal?.syncRuntime.workflowIntent;
+        if (!tools)
+          throw createProtocolError(
+            "UNSUPPORTED_CAPABILITY",
+            "Workflow intent support unavailable",
+          );
+        return tools.confirm(
+          getRequiredObjectParam<ConfirmSyncWorkflowIntentInput>(request, "input"),
+        );
+      }),
       create: method(async (request, todu) => {
         const input = getRequiredObjectParam<CreateIntegrationBindingInput>(request, "input");
         return todu.integration.create(input);
