@@ -664,6 +664,117 @@ describe("v7 safe initialization on the real engine", () => {
     expect(p.push).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { strategy: "push", change: "relink" },
+    { strategy: "bidirectional", change: "relink" },
+    { strategy: "push", change: "same-clock-body" },
+    { strategy: "bidirectional", change: "same-clock-body" },
+    { strategy: "push", change: "comment" },
+    { strategy: "bidirectional", change: "comment" },
+    { strategy: "push", change: "disable" },
+    { strategy: "bidirectional", change: "disable" },
+  ] as const)("rejects $strategy exports changed by $change before push invocation", async ({
+    strategy,
+    change,
+  }) => {
+    const local = await task({ sourceUrl: "https://fixture.test/issues/1" });
+    const note = value(
+      await todu.note.create({
+        entityType: "task",
+        entityId: local.id,
+        content: "Original comment",
+      }),
+    );
+    binding = value(await todu.integration.update(binding.id, { strategy }));
+    const p = provider(async () => empty());
+    vi.mocked(p.recoveryState)
+      .mockImplementationOnce(async () => ({ state: "ready" }))
+      .mockImplementationOnce(async () => {
+        if (change === "relink")
+          value(
+            await todu.task.update(local.id, {
+              externalId: "remote-2",
+              sourceUrl: "https://fixture.test/issues/2",
+              title: "Relinked title",
+              description: "Relinked body",
+            }),
+          );
+        else if (change === "same-clock-body")
+          value(
+            await todu.task.update(local.id, {
+              description: "Concurrent body",
+              updatedAt: local.updatedAt,
+            }),
+          );
+        else if (change === "comment")
+          value(
+            await todu.note.update(note.id, {
+              content: "Concurrent comment",
+              updatedAt: note.updatedAt,
+            }),
+          );
+        else value(await todu.integration.update(binding.id, { enabled: false }));
+        return { state: "ready" };
+      });
+    expect(await run(p)).toBe("error");
+    expect(p.push).not.toHaveBeenCalled();
+    if (strategy === "bidirectional") expect(p.acknowledgePull).toHaveBeenCalledOnce();
+    if (change === "relink")
+      expect(value(await todu.task.get(local.id))).toMatchObject({
+        externalId: "remote-2",
+        sourceUrl: "https://fixture.test/issues/2",
+        title: "Relinked title",
+        description: "Relinked body",
+      });
+    else if (change === "same-clock-body")
+      expect(value(await todu.task.get(local.id))).toMatchObject({
+        externalId: "remote-1",
+        description: "Concurrent body",
+        updatedAt: local.updatedAt,
+      });
+    else if (change === "comment")
+      expect(
+        value(await todu.note.list({ entityType: "task", entityId: local.id })).find(
+          (row) => row.id === note.id,
+        )?.content,
+      ).toBe("Concurrent comment");
+    else expect(value(await todu.integration.get(binding.id)).enabled).toBe(false);
+  });
+
+  it("exports stable linked and unlinked v7 values with identity and clock from their same snapshots", async () => {
+    const local = await task({ sourceUrl: "https://fixture.test/issues/1" });
+    const unlinked = value(
+      await todu.task.create({
+        projectId: project.id,
+        title: "New local",
+        description: "Unlinked body",
+      }),
+    );
+    binding = value(await todu.integration.update(binding.id, { strategy: "push" }));
+    const p = provider(async () => empty());
+    expect(await run(p)).toBe("idle");
+    const payloads = vi.mocked(p.push).mock.calls[0][1];
+    expect(payloads.find((row) => row.localTaskId === local.id)).toMatchObject({
+      localTaskId: local.id,
+      externalId: "remote-1",
+      sourceUrl: local.sourceUrl,
+      updatedAt: local.updatedAt,
+      groups: {
+        content: { state: "known", value: { title: local.title, description: local.description } },
+      },
+    });
+    const exported = payloads.find((row) => row.localTaskId === unlinked.id);
+    expect(exported).toMatchObject({
+      localTaskId: unlinked.id,
+      updatedAt: unlinked.updatedAt,
+      groups: {
+        content: { state: "known", value: { title: "New local", description: "Unlinked body" } },
+        assignment: { state: "known", value: { assignees: [] } },
+      },
+    });
+    expect(exported?.externalId).toBeUndefined();
+  });
+
   it("push-only exports deferred assignment, without fake pull receipts or truncated assignees", async () => {
     const actor = value(
       await todu.actor.create({

@@ -42,9 +42,10 @@ import {
   type SyncProviderV7,
   type SyncTaskFieldGroupResult,
   type Task,
+  type TaskWithDetail,
   type ToduError,
 } from "@todu/core";
-import type { Todu, ToduWithInternalTools } from "@todu/engine";
+import type { SyncTaskStateGuard, Todu, ToduWithInternalTools } from "@todu/engine";
 import type { DaemonLogger } from "./logger.js";
 import {
   applySyncFieldGroupUpdates,
@@ -555,6 +556,25 @@ export function createSyncPluginWorkerRuntime(
         }
 
         if (binding.strategy === "push" || binding.strategy === "bidirectional") {
+          const pushGuards: SyncTaskStateGuard[] = [];
+          const groupedSnapshots = new Map<string, ExportedTaskInputV7["groups"]>();
+          const capturePushState = async (tasks: TaskWithDetail[]) => {
+            const captured = await getToduWithInternals(
+              activeTodu,
+            ).__internal.syncRuntime.captureTaskState({
+              binding: actorState.binding,
+              project,
+              actors: [...actorState.actorsById.values()],
+              tasks,
+              allowUnlinked: true,
+              includeTaskNotes: true,
+              isCurrentHost: () => options.getTodu() === activeTodu,
+            });
+            if (!captured.ok)
+              throw new Error(`V7 push snapshot unavailable: ${JSON.stringify(captured.error)}`);
+            pushGuards.push(captured.value);
+          };
+          if (v7Provider) await capturePushState([]);
           const pushPayloads = await buildPushPayloadsV3({
             todu: activeTodu,
             actorState,
@@ -564,14 +584,21 @@ export function createSyncPluginWorkerRuntime(
               providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
               providerApiVersion === SYNC_PROVIDER_API_VERSION_V6 ||
               v7Provider !== null,
+            onTaskSnapshot: v7Provider
+              ? async (task) => {
+                  // Capture revisions before asynchronous comment/provenance reads.
+                  await capturePushState([task]);
+                  groupedSnapshots.set(task.id, observeSyncTaskGroups(task, fieldGroupActors));
+                }
+              : undefined,
           });
           let pushResult: SyncProviderPushResult;
           if (v7Provider) {
             await requireV7RecoveryReady(v7Provider, binding, project);
             const grouped: ExportedTaskInputV7[] = [];
             for (const payload of pushPayloads) {
-              const detail = await activeTodu.task.get(payload.localTaskId);
-              if (!detail.ok) throw new Error("V7 push task detail unavailable");
+              const groups = groupedSnapshots.get(payload.localTaskId);
+              if (!groups) throw new Error("V7 push snapshot unavailable");
               const {
                 title: _title,
                 description: _description,
@@ -583,8 +610,14 @@ export function createSyncPluginWorkerRuntime(
               } = payload;
               grouped.push({
                 ...identity,
-                groups: observeSyncTaskGroups(detail.value, fieldGroupActors),
+                groups,
               });
+            }
+            // No await or provider callback separates these checks from push invocation.
+            for (const guard of pushGuards) {
+              const checked = guard.verify();
+              if (!checked.ok)
+                throw new Error(`Stale V7 push snapshot: ${JSON.stringify(checked.error)}`);
             }
             pushResult = await v7Provider.push(binding, grouped, project);
           } else
@@ -1557,6 +1590,7 @@ async function buildPushPayloadsV3(params: {
   project: Project;
   logger: DaemonLogger;
   requireCompleteReads?: boolean;
+  onTaskSnapshot?: (task: TaskWithDetail) => Promise<void>;
 }): Promise<ExportedTaskInput[]> {
   const { todu, actorState, project, logger, requireCompleteReads = false } = params;
   const tasksResult = await todu.task.list({ projectId: project.id });
@@ -1572,6 +1606,7 @@ async function buildPushPayloadsV3(params: {
         `v5 push task detail load failed: task=${task.id} ${formatToduError(detailResult.error)}`,
       );
     const taskDetail = detailResult.ok ? detailResult.value : { ...task, description: undefined };
+    if (params.onTaskSnapshot) await params.onTaskSnapshot(taskDetail);
 
     const commentsResult = await todu.note.list({
       entityType: "task",

@@ -7,6 +7,7 @@ import {
   type IntegrationBinding,
   type IntegrationBindingActorMapping,
   type IntegrationRegistryDocument,
+  type NotesDocument,
   ok,
   type Project,
   type Result,
@@ -33,6 +34,10 @@ export interface CaptureSyncTaskStateInput {
   project: Project;
   actors: readonly Actor[];
   tasks: readonly TaskWithDetail[];
+  /** Outbound creation may observe an unlinked task; pull observations still require identity. */
+  allowUnlinked?: boolean;
+  /** Outbound comments must remain current across asynchronous export/provenance reads. */
+  includeTaskNotes?: boolean;
   isCurrentHost: () => boolean;
 }
 
@@ -72,12 +77,17 @@ export function createSyncTaskStateCapture(options: {
     let registry: DocHandle<IntegrationRegistryDocument>;
     let list: DocHandle<TaskListDocument> | undefined;
     const details = new Map<string, DocHandle<TaskDetailDocument>>();
+    const notes = new Map<string, DocHandle<NotesDocument>>();
     try {
       registry = await repo.find<IntegrationRegistryDocument>(registryId as DocumentId);
       if (listId) list = await repo.find<TaskListDocument>(listId as DocumentId);
       for (const task of tasks) {
         const id = list?.doc()?.detailDocIds[task.id];
         if (id) details.set(task.id, await repo.find<TaskDetailDocument>(id as DocumentId));
+        if (input.includeTaskNotes) {
+          const notesId = catalog.doc()?.notesBucketDocIds?.[`entity:task:${task.id}`];
+          if (notesId) notes.set(task.id, await repo.find<NotesDocument>(notesId as DocumentId));
+        }
       }
     } catch (error) {
       return err(storageError(`Cannot capture sync task state: ${String(error)}`));
@@ -119,11 +129,15 @@ export function createSyncTaskStateCapture(options: {
           matches.length !== 1 ||
           !task ||
           task.projectId !== binding.projectId ||
-          !expected.externalId ||
-          doc?.tasks.filter((row) => row.externalId === expected.externalId).length !== 1 ||
+          (!input.allowUnlinked && !expected.externalId) ||
+          (expected.externalId !== undefined &&
+            doc?.tasks.filter((row) => row.externalId === expected.externalId).length !== 1) ||
           (expected.sourceUrl !== undefined &&
             doc?.tasks.filter((row) => row.sourceUrl === expected.sourceUrl).length !== 1) ||
           doc?.detailDocIds[expected.id] !== details.get(expected.id)?.documentId ||
+          (input.includeTaskNotes &&
+            catalog.doc()?.notesBucketDocIds?.[`entity:task:${expected.id}`] !==
+              notes.get(expected.id)?.documentId) ||
           !syncValuesEqual(
             { ...task, description: detail?.description ?? "", descriptionApproval: approval },
             { ...expected, description: expected.description ?? "" },
@@ -135,12 +149,16 @@ export function createSyncTaskStateCapture(options: {
     }
     const checked = verifyValues();
     if (!checked.ok) return checked;
-    const heads = [catalog, registry, ...(list ? [list] : []), ...details.values()].map(
-      (handle) => ({
-        handle,
-        heads: [...handle.heads()].sort().join(","),
-      }),
-    );
+    const heads = [
+      catalog,
+      registry,
+      ...(list ? [list] : []),
+      ...details.values(),
+      ...notes.values(),
+    ].map((handle) => ({
+      handle,
+      heads: [...handle.heads()].sort().join(","),
+    }));
     function verify(): Result<void> {
       const checked = verifyValues();
       if (!checked.ok) return checked;
