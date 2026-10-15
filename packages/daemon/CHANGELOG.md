@@ -1,5 +1,13 @@
 # @todu/daemon
 
+## 0.28.1
+
+### Patch Changes
+
+- Require engine ^0.24.5 so fresh daemon installations include the replication socket ownership and shutdown cleanup fixes.
+- Updated dependencies
+  - @todu/engine@0.24.5
+
 ## 0.28.0
 
 ### Minor Changes
