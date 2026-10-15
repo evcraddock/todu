@@ -10,6 +10,7 @@ import {
   type DeletedImportedCommentInput,
   type ExportedCommentInput,
   type ExportedTaskInput,
+  type ExportedTaskInputV7,
   type ExternalActorRef,
   type ImportedCommentInput,
   type ImportedContentApproval,
@@ -25,21 +26,26 @@ import {
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
   SYNC_PROVIDER_API_VERSION_V6,
+  SYNC_PROVIDER_API_VERSION_V7,
   type SyncAssigneeIdentity,
   type SyncProviderPullResultV4,
   type SyncProviderPullResultV5,
   type SyncProviderPullResultV6,
+  type SyncProviderPullResultV7,
   type SyncProviderPushCommentLink,
+  type SyncProviderPushResult,
   type SyncProviderPushTaskLink,
   type SyncProviderV3,
   type SyncProviderV4,
   type SyncProviderV5,
   type SyncProviderV6,
+  type SyncProviderV7,
   type SyncTaskFieldGroupResult,
   type Task,
+  type TaskWithDetail,
   type ToduError,
 } from "@todu/core";
-import type { Todu, ToduWithInternalTools } from "@todu/engine";
+import type { SyncTaskStateGuard, Todu, ToduWithInternalTools } from "@todu/engine";
 import type { DaemonLogger } from "./logger.js";
 import {
   applySyncFieldGroupUpdates,
@@ -48,6 +54,7 @@ import {
   prepareSyncFieldGroupPull,
   verifySyncFieldGroupResults,
 } from "./sync-field-group-pull.js";
+import { createSyncInitializationPull, observeSyncTaskGroups } from "./sync-initialization.js";
 import { createLocalTaskPullGuard } from "./sync-local-task-context.js";
 import type { WorkerRuntime } from "./workers.js";
 
@@ -312,8 +319,40 @@ export function createSyncPluginWorkerRuntime(
 
         let project = projectResult.value;
         const actorState = await createBindingActorState(activeTodu, binding);
+        const v7Provider =
+          providerApiVersion === SYNC_PROVIDER_API_VERSION_V7
+            ? (options.provider as SyncProviderV7)
+            : null;
+        const fieldGroupActors: FieldGroupActors = {
+          local: (task) => projectFieldGroupAssignees({ task, actorState, project }),
+          canonicalize: (value) => ({
+            assignees: value.assignees.map((identity) =>
+              canonicalFieldGroupIdentity(identity, actorState),
+            ),
+          }),
+          async import(assignees) {
+            if (v7Provider) {
+              const known = resolveKnownV7Assignees(assignees, actorState, project);
+              if (!known)
+                throw new Error("V7 assignment requires complete authorized actor mappings");
+              return known;
+            }
+            for (const identity of assignees) canonicalFieldGroupIdentity(identity, actorState);
+            const resolved = await resolveImportedAssignees(activeTodu, actorState, assignees);
+            project = await ensureProjectAuthorizedAssigneeActors(
+              activeTodu,
+              project,
+              resolved.actorIds,
+            );
+            return {
+              actorIds: resolved.actorIds,
+              assignees: resolved.actorIds.map((id) => getActorDisplayName(actorState, id)),
+            };
+          },
+        };
 
         await ensureInitialized();
+        if (v7Provider) await requireV7RecoveryReady(v7Provider, binding, project);
 
         if (!isSyncProviderApiVersionCompatible(providerApiVersion)) {
           throw new Error(
@@ -323,15 +362,33 @@ export function createSyncPluginWorkerRuntime(
 
         if (binding.strategy === "pull" || binding.strategy === "bidirectional") {
           const localTaskGuard =
-            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6 || v7Provider
               ? await createLocalTaskPullGuard({
                   todu: activeTodu,
                   binding,
                   isCurrentHost: () => options.getTodu() === activeTodu,
                 })
               : null;
+          const initialization =
+            v7Provider && localTaskGuard
+              ? createSyncInitializationPull({
+                  todu: getToduWithInternals(activeTodu),
+                  context: localTaskGuard.context,
+                  actors: fieldGroupActors,
+                  scope: () => ({
+                    binding: actorState.binding,
+                    project,
+                    actors: [...actorState.actorsById.values()],
+                  }),
+                  isCurrentHost: () => options.getTodu() === activeTodu,
+                  assignments: (identities) =>
+                    resolveKnownV7Assignees(identities, actorState, project),
+                })
+              : null;
           const pullResult = await (async () => {
             try {
+              if (v7Provider && initialization)
+                return await v7Provider.pull(binding, project, initialization.context);
               return localTaskGuard
                 ? await (options.provider as SyncProviderV6).pull(
                     binding,
@@ -343,12 +400,13 @@ export function createSyncPluginWorkerRuntime(
                     project,
                   );
             } finally {
+              initialization?.expire();
               localTaskGuard?.expire();
             }
           })();
           if (localTaskGuard)
             await localTaskGuard.verifyAndRun(
-              pullResult as SyncProviderPullResultV6,
+              pullResult as SyncProviderPullResultV6 | SyncProviderPullResultV7,
               async () => {},
             );
           const fieldGroupProvider =
@@ -361,24 +419,26 @@ export function createSyncPluginWorkerRuntime(
               ? (options.provider as SyncProviderV4)
               : fieldGroupProvider;
           if (
-            acknowledgedProvider &&
+            (acknowledgedProvider || v7Provider) &&
             (!pullResult ||
               !Object.hasOwn(pullResult, "checkpoint") ||
-              typeof acknowledgedProvider.acknowledgePull !== "function")
-          ) {
+              typeof (v7Provider ?? acknowledgedProvider)?.acknowledgePull !== "function")
+          )
             throw new Error(
               `sync provider v${providerApiVersion} pull requires a checkpoint and acknowledgePull callback`,
             );
-          }
-
-          if (fieldGroupProvider) {
+          let updates: SyncProviderPullResultV5["taskUpdates"] = [];
+          if (initialization)
+            updates = await initialization.prepare(pullResult as SyncProviderPullResultV7);
+          else if (fieldGroupProvider) {
             await prepareSyncFieldGroupPull({
               todu: getToduWithInternals(activeTodu),
               binding,
               project,
               pull: pullResult as SyncProviderPullResultV5,
             });
-            for (const update of (pullResult as SyncProviderPullResultV5).taskUpdates) {
+            updates = (pullResult as SyncProviderPullResultV5).taskUpdates;
+            for (const update of updates) {
               const assignment = update.groups.assignment;
               if (assignment)
                 for (const identity of [
@@ -388,30 +448,10 @@ export function createSyncPluginWorkerRuntime(
                   enrichFieldGroupActorMapping(identity, actorState);
             }
           }
-          const fieldGroupActors: FieldGroupActors = {
-            local: (task) => projectFieldGroupAssignees({ task, actorState, project }),
-            canonicalize: (value) => ({
-              assignees: value.assignees.map((identity) =>
-                canonicalFieldGroupIdentity(identity, actorState),
-              ),
-            }),
-            async import(assignees) {
-              for (const identity of assignees) canonicalFieldGroupIdentity(identity, actorState);
-              const resolved = await resolveImportedAssignees(activeTodu, actorState, assignees);
-              project = await ensureProjectAuthorizedAssigneeActors(
-                activeTodu,
-                project,
-                resolved.actorIds,
-              );
-              return {
-                actorIds: resolved.actorIds,
-                assignees: resolved.actorIds.map((id) => getActorDisplayName(actorState, id)),
-              };
-            },
-          };
           let taskResults: SyncTaskFieldGroupResult[] = [];
-          if (pullResult.tasks.length > 0) {
-            const pullStats = await applyPulledTasksV3({
+          if (initialization) await initialization.applyBootstrap();
+          else if (pullResult.tasks.length) {
+            const stats = await applyPulledTasksV3({
               todu: activeTodu,
               actorState,
               project,
@@ -419,38 +459,69 @@ export function createSyncPluginWorkerRuntime(
               repairEqualTimestamps: acknowledgedProvider !== null,
               guardedReplay: fieldGroupProvider !== null,
             });
-            project = pullStats.project;
+            project = stats.project;
           }
-
-          if (fieldGroupProvider) {
+          if (fieldGroupProvider || initialization)
             taskResults = await applySyncFieldGroupUpdates({
               todu: getToduWithInternals(activeTodu),
               binding,
-              updates: (pullResult as SyncProviderPullResultV5).taskUpdates,
+              updates,
               actors: fieldGroupActors,
               logger: runtimeLogger,
+              strictContentRecovery: initialization !== null,
+              beforeTask: initialization?.beforeTask,
+              mutationGuard: initialization?.mutationGuard,
+              onApplied: initialization?.applied,
             });
-          }
-
-          const hasPulledCommentChanges =
-            (pullResult.comments?.length ?? 0) > 0 ||
-            (pullResult.deletedComments?.length ?? 0) > 0 ||
-            (pullResult.completeCommentExternalTaskIds?.length ?? 0) > 0;
-          if (hasPulledCommentChanges) {
+          if (
+            (pullResult.comments?.length ?? 0) +
+              (pullResult.deletedComments?.length ?? 0) +
+              (pullResult.completeCommentExternalTaskIds?.length ?? 0) >
+            0
+          )
             await applyPulledCommentsV3(activeTodu, actorState, project.id, {
               comments: pullResult.comments ?? [],
               deletedComments: pullResult.deletedComments ?? [],
               completeCommentExternalTaskIds: pullResult.completeCommentExternalTaskIds ?? [],
-              requireKnownTasks: acknowledgedProvider !== null,
+              requireKnownTasks: acknowledgedProvider !== null || v7Provider !== null,
             });
-          }
-
-          if (acknowledgedProvider) {
+          if (acknowledgedProvider || v7Provider) {
             if (actorState.mappingsChanged) {
-              await persistBindingActorMappings(activeTodu, actorState);
+              if (v7Provider) {
+                const saved = await getToduWithInternals(
+                  activeTodu,
+                ).__internal.syncRuntime.persistActorMappings({
+                  binding: actorState.binding,
+                  mappings: actorState.actorMappings,
+                  isCurrentHost: () => options.getTodu() === activeTodu,
+                });
+                if (!saved.ok)
+                  throw new Error(
+                    `V7 actor mapping persistence failed: ${JSON.stringify(saved.error)}`,
+                  );
+                actorState.binding = saved.value;
+                actorState.mappingsChanged = false;
+              } else await persistBindingActorMappings(activeTodu, actorState);
             }
             await getToduWithInternals(activeTodu).__internal.syncRuntime.flush();
-            if (fieldGroupProvider) {
+            if (v7Provider && initialization && localTaskGuard) {
+              const receipt = await initialization.acknowledgment(taskResults);
+              await localTaskGuard.verifyAndRun(pullResult as SyncProviderPullResultV7, () =>
+                receipt.run((ack) =>
+                  v7Provider.acknowledgePull(
+                    binding,
+                    (pullResult as SyncProviderPullResultV7).checkpoint,
+                    project,
+                    ack,
+                  ),
+                ),
+              );
+              await clearAcknowledgedContentRecovery({
+                todu: getToduWithInternals(activeTodu),
+                binding,
+                results: taskResults,
+              });
+            } else if (fieldGroupProvider) {
               await verifySyncFieldGroupResults({
                 todu: getToduWithInternals(activeTodu),
                 binding,
@@ -475,17 +546,35 @@ export function createSyncPluginWorkerRuntime(
                 binding,
                 results: taskResults,
               });
-            } else {
+            } else
               await (acknowledgedProvider as SyncProviderV4).acknowledgePull(
                 binding,
                 (pullResult as SyncProviderPullResultV4).checkpoint,
                 project,
               );
-            }
           }
         }
 
         if (binding.strategy === "push" || binding.strategy === "bidirectional") {
+          const pushGuards: SyncTaskStateGuard[] = [];
+          const groupedSnapshots = new Map<string, ExportedTaskInputV7["groups"]>();
+          const capturePushState = async (tasks: TaskWithDetail[]) => {
+            const captured = await getToduWithInternals(
+              activeTodu,
+            ).__internal.syncRuntime.captureTaskState({
+              binding: actorState.binding,
+              project,
+              actors: [...actorState.actorsById.values()],
+              tasks,
+              allowUnlinked: true,
+              includeTaskNotes: true,
+              isCurrentHost: () => options.getTodu() === activeTodu,
+            });
+            if (!captured.ok)
+              throw new Error(`V7 push snapshot unavailable: ${JSON.stringify(captured.error)}`);
+            pushGuards.push(captured.value);
+          };
+          if (v7Provider) await capturePushState([]);
           const pushPayloads = await buildPushPayloadsV3({
             todu: activeTodu,
             actorState,
@@ -493,9 +582,48 @@ export function createSyncPluginWorkerRuntime(
             logger: runtimeLogger,
             requireCompleteReads:
               providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
-              providerApiVersion === SYNC_PROVIDER_API_VERSION_V6,
+              providerApiVersion === SYNC_PROVIDER_API_VERSION_V6 ||
+              v7Provider !== null,
+            onTaskSnapshot: v7Provider
+              ? async (task) => {
+                  // Capture revisions before asynchronous comment/provenance reads.
+                  await capturePushState([task]);
+                  groupedSnapshots.set(task.id, observeSyncTaskGroups(task, fieldGroupActors));
+                }
+              : undefined,
           });
-          const pushResult = await options.provider.push(binding, pushPayloads, project);
+          let pushResult: SyncProviderPushResult;
+          if (v7Provider) {
+            await requireV7RecoveryReady(v7Provider, binding, project);
+            const grouped: ExportedTaskInputV7[] = [];
+            for (const payload of pushPayloads) {
+              const groups = groupedSnapshots.get(payload.localTaskId);
+              if (!groups) throw new Error("V7 push snapshot unavailable");
+              const {
+                title: _title,
+                description: _description,
+                status: _status,
+                priority: _priority,
+                labels: _labels,
+                assignees: _assignees,
+                ...identity
+              } = payload;
+              grouped.push({
+                ...identity,
+                groups,
+              });
+            }
+            // No await or provider callback separates these checks from push invocation.
+            for (const guard of pushGuards) {
+              const checked = guard.verify();
+              if (!checked.ok)
+                throw new Error(`Stale V7 push snapshot: ${JSON.stringify(checked.error)}`);
+            }
+            pushResult = await v7Provider.push(binding, grouped, project);
+          } else
+            pushResult = await (
+              options.provider as SyncProviderV3 | SyncProviderV4 | SyncProviderV5 | SyncProviderV6
+            ).push(binding, pushPayloads, project);
           if (
             !pushResult ||
             !Array.isArray(pushResult.commentLinks) ||
@@ -508,7 +636,8 @@ export function createSyncPluginWorkerRuntime(
             todu: activeTodu,
             links: pushResult.taskLinks,
             ...(providerApiVersion === SYNC_PROVIDER_API_VERSION_V5 ||
-            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6
+            providerApiVersion === SYNC_PROVIDER_API_VERSION_V6 ||
+            v7Provider !== null
               ? { guardProjectId: project.id }
               : {}),
           });
@@ -564,7 +693,7 @@ export function createSyncPluginWorkerRuntime(
               await runBindingCycle(activeTodu, binding, startedAt);
             } catch (error) {
               await updateBindingStatus(activeTodu, binding, {
-                state: "error",
+                state: error instanceof SyncLegacyDrainRequired ? "blocked" : "error",
                 lastAttemptedSyncAt: startedAt,
                 lastErrorSummary: summarizeError(error),
               });
@@ -623,6 +752,53 @@ export function createSyncPluginWorkerRuntime(
       };
     },
   };
+}
+
+class SyncLegacyDrainRequired extends Error {}
+
+async function requireV7RecoveryReady(
+  provider: SyncProviderV7,
+  binding: IntegrationBinding,
+  project: Project,
+): Promise<void> {
+  const state = await provider.recoveryState(binding, project);
+  if (
+    !state ||
+    typeof state !== "object" ||
+    Array.isArray(state) ||
+    state.state !== "ready" ||
+    Object.keys(state).length !== 1
+  )
+    throw new SyncLegacyDrainRequired(
+      "V7 adoption blocked: drain the original pending v4 batch with the v4 provider and retain its checkpoint until acknowledgment; unknown recovery readiness is not an empty queue",
+    );
+}
+
+function resolveKnownV7Assignees(
+  identities: SyncAssigneeIdentity[],
+  state: SyncBindingActorState,
+  project: Project,
+): { actorIds: ActorId[]; assignees: string[] } | null {
+  const ids: ActorId[] = [];
+  for (const identity of identities) {
+    const account = normalizeExternalAccountId(identity.externalAccountId);
+    const login = normalizeExternalLogin(identity.externalLogin);
+    if (!account && !login) return null;
+    const rows = state.actorMappings.filter(
+      (row) =>
+        (!account || normalizeExternalAccountId(row.externalAccountId) === account) &&
+        (!login || normalizeExternalLogin(row.externalLogin) === login),
+    );
+    if (
+      rows.length !== 1 ||
+      !state.actorsById.has(rows[0].actorId) ||
+      !project.authorizedAssigneeActorIds.includes(rows[0].actorId)
+    )
+      return null;
+    const id = createActorId(rows[0].actorId);
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return { actorIds: ids, assignees: ids.map((id) => getActorDisplayName(state, id)) };
 }
 
 function createSyncExternalIdTag(externalId: string): string {
@@ -1414,6 +1590,7 @@ async function buildPushPayloadsV3(params: {
   project: Project;
   logger: DaemonLogger;
   requireCompleteReads?: boolean;
+  onTaskSnapshot?: (task: TaskWithDetail) => Promise<void>;
 }): Promise<ExportedTaskInput[]> {
   const { todu, actorState, project, logger, requireCompleteReads = false } = params;
   const tasksResult = await todu.task.list({ projectId: project.id });
@@ -1429,6 +1606,7 @@ async function buildPushPayloadsV3(params: {
         `v5 push task detail load failed: task=${task.id} ${formatToduError(detailResult.error)}`,
       );
     const taskDetail = detailResult.ok ? detailResult.value : { ...task, description: undefined };
+    if (params.onTaskSnapshot) await params.onTaskSnapshot(taskDetail);
 
     const commentsResult = await todu.note.list({
       entityType: "task",

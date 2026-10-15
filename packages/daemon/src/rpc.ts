@@ -45,7 +45,16 @@ export const CORE_DAEMON_NAMESPACE_METHODS = {
   task: ["create", "list", "get", "update", "delete", "move", "search"],
   approval: ["list", "approveTaskDescription", "approveNoteContent"],
   label: ["create", "list", "update", "delete"],
-  integration: ["create", "list", "get", "update", "delete", "status"],
+  integration: [
+    "create",
+    "list",
+    "get",
+    "update",
+    "delete",
+    "status",
+    "prepareWorkflowIntent",
+    "confirmWorkflowIntent",
+  ],
   note: ["create", "list", "update", "delete"],
   recurring: [
     "create",

@@ -369,11 +369,17 @@ export interface SyncRuntimeNoteTools {
 }
 
 export interface SyncRuntimeTaskTools {
+  /** Bootstrap only if canonical identity is still absent at the mutation boundary. */
+  createIfUnlinked(params: {
+    input: CreateTaskInput;
+    validateContext: () => Result<void>;
+  }): Promise<Result<TaskWithDetail>>;
   /** Check the complete observed task at the mutation boundary and preserve its clock. */
   updateIfCurrent(params: {
     id: TaskId;
     input: Omit<UpdateTaskInput, "updatedAt">;
     expected: TaskWithDetail;
+    validateContext?: () => Result<void>;
   }): Promise<Result<TaskWithDetail>>;
 }
 
@@ -383,6 +389,13 @@ export interface ToduInternalTools {
     attachSource(source: EnrollmentSource, signal?: AbortSignal): Promise<Result<void>>;
   };
   syncRuntime: {
+    workflowIntent: import("./sync-workflow-intent.js").SyncWorkflowIntentTools;
+    captureTaskState: ReturnType<
+      typeof import("./sync-task-state-guard.js").createSyncTaskStateCapture
+    >;
+    persistActorMappings: ReturnType<
+      typeof import("./sync-task-state-guard.js").createSyncActorMappingWriter
+    >;
     /** Verify scoped live lifecycle metadata and immediately invoke a host-only continuation. */
     withCurrentTaskLifecycle(params: {
       binding: IntegrationBinding;

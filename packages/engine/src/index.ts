@@ -51,6 +51,11 @@ import { createSyncContentRecoveryStore } from "./sync-content-recovery.js";
 import { createSyncLifecycleGuard } from "./sync-lifecycle-guard.js";
 import { type SyncListener, startSyncListener } from "./sync-listener.js";
 import { type SyncServer, startSyncServer } from "./sync-server.js";
+import {
+  createSyncActorMappingWriter,
+  createSyncTaskStateCapture,
+} from "./sync-task-state-guard.js";
+import { createSyncWorkflowIntentTools } from "./sync-workflow-intent.js";
 import { createTaskNamespaces } from "./tasks.js";
 import {
   createStubNamespaces,
@@ -112,6 +117,9 @@ export {
 } from "./sync-content-recovery.js";
 export { reconcileSyncTaskFieldGroup, syncTaskFieldGroupValuesEqual } from "./sync-field-groups.js";
 export { DEFAULT_SYNC_PORT } from "./sync-server.js";
+export type { CaptureSyncTaskStateInput, SyncTaskStateGuard } from "./sync-task-state-guard.js";
+export { syncValuesEqual } from "./sync-task-state-guard.js";
+export type { SyncWorkflowIntentTools } from "./sync-workflow-intent.js";
 export type {
   ActorNamespace,
   ApprovalNamespace,
@@ -737,6 +745,22 @@ export async function createTodu(
         },
       },
       syncRuntime: {
+        workflowIntent: createSyncWorkflowIntentTools({
+          catalog: storage.catalog,
+          repo: storage.repo,
+          isClosed: () => engineClosed,
+          flush: () => storage.repo.flush(),
+        }),
+        persistActorMappings: createSyncActorMappingWriter({
+          catalog: storage.catalog,
+          repo: storage.repo,
+          isClosed: () => engineClosed,
+        }),
+        captureTaskState: createSyncTaskStateCapture({
+          catalog: storage.catalog,
+          repo: storage.repo,
+          isClosed: () => engineClosed,
+        }),
         activateDeviceNetworking,
         flush: () => storage.repo.flush(),
         contentRecovery: createSyncContentRecoveryStore({

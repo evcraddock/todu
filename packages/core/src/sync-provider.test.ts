@@ -10,6 +10,7 @@ import {
   SYNC_PROVIDER_API_VERSION_V4,
   SYNC_PROVIDER_API_VERSION_V5,
   SYNC_PROVIDER_API_VERSION_V6,
+  SYNC_PROVIDER_API_VERSION_V7,
   type SyncProviderRegistrationV3,
   type SyncProviderRegistrationV4,
   type SyncProviderRegistrationV5,
@@ -18,16 +19,16 @@ import {
 } from "./sync-provider.js";
 
 describe("isSyncProviderApiVersionCompatible", () => {
-  it.each([3, 4, 5, 6])("accepts supported v%s API version", (apiVersion) => {
+  it.each([3, 4, 5, 6, 7])("accepts supported v%s API version", (apiVersion) => {
     expect(isSyncProviderApiVersionCompatible(apiVersion)).toBe(true);
   });
 
-  it("advertises v6 as the latest API", () => {
-    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V6);
+  it("advertises v7 as the latest API", () => {
+    expect(SYNC_PROVIDER_API_VERSION).toBe(SYNC_PROVIDER_API_VERSION_V7);
   });
 
   it("rejects unsupported API version", () => {
-    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V6 + 1)).toBe(false);
+    expect(isSyncProviderApiVersionCompatible(SYNC_PROVIDER_API_VERSION_V7 + 1)).toBe(false);
   });
 
   it("supports explicit supported version lists", () => {
@@ -140,7 +141,7 @@ describe("validateSyncProviderRegistration", () => {
 
   it("rejects provider with unsupported API version", () => {
     const registration = createValidV3Registration();
-    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V6 + 1) as never;
+    registration.manifest.apiVersion = (SYNC_PROVIDER_API_VERSION_V7 + 1) as never;
 
     const result = validateSyncProviderRegistration(registration);
 
@@ -152,12 +153,13 @@ describe("validateSyncProviderRegistration", () => {
     expect(result.error).toMatchObject({
       code: "API_VERSION_MISMATCH",
       details: {
-        providerApiVersion: SYNC_PROVIDER_API_VERSION_V6 + 1,
+        providerApiVersion: SYNC_PROVIDER_API_VERSION_V7 + 1,
         supportedApiVersions: [
           SYNC_PROVIDER_API_VERSION_V3,
           SYNC_PROVIDER_API_VERSION_V4,
           SYNC_PROVIDER_API_VERSION_V5,
           SYNC_PROVIDER_API_VERSION_V6,
+          SYNC_PROVIDER_API_VERSION_V7,
         ],
       },
     });

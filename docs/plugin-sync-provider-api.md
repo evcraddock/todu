@@ -29,8 +29,8 @@ Use local provider configuration for secrets and host-local runtime settings, no
 
 Compatibility is API-version based.
 
-- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `6`).
-- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`, `4`, `5`, and `6`).
+- Latest provider API version: `SYNC_PROVIDER_API_VERSION` (currently `7`).
+- Host-supported provider API versions: `SYNC_PROVIDER_SUPPORTED_API_VERSIONS` (currently `3`, `4`, `5`, `6`, and `7`).
 - Every provider manifest must declare `apiVersion`.
 - Providers are loadable only when `manifest.apiVersion` is included in the host-supported version set.
 - Unsupported versions must fail closed at load time.
@@ -54,6 +54,14 @@ Rules:
 - `name` must be non-empty.
 - `version` must be non-empty.
 - `apiVersion` must be a positive integer and API-compatible with host runtime.
+
+## API v7: safe initialization, actual persisted receipts, and recovery
+
+V7 explicitly opts into `SyncProviderV7` / `SYNC_PROVIDER_API_VERSION_V7`; older hosts reject it rather than falling back. It extends the existing v6 scoped identity resolver with immutable `observeTaskGroups` observations and invocation-local freshness tokens, independently tagged unknown/known bases, equal-value initialization without writes, actual bootstrap/update receipts after guarded persistence, and a required durable `recoveryState` gate. Unknown/disagreeing history, incomplete assignments, and pending content approval never become fabricated mirrored bases. Push exports use complete known/deferred group envelopes, and remote-write-required outcomes remain unproven until verified remotely.
+
+V7 providers must finish a bounded original v4 pending-batch drain before cutover, preserve unresolved work across errors/restart, and keep read checkpoints independent of remote writes. The separate local operator preview/confirm RPC can express guarded cancellation intent; it is not part of provider pull authority. V3–V6 retain their original registration, arguments, payloads and behavior.
+
+See [Safe provider initialization and recovery](plans/sync-api-v7-adoption.md) for exact shapes, normalization, receipt meanings, freshness/approval/mapping rules, durable ledger obligations, bounded drain instructions, unsupported-host behavior, strategy coverage, and the local operator workflow.
 
 ## API v6: scoped local task context during pull
 
@@ -113,7 +121,7 @@ For Forgejo adoption, resolve the saved local ID plus external identity/source r
 
 ## API v5: field-group task reconciliation
 
-The daemon implements this lifecycle for explicitly registered v5 providers. V3/V4 payloads, whole-task conflict behavior, and acknowledgment signatures remain unchanged. `validateSyncProviderRegistration` accepts v3/v4/v5/v6 by default; an explicit `supportedApiVersions` override can restrict compatibility. A v4 registration exposing v5-shaped data does not opt into field-group processing.
+The daemon implements this lifecycle for explicitly registered v5 providers. V3/V4 payloads, whole-task conflict behavior, and acknowledgment signatures remain unchanged. `validateSyncProviderRegistration` accepts v3/v4/v5/v6/v7 by default; an explicit `supportedApiVersions` override can restrict compatibility. A v4 registration exposing v5-shaped data does not opt into field-group processing.
 
 v5 inherits initialization, shutdown, push, comments, and opaque checkpoints from v4. It replaces the pull result and acknowledgment signature:
 
@@ -267,7 +275,7 @@ If push fails after a successful acknowledgment, the acknowledged pull remains c
 
 ### v3 compatibility
 
-API v3 remains supported with its original pull/push lifecycle and no host acknowledgment or new flush requirement. Legacy providers should declare `SYNC_PROVIDER_API_VERSION_V3` explicitly; the unversioned latest-version constant now advertises v5. V4 providers should likewise declare `SYNC_PROVIDER_API_VERSION_V4` explicitly. A callback or checkpoint on a v3 registration does not opt it into v4 behavior. Registration must explicitly declare v4 to use acknowledged checkpoints. v2 remains unsupported. Existing v3 providers do not gain checkpoint safety until they adopt v4.
+API v3 remains supported with its original pull/push lifecycle and no host acknowledgment or new flush requirement. Legacy providers should declare `SYNC_PROVIDER_API_VERSION_V3` explicitly; the unversioned latest-version constant now advertises v7. V4 providers should likewise declare `SYNC_PROVIDER_API_VERSION_V4` explicitly. A callback or checkpoint on a v3 registration does not opt it into v4 behavior. Registration must explicitly declare v4 to use acknowledged checkpoints. v2 remains unsupported. Existing v3 providers do not gain checkpoint safety until they adopt v4.
 
 ## API v3 shared payload contract
 
