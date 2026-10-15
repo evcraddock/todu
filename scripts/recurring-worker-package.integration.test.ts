@@ -103,6 +103,10 @@ describe("packed recurring-worker version", () => {
         path.join(rootDir, "scripts/test-helpers/installed-recurring-worker.mjs"),
         probe,
       );
+      copyFileSync(
+        path.join(rootDir, "scripts/test-helpers/installed-sync-initialization.mjs"),
+        path.join(directory, "installed-sync-initialization.mjs"),
+      );
       const output = execFileSync(
         process.execPath,
         ["--experimental-import-meta-resolve", probe, directory],
@@ -114,6 +118,17 @@ describe("packed recurring-worker version", () => {
         unsupportedHostRefused: true,
         automaticOccurrences: 1,
         retainedHistory: true,
+        syncInitialization: {
+          apiVersion: 7,
+          legacyVersionsAccepted: true,
+          unsupportedHostRefused: true,
+          equalityWithoutWrite: true,
+          disagreementDeferred: true,
+          approvalDeferred: true,
+          legacyDrainBlocked: true,
+          stalePushRefused: true,
+          operatorStatusOnly: true,
+        },
       });
     } finally {
       rmSync(directory, { recursive: true });

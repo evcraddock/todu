@@ -6,16 +6,18 @@ The optional recurring worker turns due templates into tasks automatically. With
 
 The `0.2.0` release intentionally restores `@todu/recurring-worker` to the normal Changesets npm flow. Its manifest reports the package version, and stop drains admitted startup/interval processing after cancelling future intervals. It requires the host's explicit `capabilities.awaitableStop === true`; an older host is refused before runtime resources are allocated. Version numbers alone are not the negotiation mechanism. See [Worker Plugin API](worker-plugin-api.md#awaitable-stop-opt-in).
 
-The release compatibility set is:
+The `0.2.1` release changes dependency metadata only, aligning with the API v7 host release; worker generation/shutdown behavior and explicit `awaitableStop` negotiation remain unchanged from `0.2.0`.
+
+The current release compatibility set is:
 
 | Package | Version |
 | --- | --- |
 | Node / npm used in local validation | `24.16.0` / `11.13.0` |
 | `@todu/cli` (unchanged published CLI) | `0.25.2` |
-| `@todu/core` | `0.27.0` |
-| `@todu/engine` | `0.24.3` |
-| `@todu/daemon` | `0.27.0` |
-| `@todu/recurring-worker` | `0.2.0` |
+| `@todu/core` | `0.28.0` |
+| `@todu/engine` | `0.24.4` |
+| `@todu/daemon` | `0.28.0` |
+| `@todu/recurring-worker` | `0.2.1` |
 
 The daemon and worker declare minimum compatible core/engine ranges; engine aligns its core dependency. The host/engine pin Automerge `3.5.0` and Repo `2.5.6`. Do not add the obsolete Automerge `3.3.2` override from the historical `0.1.1` setup. Normal npm installation must run the engine's required Repo repair postinstall script.
 
@@ -30,10 +32,10 @@ Once the existing process has exited, install the exact verified set in the exis
 ```bash
 npm install -g \
   @todu/cli@0.25.2 \
-  @todu/core@0.27.0 \
-  @todu/engine@0.24.3 \
-  @todu/daemon@0.27.0 \
-  @todu/recurring-worker@0.2.0
+  @todu/core@0.28.0 \
+  @todu/engine@0.24.4 \
+  @todu/daemon@0.28.0 \
+  @todu/recurring-worker@0.2.1
 ```
 
 For a fresh setup only, register the plugin and assign `recurring` to exactly one daemon for the dataset. Preserve other assignments:
@@ -59,7 +61,7 @@ todu plugin list
 npm list -g --depth=0 @todu/cli @todu/daemon @todu/recurring-worker
 ```
 
-Confirm the actual CLI-to-daemon/core/engine module resolution as well as top-level package metadata. The daemon must be healthy on the original catalog/socket, and the worker must be running/OK with manifest `0.2.0`. Runtime version fields may report `dev`; they do not replace artifact/version verification.
+Confirm the actual CLI-to-daemon/core/engine module resolution as well as top-level package metadata. The daemon must be healthy on the original catalog/socket, and the worker must be running/OK with manifest `0.2.1`. Runtime version fields may report `dev`; they do not replace artifact/version verification.
 
 ## Candidate installation regression
 
@@ -69,7 +71,7 @@ After building the candidate:
 npm run test:all -- scripts/recurring-worker-package.integration.test.ts
 ```
 
-The regression packs core/engine/daemon/worker, installs their actual archives plus published CLI `0.25.2` in disposable HOME/config/data paths, executes required installation scripts, verifies module resolution and unsupported-host refusal, and runs the real direct CLI lifecycle. It automatically generates an occurrence, restarts with a persistent subscribed client, checks the same catalog/new PID/no duplicate occurrence, stops after client disconnection without forced termination, and reopens exact task/description/note data. It uses no source-checkout plugin, production dataset, real provider, or manual occurrence-generation call. Separate source shutdown regressions cover admitted work and cleanup/storage/RPC failure propagation.
+The regression packs core/engine/daemon/worker, installs their actual archives plus published CLI `0.25.2` in disposable HOME/config/data paths, executes required installation scripts, verifies module resolution and unsupported-host refusal, and runs the real direct CLI lifecycle. It automatically generates an occurrence, restarts with a persistent subscribed client, checks the same catalog/new PID/no duplicate occurrence, stops after client disconnection without forced termination, and reopens exact task/description/note data. It uses no source-checkout plugin, production dataset, real provider, or manual occurrence-generation call. The same clean installation also probes API v7 scoped canonical equality without rewrites, deferred disagreement/approval, legacy-drain blocking, stale push refusal after relinking, legacy registration/unsupported-host negotiation, and actual local operator preview/confirm RPCs with status-only/comment preservation and token-reuse rejection. These use disposable fixture identities only, not real remote-deletion confirmation or adapter adoption. Separate source shutdown/recovery regressions cover admitted work, durable ledgers and cleanup/storage/RPC failure propagation.
 
 Successful local exit/persistence does not establish remote durability or resolve historical startup stalls. Long-running uncooperative work can still exhaust the existing stop allowance; no universal abort support is implied.
 
