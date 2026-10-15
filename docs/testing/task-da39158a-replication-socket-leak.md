@@ -37,7 +37,7 @@ A related health-probe defect was also present: `isSyncServerAvailable()` resolv
 - Legacy `connectSyncClient()` disconnect behavior.
 - Repeated adapter lifetimes, pending-handshake disposal, repeated disposal and attempted reuse.
 - A peer that accepts the upgrade but does not acknowledge WebSocket closure.
-- The real native peer lease with its normal initial retry interval and a transferred pending server adapter; unverified peers are not accepted as ready.
+- The real native peer lease with its normal initial retry interval and a transferred pending server adapter; unverified peers are not accepted as ready. Native fixture allocation, the first-attempt barrier, and lease creation run inside a cleanup owner that always attempts peer, Repo, and server cleanup, retaining all failures. Injected pre-lease setup failure and combined setup/peer-cleanup failures verify that resources are released even when setup or earlier teardown throws.
 - Successful, invalid and timed-out availability probes.
 - Natural client-process exit after Repo shutdown while an independent peer is still listening.
 

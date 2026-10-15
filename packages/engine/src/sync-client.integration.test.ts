@@ -110,6 +110,34 @@ async function expectNoSockets(server: Awaited<ReturnType<typeof delayedServer>>
   expect(server.attempts()).toBe(attempts);
 }
 
+type SocketFixture = {
+  repo: Repo;
+  server: Awaited<ReturnType<typeof delayedServer>>;
+  onCleanup(cleanup: () => void | Promise<void>): void;
+};
+
+async function withSocketFixture(run: (fixture: SocketFixture) => Promise<void>): Promise<void> {
+  const server = await delayedServer();
+  const cleanups: Array<() => void | Promise<void>> = [() => server.close()];
+  const errors: unknown[] = [];
+  try {
+    const repo = new Repo({ network: [] });
+    cleanups.unshift(() => repo.shutdown());
+    await run({ repo, server, onCleanup: (cleanup) => cleanups.unshift(cleanup) });
+  } catch (error) {
+    errors.push(error);
+  }
+  for (const cleanup of cleanups) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, "Socket fixture setup/cleanup failed");
+}
+
 describe("replication socket ownership", () => {
   it.each([
     false,
@@ -233,24 +261,23 @@ describe("replication socket ownership", () => {
     "retires native peer retries without accepting unverified identity (transferred=%s)",
     { timeout: 15_000 },
     async (transferred) => {
-      const server = await delayedServer();
-      const repo = new Repo({ network: [] });
-      const adapter = transferred ? addRemoteSyncAdapter(repo, server.url, 60) : undefined;
-      if (transferred) await until(() => server.attempts() >= 1);
-      const peer = createEnrollmentPeerConnection({
-        repo,
-        adapter,
-        source: {
-          endpoint: server.url.replace("ws:", "http:"),
-          approval: {
-            catalogId: repo.create({ fixture: true }).documentId,
-            deviceId: createDeviceId("fixture-local"),
-            sourceDeviceId: createDeviceId("fixture-source"),
-            syncPath: "/sync/fixture",
+      await withSocketFixture(async ({ repo, server, onCleanup }) => {
+        const adapter = transferred ? addRemoteSyncAdapter(repo, server.url, 60) : undefined;
+        if (transferred) await until(() => server.attempts() >= 1);
+        const peer = createEnrollmentPeerConnection({
+          repo,
+          adapter,
+          source: {
+            endpoint: server.url.replace("ws:", "http:"),
+            approval: {
+              catalogId: repo.create({ fixture: true }).documentId,
+              deviceId: createDeviceId("fixture-local"),
+              sourceDeviceId: createDeviceId("fixture-source"),
+              syncPath: "/sync/fixture",
+            },
           },
-        },
-      });
-      try {
+        });
+        onCleanup(() => peer.close());
         await until(() => server.attempts() >= 4, 8_000);
         server.release();
         await until(() => peer.getAdapter?.()?.socket?.readyState === 1);
@@ -262,13 +289,46 @@ describe("replication socket ownership", () => {
         peer.close();
         await repo.shutdown();
         await expectNoSockets(server);
-      } finally {
-        peer.close();
-        await repo.shutdown();
-        await server.close();
-      }
+      });
     },
   );
+
+  it("cleans a transferred adapter if setup fails before a peer lease exists", async () => {
+    let fixture: SocketFixture | undefined;
+    await expect(
+      withSocketFixture(async (current) => {
+        fixture = current;
+        addRemoteSyncAdapter(current.repo, current.server.url, 60);
+        await until(() => current.server.attempts() >= 1);
+        throw new Error("injected setup barrier failure");
+      }),
+    ).rejects.toThrow("injected setup barrier failure");
+    expect(fixture!.server.server.listening).toBe(false);
+    await expectNoSockets(fixture!.server);
+  });
+
+  it("still closes the Repo and server if peer cleanup fails, preserving both errors", async () => {
+    let fixture: SocketFixture | undefined;
+    const failure = await withSocketFixture(async (current) => {
+      fixture = current;
+      addRemoteSyncAdapter(current.repo, current.server.url, 60);
+      await until(() => current.server.attempts() >= 1);
+      current.onCleanup(() => {
+        throw new Error("injected peer cleanup failure");
+      });
+      throw new Error("injected setup failure");
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors.map((error: Error) => error.message)).toEqual([
+      "injected setup failure",
+      "injected peer cleanup failure",
+    ]);
+    expect(fixture!.server.server.listening).toBe(false);
+    await expectNoSockets(fixture!.server);
+  });
 
   it(
     "allows natural client process exit while its independent peer is still listening",
