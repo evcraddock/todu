@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createTodu } from "@todu/engine";
 import { workerPlugin } from "@todu/recurring-worker";
+import { runInstalledSyncInitializationProbe } from "./installed-sync-initialization.mjs";
 
 const directory = process.argv[2];
 assert.ok(directory, "Fixture directory required");
@@ -163,4 +164,5 @@ try {
     assert.deepEqual(note.value, originalNote);
   } finally { await reopened.close(); }
 } finally { client?.close(); if (managed) await command(["daemon", "stop"]); }
-console.log(JSON.stringify({ versions, manifestVersion: workerPlugin.manifest.version, unsupportedHostRefused: true, automaticOccurrences: generated.length, retainedHistory: true, timings }));
+const syncInitialization = await runInstalledSyncInitializationProbe({ directory, connect });
+console.log(JSON.stringify({ versions, manifestVersion: workerPlugin.manifest.version, unsupportedHostRefused: true, automaticOccurrences: generated.length, retainedHistory: true, timings, syncInitialization }));

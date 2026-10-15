@@ -52,11 +52,18 @@ describe("npm trusted publishing", () => {
   it.each([
     "daemon",
     "recurring-worker",
-  ])("requires completion-aware dependency minimums for @todu/%s", (packageName) => {
+  ])("requires compatible negotiated-host dependency minimums for @todu/%s", (packageName) => {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, "packages", packageName, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
-    expect(manifest.dependencies["@todu/core"]).toBe("^0.27.0");
-    expect(manifest.dependencies["@todu/engine"]).toBe("^0.24.3");
+    expect(manifest.dependencies["@todu/core"]).toBe("^0.28.0");
+    expect(manifest.dependencies["@todu/engine"]).toBe("^0.24.4");
+  });
+
+  it("requires the negotiated core contract in the guarded engine", () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(rootDir, "packages/engine/package.json"), "utf8"),
+    ) as { dependencies: Record<string, string> };
+    expect(manifest.dependencies["@todu/core"]).toBe("^0.28.0");
   });
 });
