@@ -125,6 +125,58 @@ describe("hardenWebSocketClientAdapterErrors", () => {
     );
   });
 
+  it("retires each superseded Node socket and prevents connection reuse after disconnect", () => {
+    const adapter = new WebSocketClientAdapter("ws://localhost:1");
+    const previous = { on: vi.fn(), removeEventListener: vi.fn(), terminate: vi.fn() };
+    const current = { on: vi.fn(), removeEventListener: vi.fn(), terminate: vi.fn() };
+    adapter.socket = previous as unknown as WebSocketClientAdapter["socket"];
+    const connect = vi.fn(() => {
+      adapter.socket = current as unknown as WebSocketClientAdapter["socket"];
+    });
+    adapter.connect = connect;
+    adapter.disconnect = () => {
+      adapter.socket = undefined;
+    };
+    hardenWebSocketClientAdapterErrors(adapter);
+    adapter.connect("local-peer", {});
+    expect(previous.terminate).toHaveBeenCalledOnce();
+    expect(current.terminate).not.toHaveBeenCalled();
+    adapter.disconnect();
+    adapter.disconnect();
+    expect(current.terminate).toHaveBeenCalledOnce();
+    adapter.connect("local-peer", {});
+    expect(connect).toHaveBeenCalledOnce();
+  });
+
+  it("closes sockets without a Node termination method", () => {
+    const adapter = new WebSocketClientAdapter("ws://localhost:1");
+    const socket = { on: vi.fn(), removeEventListener: vi.fn(), close: vi.fn() };
+    adapter.socket = socket as unknown as WebSocketClientAdapter["socket"];
+    adapter.disconnect = () => {
+      adapter.socket = undefined;
+    };
+    hardenWebSocketClientAdapterErrors(adapter);
+    adapter.disconnect();
+    expect(socket.close).toHaveBeenCalledOnce();
+  });
+
+  it("surfaces socket retirement failures instead of claiming cleanup completed", () => {
+    const adapter = new WebSocketClientAdapter("ws://localhost:1");
+    const socket = {
+      on: vi.fn(),
+      removeEventListener: vi.fn(),
+      terminate: () => {
+        throw new Error("retirement failed");
+      },
+    };
+    adapter.socket = socket as unknown as WebSocketClientAdapter["socket"];
+    adapter.disconnect = () => {
+      adapter.socket = undefined;
+    };
+    hardenWebSocketClientAdapterErrors(adapter);
+    expect(() => adapter.disconnect()).toThrow("retirement failed");
+  });
+
   it("attaches a socket error listener on each connection", () => {
     const adapter = new WebSocketClientAdapter("ws://localhost:1");
     const errorListeners: Array<(error: unknown) => void> = [];

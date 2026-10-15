@@ -109,6 +109,7 @@ export function disposeRemoteSyncAdapter(repo: Repo, adapter: WebSocketClientAda
 
 const disposedAdapters = new WeakSet<WebSocketClientAdapter>();
 const hardenedSockets = new WeakSet<object>();
+const socketListenerCleanup = new WeakMap<object, () => void>();
 
 export function hardenWebSocketClientAdapterErrors(
   adapter: WebSocketClientAdapter,
@@ -164,17 +165,37 @@ export function hardenWebSocketClientAdapterErrors(
   adapter.connect = (...args: Parameters<WebSocketClientAdapter["connect"]>) => {
     if (disposedAdapters.has(adapter)) return;
 
-    originalConnect(...args);
-    hardenCurrentWebSocket(adapter);
+    const previousSocket = adapter.socket;
+    try {
+      originalConnect(...args);
+    } finally {
+      // Upstream retries replace the socket without closing its pending handshake.
+      if (previousSocket && previousSocket !== adapter.socket) retireWebSocket(previousSocket);
+      hardenCurrentWebSocket(adapter);
+    }
   };
 
   adapter.disconnect = () => {
     disposedAdapters.add(adapter);
-    originalDisconnect();
-    adapter.remotePeerId = undefined;
+    const socket = adapter.socket;
+    try {
+      originalDisconnect();
+    } finally {
+      adapter.remotePeerId = undefined;
+      // Disconnect must not leave Node waiting for an unresponsive peer's close reply.
+      if (socket) retireWebSocket(socket);
+    }
   };
 
   hardenCurrentWebSocket(adapter);
+}
+
+function retireWebSocket(socket: NonNullable<WebSocketClientAdapter["socket"]>): void {
+  socketListenerCleanup.get(socket)?.();
+  socketListenerCleanup.delete(socket);
+  const nodeSocket = socket as typeof socket & { terminate?: () => void };
+  if (typeof nodeSocket.terminate === "function") nodeSocket.terminate();
+  else socket.close();
 }
 
 function hardenCurrentWebSocket(adapter: WebSocketClientAdapter): void {
@@ -183,14 +204,22 @@ function hardenCurrentWebSocket(adapter: WebSocketClientAdapter): void {
     return;
   }
 
+  hardenedSockets.add(socket);
+  // Native peer handoff may replace adapter callbacks after this socket attached them.
+  const { onOpen, onClose, onMessage, onError } = adapter;
+  socketListenerCleanup.set(socket, () => {
+    socket.removeEventListener("open", onOpen);
+    socket.removeEventListener("close", onClose);
+    socket.removeEventListener("message", onMessage);
+    socket.removeEventListener("error", onError);
+  });
+
   const eventEmitterSocket = socket as {
     on?: (event: "error", listener: (error: unknown) => void) => void;
   };
   if (typeof eventEmitterSocket.on !== "function") {
     return;
   }
-
-  hardenedSockets.add(socket);
   eventEmitterSocket.on("error", () => {
     // Transient WebSocket errors are surfaced through `onError`; this listener prevents Node from treating an otherwise handled socket error as fatal.
   });
@@ -246,29 +275,25 @@ export async function isSyncServerAvailable(
   timeoutMs = 200,
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      resolve(false);
-    }, timeoutMs);
-
-    try {
-      // Use dynamic import for ws since it's CJS
-      import("ws").then(({ default: WebSocket }) => {
-        const ws = new WebSocket(url);
-
-        ws.onopen = () => {
-          clearTimeout(timer);
-          ws.close();
-          resolve(true);
-        };
-
-        ws.onerror = () => {
-          clearTimeout(timer);
-          resolve(false);
-        };
-      });
-    } catch {
+    let settled = false;
+    let socket: import("ws").WebSocket | undefined;
+    const finish = (available: boolean): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(false);
-    }
+      socket?.terminate();
+      resolve(available);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    // A timed-out probe owns its pending handshake, including a late module import.
+    void import("ws")
+      .then(({ default: WebSocket }) => {
+        if (settled) return;
+        socket = new WebSocket(url);
+        socket.on("error", () => finish(false));
+        socket.on("open", () => finish(true));
+      })
+      .catch(() => finish(false));
   });
 }
