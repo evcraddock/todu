@@ -107,6 +107,9 @@ describe("packed recurring-worker version", () => {
         path.join(rootDir, "scripts/test-helpers/installed-sync-initialization.mjs"),
         path.join(directory, "installed-sync-initialization.mjs"),
       );
+      for (const name of ["installed-replication-sockets.mjs", "replication-socket-client.mjs"]) {
+        copyFileSync(path.join(rootDir, "scripts/test-helpers", name), path.join(directory, name));
+      }
       const output = execFileSync(
         process.execPath,
         ["--experimental-import-meta-resolve", probe, directory],
@@ -118,6 +121,14 @@ describe("packed recurring-worker version", () => {
         unsupportedHostRefused: true,
         automaticOccurrences: 1,
         retainedHistory: true,
+        replicationSockets: {
+          compiledEngineVersion: versions.engine,
+          packedModulesOnly: true,
+          retainedSockets: 0,
+          naturalExit: true,
+          independentPeerListening: true,
+          probeTimeoutCleaned: true,
+        },
         syncInitialization: {
           apiVersion: 7,
           legacyVersionsAccepted: true,

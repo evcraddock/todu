@@ -1,5 +1,11 @@
 # @todu/engine
 
+## 0.24.5
+
+### Patch Changes
+
+- Retire superseded replication sockets and their captured callbacks across retries and native peer handoff. Cancel timed-out availability handshakes and release owned sockets during disconnect so tracked shutdown can be followed by natural process exit.
+
 ## 0.24.4
 
 ### Patch Changes

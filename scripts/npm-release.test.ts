@@ -57,7 +57,9 @@ describe("npm trusted publishing", () => {
       readFileSync(path.join(rootDir, "packages", packageName, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
     expect(manifest.dependencies["@todu/core"]).toBe("^0.28.0");
-    expect(manifest.dependencies["@todu/engine"]).toBe("^0.24.4");
+    expect(manifest.dependencies["@todu/engine"]).toBe(
+      packageName === "daemon" ? "^0.24.5" : "^0.24.4",
+    );
   });
 
   it("requires the negotiated core contract in the guarded engine", () => {
