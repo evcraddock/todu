@@ -5,3 +5,7 @@ data_dir: data
 sync:
   remote:
     server: ws://localhost:3030
+  listener:
+    enabled: true
+    bind: 127.0.0.1
+    port: 24377
