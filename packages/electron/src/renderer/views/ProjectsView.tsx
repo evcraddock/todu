@@ -1,5 +1,5 @@
 import type { ProjectFilter } from "@todu/core/browser";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { CreateProjectDialog } from "./CreateProjectDialog.js";
 import { CreateTaskDialog } from "./CreateTaskDialog.js";
 import { ProjectDetail } from "./ProjectDetail.js";
@@ -15,10 +15,23 @@ type ProjectViewState =
 
 export function ProjectsView({
   externalFilter,
+  focusProjectId,
+  onFocusConsumed,
 }: {
   externalFilter?: ProjectFilter | null;
+  focusProjectId?: string | null;
+  onFocusConsumed?: () => void;
 }): ReactNode {
-  const [state, setState] = useState<ProjectViewState>({ view: "list" });
+  const [state, setState] = useState<ProjectViewState>(
+    focusProjectId ? { view: "detail", projectId: focusProjectId } : { view: "list" },
+  );
+
+  useEffect(() => {
+    if (focusProjectId) {
+      setState({ view: "detail", projectId: focusProjectId });
+      onFocusConsumed?.();
+    }
+  }, [focusProjectId, onFocusConsumed]);
 
   switch (state.view) {
     case "list":

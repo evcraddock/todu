@@ -146,15 +146,24 @@ function Section({
 
 export function HomeView({
   onNavigateToTask,
+  onNavigateToProject,
 }: {
   onNavigateToTask: (taskId: string) => void;
+  onNavigateToProject: (projectId: string) => void;
 }): ReactNode {
   // Fetch all relevant task groups
   const { data: inprogressTasks } = useTasks({ status: "inprogress" });
   const { data: activeTasks } = useTasks({ status: "active" });
   const { data: waitingTasks } = useTasks({ status: "waiting" });
-  const { data: projects } = useProjects();
+  const {
+    data: projects,
+    isLoading: projectsLoading,
+    isError: projectsFailed,
+    error: projectsError,
+  } = useProjects();
   const { data: habits } = useHabitList({ paused: false });
+  const focusProjects =
+    projects?.filter((project) => project.status === "active" && project.priority === "high") ?? [];
 
   const projectMap = new Map<string, string>();
   if (projects) {
@@ -225,6 +234,40 @@ export function HomeView({
             today={today}
             onSelectTask={onNavigateToTask}
           />
+
+          {(projectsLoading || projectsFailed || focusProjects.length > 0) && (
+            <div className="home-section">
+              <h3 className="home-section-title">
+                <span>◎</span> Project Focus
+                {!projectsLoading && !projectsFailed && (
+                  <span className="home-section-count">{focusProjects.length}</span>
+                )}
+              </h3>
+              {projectsLoading ? (
+                <div className="loading-state">Loading projects…</div>
+              ) : projectsFailed ? (
+                <div className="error-state" role="alert">
+                  <p>Failed to load projects</p>
+                  <p className="error-detail">
+                    {projectsError instanceof Error ? projectsError.message : "Unknown error"}
+                  </p>
+                </div>
+              ) : (
+                <div className="home-task-list">
+                  {focusProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      className="home-task-row"
+                      onClick={() => onNavigateToProject(project.id)}
+                    >
+                      <span className="home-task-title">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Today's Habits */}
           {habits && habits.length > 0 && (

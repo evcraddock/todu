@@ -29,6 +29,8 @@ function ViewRouter({
   agentRecurringFilter,
   focusTaskId,
   onFocusTaskConsumed,
+  focusProjectId,
+  onFocusProjectConsumed,
   themePreference,
   onThemeChange,
 }: {
@@ -41,14 +43,27 @@ function ViewRouter({
   agentRecurringFilter: RecurringFilter | null;
   focusTaskId: string | null;
   onFocusTaskConsumed: () => void;
+  focusProjectId: string | null;
+  onFocusProjectConsumed: () => void;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
   switch (activeView) {
     case "home":
-      return <HomeView onNavigateToTask={(id) => onNavigateToEntity("task", id)} />;
+      return (
+        <HomeView
+          onNavigateToTask={(id) => onNavigateToEntity("task", id)}
+          onNavigateToProject={(id) => onNavigateToEntity("project", id)}
+        />
+      );
     case "projects":
-      return <ProjectsView externalFilter={agentProjectFilter} />;
+      return (
+        <ProjectsView
+          externalFilter={agentProjectFilter}
+          focusProjectId={focusProjectId}
+          onFocusConsumed={onFocusProjectConsumed}
+        />
+      );
     case "tasks":
       return (
         <TasksView
@@ -81,6 +96,7 @@ export function App(): ReactNode {
   const [agentHabitFilter, setAgentHabitFilter] = useState<HabitFilter | null>(null);
   const [agentRecurringFilter, setAgentRecurringFilter] = useState<RecurringFilter | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
+  const [focusProjectId, setFocusProjectId] = useState<string | null>(null);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -165,6 +181,7 @@ export function App(): ReactNode {
         setActiveView("tasks");
         break;
       case "project":
+        setFocusProjectId(entityId);
         setActiveView("projects");
         break;
       case "habit":
@@ -199,6 +216,8 @@ export function App(): ReactNode {
             agentRecurringFilter={agentRecurringFilter}
             focusTaskId={focusTaskId}
             onFocusTaskConsumed={() => setFocusTaskId(null)}
+            focusProjectId={focusProjectId}
+            onFocusProjectConsumed={() => setFocusProjectId(null)}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />
