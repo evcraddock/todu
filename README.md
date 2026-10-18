@@ -166,6 +166,8 @@ make install
 
 Tasks already shown in **In Progress** or **Coming Soon** stay in those sections without duplication. Priority remains visible as guidance, and only a passed due date marks a task overdue. To remove a task from the weekly plan, clear its scheduled date or reschedule it to a future week.
 
+Electron Home also includes **Project Focus** for active, high-priority projects, including projects with no tasks. Use project priority to indicate which projects deserve attention now; selecting a project opens its detail view. Changing a project's priority or status updates its membership after refresh. Project focus does not schedule or change any tasks, and the section is hidden when no projects qualify.
+
 ## Work on the project
 
 Read first: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
