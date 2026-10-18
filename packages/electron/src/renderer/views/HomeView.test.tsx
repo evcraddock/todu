@@ -65,10 +65,10 @@ afterEach(() => {
 describe("Home weekly planning", () => {
   it("shows scheduled work in This Week and preserves navigation, priority, and habits", () => {
     state.tasks = [
-      makeTask("Later this week", { priority: "low", scheduledDate: "2026-10-18" }),
+      makeTask("Later this week", { priority: "low", scheduledDate: "2026-10-17" }),
       makeTask("Earlier week", { scheduledDate: "2026-09-28" }),
       makeTask("Unscheduled high", { priority: "high" }),
-      makeTask("Next week", { scheduledDate: "2026-10-19" }),
+      makeTask("Next week", { scheduledDate: "2026-10-18" }),
       makeTask("Waiting task", { status: "waiting", scheduledDate: "2026-10-12" }),
       makeTask("Completed task", { status: "done", scheduledDate: "2026-10-12" }),
       makeTask("Canceled task", { status: "canceled", scheduledDate: "2026-10-12" }),
@@ -95,13 +95,31 @@ describe("Home weekly planning", () => {
     expect(state.checkHabit).toHaveBeenCalledWith("habit-1");
   });
 
+  it("opens the Sunday–Saturday plan on Sunday and retains unfinished earlier work", () => {
+    vi.setSystemTime(new Date(2026, 9, 18, 12));
+    state.tasks = [
+      makeTask("Previous Saturday", { scheduledDate: "2026-10-17" }),
+      makeTask("This Sunday", { scheduledDate: "2026-10-18" }),
+      makeTask("This Monday", { scheduledDate: "2026-10-19" }),
+      makeTask("This Saturday", { scheduledDate: "2026-10-24" }),
+      makeTask("Next Sunday", { scheduledDate: "2026-10-25" }),
+    ];
+    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+
+    expect(screen.getByRole("heading", { name: /This Week/ }).textContent).toContain("4");
+    for (const title of ["Previous Saturday", "This Sunday", "This Monday", "This Saturday"]) {
+      expect(screen.getByRole("button", { name: new RegExp(title) })).toBeTruthy();
+    }
+    expect(screen.queryByRole("button", { name: /Next Sunday/ })).toBeNull();
+  });
+
   it("preserves due-date section precedence without duplicating planned work", () => {
     state.tasks = [
       makeTask("Started", { status: "inprogress", scheduledDate: "2026-10-12" }),
       makeTask("Due today", { dueDate: "2026-10-14", scheduledDate: "2026-10-12" }),
       makeTask("Overdue", { dueDate: "2026-10-13", scheduledDate: "2026-10-12" }),
       makeTask("Coming soon", { dueDate: "2026-10-16", scheduledDate: "2026-10-12" }),
-      makeTask("Weekly plan", { scheduledDate: "2026-10-18" }),
+      makeTask("Weekly plan", { scheduledDate: "2026-10-17" }),
     ];
     render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
 

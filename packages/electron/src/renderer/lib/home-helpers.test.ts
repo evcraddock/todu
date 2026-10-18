@@ -132,14 +132,14 @@ describe("buildDashboardSections", () => {
     "medium",
     "high",
   ] as const)("includes %s priority tasks scheduled later this week", (priority) => {
-    const task = makeTask({ priority, scheduledDate: "2025-02-16" });
+    const task = makeTask({ priority, scheduledDate: "2025-02-15" });
     const result = buildDashboardSections([], [task], [], today, threeDaysOut);
     expect(result.thisWeek).toEqual([task]);
   });
 
   it.each([
     undefined,
-    "2025-02-17",
+    "2025-02-16",
   ])("excludes high priority tasks scheduled %s", (scheduledDate) => {
     const task = makeTask({ priority: "high", scheduledDate });
     expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
@@ -149,7 +149,7 @@ describe("buildDashboardSections", () => {
     const task = Object.freeze(makeTask({ scheduledDate: "2025-01-27", dueDate: "2025-12-31" }));
     const snapshot = { ...task };
     const tasks = [task];
-    for (const date of ["2025-02-09", "2025-02-10", "2025-02-17", "2025-03-03"]) {
+    for (const date of ["2025-02-08", "2025-02-09", "2025-02-15", "2025-02-16", "2025-03-02"]) {
       expect(buildDashboardSections([], tasks, [], date, addDays(date, 3)).thisWeek).toEqual([
         task,
       ]);
@@ -228,19 +228,26 @@ describe("buildDashboardSections", () => {
 
 describe("endOfWeek", () => {
   it.each([
-    ["2025-02-10", "2025-02-16"],
-    ["2025-02-16", "2025-02-16"],
-    ["2025-02-17", "2025-02-23"],
-    ["2025-01-31", "2025-02-02"],
-    ["2025-12-31", "2026-01-04"],
-    ["2026-03-08", "2026-03-08"],
-    ["2026-03-09", "2026-03-15"],
-    ["2026-11-01", "2026-11-01"],
-    ["2026-11-02", "2026-11-08"],
-  ])("includes Sunday and excludes next Monday for %s", (today, sunday) => {
-    expect(endOfWeek(today)).toBe(sunday);
-    const included = makeTask({ id: "included" as Task["id"], scheduledDate: sunday });
-    const excluded = makeTask({ id: "excluded" as Task["id"], scheduledDate: addDays(sunday, 1) });
+    ["2026-10-17", "2026-10-17"],
+    ["2026-10-18", "2026-10-24"],
+    ["2026-10-19", "2026-10-24"],
+    ["2026-10-24", "2026-10-24"],
+    ["2026-10-25", "2026-10-31"],
+    ["2025-01-31", "2025-02-01"],
+    ["2025-12-31", "2026-01-03"],
+    ["2026-03-07", "2026-03-07"],
+    ["2026-03-08", "2026-03-14"],
+    ["2026-03-09", "2026-03-14"],
+    ["2026-10-31", "2026-10-31"],
+    ["2026-11-01", "2026-11-07"],
+    ["2026-11-02", "2026-11-07"],
+  ])("includes Saturday and excludes next Sunday for %s", (today, saturday) => {
+    expect(endOfWeek(today)).toBe(saturday);
+    const included = makeTask({ id: "included" as Task["id"], scheduledDate: saturday });
+    const excluded = makeTask({
+      id: "excluded" as Task["id"],
+      scheduledDate: addDays(saturday, 1),
+    });
     expect(
       buildDashboardSections([], [included, excluded], [], today, addDays(today, 3)).thisWeek,
     ).toEqual([included]);

@@ -256,6 +256,10 @@ Baseline worker lifecycle states are:
 - Author-facing contract details are documented in `docs/worker-plugin-api.md` and `docs/plugin-sync-provider-api.md`.
 - Product/plugin boundary policy is documented in `docs/adr/0001-plugin-boundaries-and-data-ownership.md`, `docs/architecture/plugins.md`, and `docs/architecture/integrations.md`.
 
+### Home weekly planning
+
+Electron Home's **This Week** uses local Sunday–Saturday weeks. Active tasks scheduled on or before the current Saturday qualify regardless of priority, subject to existing section precedence. Unfinished tasks from earlier weeks remain visible without rewriting their scheduled dates. Scheduled dates indicate weekly intent; only due dates determine overdue status.
+
 ### Recurring behavior
 
 - Recurring automation is a worker capability.
