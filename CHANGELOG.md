@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bundled core 0.28.0, engine 0.24.5, and daemon 0.28.1, including field-group sync, scoped provider context, and safe provider initialization/recovery contracts (#556, #557, #569, #573).
 - Kept companion npm package versions independent: CLI 0.25.2 and TUI 0.26.2. This desktop release does not publish new npm versions.
 - Limited new macOS desktop and standalone CLI releases to Apple Silicon (arm64); historical Intel artifacts remain available (#559).
+- Staged GitHub release assets as a draft so the locally Developer ID-signed macOS installer and final checksums can be verified before publication. macOS signing does not include Apple notarization in this release.
 
 ### Fixed
 - Preserved explicit daemon ownership: desktop startup and reconnect no longer launch, replace, or restart a daemon, and connection failures provide actionable diagnostics (#551).

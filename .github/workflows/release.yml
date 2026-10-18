@@ -308,5 +308,6 @@ jobs:
           tag_name: v${{ needs.validate.outputs.version }}
           name: todu v${{ needs.validate.outputs.version }}
           body_path: release-notes.md
+          draft: true
           prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
           files: release-assets/*
