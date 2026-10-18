@@ -169,7 +169,7 @@ export function HomeView({
   const {
     inProgress: inProgressSection,
     comingSoon,
-    next,
+    thisWeek,
     waiting,
   } = buildDashboardSections(
     inprogressTasks ?? [],
@@ -209,9 +209,9 @@ export function HomeView({
           />
 
           <Section
-            title="Next"
+            title="This Week"
             icon="⚡"
-            tasks={next}
+            tasks={thisWeek}
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   buildDashboardSections,
+  endOfWeek,
   formatDueLabel,
   isDueToday,
   isOverdue,
@@ -16,11 +17,12 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     priority: "medium",
     projectId: "proj-1" as Task["projectId"],
     labels: [],
+    assigneeActorIds: [],
     assignees: [],
     createdAt: "2025-01-01",
     updatedAt: "2025-01-01",
     ...overrides,
-  } as Task;
+  };
 }
 
 describe("addDays", () => {
@@ -125,17 +127,62 @@ describe("buildDashboardSections", () => {
     expect(result.comingSoon[0].id).toBe("t4");
   });
 
-  it("puts high priority active tasks with no near due date in next", () => {
-    const active = [makeTask({ id: "t5" as Task["id"], status: "active", priority: "high" })];
-    const result = buildDashboardSections([], active, [], today, threeDaysOut);
-    expect(result.next).toHaveLength(1);
-    expect(result.next[0].id).toBe("t5");
+  it.each([
+    "low",
+    "medium",
+    "high",
+  ] as const)("includes %s priority tasks scheduled later this week", (priority) => {
+    const task = makeTask({ priority, scheduledDate: "2025-02-16" });
+    const result = buildDashboardSections([], [task], [], today, threeDaysOut);
+    expect(result.thisWeek).toEqual([task]);
   });
 
-  it("does not put medium priority tasks in next", () => {
-    const active = [makeTask({ id: "t6" as Task["id"], status: "active", priority: "medium" })];
-    const result = buildDashboardSections([], active, [], today, threeDaysOut);
-    expect(result.next).toHaveLength(0);
+  it.each([
+    undefined,
+    "2025-02-17",
+  ])("excludes high priority tasks scheduled %s", (scheduledDate) => {
+    const task = makeTask({ priority: "high", scheduledDate });
+    expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
+  });
+
+  it("retains earlier-week tasks across successive weeks without mutating fields", () => {
+    const task = Object.freeze(makeTask({ scheduledDate: "2025-01-27", dueDate: "2025-12-31" }));
+    const snapshot = { ...task };
+    const tasks = [task];
+    for (const date of ["2025-02-09", "2025-02-10", "2025-02-17", "2025-03-03"]) {
+      expect(buildDashboardSections([], tasks, [], date, addDays(date, 3)).thisWeek).toEqual([
+        task,
+      ]);
+    }
+    expect(task).toEqual(snapshot);
+    expect(tasks).toEqual([snapshot]);
+  });
+
+  it.each([
+    "inprogress",
+    "waiting",
+    "done",
+    "canceled",
+  ] as const)("excludes %s tasks from This Week", (status) => {
+    const task = makeTask({ status, scheduledDate: "2025-02-10" });
+    expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
+  });
+
+  it("does not treat a passed scheduled date as overdue", () => {
+    const task = makeTask({ scheduledDate: "2025-01-27" });
+    expect(isOverdue(task, today)).toBe(false);
+    expect(formatDueLabel(task, today)).toBeNull();
+    expect(buildDashboardSections([], [task], [], today, threeDaysOut).inProgress).toEqual([]);
+    expect(isOverdue(makeTask({ ...task, dueDate: "2025-02-12" }), today)).toBe(true);
+  });
+
+  it("updates membership when a task is rescheduled or its schedule is cleared", () => {
+    for (const scheduledDate of ["2025-02-10", "2025-02-17", undefined]) {
+      const task = makeTask({ scheduledDate });
+      expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual(
+        scheduledDate === "2025-02-10" ? [task] : [],
+      );
+    }
   });
 
   it("passes through waiting tasks", () => {
@@ -153,26 +200,49 @@ describe("buildDashboardSections", () => {
         status: "active",
         dueDate: "2025-02-15",
         priority: "high",
+        scheduledDate: "2025-02-10",
       }),
     ];
     const result = buildDashboardSections(ip, active, [], today, threeDaysOut);
     expect(result.inProgress).toHaveLength(1);
     expect(result.comingSoon).toHaveLength(0);
-    expect(result.next).toHaveLength(0);
+    expect(result.thisWeek).toHaveLength(0);
   });
 
-  it("deduplicates comingSoon tasks from next", () => {
+  it("deduplicates comingSoon tasks from This Week", () => {
     const active = [
       makeTask({
         id: "t9" as Task["id"],
         status: "active",
         priority: "high",
+        scheduledDate: "2025-02-10",
         dueDate: "2025-02-15",
       }),
     ];
     const result = buildDashboardSections([], active, [], today, threeDaysOut);
-    // Should be in comingSoon, NOT in next
+    // Coming Soon keeps precedence over This Week.
     expect(result.comingSoon).toHaveLength(1);
-    expect(result.next).toHaveLength(0);
+    expect(result.thisWeek).toHaveLength(0);
+  });
+});
+
+describe("endOfWeek", () => {
+  it.each([
+    ["2025-02-10", "2025-02-16"],
+    ["2025-02-16", "2025-02-16"],
+    ["2025-02-17", "2025-02-23"],
+    ["2025-01-31", "2025-02-02"],
+    ["2025-12-31", "2026-01-04"],
+    ["2026-03-08", "2026-03-08"],
+    ["2026-03-09", "2026-03-15"],
+    ["2026-11-01", "2026-11-01"],
+    ["2026-11-02", "2026-11-08"],
+  ])("includes Sunday and excludes next Monday for %s", (today, sunday) => {
+    expect(endOfWeek(today)).toBe(sunday);
+    const included = makeTask({ id: "included" as Task["id"], scheduledDate: sunday });
+    const excluded = makeTask({ id: "excluded" as Task["id"], scheduledDate: addDays(sunday, 1) });
+    expect(
+      buildDashboardSections([], [included, excluded], [], today, addDays(today, 3)).thisWeek,
+    ).toEqual([included]);
   });
 });

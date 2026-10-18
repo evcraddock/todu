@@ -160,6 +160,12 @@ make install
 - macOS builds and installers target Apple Silicon only. Use native arm64 Node.js and Bun for macOS package builds and validation; the install script also works from a Rosetta shell on Apple Silicon.
 - macOS install script mounts the generated arm64 DMG and copies the app to `/Applications`.
 
+## Weekly planning in Electron Home
+
+**This Week** shows active tasks scheduled for the current Monday–Sunday week or any earlier week, regardless of priority. Set a task's scheduled date to any day in the intended week; it becomes visible for the whole week. Unfinished tasks stay visible in later weeks without changing their scheduled dates. Unscheduled tasks and tasks scheduled for future weeks are excluded.
+
+Tasks already shown in **In Progress** or **Coming Soon** stay in those sections without duplication. Priority remains visible as guidance, and only a passed due date marks a task overdue. To remove a task from the weekly plan, clear its scheduled date or reschedule it to a future week.
+
 ## Work on the project
 
 Read first: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)

@@ -27,6 +27,12 @@ export function isDueToday(task: Task, today: string): boolean {
   return task.dueDate.slice(0, 10) === today;
 }
 
+export function endOfWeek(today: string): string {
+  const [year, month, day] = today.split("-").map(Number);
+  const weekday = new Date(year, month - 1, day).getDay();
+  return addDays(today, (7 - weekday) % 7);
+}
+
 export function formatDueLabel(task: Task, today: string): string | null {
   if (!task.dueDate) return null;
   const due = task.dueDate.slice(0, 10);
@@ -47,7 +53,7 @@ export function buildDashboardSections(
 ): {
   inProgress: Task[];
   comingSoon: Task[];
-  next: Task[];
+  thisWeek: Task[];
   waiting: Task[];
 } {
   const inProgress: Task[] = [];
@@ -76,13 +82,15 @@ export function buildDashboardSections(
     }
   }
 
-  const next: Task[] = [];
+  const thisWeek: Task[] = [];
+  const sunday = endOfWeek(today);
   for (const t of activeTasks) {
     if (inProgressIds.has(t.id) || comingSoonIds.has(t.id)) continue;
-    if (t.priority === "high") {
-      next.push(t);
+    const scheduled = t.scheduledDate?.slice(0, 10);
+    if (t.status === "active" && scheduled && scheduled <= sunday) {
+      thisWeek.push(t);
     }
   }
 
-  return { inProgress, comingSoon, next, waiting: waitingTasks };
+  return { inProgress, comingSoon, thisWeek, waiting: waitingTasks };
 }
