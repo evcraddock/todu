@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-18
+
+### Added
+- Added Project Focus to Electron Home for active, high-priority projects, with direct navigation to the selected project's details (#578).
+- Added optional direct LAN device sync, locally approved enrollment, and automatic peer connections from the shared device roster (#553, #554, #555, #560, #564, #566).
+- Added independent controls for optional sync servers alongside direct peer connections (#561).
+
+### Changed
+- Replaced Electron Home's high-priority Next section with This Week, using scheduled dates through the current Sunday and retaining unfinished work from earlier weeks. Priority remains guidance, while overdue indicators still depend only on due dates (#577).
+- Bundled core 0.28.0, engine 0.24.5, and daemon 0.28.1, including field-group sync, scoped provider context, and safe provider initialization/recovery contracts (#556, #557, #569, #573).
+- Kept companion npm package versions independent: CLI 0.25.2 and TUI 0.26.2. This desktop release does not publish new npm versions.
+- Limited new macOS desktop and standalone CLI releases to Apple Silicon (arm64); historical Intel artifacts remain available (#559).
+
+### Fixed
+- Preserved explicit daemon ownership: desktop startup and reconnect no longer launch, replace, or restart a daemon, and connection failures provide actionable diagnostics (#551).
+- Drained admitted worker cleanup before daemon shutdown completes and retired superseded/timed-out replication sockets (#571, #575).
+- Preserved note update timestamps for sync reconciliation (#562).
+
 ## [0.23.3]
 
 ### Changed
