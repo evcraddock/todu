@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-18
+
+### Fixed
+- Corrected Electron Home's This Week planning window to Sunday–Saturday, so Sunday planning includes work through the coming Saturday. Unfinished tasks from earlier weeks remain visible without changing scheduled dates (#580).
+
+### Changed
+- Kept bundled runtime and independent companion npm versions unchanged from 0.24.0. The Apple Silicon macOS installer is Developer ID signed; Apple notarization is not included.
+
 ## [0.24.0] - 2026-10-18
 
 ### Added
