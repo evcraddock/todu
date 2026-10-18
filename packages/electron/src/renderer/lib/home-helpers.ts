@@ -30,7 +30,7 @@ export function isDueToday(task: Task, today: string): boolean {
 export function endOfWeek(today: string): string {
   const [year, month, day] = today.split("-").map(Number);
   const weekday = new Date(year, month - 1, day).getDay();
-  return addDays(today, (7 - weekday) % 7);
+  return addDays(today, 6 - weekday);
 }
 
 export function formatDueLabel(task: Task, today: string): string | null {
@@ -83,11 +83,11 @@ export function buildDashboardSections(
   }
 
   const thisWeek: Task[] = [];
-  const sunday = endOfWeek(today);
+  const weekEnd = endOfWeek(today);
   for (const t of activeTasks) {
     if (inProgressIds.has(t.id) || comingSoonIds.has(t.id)) continue;
     const scheduled = t.scheduledDate?.slice(0, 10);
-    if (t.status === "active" && scheduled && scheduled <= sunday) {
+    if (t.status === "active" && scheduled && scheduled <= weekEnd) {
       thisWeek.push(t);
     }
   }
