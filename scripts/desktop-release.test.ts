@@ -139,6 +139,14 @@ describe("desktop release metadata", () => {
     expect(manifest.private).toBe(true);
   });
 
+  it("stages release assets privately until signing and checksum finalization", () => {
+    const publish = release.jobs.release.steps.find((step: { uses?: string }) =>
+      step.uses?.startsWith("softprops/action-gh-release@"),
+    );
+    expect(publish.with.draft).toBe(true);
+    expect(publish.with.files).toBe("release-assets/*");
+  });
+
   it("accepts a matching desktop tag with independent companion versions", () => {
     const result = validateTag("v1.2.3", releaseFixture());
     expect(result.status, result.stderr).toBe(0);
