@@ -1,5 +1,11 @@
 # @todu/engine
 
+## 0.24.6
+
+### Patch Changes
+
+- Retire half-open native peer connections so direct sync recovers automatically without weakening duplicate replica identity protection.
+
 ## 0.24.5
 
 ### Patch Changes

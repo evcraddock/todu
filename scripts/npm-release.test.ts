@@ -58,7 +58,7 @@ describe("npm trusted publishing", () => {
     ) as { dependencies: Record<string, string> };
     expect(manifest.dependencies["@todu/core"]).toBe("^0.28.0");
     expect(manifest.dependencies["@todu/engine"]).toBe(
-      packageName === "daemon" ? "^0.24.5" : "^0.24.4",
+      packageName === "daemon" ? "^0.24.6" : "^0.24.4",
     );
   });
 
