@@ -141,6 +141,12 @@ Activated daemon engines observe relevant catalog roster IDs/endpoints/removal f
 
 The command reports adapter-target reconciliation, not successful connection, document completeness, or remote persistence. Removing an entry affects managed links on refresh; it does not revoke arbitrary native transport access. Pending pristine startup and thin clients do not own roster connections. No new primary election, forwarding protocol, transport authentication, or retry scheduler is introduced.
 
+### Half-open Connection Recovery
+
+Daemon-owned outbound WebSockets send a control-frame ping every five seconds and require a matching pong within five seconds. An unresponsive socket is terminated rather than waiting for a close handshake; existing peer-disconnection handling clears its verified identity and the existing watchdog reconnects. The listener retains its native inbound heartbeat. Idle responsive peers remain connected, and a genuinely simultaneous duplicate persistent replica identity is still refused. These checks do not change catalog/storage identities, reset data, or prove document completeness or remote persistence. Heartbeat timers are released on socket close, replacement, and adapter disposal.
+
+Local regression coverage uses temporary persistent replicas sharing one catalog and a loopback proxy that silently drops traffic without a close event. It verifies duplicate refusal while the original channel is responsive, retirement of the half-open outbound socket, reconnection after a peer restart with the same storage identity, and renewed bidirectional document exchange. Both independently created and transferred configured-server adapters are covered. This is not evidence of recovery on deployed devices.
+
 ## Optional Server Management
 
 Private `todu sync server status|set|enable|disable` commands retain and update machine-local `sync.remote` settings, applying them to the current engine without a daemon restart or Repo replacement. Disabled settings retain the destination for later explicit enablement; legacy URL-only configurations remain enabled by default. Existing `sync start|stop|restart` controls remain runtime-only. See [CLI server controls](../cli-daemon-usage.md#optional-sync-server-controls) for configuration context, environment precedence, and status semantics.
