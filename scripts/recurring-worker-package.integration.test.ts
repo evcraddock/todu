@@ -113,7 +113,7 @@ describe("packed recurring-worker version", () => {
       const output = execFileSync(
         process.execPath,
         ["--experimental-import-meta-resolve", probe, directory],
-        { cwd: directory, env, encoding: "utf8", timeout: 20_000 },
+        { cwd: directory, env, encoding: "utf8", timeout: 40_000 },
       );
       expect(JSON.parse(output)).toMatchObject({
         versions,
@@ -128,6 +128,12 @@ describe("packed recurring-worker version", () => {
           naturalExit: true,
           independentPeerListening: true,
           probeTimeoutCleaned: true,
+          outboundHeartbeat: {
+            packedModulesOnly: true,
+            pingObserved: true,
+            unresponsivePeerRetired: true,
+            deadlineReported: true,
+          },
         },
         syncInitialization: {
           apiVersion: 7,

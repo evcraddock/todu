@@ -15,11 +15,13 @@ The current release compatibility set is:
 | Node / npm used in local validation | `24.16.0` / `11.13.0` |
 | `@todu/cli` (unchanged published CLI) | `0.25.2` |
 | `@todu/core` | `0.28.0` |
-| `@todu/engine` | `0.24.5` |
-| `@todu/daemon` | `0.28.1` |
+| `@todu/engine` | `0.24.6` |
+| `@todu/daemon` | `0.28.2` |
 | `@todu/recurring-worker` | `0.2.1` |
 
 The socket-cleanup patch requires engine `^0.24.5` in daemon `0.28.1`. Core and worker versions remain unchanged; the worker's existing engine `^0.24.4` range accepts this compatible patch. The engine retires superseded retry sockets and timed-out availability handshakes without changing worker generation, provider contracts or storage/RPC drains. See the [socket diagnosis and regression evidence](testing/task-da39158a-replication-socket-leak.md).
+
+The stale-peer recovery patch requires engine `^0.24.6` in daemon `0.28.2`. Outbound heartbeat/pong deadlines retire half-open connections through the existing reconnect path without relaxing live duplicate-identity rejection. The worker remains `0.2.1` and accepts this engine patch through its existing range. See [half-open connection recovery](architecture/device-sync.md#half-open-connection-recovery); publication does not install the fix or prove deployed-device recovery.
 
 The daemon and worker declare minimum compatible core/engine ranges; engine aligns its core dependency. The host/engine pin Automerge `3.5.0` and Repo `2.5.6`. Do not add the obsolete Automerge `3.3.2` override from the historical `0.1.1` setup. Normal npm installation must run the engine's required Repo repair postinstall script.
 
@@ -35,8 +37,8 @@ Once the existing process has exited, install the exact verified set in the exis
 npm install -g \
   @todu/cli@0.25.2 \
   @todu/core@0.28.0 \
-  @todu/engine@0.24.5 \
-  @todu/daemon@0.28.1 \
+  @todu/engine@0.24.6 \
+  @todu/daemon@0.28.2 \
   @todu/recurring-worker@0.2.1
 ```
 
@@ -73,7 +75,7 @@ After building the candidate:
 npm run test:all -- scripts/recurring-worker-package.integration.test.ts
 ```
 
-The regression packs core/engine/daemon/worker, installs their actual archives plus published CLI `0.25.2` in disposable HOME/config/data paths, executes required installation scripts, verifies module resolution and unsupported-host refusal, and runs the real direct CLI lifecycle. It automatically generates an occurrence, restarts with a persistent subscribed client, checks the same catalog/new PID/no duplicate occurrence, stops after client disconnection without forced termination, and reopens exact task/description/note data. It uses no source-checkout plugin, production dataset, real provider, or manual occurrence-generation call. The same clean installation also probes API v7 scoped canonical equality without rewrites, deferred disagreement/approval, legacy-drain blocking, stale push refusal after relinking, legacy registration/unsupported-host negotiation, and actual local operator preview/confirm RPCs with status-only/comment preservation and token-reuse rejection. These use disposable fixture identities only, not real remote-deletion confirmation or adapter adoption. The clean installation additionally loads the actual packed engine's compiled socket helper, verifies cancellation of a timed-out probe, and runs a separate client against an independently listening loopback peer with four delayed initial handshake attempts. It requires natural client exit with zero retained sockets before peer teardown and proves neither client nor helper resolves workspace modules. Separate source shutdown/recovery regressions cover admitted work, durable ledgers and cleanup/storage/RPC failure propagation.
+The regression packs core/engine/daemon/worker, installs their actual archives plus published CLI `0.25.2` in disposable HOME/config/data paths, executes required installation scripts, verifies module resolution and unsupported-host refusal, and runs the real direct CLI lifecycle. It automatically generates an occurrence, restarts with a persistent subscribed client, checks the same catalog/new PID/no duplicate occurrence, stops after client disconnection without forced termination, and reopens exact task/description/note data. It uses no source-checkout plugin, production dataset, real provider, or manual occurrence-generation call. The same clean installation also probes API v7 scoped canonical equality without rewrites, deferred disagreement/approval, legacy-drain blocking, stale push refusal after relinking, legacy registration/unsupported-host negotiation, and actual local operator preview/confirm RPCs with status-only/comment preservation and token-reuse rejection. These use disposable fixture identities only, not real remote-deletion confirmation or adapter adoption. The clean installation additionally loads the actual packed engine's compiled socket helper, verifies cancellation of a timed-out probe, and runs a separate client against an independently listening loopback peer with four delayed initial handshake attempts. It requires natural client exit with zero retained sockets before peer teardown and proves neither client nor helper resolves workspace modules. The installed compiled client also sends heartbeat pings and terminates a loopback peer that withholds pongs, with a timeout diagnostic and no peer restart. Separate source shutdown/recovery regressions cover admitted work, durable ledgers and cleanup/storage/RPC failure propagation.
 
 Successful local exit/persistence does not establish remote durability or resolve historical startup stalls. Long-running uncooperative work can still exhaust the existing stop allowance; no universal abort support is implied.
 

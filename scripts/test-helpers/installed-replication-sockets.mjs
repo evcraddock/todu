@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";
@@ -22,6 +23,46 @@ async function within(promise, timeout = 3_000) {
       timer = setTimeout(() => reject(new Error("Installed client did not exit naturally")), timeout);
     })]);
   } finally { clearTimeout(timer); }
+}
+
+/** Exercise the installed client's control-frame deadline, not workspace sources. */
+async function runInstalledHeartbeatProbe({ require, engineDirectory }) {
+  const { Repo } = require("@automerge/automerge-repo");
+  const { WebSocketServer } = require("ws");
+  const helper = path.join(engineDirectory, "dist/sync-client.js");
+  const heartbeat = path.join(engineDirectory, "dist/websocket-heartbeat.js");
+  assert(fs.realpathSync(heartbeat).startsWith(fs.realpathSync(engineDirectory) + path.sep));
+  const { addRemoteSyncAdapter, disposeRemoteSyncAdapter } = await import(pathToFileURL(helper).href);
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0, autoPong: false });
+  const repo = new Repo({ network: [] });
+  const warnings = [];
+  let pings = 0;
+  let adapter;
+  server.on("connection", (socket) => socket.on("ping", () => { pings++; }));
+  try {
+    await once(server, "listening");
+    const address = server.address();
+    assert(address && typeof address !== "string");
+    adapter = addRemoteSyncAdapter(repo, `ws://127.0.0.1:${address.port}`, 30_000, {
+      warn(message, context) { warnings.push({ message, context }); },
+    });
+    await until(() => adapter.socket?.readyState === 1);
+    const socket = adapter.socket;
+    await until(() => pings > 0, 7_000);
+    assert.equal(socket.readyState, socket.OPEN, "Missing pong must get its deadline before termination");
+    await until(() => socket.readyState === socket.CLOSED, 7_000);
+    assert(warnings.some(({ context }) => context?.error === "WebSocket heartbeat pong timed out"));
+    assert.equal(server.address().port, address.port, "The unresponsive peer was not restarted");
+  } finally {
+    try {
+      if (adapter) disposeRemoteSyncAdapter(repo, adapter);
+    } finally {
+      await repo.shutdown();
+      for (const socket of server.clients) socket.terminate();
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  }
+  return { packedModulesOnly: true, pingObserved: true, unresponsivePeerRetired: true, deadlineReported: true };
 }
 
 export async function runInstalledReplicationSocketProbe({ directory }) {
@@ -98,7 +139,8 @@ export async function runInstalledReplicationSocketProbe({ directory }) {
     assert.equal(attempts, stoppedAttempts);
     assert.equal(sockets.size, 0);
     assert.equal(websocketServer.clients.size, 0);
-    result = { compiledEngineVersion: JSON.parse(fs.readFileSync(path.join(engineDirectory, "package.json"), "utf8")).version, packedModulesOnly: true, delayedAttempts: attempts - initialAttempts, retainedSockets: 0, naturalExit: true, independentPeerListening: true, probeTimeoutCleaned: true };
+    const outboundHeartbeat = await runInstalledHeartbeatProbe({ require, engineDirectory });
+    result = { compiledEngineVersion: JSON.parse(fs.readFileSync(path.join(engineDirectory, "package.json"), "utf8")).version, packedModulesOnly: true, delayedAttempts: attempts - initialAttempts, retainedSockets: 0, naturalExit: true, independentPeerListening: true, probeTimeoutCleaned: true, outboundHeartbeat };
   } catch (error) { errors.push(error); }
   const cleanups = [
     async () => {
