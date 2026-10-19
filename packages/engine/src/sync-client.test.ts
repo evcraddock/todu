@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { Repo } from "@automerge/automerge-repo";
 import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { describe, expect, it, vi } from "vitest";
@@ -146,6 +147,43 @@ describe("hardenWebSocketClientAdapterErrors", () => {
     expect(current.terminate).toHaveBeenCalledOnce();
     adapter.connect("local-peer", {});
     expect(connect).toHaveBeenCalledOnce();
+  });
+
+  it("cleans heartbeat timers when a socket is replaced or its adapter is disposed", () => {
+    vi.useFakeTimers();
+    try {
+      const socket = () =>
+        Object.assign(new EventEmitter(), {
+          OPEN: 1,
+          readyState: 1,
+          ping: vi.fn(),
+          terminate: vi.fn(),
+          removeEventListener: vi.fn(),
+        });
+      const previous = socket();
+      const current = socket();
+      const adapter = new WebSocketClientAdapter("ws://localhost:1");
+      adapter.socket = previous as unknown as WebSocketClientAdapter["socket"];
+      adapter.connect = () => {
+        adapter.socket = current as unknown as WebSocketClientAdapter["socket"];
+      };
+      adapter.disconnect = () => {
+        adapter.socket = undefined;
+      };
+      hardenWebSocketClientAdapterErrors(adapter);
+      adapter.connect("local-peer", {});
+      vi.advanceTimersByTime(5_000);
+      expect(previous.ping).not.toHaveBeenCalled();
+      expect(previous.terminate).toHaveBeenCalledOnce();
+      expect(current.ping).toHaveBeenCalledOnce();
+      adapter.disconnect();
+      expect(current.terminate).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(20_000);
+      expect(current.ping).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("closes sockets without a Node termination method", () => {

@@ -1,5 +1,6 @@
 import type { Repo } from "@automerge/automerge-repo";
 import { WebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
+import { startWebSocketHeartbeat } from "./websocket-heartbeat.js";
 
 export const DEFAULT_SYNC_URL = "ws://127.0.0.1:24377";
 
@@ -171,7 +172,7 @@ export function hardenWebSocketClientAdapterErrors(
     } finally {
       // Upstream retries replace the socket without closing its pending handshake.
       if (previousSocket && previousSocket !== adapter.socket) retireWebSocket(previousSocket);
-      hardenCurrentWebSocket(adapter);
+      hardenCurrentWebSocket(adapter, logger);
     }
   };
 
@@ -187,7 +188,7 @@ export function hardenWebSocketClientAdapterErrors(
     }
   };
 
-  hardenCurrentWebSocket(adapter);
+  hardenCurrentWebSocket(adapter, logger);
 }
 
 function retireWebSocket(socket: NonNullable<WebSocketClientAdapter["socket"]>): void {
@@ -198,7 +199,10 @@ function retireWebSocket(socket: NonNullable<WebSocketClientAdapter["socket"]>):
   else socket.close();
 }
 
-function hardenCurrentWebSocket(adapter: WebSocketClientAdapter): void {
+function hardenCurrentWebSocket(
+  adapter: WebSocketClientAdapter,
+  logger?: SyncAdapterEventLogger,
+): void {
   const socket = adapter.socket;
   if (typeof socket !== "object" || socket === null || hardenedSockets.has(socket)) {
     return;
@@ -207,7 +211,11 @@ function hardenCurrentWebSocket(adapter: WebSocketClientAdapter): void {
   hardenedSockets.add(socket);
   // Native peer handoff may replace adapter callbacks after this socket attached them.
   const { onOpen, onClose, onMessage, onError } = adapter;
+  const stopHeartbeat = startWebSocketHeartbeat(socket, (error) => {
+    logger?.warn("remote sync connection is unresponsive", { url: adapter.url, error });
+  });
   socketListenerCleanup.set(socket, () => {
+    stopHeartbeat();
     socket.removeEventListener("open", onOpen);
     socket.removeEventListener("close", onClose);
     socket.removeEventListener("message", onMessage);
