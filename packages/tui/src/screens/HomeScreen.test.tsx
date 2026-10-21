@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { Project, Task } from "@todu/core";
+import { Box } from "ink";
 import { render } from "ink-testing-library";
 import type { JSX, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -330,6 +331,45 @@ describe("HomeScreen", () => {
       expect(lastFrame()).toContain("A very long weekly task title");
       expect(lastFrame()).not.toContain(title);
       expect(lastFrame()).toContain("[high]");
+    } finally {
+      unmount();
+    }
+  });
+
+  it.each([
+    40, 100,
+  ])("keeps long weekly task rows within the viewport at %s columns", async (width) => {
+    const client = createClient();
+    vi.mocked(client.task.list).mockResolvedValue(
+      Array.from({ length: 14 }, (_, index) =>
+        createTask({
+          id: `weekly-${index}`,
+          title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
+          priority: "high",
+          scheduledDate: "2026-07-19",
+        }),
+      ),
+    );
+    const { stdin, lastFrame, unmount } = renderWithQuery(
+      <Box width={width}>
+        <HomeScreen client={client} today="2026-07-20" />
+      </Box>,
+    );
+    try {
+      await waitForFrameText(lastFrame, "Home • ready");
+      const initialLines = lastFrame()?.split("\n") ?? [];
+      expect(initialLines.length).toBeLessThanOrEqual(17);
+      expect(initialLines.find((line) => line.includes("• Weekly 1 "))).toContain("[high]");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Weekly 1 ");
+      for (let index = 0; index < 13; index += 1) stdin.write("j");
+      await waitForFrameText(lastFrame, "> • Weekly 14 ");
+      const lines = lastFrame()?.split("\n") ?? [];
+      expect(lines.length).toBeLessThanOrEqual(17);
+      expect(lines.find((line) => line.includes("> • Weekly 14 "))).toContain("[high]");
+      for (const line of lines.filter((line) => line.includes("• Weekly"))) {
+        expect(line).toContain("[high]");
+      }
     } finally {
       unmount();
     }

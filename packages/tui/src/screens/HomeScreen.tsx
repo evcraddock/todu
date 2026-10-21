@@ -298,13 +298,15 @@ function HomeRowLine({
   }
 
   return (
-    <Box>
-      <Box flexGrow={1} flexShrink={1} minWidth={0}>
+    <Box height={1} flexShrink={0} width="100%">
+      <Box flexGrow={1} flexShrink={1} flexBasis={0} minWidth={0}>
         {content}
       </Box>
-      <Text color={selected ? "cyan" : undefined} inverse={selected}>
-        {` [${formatTaskPriority(row.task.priority)}]`}
-      </Text>
+      <Box width={7} flexShrink={0}>
+        <Text color={selected ? "cyan" : undefined} inverse={selected} wrap="truncate-end">
+          {` [${formatTaskPriority(row.task.priority)}]`}
+        </Text>
+      </Box>
     </Box>
   );
 }
