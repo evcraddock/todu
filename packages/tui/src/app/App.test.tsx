@@ -352,6 +352,74 @@ describe("App", () => {
     expect(client.task.get).toHaveBeenCalledWith("task-1");
   });
 
+  it("opens a focused project in the project-filtered task list without opening task details", async () => {
+    const client = createFakeClient();
+    const projects = await client.project.list();
+    vi.mocked(client.project.list).mockResolvedValue(
+      projects.map((project) => ({ ...project, priority: "high" })),
+    );
+    const { stdin, lastFrame, unmount } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+
+    await waitForFrameText(lastFrame, "Project Focus (1)");
+    expect(lastFrame()).toContain("Enter Open Task/Project");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Next");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Waiting");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> • Inbox");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledWith({
+        status: ["active", "inprogress", "waiting"],
+        projectId: "project-1",
+      });
+    });
+    expect(lastFrame()).not.toContain("Task detail");
+    expect(client.task.update).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("refreshes Project Focus on data changes and reconnect without hiding cached projects", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const client = createFakeClient();
+    const projects = await client.project.list();
+    const focusedProjects = projects.map((project) => ({ ...project, priority: "high" as const }));
+    vi.mocked(client.project.list).mockResolvedValue(focusedProjects);
+    const { lastFrame, unmount } = render(<App connection={connection} toduClient={client} />);
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("Project Focus (1)");
+    await vi.waitFor(() =>
+      expect(connection.request).toHaveBeenCalledWith("events.subscribe", {
+        events: ["data.changed", "sync.statusChanged"],
+      }),
+    );
+
+    vi.mocked(client.project.list).mockResolvedValue(projects);
+    connection.emitEvent({ event: "data.changed", payload: { type: "catalog" } });
+    await waitForFrameText(lastFrame, "Project Focus (0)");
+    expect(lastFrame()).toContain("No focused projects.");
+    expect(lastFrame()).toContain("Ship");
+
+    vi.mocked(client.project.list).mockResolvedValue(focusedProjects);
+    connection.emitEvent({ event: "data.changed", payload: { type: "catalog" } });
+    await waitForFrameText(lastFrame, "Project Focus (1)");
+    connection.emitSnapshot({ ...createConnectedSnapshot(), state: "reconnecting", hello: null });
+    await waitForFrameText(lastFrame, "Daemon disconnected; reconnecting");
+    expect(lastFrame()).toContain("Project Focus (1)");
+    expect(lastFrame()).toContain("Inbox");
+    vi.mocked(client.project.list).mockResolvedValue(
+      focusedProjects.map((project) => ({ ...project, status: "canceled" })),
+    );
+    connection.emitSnapshot(createConnectedSnapshot());
+    await waitForFrameText(lastFrame, "Project Focus (0)");
+    expect(client.task.update).not.toHaveBeenCalled();
+    unmount();
+  });
+
   it("selects a project and filters Tasks", async () => {
     const client = createFakeClient();
     const { stdin, lastFrame } = render(

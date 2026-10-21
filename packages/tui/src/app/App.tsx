@@ -281,6 +281,7 @@ function RouteScreen({
         client={toduClient}
         dataQueriesEnabled={dataQueriesEnabled}
         onOpenTask={onOpenHomeTask}
+        onSelectProject={onSelectProject}
       />
     ) : null;
   }

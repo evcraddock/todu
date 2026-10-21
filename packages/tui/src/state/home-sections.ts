@@ -1,9 +1,13 @@
-import type { Task } from "@todu/core";
+import type { Project, Task } from "@todu/core";
 
 export interface HomeTaskSections {
   now: readonly Task[];
   next: readonly Task[];
   waiting: readonly Task[];
+}
+
+export function createHomeProjectFocus(projects: readonly Project[]): Project[] {
+  return projects.filter((project) => project.status === "active" && project.priority === "high");
 }
 
 export function localDateString(date = new Date()): string {

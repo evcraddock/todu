@@ -136,6 +136,12 @@ Compatibility guidance:
 - The TUI uses the same local daemon and user-local dataset as the CLI and desktop app once daemon-backed screens are enabled.
 - Early TUI releases may expose only the current scaffold UI while daemon-backed views are added incrementally.
 
+### TUI Project Focus
+
+TUI Home includes **Project Focus** after Now, Next, and Waiting. Projects appear when their status is `active` and their priority is `high`, even if they have no tasks or only routine, completed, or future-scheduled tasks. Set project priority to high when a project deserves attention now; low/medium-priority and done/canceled projects are excluded. Priority and status changes appear on the next Home refresh, including daemon data-change events and reconnects.
+
+Use `Shift+J/K` to focus a Home section, `j/k` or arrow keys to select a project, and `Enter` to open Tasks filtered by that project, just like selecting it in Projects. Navigation keeps the selection visible. An empty focus section shows `No focused projects.` Project Focus is guidance only: displaying or opening projects does not schedule, start, or reprioritize tasks, change project fields, or alter the existing Home task selection rules. No weekly reset is needed.
+
 ### Build from source
 
 Additional prerequisite for standalone CLI binaries:
