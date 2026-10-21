@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
 import { getVisibleTaskWindow } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
+import { formatTaskPriority } from "../formatting/priority.js";
 import {
   createHomeProjectFocus,
   createHomeTaskSections,
@@ -15,7 +16,7 @@ import { formatListWindowIndicator } from "../state/list-window.js";
 import { queryKeys } from "../state/query-keys.js";
 import { moveSelection, resolveSelectedId } from "../state/selection.js";
 
-const taskSectionOrder = ["now", "next", "waiting"] as const;
+const taskSectionOrder = ["now", "thisWeek", "waiting"] as const;
 const homeSectionOrder = [...taskSectionOrder, "projectFocus"] as const;
 
 type HomeSection = (typeof homeSectionOrder)[number];
@@ -45,7 +46,7 @@ export function HomeScreen({
   const [focusedSection, setFocusedSection] = useState<HomeSection>("now");
   const [selectedItemIds, setSelectedItemIds] = useState<Record<HomeSection, string | null>>({
     now: null,
-    next: null,
+    thisWeek: null,
     waiting: null,
     projectFocus: null,
   });
@@ -73,7 +74,7 @@ export function HomeScreen({
   };
   const effectiveSelectedItemIds = {
     now: resolveSelectedId(taskSections.now, selectedItemIds.now),
-    next: resolveSelectedId(taskSections.next, selectedItemIds.next),
+    thisWeek: resolveSelectedId(taskSections.thisWeek, selectedItemIds.thisWeek),
     waiting: resolveSelectedId(taskSections.waiting, selectedItemIds.waiting),
     projectFocus: resolveSelectedId(focusedProjects, selectedItemIds.projectFocus),
   };
@@ -142,7 +143,7 @@ export function HomeScreen({
   const homeWindow = getVisibleTaskWindow(
     homeRows,
     activeRowId,
-    resolveHomeViewportRows(stdout.rows),
+    resolveHomeViewportRows(stdout.rows, tasksQuery.isPending ? 1 : 0),
   );
   const aboveIndicator = formatListWindowIndicator(homeWindow, "above");
   const belowIndicator = formatListWindowIndicator(homeWindow, "below");
@@ -183,7 +184,7 @@ function createHomeTaskRows(
       id: `header:${section}`,
       kind: "header",
       section,
-      title: section === "now" ? "Now" : section === "next" ? "Next" : "Waiting",
+      title: section === "now" ? "Now" : section === "thisWeek" ? "This Week" : "Waiting",
       count: tasks.length,
     });
     if (section === "now" && taskError) {
@@ -287,10 +288,26 @@ function HomeRowLine({
   const item = row.kind === "project" ? row.project : row.task;
   const title = row.kind === "project" ? row.project.name : row.task.title;
   const selected = row.section === focusedSection && selectedItemIds[row.section] === item.id;
-  return (
+  const content = (
     <Text color={selected ? "cyan" : undefined} inverse={selected} wrap="truncate-end">
       {selected ? ">" : " "} • {title}
     </Text>
+  );
+  if (row.kind === "project") {
+    return content;
+  }
+
+  return (
+    <Box height={1} flexShrink={0} width="100%">
+      <Box flexGrow={1} flexShrink={1} flexBasis={0} minWidth={0}>
+        {content}
+      </Box>
+      <Box width={7} flexShrink={0}>
+        <Text color={selected ? "cyan" : undefined} inverse={selected} wrap="truncate-end">
+          {` [${formatTaskPriority(row.task.priority)}]`}
+        </Text>
+      </Box>
+    </Box>
   );
 }
 
@@ -301,7 +318,8 @@ export function moveHomeSection(current: HomeSection, direction: "next" | "previ
   return homeSectionOrder[nextIndex] ?? current;
 }
 
-function resolveHomeViewportRows(rows: number | undefined): number {
+function resolveHomeViewportRows(rows: number | undefined, loadingRows: number): number {
   const terminalRows = rows && rows > 0 ? rows : 24;
-  return Math.max(4, terminalRows - 12);
+  // AppFrame uses eight rows; pane borders/title use three; scroll indicators need two.
+  return Math.max(1, terminalRows - 13 - loadingRows);
 }

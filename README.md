@@ -136,9 +136,17 @@ Compatibility guidance:
 - The TUI uses the same local daemon and user-local dataset as the CLI and desktop app once daemon-backed screens are enabled.
 - Early TUI releases may expose only the current scaffold UI while daemon-backed views are added incrementally.
 
+### TUI weekly planning
+
+TUI Home's **This Week** replaces Next. It shows active tasks with a scheduled date on or before the current local Saturday, regardless of priority. Weeks run Sunday through Saturday: a task scheduled for later this week is visible all week, and using Sunday for every task in a weekly plan is supported. The scheduled date expresses weekly intent, not a required workday.
+
+Unfinished tasks from any earlier week stay visible without rewriting their scheduled dates. Starting, completing, canceling, or moving a task to waiting removes it from This Week; so does clearing its scheduled date or rescheduling it to a future week. Unscheduled tasks and future-week tasks are excluded even at high priority. High-priority tasks remain available in Tasks.
+
+**Now** still takes precedence for in-progress tasks and active tasks due today; **Waiting** is unchanged, and tasks are not duplicated between sections. Task priorities remain visible as guidance. Scheduled dates alone never mark tasks overdue; due dates remain deadlines. Displaying or opening Home tasks does not change their priority, due date, scheduled date, or status. Use `Shift+J/K` to switch sections, `j/k` or arrows to select tasks, and `Enter` to open one.
+
 ### TUI Project Focus
 
-TUI Home includes **Project Focus** after Now, Next, and Waiting. Projects appear when their status is `active` and their priority is `high`, even if they have no tasks or only routine, completed, or future-scheduled tasks. Set project priority to high when a project deserves attention now; low/medium-priority and done/canceled projects are excluded. Priority and status changes appear on the next Home refresh, including daemon data-change events and reconnects.
+TUI Home includes **Project Focus** after Now, This Week, and Waiting. Projects appear when their status is `active` and their priority is `high`, even if they have no tasks or only routine, completed, or future-scheduled tasks. Set project priority to high when a project deserves attention now; low/medium-priority and done/canceled projects are excluded. Priority and status changes appear on the next Home refresh, including daemon data-change events and reconnects.
 
 Use `Shift+J/K` to focus a Home section, `j/k` or arrow keys to select a project, and `Enter` to open Tasks filtered by that project, just like selecting it in Projects. Navigation keeps the selection visible. An empty focus section shows `No focused projects.` Project Focus is guidance only: displaying or opening projects does not schedule, start, or reprioritize tasks, change project fields, or alter the existing Home task selection rules. No weekly reset is needed.
 
@@ -168,7 +176,7 @@ make install
 
 ## Weekly planning in Electron Home
 
-**This Week** shows active tasks scheduled for the current Monday–Sunday week or any earlier week, regardless of priority. Set a task's scheduled date to any day in the intended week; it becomes visible for the whole week. Unfinished tasks stay visible in later weeks without changing their scheduled dates. Unscheduled tasks and tasks scheduled for future weeks are excluded.
+**This Week** shows active tasks scheduled for the current Sunday–Saturday week or any earlier week, regardless of priority. Set a task's scheduled date to any day in the intended week; it becomes visible for the whole week. Unfinished tasks stay visible in later weeks without changing their scheduled dates. Unscheduled tasks and tasks scheduled for future weeks are excluded.
 
 Tasks already shown in **In Progress** or **Coming Soon** stay in those sections without duplication. Priority remains visible as guidance, and only a passed due date marks a task overdue. To remove a task from the weekly plan, clear its scheduled date or reschedule it to a future week.
 

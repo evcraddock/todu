@@ -290,7 +290,10 @@ The current TUI implements these global navigation and task-list movement keys:
 ### MVP Screens
 
 1. **Home**
-   - Now, Next, and Waiting task summary sections, followed by Project Focus for active high-priority projects.
+   - Now, This Week, and Waiting task summary sections, followed by Project Focus for active high-priority projects.
+   - Now retains in-progress tasks and active tasks due today. This Week includes remaining active tasks scheduled on or before the current local Saturday, with no lower date bound or priority requirement; Sunday–Saturday weeks match Electron and leave journal behavior unchanged.
+   - Tasks scheduled later this week are visible throughout the week. Earlier-week tasks carry over without date rewrites until their status or scheduled date removes them from the section. Unscheduled and future-week tasks do not qualify, even at high priority; they remain available in Tasks. Waiting, done, and canceled tasks are excluded from This Week.
+   - Priority labels stay visible beside truncated task titles. Home does not mutate task fields or treat elapsed scheduled dates as overdue; due dates remain deadlines.
    - Project Focus uses existing project fields independently of tasks and updates on Home refresh. No focused projects shows an explicit empty state; project loading/failure does not block task sections.
    - `Enter` opens a focused project in the project-filtered Tasks list, matching Projects selection, without changing any task or project fields.
    - All section items form one scrollable Home view; navigation keeps the focused item visible.
