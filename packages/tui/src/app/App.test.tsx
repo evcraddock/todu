@@ -178,6 +178,21 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
   throw new Error(`Timed out waiting for frame text: ${text}\nLast frame:\n${lastFrame() ?? ""}`);
 }
 
+async function actWithTestEnvironment(action: () => void): Promise<void> {
+  const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(action);
+  } finally {
+    if (previous === undefined) {
+      delete environment.IS_REACT_ACT_ENVIRONMENT;
+    } else {
+      environment.IS_REACT_ACT_ENVIRONMENT = previous;
+    }
+  }
+}
+
 describe("App", () => {
   it("waits for handshake, then shows data loading until Home is ready", async () => {
     const connection = createFakeConnection({
@@ -415,9 +430,7 @@ describe("App", () => {
         stdin.write(" ");
         await waitForFrameText(lastFrame, "> [ ] Active");
       }
-      await act(async () => {
-        stdin.write("\r");
-      });
+      await actWithTestEnvironment(() => stdin.write("\r"));
       await waitForFrameText(lastFrame, "No projects available.");
       stdin.write("1");
       await waitForFrameText(lastFrame, "Home • ready");
