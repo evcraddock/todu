@@ -1,5 +1,11 @@
 # @todu/tui
 
+## 0.27.0
+
+### Minor Changes
+
+- Add TUI Project Focus and Sunday–Saturday This Week planning with carryover, priority guidance, and viewport-safe navigation.
+
 ## 0.26.2
 
 ### Patch Changes
