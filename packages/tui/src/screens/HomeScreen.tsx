@@ -143,7 +143,7 @@ export function HomeScreen({
   const homeWindow = getVisibleTaskWindow(
     homeRows,
     activeRowId,
-    resolveHomeViewportRows(stdout.rows),
+    resolveHomeViewportRows(stdout.rows, tasksQuery.isPending ? 1 : 0),
   );
   const aboveIndicator = formatListWindowIndicator(homeWindow, "above");
   const belowIndicator = formatListWindowIndicator(homeWindow, "below");
@@ -318,7 +318,8 @@ export function moveHomeSection(current: HomeSection, direction: "next" | "previ
   return homeSectionOrder[nextIndex] ?? current;
 }
 
-function resolveHomeViewportRows(rows: number | undefined): number {
+function resolveHomeViewportRows(rows: number | undefined, loadingRows: number): number {
   const terminalRows = rows && rows > 0 ? rows : 24;
-  return Math.max(4, terminalRows - 12);
+  // AppFrame uses eight rows; pane borders/title use three; scroll indicators need two.
+  return Math.max(1, terminalRows - 13 - loadingRows);
 }

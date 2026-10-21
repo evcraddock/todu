@@ -4,7 +4,9 @@ import { Box } from "ink";
 import { render } from "ink-testing-library";
 import type { JSX, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { AppFrame } from "../components/AppFrame.js";
 import type { TuiToduClient } from "../daemon/todu-client.js";
+import { allProjectsFilter } from "../state/project-filter.js";
 import { createTuiQueryClient } from "../state/query-client.js";
 import { queryKeys } from "../state/query-keys.js";
 import { HomeScreen } from "./HomeScreen.js";
@@ -370,6 +372,51 @@ describe("HomeScreen", () => {
       for (const line of lines.filter((line) => line.includes("• Weekly"))) {
         expect(line).toContain("[high]");
       }
+    } finally {
+      unmount();
+    }
+  });
+
+  it.each([
+    40, 100,
+  ])("keeps intermediate scrolling separate from app chrome at %s columns", async (width) => {
+    const client = createClient();
+    vi.mocked(client.task.list).mockResolvedValue(
+      Array.from({ length: 14 }, (_, index) =>
+        createTask({
+          id: `weekly-${index}`,
+          title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
+          priority: "high",
+          scheduledDate: "2026-07-19",
+        }),
+      ),
+    );
+    const { stdin, lastFrame, unmount } = renderWithQuery(
+      <AppFrame
+        route="home"
+        taskFilter={{ projectFilter: allProjectsFilter }}
+        footerContext="home"
+        terminalWidth={width}
+        terminalHeight={24}
+      >
+        <HomeScreen client={client} today="2026-07-20" />
+      </AppFrame>,
+    );
+    try {
+      await waitForFrameText(lastFrame, "Home • ready");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Weekly 1 ");
+      for (let index = 0; index < 11; index += 1) stdin.write("j");
+      await waitForFrameText(lastFrame, "> • Weekly 12 ");
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      expect(lines).toHaveLength(24);
+      expect(frame).toMatch(/↑ \d+ more/);
+      expect(frame).toMatch(/↓ \d+ more/);
+      expect(frame).toContain("Home • ready");
+      expect(lines.find((line) => line.includes("> • Weekly 12 "))).toContain("[high]");
+      expect(lines.find((line) => line.includes("• Weekly 14 "))).toContain("[high]");
+      expect(lines.find((line) => line.includes("Waiting (0)"))).not.toContain("[high]");
     } finally {
       unmount();
     }
