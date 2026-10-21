@@ -198,6 +198,9 @@ function AppContent({
         onTaskListFilterChange={setTaskListFilter}
         onProjectListFilterChange={setProjectListFilter}
         onSelectProject={(project) => {
+          if (routeState.route === "home") {
+            setProjectListFilter(defaultProjectListFilter);
+          }
           updateProjectFilter(createProjectFilter(project));
           setRouteState({ route: "tasks", previousRoute: "tasks" });
         }}
@@ -281,6 +284,7 @@ function RouteScreen({
         client={toduClient}
         dataQueriesEnabled={dataQueriesEnabled}
         onOpenTask={onOpenHomeTask}
+        onSelectProject={onSelectProject}
       />
     ) : null;
   }

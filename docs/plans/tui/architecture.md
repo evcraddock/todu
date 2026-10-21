@@ -290,7 +290,9 @@ The current TUI implements these global navigation and task-list movement keys:
 ### MVP Screens
 
 1. **Home**
-   - Now, Next, and Waiting summary sections.
+   - Now, Next, and Waiting task summary sections, followed by Project Focus for active high-priority projects.
+   - Project Focus uses existing project fields independently of tasks and updates on Home refresh. No focused projects shows an explicit empty state; project loading/failure does not block task sections.
+   - `Enter` opens a focused project in the project-filtered Tasks list, matching Projects selection, without changing any task or project fields.
    - All section items form one scrollable Home view; navigation keeps the focused item visible.
    - `Shift+J` / `Shift+K` moves focus between sections.
    - `j` / `k` and arrow keys select items within the focused section.

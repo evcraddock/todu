@@ -1,6 +1,11 @@
-import type { Task } from "@todu/core";
+import type { Project, Task } from "@todu/core";
 import { describe, expect, it } from "vitest";
-import { addCalendarDays, createHomeTaskSections, localDateString } from "./home-sections.js";
+import {
+  addCalendarDays,
+  createHomeProjectFocus,
+  createHomeTaskSections,
+  localDateString,
+} from "./home-sections.js";
 
 function createTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -20,6 +25,29 @@ function createTask(overrides: Partial<Task> = {}): Task {
 
 describe("home sections", () => {
   const today = "2026-07-20";
+
+  it("includes only active high-priority projects, preserving order and project fields", () => {
+    const projects = (["active", "done", "canceled"] as const).flatMap((status) =>
+      (["low", "medium", "high"] as const).map((priority) =>
+        Object.freeze({
+          id: `${status}-${priority}` as Project["id"],
+          name: `${status} ${priority}`,
+          status,
+          priority,
+          authorizedAssigneeActorIds: [],
+          createdAt: "2026-07-01T00:00:00.000Z",
+          updatedAt: "2026-07-01T00:00:00.000Z",
+        }),
+      ),
+    );
+    const snapshot = structuredClone(projects);
+    const focused = createHomeProjectFocus(Object.freeze(projects));
+
+    expect(focused.map((project) => project.id)).toEqual(["active-high"]);
+    expect(focused[0]).toBe(projects[2]);
+    expect(projects).toEqual(snapshot);
+    expect(createHomeProjectFocus([])).toEqual([]);
+  });
 
   it("formats local dates and adds calendar days", () => {
     expect(localDateString(new Date(2026, 6, 20, 12))).toBe(today);

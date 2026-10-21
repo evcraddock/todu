@@ -1,5 +1,6 @@
 import { Text } from "ink";
 import { render } from "ink-testing-library";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../components/AppFrame.js";
 import type {
@@ -177,6 +178,21 @@ async function waitForFrameText(lastFrame: () => string | undefined, text: strin
   throw new Error(`Timed out waiting for frame text: ${text}\nLast frame:\n${lastFrame() ?? ""}`);
 }
 
+async function actWithTestEnvironment(action: () => void): Promise<void> {
+  const environment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(action);
+  } finally {
+    if (previous === undefined) {
+      delete environment.IS_REACT_ACT_ENVIRONMENT;
+    } else {
+      environment.IS_REACT_ACT_ENVIRONMENT = previous;
+    }
+  }
+}
+
 describe("App", () => {
   it("waits for handshake, then shows data loading until Home is ready", async () => {
     const connection = createFakeConnection({
@@ -350,6 +366,130 @@ describe("App", () => {
       projectId: "project-1",
     });
     expect(client.task.get).toHaveBeenCalledWith("task-1");
+  });
+
+  it("opens a focused project in the project-filtered task list without opening task details", async () => {
+    const client = createFakeClient();
+    const projects = await client.project.list();
+    vi.mocked(client.project.list).mockResolvedValue(
+      projects.map((project) => ({ ...project, priority: "high" })),
+    );
+    const { stdin, lastFrame, unmount } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+
+    await waitForFrameText(lastFrame, "Project Focus (1)");
+    expect(lastFrame()).toContain("Enter Open Task/Project");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Next");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> Waiting");
+    stdin.write("J");
+    await waitForFrameText(lastFrame, "> • Inbox");
+    stdin.write("\r");
+    await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
+    await vi.waitFor(() => {
+      expect(client.task.list).toHaveBeenCalledWith({
+        status: ["active", "inprogress", "waiting"],
+        projectId: "project-1",
+      });
+    });
+    expect(lastFrame()).not.toContain("Task detail");
+    expect(client.task.update).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it.each([
+    "priority",
+    "status",
+  ])("opens the focused project's Tasks despite an incompatible saved project %s filter", async (filterKind) => {
+    const client = createFakeClient();
+    const projects = await client.project.list();
+    vi.mocked(client.project.list).mockResolvedValue(
+      projects.map((project) => ({ ...project, priority: "high" })),
+    );
+    const { stdin, lastFrame, unmount } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "Home • ready");
+      stdin.write("5");
+      await waitForFrameText(lastFrame, "Projects (1)");
+      stdin.write("\u0006");
+      await waitForFrameText(lastFrame, "Filter projects");
+      if (filterKind === "priority") {
+        stdin.write("j");
+        stdin.write("j");
+        stdin.write("j");
+        await waitForFrameText(lastFrame, "> Priority: Any");
+        stdin.write("\u001B[C");
+        await waitForFrameText(lastFrame, "> Priority: High");
+        stdin.write("\u001B[C");
+        await waitForFrameText(lastFrame, "> Priority: Medium");
+      } else {
+        stdin.write(" ");
+        await waitForFrameText(lastFrame, "> [ ] Active");
+      }
+      await actWithTestEnvironment(() => stdin.write("\r"));
+      await waitForFrameText(lastFrame, "No projects available.");
+      stdin.write("1");
+      await waitForFrameText(lastFrame, "Home • ready");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> Next");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> Waiting");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Inbox");
+      stdin.write("\r");
+      await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
+      await vi.waitFor(() => {
+        expect(client.task.list).toHaveBeenCalledWith({
+          status: ["active", "inprogress", "waiting"],
+          projectId: "project-1",
+        });
+      });
+      expect(lastFrame()).toContain("> Inbox");
+      expect(client.task.update).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
+  it("refreshes Project Focus on data changes and reconnect without hiding cached projects", async () => {
+    const connection = createFakeConnection(createConnectedSnapshot());
+    const client = createFakeClient();
+    const projects = await client.project.list();
+    const focusedProjects = projects.map((project) => ({ ...project, priority: "high" as const }));
+    vi.mocked(client.project.list).mockResolvedValue(focusedProjects);
+    const { lastFrame, unmount } = render(<App connection={connection} toduClient={client} />);
+    await waitForFrameText(lastFrame, "Home • ready");
+    expect(lastFrame()).toContain("Project Focus (1)");
+    await vi.waitFor(() =>
+      expect(connection.request).toHaveBeenCalledWith("events.subscribe", {
+        events: ["data.changed", "sync.statusChanged"],
+      }),
+    );
+
+    vi.mocked(client.project.list).mockResolvedValue(projects);
+    connection.emitEvent({ event: "data.changed", payload: { type: "catalog" } });
+    await waitForFrameText(lastFrame, "Project Focus (0)");
+    expect(lastFrame()).toContain("No focused projects.");
+    expect(lastFrame()).toContain("Ship");
+
+    vi.mocked(client.project.list).mockResolvedValue(focusedProjects);
+    connection.emitEvent({ event: "data.changed", payload: { type: "catalog" } });
+    await waitForFrameText(lastFrame, "Project Focus (1)");
+    connection.emitSnapshot({ ...createConnectedSnapshot(), state: "reconnecting", hello: null });
+    await waitForFrameText(lastFrame, "Daemon disconnected; reconnecting");
+    expect(lastFrame()).toContain("Project Focus (1)");
+    expect(lastFrame()).toContain("Inbox");
+    vi.mocked(client.project.list).mockResolvedValue(
+      focusedProjects.map((project) => ({ ...project, status: "canceled" })),
+    );
+    connection.emitSnapshot(createConnectedSnapshot());
+    await waitForFrameText(lastFrame, "Project Focus (0)");
+    expect(client.task.update).not.toHaveBeenCalled();
+    unmount();
   });
 
   it("selects a project and filters Tasks", async () => {
