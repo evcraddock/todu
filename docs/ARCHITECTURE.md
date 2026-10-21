@@ -258,7 +258,7 @@ Baseline worker lifecycle states are:
 
 ### Home weekly planning
 
-Electron Home's **This Week** uses local Sunday–Saturday weeks. Active tasks scheduled on or before the current Saturday qualify regardless of priority, subject to existing section precedence. Unfinished tasks from earlier weeks remain visible without rewriting their scheduled dates. Scheduled dates indicate weekly intent; only due dates determine overdue status.
+The **This Week** sections in Electron and TUI Home use local Sunday–Saturday weeks. Active tasks scheduled on or before the current Saturday qualify regardless of priority, subject to existing section precedence. Unfinished tasks from earlier weeks remain visible without rewriting their scheduled dates. Scheduled dates indicate weekly intent; only due dates determine overdue status.
 
 ### Recurring behavior
 

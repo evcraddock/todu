@@ -100,6 +100,7 @@ function createFakeTask() {
     title: "Ship",
     status: "active",
     priority: "high",
+    scheduledDate: "2026-06-28",
     projectId: "project-1",
     labels: ["tui"],
     assigneeActorIds: [],
@@ -368,6 +369,27 @@ describe("App", () => {
     expect(client.task.get).toHaveBeenCalledWith("task-1");
   });
 
+  it("keeps unscheduled high-priority tasks available in Tasks but not This Week", async () => {
+    const client = createFakeClient();
+    vi.mocked(client.task.list).mockResolvedValue([
+      { ...createFakeTask(), scheduledDate: undefined },
+    ]);
+    const { stdin, lastFrame, unmount } = render(
+      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "Home • ready");
+      expect(lastFrame()).toContain("This Week (0)");
+      expect(lastFrame()).not.toContain("Ship");
+      stdin.write("4");
+      await waitForFrameText(lastFrame, "Ship");
+      expect(lastFrame()).toContain("[high]");
+      expect(client.task.update).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
   it("opens a focused project in the project-filtered task list without opening task details", async () => {
     const client = createFakeClient();
     const projects = await client.project.list();
@@ -381,7 +403,7 @@ describe("App", () => {
     await waitForFrameText(lastFrame, "Project Focus (1)");
     expect(lastFrame()).toContain("Enter Open Task/Project");
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("J");
@@ -435,7 +457,7 @@ describe("App", () => {
       stdin.write("1");
       await waitForFrameText(lastFrame, "Home • ready");
       stdin.write("J");
-      await waitForFrameText(lastFrame, "> Next");
+      await waitForFrameText(lastFrame, "> This Week");
       stdin.write("J");
       await waitForFrameText(lastFrame, "> Waiting");
       stdin.write("J");

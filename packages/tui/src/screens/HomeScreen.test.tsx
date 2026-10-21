@@ -69,7 +69,14 @@ function createClient(): TuiToduClient {
   const tasks = [
     createTask({ id: "task-progress", title: "Work now", status: "inprogress" }),
     createTask({ id: "task-today", title: "Due today", dueDate: "2026-07-20" }),
-    createTask({ id: "task-next", title: "Plan next", priority: "high" }),
+    createTask({
+      id: "task-week",
+      title: "Plan this week",
+      priority: "low",
+      scheduledDate: "2026-07-19",
+    }),
+    createTask({ id: "task-later", title: "Later this week", scheduledDate: "2026-07-25" }),
+    createTask({ id: "task-high", title: "Unscheduled important", priority: "high" }),
     createTask({ id: "task-two-days", title: "Due in two days", dueDate: "2026-07-22" }),
     createTask({ id: "task-waiting", title: "Waiting on review", status: "waiting" }),
   ];
@@ -188,7 +195,7 @@ describe("HomeScreen", () => {
     unmount();
   });
 
-  it("renders Now, Next, and Waiting without habits", async () => {
+  it("renders Now, This Week, and Waiting with priority guidance but no old Next rules", async () => {
     const { lastFrame } = renderWithQuery(
       <HomeScreen client={createClient()} today="2026-07-20" />,
     );
@@ -196,9 +203,12 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "Work now");
     expect(lastFrame()).toContain("> Now (2)");
     expect(lastFrame()).toContain("Due today");
-    expect(lastFrame()).toContain("Next (2)");
-    expect(lastFrame()).toContain("Plan next");
-    expect(lastFrame()).toContain("Due in two days");
+    expect(lastFrame()).toContain("This Week (2)");
+    expect(lastFrame()).toMatch(/Plan this week\s+\[low\]/);
+    expect(lastFrame()).toMatch(/Later this week\s+\[med\]/);
+    expect(lastFrame()).not.toContain("Unscheduled important");
+    expect(lastFrame()).not.toContain("Due in two days");
+    expect(lastFrame()).not.toContain("Next (");
     expect(lastFrame()).toContain("Waiting (1)");
     expect(lastFrame()).toContain("Waiting on review");
     expect(lastFrame()).not.toContain("Habits");
@@ -211,7 +221,7 @@ describe("HomeScreen", () => {
 
     await waitForFrameText(lastFrame, "> Now");
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("J");
@@ -221,7 +231,7 @@ describe("HomeScreen", () => {
     stdin.write("K");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("K");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
   });
 
   it("opens the selected task with Enter", async () => {
@@ -255,9 +265,160 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "> • Due today");
 
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> • Plan next");
+    await waitForFrameText(lastFrame, "> • Plan this week");
     stdin.write("k");
-    expect(lastFrame()).toContain("> • Plan next");
+    expect(lastFrame()).toContain("> • Plan this week");
+  });
+
+  it("opens the selected weekly task, preserves fields, and does not label carryover overdue", async () => {
+    const client = createClient();
+    const tasks = [
+      createTask({
+        id: "carryover",
+        title: "Carried task",
+        priority: "low",
+        scheduledDate: "2025-01-05",
+      }),
+      createTask({
+        id: "later",
+        title: "Scheduled Saturday",
+        priority: "high",
+        scheduledDate: "2026-07-25",
+        dueDate: "2026-08-01",
+      }),
+    ];
+    const snapshot = structuredClone(tasks);
+    tasks.forEach(Object.freeze);
+    vi.mocked(client.task.list).mockResolvedValue(tasks);
+    const onOpenTask = vi.fn();
+    const { stdin, lastFrame, unmount } = renderWithQuery(
+      <HomeScreen client={client} today="2026-07-20" onOpenTask={onOpenTask} />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "This Week (2)");
+      expect(lastFrame()).toMatch(/Carried task\s+\[low\]/);
+      expect(lastFrame()).toMatch(/Scheduled Saturday\s+\[high\]/);
+      expect(lastFrame()?.toLowerCase()).not.toContain("overdue");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Carried task");
+      stdin.write("j");
+      await waitForFrameText(lastFrame, "> • Scheduled Saturday");
+      stdin.write("\u001B[A");
+      await waitForFrameText(lastFrame, "> • Carried task");
+      stdin.write("\u001B[B");
+      await waitForFrameText(lastFrame, "> • Scheduled Saturday");
+      stdin.write("\r");
+      expect(onOpenTask).toHaveBeenCalledExactlyOnceWith(tasks[1]);
+      expect(client.task.update).not.toHaveBeenCalled();
+      expect(tasks).toEqual(snapshot);
+    } finally {
+      unmount();
+    }
+  });
+
+  it("keeps priority visible when a weekly task title is truncated", async () => {
+    const client = createClient();
+    const title = "A very long weekly task title ".repeat(8);
+    vi.mocked(client.task.list).mockResolvedValue([
+      createTask({ title, priority: "high", scheduledDate: "2026-07-19" }),
+    ]);
+    const { lastFrame, unmount } = renderWithQuery(
+      <HomeScreen client={client} today="2026-07-20" />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "This Week (1)");
+      expect(lastFrame()).toContain("A very long weekly task title");
+      expect(lastFrame()).not.toContain(title);
+      expect(lastFrame()).toContain("[high]");
+    } finally {
+      unmount();
+    }
+  });
+
+  it("refreshes weekly membership after scheduling/status changes, not priority changes", async () => {
+    const client = createClient();
+    const tasks = [
+      createTask({
+        id: "selected",
+        title: "Selected weekly task",
+        priority: "low",
+        scheduledDate: "2026-07-19",
+      }),
+      createTask({ id: "cleared", title: "Schedule cleared", scheduledDate: "2026-07-19" }),
+      createTask({ id: "future", title: "Rescheduled future", scheduledDate: "2026-07-19" }),
+    ];
+    const snapshot = structuredClone(tasks);
+    vi.mocked(client.task.list).mockResolvedValue(tasks);
+    const onOpenTask = vi.fn();
+    const { stdin, lastFrame, unmount, queryClient } = renderWithQuery(
+      <HomeScreen client={client} today="2026-07-20" onOpenTask={onOpenTask} />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "This Week (3)");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Selected weekly task");
+      expect(lastFrame()).toMatch(/Selected weekly task\s+\[low\]/);
+      vi.mocked(client.task.list).mockResolvedValue([
+        { ...tasks[0], priority: "high" },
+        { ...tasks[1], scheduledDate: undefined },
+        { ...tasks[2], scheduledDate: "2026-07-26" },
+      ]);
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await waitForFrameText(lastFrame, "This Week (1)");
+      expect(lastFrame()).toMatch(/> • Selected weekly task\s+\[high\]/);
+      expect(lastFrame()).not.toContain("Schedule cleared");
+      expect(lastFrame()).not.toContain("Rescheduled future");
+
+      vi.mocked(client.task.list).mockResolvedValue([
+        { ...tasks[0], status: "inprogress" },
+        { ...tasks[1], status: "waiting" },
+        { ...tasks[2], status: "done" },
+      ]);
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await waitForFrameText(lastFrame, "This Week (0)");
+      expect(lastFrame()).toContain("Now (1)");
+      expect(lastFrame()).toContain("Waiting (1)");
+      expect(lastFrame()).not.toContain("Rescheduled future");
+      stdin.write("\r");
+      expect(onOpenTask).not.toHaveBeenCalled();
+      expect(client.task.update).not.toHaveBeenCalled();
+      expect(tasks).toEqual(snapshot);
+    } finally {
+      unmount();
+    }
+  });
+
+  it("scrolls a long This Week list and retains its selection between sections", async () => {
+    const client = createClient();
+    vi.mocked(client.task.list).mockResolvedValue(
+      Array.from({ length: 14 }, (_, index) =>
+        createTask({
+          id: `weekly-${index}`,
+          title: `Weekly task ${index + 1}`,
+          scheduledDate: "2026-07-19",
+        }),
+      ),
+    );
+    const { stdin, lastFrame, unmount } = renderWithQuery(
+      <HomeScreen client={client} today="2026-07-20" />,
+    );
+    try {
+      await waitForFrameText(lastFrame, "This Week (14)");
+      expect(lastFrame()).not.toContain("Weekly task 14");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Weekly task 1");
+      for (let index = 0; index < 13; index += 1) stdin.write("j");
+      await waitForFrameText(lastFrame, "> • Weekly task 14");
+      expect(lastFrame()).not.toContain("Now (0)");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> Waiting (0)");
+      stdin.write("K");
+      await waitForFrameText(lastFrame, "> • Weekly task 14");
+      stdin.write("K");
+      await waitForFrameText(lastFrame, "> Now (0)");
+    } finally {
+      unmount();
+    }
   });
 
   it("shows focus projects independently of task fields, including projects without tasks", async () => {
@@ -370,7 +531,7 @@ describe("HomeScreen", () => {
 
     await waitForFrameText(lastFrame, "Home • ready");
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("J");
@@ -410,7 +571,7 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "Home • ready");
     expect(lastFrame()).toContain("Project Focus (2)");
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("J");
@@ -467,7 +628,7 @@ describe("HomeScreen", () => {
     await waitForFrameText(lastFrame, "Home • ready");
     expect(lastFrame()).not.toContain("Focus 14");
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next");
+    await waitForFrameText(lastFrame, "> This Week");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting");
     stdin.write("J");
@@ -478,7 +639,7 @@ describe("HomeScreen", () => {
     stdin.write("K");
     await waitForFrameText(lastFrame, "> • Waiting on review");
     stdin.write("K");
-    await waitForFrameText(lastFrame, "> • Plan next");
+    await waitForFrameText(lastFrame, "> • Plan this week");
     stdin.write("K");
     await waitForFrameText(lastFrame, "> • Work now");
     unmount();
@@ -505,7 +666,7 @@ describe("HomeScreen", () => {
     expect(lastFrame()).not.toMatch(/• Now task 1\s+│/);
 
     stdin.write("J");
-    await waitForFrameText(lastFrame, "> Next (0)");
+    await waitForFrameText(lastFrame, "> This Week (0)");
     stdin.write("J");
     await waitForFrameText(lastFrame, "> Waiting (0)");
   });

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
 import { getVisibleTaskWindow } from "../components/tasks/TaskListPane.js";
 import { formatToduClientError, type TuiToduClient } from "../daemon/todu-client.js";
+import { formatTaskPriority } from "../formatting/priority.js";
 import {
   createHomeProjectFocus,
   createHomeTaskSections,
@@ -15,7 +16,7 @@ import { formatListWindowIndicator } from "../state/list-window.js";
 import { queryKeys } from "../state/query-keys.js";
 import { moveSelection, resolveSelectedId } from "../state/selection.js";
 
-const taskSectionOrder = ["now", "next", "waiting"] as const;
+const taskSectionOrder = ["now", "thisWeek", "waiting"] as const;
 const homeSectionOrder = [...taskSectionOrder, "projectFocus"] as const;
 
 type HomeSection = (typeof homeSectionOrder)[number];
@@ -45,7 +46,7 @@ export function HomeScreen({
   const [focusedSection, setFocusedSection] = useState<HomeSection>("now");
   const [selectedItemIds, setSelectedItemIds] = useState<Record<HomeSection, string | null>>({
     now: null,
-    next: null,
+    thisWeek: null,
     waiting: null,
     projectFocus: null,
   });
@@ -73,7 +74,7 @@ export function HomeScreen({
   };
   const effectiveSelectedItemIds = {
     now: resolveSelectedId(taskSections.now, selectedItemIds.now),
-    next: resolveSelectedId(taskSections.next, selectedItemIds.next),
+    thisWeek: resolveSelectedId(taskSections.thisWeek, selectedItemIds.thisWeek),
     waiting: resolveSelectedId(taskSections.waiting, selectedItemIds.waiting),
     projectFocus: resolveSelectedId(focusedProjects, selectedItemIds.projectFocus),
   };
@@ -183,7 +184,7 @@ function createHomeTaskRows(
       id: `header:${section}`,
       kind: "header",
       section,
-      title: section === "now" ? "Now" : section === "next" ? "Next" : "Waiting",
+      title: section === "now" ? "Now" : section === "thisWeek" ? "This Week" : "Waiting",
       count: tasks.length,
     });
     if (section === "now" && taskError) {
@@ -287,10 +288,24 @@ function HomeRowLine({
   const item = row.kind === "project" ? row.project : row.task;
   const title = row.kind === "project" ? row.project.name : row.task.title;
   const selected = row.section === focusedSection && selectedItemIds[row.section] === item.id;
-  return (
+  const content = (
     <Text color={selected ? "cyan" : undefined} inverse={selected} wrap="truncate-end">
       {selected ? ">" : " "} • {title}
     </Text>
+  );
+  if (row.kind === "project") {
+    return content;
+  }
+
+  return (
+    <Box>
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
+        {content}
+      </Box>
+      <Text color={selected ? "cyan" : undefined} inverse={selected}>
+        {` [${formatTaskPriority(row.task.priority)}]`}
+      </Text>
+    </Box>
   );
 }
 

@@ -2,7 +2,7 @@ import type { Project, Task } from "@todu/core";
 
 export interface HomeTaskSections {
   now: readonly Task[];
-  next: readonly Task[];
+  thisWeek: readonly Task[];
   waiting: readonly Task[];
 }
 
@@ -22,13 +22,19 @@ export function addCalendarDays(date: string, days: number): string {
   return localDateString(new Date(year, month - 1, day + days, 12));
 }
 
+export function endOfWeek(today: string): string {
+  const [year, month, day] = today.split("-").map(Number);
+  const weekday = new Date(year, month - 1, day, 12).getDay();
+  return addCalendarDays(today, 6 - weekday);
+}
+
 export function createHomeTaskSections(
   tasks: readonly Task[],
   today = localDateString(),
 ): HomeTaskSections {
-  const twoDaysOut = addCalendarDays(today, 2);
+  const weekEnd = endOfWeek(today);
   const now: Task[] = [];
-  const next: Task[] = [];
+  const thisWeek: Task[] = [];
   const waiting: Task[] = [];
 
   for (const task of tasks) {
@@ -38,8 +44,9 @@ export function createHomeTaskSections(
       continue;
     }
 
-    if (task.status === "active" && (task.priority === "high" || dueDate === twoDaysOut)) {
-      next.push(task);
+    const scheduledDate = task.scheduledDate?.slice(0, 10);
+    if (task.status === "active" && scheduledDate && scheduledDate <= weekEnd) {
+      thisWeek.push(task);
       continue;
     }
 
@@ -48,5 +55,5 @@ export function createHomeTaskSections(
     }
   }
 
-  return { now, next, waiting };
+  return { now, thisWeek, waiting };
 }
