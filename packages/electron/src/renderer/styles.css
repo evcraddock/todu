@@ -2673,14 +2673,17 @@ button.detail-description {
   min-height: 0;
   overflow: hidden;
 }
+/* Reserve space for tabs and content when an oversized header needs to scroll. */
 .detail-page-content {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 120px;
+  min-height: 120px;
   overflow-y: auto;
   padding-bottom: 20px;
 }
 .detail-page-header {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: var(--bg);
 }
 .entity-detail-view .detail-tabs > .tab-bar {
