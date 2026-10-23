@@ -2413,10 +2413,6 @@ button.detail-description {
  * Home / Dashboard
  * ============================================================================ */
 
-.home-view {
-  max-width: 800px;
-}
-
 .home-section {
   margin-bottom: 24px;
 }
@@ -2550,10 +2546,13 @@ button.detail-description {
   outline-offset: 2px;
 }
 
-/* Task and project list layouts */
+/* Shared page width */
+.home-view,
 .list-view {
   max-width: 1400px;
 }
+
+/* Task and project list layouts */
 .list-filters {
   padding: 16px;
   border: 1px solid var(--border);
