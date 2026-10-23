@@ -15,7 +15,24 @@ const state = vi.hoisted(() => ({
   uncheckHabit: vi.fn(),
 }));
 
+vi.mock("./AssigneeDetail.js", () => ({
+  AssigneeDetail: ({ actorId, onBack }: { actorId: string; onBack: () => void }) => (
+    <div>
+      Assignee {actorId}
+      <button type="button" onClick={onBack}>
+        Home
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock("../hooks/useTodu.js", () => ({
+  useActors: () => ({
+    data: [
+      { id: "actor-user", displayName: "User" },
+      { id: "actor-old", displayName: "Former", archived: true },
+    ],
+  }),
   useTasks: ({ status }: { status: string }) => ({
     data: state.tasks.filter((task) => task.status === status),
   }),
@@ -275,4 +292,33 @@ describe("Home project focus", () => {
       expect(screen.getByRole("alert").textContent).toContain("Daemon query failed");
     }
   });
+});
+
+it("shows assignees and opens their details without opening the task", () => {
+  state.tasks = [
+    makeTask("Assigned work", {
+      status: "inprogress",
+      assigneeActorIds: ["actor-user", "actor-old"] as Task["assigneeActorIds"],
+    }),
+    makeTask("Legacy work", { status: "inprogress", assignees: ["Legacy name"] }),
+    makeTask("Unassigned work", { status: "inprogress" }),
+  ];
+  const onNavigateToTask = vi.fn();
+  render(
+    <HomeView
+      onNavigateToHabit={vi.fn()}
+      onNavigateToProject={vi.fn()}
+      onNavigateToTask={onNavigateToTask}
+    />,
+  );
+  expect(screen.getByText("Former (archived)")).toBeTruthy();
+  expect(screen.getByText("Legacy name")).toBeTruthy();
+  expect(screen.getByText("Unassigned")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "User", exact: true }));
+  expect(screen.getByText("Assignee actor-user")).toBeTruthy();
+  expect(onNavigateToTask).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Home", exact: true }));
+  const row = screen.getByRole("button", { name: /Assigned work/ });
+  fireEvent.keyDown(row, { key: "Enter" });
+  expect(onNavigateToTask).toHaveBeenCalledWith("Assigned work");
 });

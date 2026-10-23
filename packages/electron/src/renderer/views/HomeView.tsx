@@ -1,6 +1,7 @@
 import type { HabitId, Task } from "@todu/core/browser";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
+  useActors,
   useCheckHabit,
   useHabitList,
   useHabitStreak,
@@ -8,6 +9,7 @@ import {
   useTasks,
   useUncheckHabit,
 } from "../hooks/useTodu.js";
+import { createActorMap, getActorNames } from "../lib/actors.js";
 import {
   addDays,
   buildDashboardSections,
@@ -15,6 +17,7 @@ import {
   isOverdue,
   todayStr,
 } from "../lib/home-helpers.js";
+import { AssigneeDetail } from "./AssigneeDetail.js";
 
 // ============================================================================
 // Habit check-in for dashboard
@@ -62,20 +65,32 @@ function TaskRow({
   projectName,
   today,
   onSelect,
+  actorMap,
+  onSelectAssignee,
 }: {
   task: Task;
   projectName?: string;
   today: string;
   onSelect: (id: string) => void;
+  actorMap: ReturnType<typeof createActorMap>;
+  onSelectAssignee: (id: string) => void;
 }): ReactNode {
+  const names = getActorNames(task.assigneeActorIds ?? [], actorMap, task.assignees ?? []);
   const dueLabel = formatDueLabel(task, today);
   const overdue = isOverdue(task, today);
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className="home-task-row home-task-columns"
       onClick={() => onSelect(task.id)}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onSelect(task.id);
+        }
+      }}
     >
       <span className="home-task-title">{task.title}</span>
       <span className="home-task-project" title={projectName}>
@@ -84,8 +99,36 @@ function TaskRow({
       <span>
         <span className={`chip priority-${task.priority}`}>{task.priority}</span>
       </span>
+      <span className="home-task-assignees">
+        {names.length ? (
+          names.map((name, index) => {
+            const actorId = task.assigneeActorIds?.[index];
+            return (
+              <span key={actorId ?? `${name}-${index}`}>
+                {index > 0 && ", "}
+                {actorId ? (
+                  <button
+                    type="button"
+                    className="assignee-name-link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectAssignee(actorId);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ) : (
+                  name
+                )}
+              </span>
+            );
+          })
+        ) : (
+          <span className="empty-hint">Unassigned</span>
+        )}
+      </span>
       <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel || "—"}</span>
-    </button>
+    </div>
   );
 }
 
@@ -101,6 +144,8 @@ function Section({
   today,
   onSelectTask,
   emptyText,
+  actorMap,
+  onSelectAssignee,
 }: {
   title: string;
   icon: string;
@@ -109,6 +154,8 @@ function Section({
   today: string;
   onSelectTask: (id: string) => void;
   emptyText?: string;
+  actorMap: ReturnType<typeof createActorMap>;
+  onSelectAssignee: (id: string) => void;
 }): ReactNode {
   if (tasks.length === 0 && emptyText) {
     return (
@@ -134,6 +181,7 @@ function Section({
           <span>Task</span>
           <span>Project</span>
           <span>Priority</span>
+          <span>Assignee</span>
           <span>Due</span>
         </div>
         {tasks.map((task) => (
@@ -143,6 +191,8 @@ function Section({
             projectName={projectMap.get(task.projectId)}
             today={today}
             onSelect={onSelectTask}
+            actorMap={actorMap}
+            onSelectAssignee={onSelectAssignee}
           />
         ))}
       </div>
@@ -163,6 +213,10 @@ export function HomeView({
   onNavigateToProject: (projectId: string) => void;
   onNavigateToHabit: (habitId: string) => void;
 }): ReactNode {
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string | null>(null);
+  const { data: actors } = useActors();
+  const actorMap = createActorMap(actors);
+
   // Fetch all relevant task groups
   const { data: inprogressTasks } = useTasks({ status: "inprogress" });
   const { data: activeTasks } = useTasks({ status: "active" });
@@ -201,6 +255,15 @@ export function HomeView({
   );
 
   const isLoading = !inprogressTasks && !activeTasks;
+
+  if (selectedAssigneeId)
+    return (
+      <AssigneeDetail
+        actorId={selectedAssigneeId}
+        backLabel="Home"
+        onBack={() => setSelectedAssigneeId(null)}
+      />
+    );
 
   return (
     <div className="home-view">
@@ -245,6 +308,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
             emptyText="Nothing in progress right now"
           />
 
@@ -255,6 +320,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           <Section
@@ -264,6 +331,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           <Section
@@ -273,6 +342,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           {(projectsLoading || projectsFailed || focusProjects.length > 0) && (

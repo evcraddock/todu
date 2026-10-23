@@ -2452,10 +2452,10 @@ button.detail-description {
 
 .home-task-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 28%) 90px 110px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22%) 90px minmax(0, 18%) 110px;
   align-items: center;
   gap: 12px;
-  min-width: 600px;
+  min-width: 760px;
 }
 
 .home-task-column-headings {
@@ -2498,6 +2498,12 @@ button.detail-description {
 
 .home-task-row.home-task-columns {
   display: grid;
+}
+
+.home-task-assignees {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }
 
 .home-task-project {
