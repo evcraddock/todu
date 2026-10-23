@@ -96,9 +96,6 @@ function TaskRow({
       <span className="home-task-project" title={projectName}>
         {projectName || "—"}
       </span>
-      <span>
-        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
-      </span>
       <span className="home-task-assignees">
         {names.length ? (
           names.map((name, index) => {
@@ -126,6 +123,9 @@ function TaskRow({
         ) : (
           <span className="empty-hint">Unassigned</span>
         )}
+      </span>
+      <span>
+        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
       </span>
       <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel || "—"}</span>
     </div>
@@ -180,8 +180,8 @@ function Section({
         <div className="home-task-columns home-task-column-headings" aria-hidden="true">
           <span>Task</span>
           <span>Project</span>
-          <span>Priority</span>
           <span>Assignee</span>
+          <span>Priority</span>
           <span>Due</span>
         </div>
         {tasks.map((task) => (

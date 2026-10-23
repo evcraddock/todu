@@ -2452,7 +2452,7 @@ button.detail-description {
 
 .home-task-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 22%) 90px minmax(0, 18%) 110px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22%) minmax(0, 18%) 90px 110px;
   align-items: center;
   gap: 12px;
   min-width: 760px;
