@@ -45,7 +45,7 @@ it("shows assigned names, archived and unknown assignees, legacy names, and unas
   ]);
   const sharedRow = screen.getByText("Shared work").closest("tr")!;
   expect(sharedRow.textContent).toContain("Reviewer, Former reviewer (archived)");
-  expect(screen.getByText("Unassigned")).toBeDefined();
+  expect(screen.getByText("-")).toBeDefined();
   expect(screen.getByText("Legacy reviewer")).toBeDefined();
   expect(screen.getByText("actor-missing")).toBeDefined();
 });

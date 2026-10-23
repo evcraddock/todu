@@ -133,7 +133,7 @@ export function TaskTable({
                     );
                   })
                 ) : (
-                  <span className="empty-hint">Unassigned</span>
+                  <span className="empty-hint">-</span>
                 )}
               </td>
               <td className={`cell-date ${overdue ? "cell-overdue" : ""}`}>
