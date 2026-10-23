@@ -72,15 +72,19 @@ function TaskRow({
   const overdue = isOverdue(task, today);
 
   return (
-    <button type="button" className="home-task-row" onClick={() => onSelect(task.id)}>
+    <button
+      type="button"
+      className="home-task-row home-task-columns"
+      onClick={() => onSelect(task.id)}
+    >
       <span className="home-task-title">{task.title}</span>
-      <span className="home-task-meta">
-        {projectName && <span className="home-task-project">{projectName}</span>}
-        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
-        {dueLabel && (
-          <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel}</span>
-        )}
+      <span className="home-task-project" title={projectName}>
+        {projectName || "—"}
       </span>
+      <span>
+        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
+      </span>
+      <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel || "—"}</span>
     </button>
   );
 }
@@ -126,6 +130,12 @@ function Section({
         <span className="home-section-count">{tasks.length}</span>
       </h3>
       <div className="home-task-list">
+        <div className="home-task-columns home-task-column-headings" aria-hidden="true">
+          <span>Task</span>
+          <span>Project</span>
+          <span>Priority</span>
+          <span>Due</span>
+        </div>
         {tasks.map((task) => (
           <TaskRow
             key={task.id}
