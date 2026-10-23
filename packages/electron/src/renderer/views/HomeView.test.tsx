@@ -313,7 +313,7 @@ it("shows assignees and opens their details without opening the task", () => {
   );
   expect(screen.getByText("Former (archived)")).toBeTruthy();
   expect(screen.getByText("Legacy name")).toBeTruthy();
-  expect(screen.getByText("Unassigned")).toBeTruthy();
+  expect(screen.getByText("-")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "User", exact: true }));
   expect(screen.getByText("Assignee actor-user")).toBeTruthy();
   expect(onNavigateToTask).not.toHaveBeenCalled();

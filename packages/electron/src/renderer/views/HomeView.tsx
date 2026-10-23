@@ -121,7 +121,7 @@ function TaskRow({
             );
           })
         ) : (
-          <span className="empty-hint">Unassigned</span>
+          <span className="empty-hint">-</span>
         )}
       </span>
       <span>
