@@ -39,8 +39,8 @@ it("shows assigned names, archived and unknown assignees, legacy names, and unas
   expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
     "Task",
     "Status",
-    "Priority",
     "Assignee",
+    "Priority",
     "Due",
   ]);
   const sharedRow = screen.getByText("Shared work").closest("tr")!;

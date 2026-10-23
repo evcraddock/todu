@@ -69,8 +69,8 @@ export function TaskTable({
         <tr>
           <SortHeader label="Task" field="title" sort={sort} onSort={onSort} />
           <th>Status</th>
-          <SortHeader label="Priority" field="priority" sort={sort} onSort={onSort} />
           <th>Assignee</th>
+          <SortHeader label="Priority" field="priority" sort={sort} onSort={onSort} />
           <SortHeader label="Due" field="dueDate" sort={sort} onSort={onSort} />
         </tr>
       </thead>
@@ -105,9 +105,6 @@ export function TaskTable({
               <td>
                 <StatusChip status={task.status} />
               </td>
-              <td>
-                <PriorityChip priority={task.priority} />
-              </td>
               <td className="cell-assignees">
                 {assigneeNames.length > 0 ? (
                   assigneeNames.map((name, index) => {
@@ -135,6 +132,9 @@ export function TaskTable({
                 ) : (
                   <span className="empty-hint">-</span>
                 )}
+              </td>
+              <td>
+                <PriorityChip priority={task.priority} />
               </td>
               <td className={`cell-date ${overdue ? "cell-overdue" : ""}`}>
                 {task.dueDate?.slice(0, 10) ?? "—"}

@@ -2633,7 +2633,7 @@ button.detail-description {
 .task-table th:first-child {
   width: 40%;
 }
-.task-table th:nth-child(4) {
+.task-table th:nth-child(3) {
   width: 20%;
 }
 .cell-assignees {
