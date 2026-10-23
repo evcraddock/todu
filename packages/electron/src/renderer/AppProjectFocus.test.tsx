@@ -6,8 +6,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 
 vi.mock("./views/HomeView.js", () => ({
-  HomeView: ({ onNavigateToProject }: { onNavigateToProject: (id: string) => void }) => (
+  HomeView: ({
+    onNavigateToProject,
+    onNavigateToHabit,
+    onNavigateToTask,
+  }: {
+    onNavigateToProject: (id: string) => void;
+    onNavigateToHabit: (id: string) => void;
+    onNavigateToTask: (id: string) => void;
+  }) => (
     <>
+      <button type="button" onClick={() => onNavigateToTask("task-a")}>
+        Open home task
+      </button>
+      <button type="button" onClick={() => onNavigateToHabit("habit-a")}>
+        Open home habit
+      </button>
       <button type="button" onClick={() => onNavigateToProject("project-a")}>
         Focus A
       </button>
@@ -27,12 +41,59 @@ vi.mock("./views/ProjectDetail.js", () => ({
     </>
   ),
 }));
-vi.mock("./views/ProjectList.js", () => ({ ProjectList: () => <h2>Project list</h2> }));
+vi.mock("./views/ProjectList.js", () => ({
+  ProjectList: ({ onSelectProject }: { onSelectProject: (id: string) => void }) => (
+    <>
+      <h2>Project list</h2>
+      <button type="button" onClick={() => onSelectProject("project-c")}>
+        Open list project
+      </button>
+    </>
+  ),
+}));
 vi.mock("./views/CreateProjectDialog.js", () => ({ CreateProjectDialog: () => null }));
 vi.mock("./views/CreateTaskDialog.js", () => ({ CreateTaskDialog: () => null }));
-vi.mock("./views/TaskDetail.js", () => ({ TaskDetail: () => null }));
-vi.mock("./views/TasksView.js", () => ({ TasksView: () => null }));
-vi.mock("./views/HabitsView.js", () => ({ HabitsView: () => null }));
+vi.mock("./views/TaskDetail.js", () => ({
+  TaskDetail: ({ taskId, onBack }: { taskId: string; onBack: () => void }) => (
+    <>
+      <h2>Task detail: {taskId}</h2>
+      <button type="button" onClick={onBack}>
+        Back from task
+      </button>
+    </>
+  ),
+}));
+vi.mock("./views/TaskList.js", () => ({
+  TaskList: ({ onSelectTask }: { onSelectTask: (id: string) => void }) => (
+    <>
+      <h2>Task list</h2>
+      <button type="button" onClick={() => onSelectTask("task-b")}>
+        Open list task
+      </button>
+    </>
+  ),
+}));
+vi.mock("./views/HabitDetail.js", () => ({
+  HabitDetail: ({ habitId, onBack }: { habitId: string; onBack: () => void }) => (
+    <>
+      <h2>Habit detail: {habitId}</h2>
+      <button type="button" onClick={onBack}>
+        Back from habit
+      </button>
+    </>
+  ),
+}));
+vi.mock("./views/HabitList.js", () => ({
+  HabitList: ({ onSelectHabit }: { onSelectHabit: (id: string) => void }) => (
+    <>
+      <h2>Habit list</h2>
+      <button type="button" onClick={() => onSelectHabit("habit-b")}>
+        Open list habit
+      </button>
+    </>
+  ),
+}));
+vi.mock("./views/CreateHabitDialog.js", () => ({ CreateHabitDialog: () => null }));
 vi.mock("./views/JournalView.js", () => ({ JournalView: () => null }));
 vi.mock("./views/LabelsView.js", () => ({ LabelsView: () => null }));
 vi.mock("./views/RecurringView.js", () => ({ RecurringView: () => null }));
@@ -48,6 +109,12 @@ vi.mock("./components/Sidebar.js", () => ({
     <>
       <button type="button" onClick={() => onNavigate("home")}>
         Home
+      </button>
+      <button type="button" onClick={() => onNavigate("habits")}>
+        Habits
+      </button>
+      <button type="button" onClick={() => onNavigate("tasks")}>
+        Tasks
       </button>
       <button type="button" onClick={() => onNavigate("projects")}>
         Projects
@@ -77,7 +144,7 @@ describe("Project Focus navigation", () => {
     expect(screen.getByRole("heading", { name: "Project detail: project-a" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to project list" }));
-    expect(screen.getByRole("heading", { name: "Project list" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Focus A" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
@@ -91,4 +158,38 @@ describe("Project Focus navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Focus B" }));
     expect(screen.getByRole("heading", { name: "Project detail: project-b" })).toBeTruthy();
   });
+});
+
+it("returns a Home habit to Home and a list habit to the habits list", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Open home habit" }));
+  expect(screen.getByRole("heading", { name: "Habit detail: habit-a" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Back from habit" }));
+  expect(screen.getByRole("button", { name: "Open home habit" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Habits" }));
+  expect(screen.getByRole("heading", { name: "Habit list" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Open list habit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back from habit" }));
+  expect(screen.getByRole("heading", { name: "Habit list" })).toBeTruthy();
+});
+
+it("returns projects opened from the projects list to that list", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open list project" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back to project list" }));
+  expect(screen.getByRole("heading", { name: "Project list" })).toBeTruthy();
+});
+
+it("returns a Home task to Home and a list task to the task list", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Open home task" }));
+  expect(screen.getByRole("heading", { name: "Task detail: task-a" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Back from task" }));
+  expect(screen.getByRole("button", { name: "Open home task" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+  expect(screen.getByRole("heading", { name: "Task list" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Open list task" }));
+  fireEvent.click(screen.getByRole("button", { name: "Back from task" }));
+  expect(screen.getByRole("heading", { name: "Task list" })).toBeTruthy();
 });

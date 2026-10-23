@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ApprovalItem,
   ApprovalListFilter,
+  CreateActorInput,
   CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
@@ -89,6 +90,32 @@ export function useActors() {
   return useQuery({
     queryKey: queryKeys.actors,
     queryFn: async () => unwrap(await window.todu.actor.list()),
+  });
+}
+
+export function useCreateActor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateActorInput) => unwrap(await window.todu.actor.create(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.actors }),
+  });
+}
+
+export function useRenameActor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, displayName }: { id: string; displayName: string }) =>
+      unwrap(await window.todu.actor.rename(id, displayName)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.actors }),
+  });
+}
+
+export function useSetActorArchived() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) =>
+      unwrap(await (archived ? window.todu.actor.archive(id) : window.todu.actor.unarchive(id))),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.actors }),
   });
 }
 

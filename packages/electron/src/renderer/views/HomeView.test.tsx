@@ -73,8 +73,15 @@ describe("Home weekly planning", () => {
       makeTask("Completed task", { status: "done", scheduledDate: "2026-10-12" }),
       makeTask("Canceled task", { status: "canceled", scheduledDate: "2026-10-12" }),
     ];
+    const onNavigateToHabit = vi.fn();
     const onNavigateToTask = vi.fn();
-    render(<HomeView onNavigateToTask={onNavigateToTask} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={onNavigateToHabit}
+        onNavigateToTask={onNavigateToTask}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: /This Week/ })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: /Next/ })).toBeNull();
@@ -91,7 +98,11 @@ describe("Home weekly planning", () => {
     expect(onNavigateToTask).toHaveBeenCalledWith("Later this week");
     expect(screen.getByRole("heading", { name: /Waiting/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Today's Habits/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Daily habit" }));
+    expect(onNavigateToHabit).toHaveBeenCalledWith("habit-1");
+    onNavigateToHabit.mockClear();
     fireEvent.click(screen.getByTitle("Check in today"));
+    expect(onNavigateToHabit).not.toHaveBeenCalled();
     expect(state.checkHabit).toHaveBeenCalledWith("habit-1");
   });
 
@@ -104,7 +115,13 @@ describe("Home weekly planning", () => {
       makeTask("This Saturday", { scheduledDate: "2026-10-24" }),
       makeTask("Next Sunday", { scheduledDate: "2026-10-25" }),
     ];
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: /This Week/ }).textContent).toContain("4");
     for (const title of ["Previous Saturday", "This Sunday", "This Monday", "This Saturday"]) {
@@ -121,7 +138,13 @@ describe("Home weekly planning", () => {
       makeTask("Coming soon", { dueDate: "2026-10-16", scheduledDate: "2026-10-12" }),
       makeTask("Weekly plan", { scheduledDate: "2026-10-17" }),
     ];
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
 
     for (const task of state.tasks) {
       expect(screen.getAllByRole("button", { name: new RegExp(task.title) })).toHaveLength(1);
@@ -157,7 +180,13 @@ describe("Home project focus", () => {
     ];
     const snapshot = structuredClone(state.projects);
     const onNavigateToProject = vi.fn();
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={onNavigateToProject} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={onNavigateToProject}
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: /Project Focus/ }).textContent).toContain("1");
     for (const name of ["Low", "Medium", "Done", "Canceled"]) {
@@ -179,7 +208,13 @@ describe("Home project focus", () => {
       }),
     ];
     const taskSnapshot = structuredClone(state.tasks);
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
     expect(screen.getByRole("button", { name: "Focused" })).toBeTruthy();
     expect(state.tasks).toEqual(taskSnapshot);
   });
@@ -187,12 +222,12 @@ describe("Home project focus", () => {
   it("updates membership when refreshed projects change priority or status", () => {
     state.projects = [makeProject("First"), makeProject("Second", { priority: "medium" })];
     const props = { onNavigateToTask: vi.fn(), onNavigateToProject: vi.fn() };
-    const { rerender } = render(<HomeView {...props} />);
+    const { rerender } = render(<HomeView onNavigateToHabit={vi.fn()} {...props} />);
     expect(screen.getByRole("button", { name: "First" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Second" })).toBeNull();
 
     state.projects = [makeProject("First", { priority: "low" }), makeProject("Second")];
-    rerender(<HomeView {...props} />);
+    rerender(<HomeView onNavigateToHabit={vi.fn()} {...props} />);
     expect(screen.queryByRole("button", { name: "First" })).toBeNull();
     expect(screen.getByRole("button", { name: "Second" })).toBeTruthy();
 
@@ -200,13 +235,19 @@ describe("Home project focus", () => {
       makeProject("First", { status: "done" }),
       makeProject("Second", { status: "canceled" }),
     ];
-    rerender(<HomeView {...props} />);
+    rerender(<HomeView onNavigateToHabit={vi.fn()} {...props} />);
     expect(screen.queryByRole("heading", { name: /Project Focus/ })).toBeNull();
   });
 
   it("hides the optional section when no projects qualify", () => {
     state.projects = [];
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
     expect(screen.queryByRole("heading", { name: /Project Focus/ })).toBeNull();
   });
 
@@ -217,7 +258,13 @@ describe("Home project focus", () => {
     state.projectsLoading = condition === "loading";
     state.projectsError = condition === "failure" ? new Error("Daemon query failed") : null;
     state.tasks = [makeTask("Planned work", { scheduledDate: "2026-10-12" })];
-    render(<HomeView onNavigateToTask={vi.fn()} onNavigateToProject={vi.fn()} />);
+    render(
+      <HomeView
+        onNavigateToHabit={vi.fn()}
+        onNavigateToTask={vi.fn()}
+        onNavigateToProject={vi.fn()}
+      />,
+    );
     expect(screen.getByRole("heading", { name: /Project Focus/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Planned work/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Today's Habits/ })).toBeTruthy();

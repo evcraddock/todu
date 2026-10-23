@@ -268,6 +268,7 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
   habit
     .command("update <id>")
     .description("Update a habit")
+    .option("--project <project>", "update project by name or ID")
     .option("--title <title>", "update title")
     .option("--schedule <rrule>", "update RRULE")
     .option("--timezone <tz>", "update timezone")
@@ -282,6 +283,15 @@ export function registerHabitCommands(program: Command, invokeDaemon: CliDaemonI
       }
 
       const input: Record<string, unknown> = {};
+      if (opts.project) {
+        const projectRes = await resolveProjectId(invokeDaemon, opts.project);
+        if (!projectRes.ok) {
+          console.error(projectRes.message);
+          process.exitCode = 1;
+          return;
+        }
+        input.projectId = projectRes.value;
+      }
       if (opts.title) input.title = opts.title;
       if (opts.schedule) input.schedule = opts.schedule;
       if (opts.timezone) input.timezone = opts.timezone;

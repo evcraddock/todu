@@ -13,13 +13,14 @@ export interface TabBarProps {
   tabs: Tab[];
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  actions?: ReactNode;
 }
 
 // ============================================================================
 // TabBar
 // ============================================================================
 
-export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps): ReactNode {
+export function TabBar({ tabs, activeTab, onTabChange, actions }: TabBarProps): ReactNode {
   return (
     <div className="tab-bar">
       {tabs.map((tab) => (
@@ -32,6 +33,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps): ReactNode
           {tab.label}
         </button>
       ))}
+      {actions && <div className="tab-bar-actions">{actions}</div>}
     </div>
   );
 }

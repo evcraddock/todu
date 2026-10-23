@@ -9,5 +9,9 @@ const STATUS_CLASSES: Record<string, string> = {
 };
 
 export function StatusChip({ status }: { status: string }): ReactNode {
-  return <span className={`chip ${STATUS_CLASSES[status] ?? ""}`}>{status}</span>;
+  return (
+    <span className={`chip ${STATUS_CLASSES[status] ?? ""}`}>
+      {status === "inprogress" ? "In progress" : status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
+  );
 }

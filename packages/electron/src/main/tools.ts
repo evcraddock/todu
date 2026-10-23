@@ -232,7 +232,7 @@ const HabitHistoryParams = Type.Object({
 const ListRecurringParams = Type.Object({
   paused: Type.Optional(Type.Boolean({ description: "Filter by paused state" })),
   projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
-  search: Type.Optional(Type.String({ description: "Search recurring templates by title" })),
+  search: Type.Optional(Type.String({ description: "Search recurring tasks by title" })),
 });
 
 const RecurringUpcomingParams = Type.Object({

@@ -11,23 +11,30 @@ describe("filter-persistence", () => {
 
   describe("loadFilter", () => {
     it("returns default filter when nothing is stored", () => {
-      expect(loadFilter()).toEqual(DEFAULT_FILTER);
+      expect(loadFilter()).toEqual({ ...DEFAULT_FILTER, activeProjects: true });
+    });
+
+    it("preserves a specific project and an explicit All projects selection", () => {
+      saveFilter({ projectId: "proj-1" as never });
+      expect(loadFilter().activeProjects).toBe(false);
+      saveFilter({ activeProjects: false });
+      expect(loadFilter().activeProjects).toBe(false);
     });
 
     it("returns stored filter", () => {
       const filter = { status: ["done" as const], priority: "high" as const };
       localStorage.setItem("todu:task-filter", JSON.stringify(filter));
-      expect(loadFilter()).toEqual(filter);
+      expect(loadFilter()).toEqual({ ...filter, activeProjects: true });
     });
 
     it("returns default filter on corrupt JSON", () => {
       localStorage.setItem("todu:task-filter", "not-json{{{");
-      expect(loadFilter()).toEqual(DEFAULT_FILTER);
+      expect(loadFilter()).toEqual({ ...DEFAULT_FILTER, activeProjects: true });
     });
 
     it("returns default filter on non-object JSON", () => {
       localStorage.setItem("todu:task-filter", '"string"');
-      expect(loadFilter()).toEqual(DEFAULT_FILTER);
+      expect(loadFilter()).toEqual({ ...DEFAULT_FILTER, activeProjects: true });
     });
   });
 
@@ -49,8 +56,8 @@ describe("filter-persistence", () => {
   });
 
   describe("DEFAULT_FILTER", () => {
-    it("has active and inprogress statuses", () => {
-      expect(DEFAULT_FILTER.status).toEqual(["active", "inprogress"]);
+    it("includes all unfinished statuses", () => {
+      expect(DEFAULT_FILTER.status).toEqual(["active", "inprogress", "waiting"]);
     });
   });
 });

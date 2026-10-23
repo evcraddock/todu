@@ -986,6 +986,10 @@ describe("validateCreateHabitInput", () => {
 });
 
 describe("validateUpdateHabitInput", () => {
+  it("accepts a project-only update and rejects an empty project ID", () => {
+    expect(validateUpdateHabitInput({ projectId: createProjectId("proj-1") })).toBeNull();
+    expect(validateUpdateHabitInput({ projectId: createProjectId("") })?.field).toBe("projectId");
+  });
   it("accepts valid title-only updates", () => {
     expect(validateUpdateHabitInput({ title: "Meditate daily" })).toBeNull();
   });

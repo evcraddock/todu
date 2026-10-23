@@ -19,8 +19,9 @@ export function RecurringList({
   externalFilter?: RecurringFilter | null;
 }): ReactNode {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [filterProject, setFilterProject] = useState("");
+  const [filterProject, setFilterProject] = useState("active-projects");
   const [searchText, setSearchText] = useState("");
+  const [sort, setSort] = useState("name");
   const appliedExternalRef = useRef<RecurringFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -38,12 +39,18 @@ export function RecurringList({
   const filter: RecurringFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
     ...(filterStatus === "paused" ? { paused: true } : {}),
-    ...(filterProject ? { projectId: filterProject as RecurringFilter["projectId"] } : {}),
+    ...(filterProject && filterProject !== "active-projects"
+      ? { projectId: filterProject as RecurringFilter["projectId"] }
+      : {}),
     ...(searchText ? { search: searchText } : {}),
   };
 
   const { data: templates, isLoading, isError, error } = useRecurringList(filter);
-  const { data: projects } = useProjects();
+  const { data: projects, isError: projectsError, error: projectError } = useProjects();
+  const activeProjectsOnly = filterProject === "active-projects";
+  const activeProjectIds = new Set(
+    projects?.filter((project) => project.status === "active").map((project) => project.id),
+  );
 
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -51,123 +58,167 @@ export function RecurringList({
     return map;
   }, [projects]);
 
-  if (isLoading) {
-    return (
-      <div className="view-container">
-        <div className="view-header">
-          <h2 className="view-title">Recurring Templates</h2>
-        </div>
-        <div className="loading-state">Loading templates…</div>
-      </div>
-    );
-  }
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const displayTemplates = [...(templates ?? [])]
+    .filter((item) => !activeProjectsOnly || activeProjectIds.has(item.projectId))
+    .sort((a, b) => {
+      if (sort === "nextDue")
+        return (
+          (a.nextDue || "9999").localeCompare(b.nextDue || "9999") || a.title.localeCompare(b.title)
+        );
+      if (sort === "priority")
+        return (
+          priorityOrder[a.priority] - priorityOrder[b.priority] || a.title.localeCompare(b.title)
+        );
+      if (sort === "status")
+        return Number(a.paused) - Number(b.paused) || a.title.localeCompare(b.title);
+      return a.title.localeCompare(b.title);
+    });
 
-  if (isError) {
+  if (isError || (activeProjectsOnly && projectsError)) {
+    const loadError = isError ? error : projectError;
     return (
-      <div className="view-container">
+      <div className="view-container list-view">
         <div className="view-header">
-          <h2 className="view-title">Recurring Templates</h2>
+          <h2 className="view-title">Recurring Tasks</h2>
         </div>
         <div className="error-state">
-          <p>Failed to load templates</p>
-          <p className="error-detail">{error instanceof Error ? error.message : "Unknown error"}</p>
+          <p>Failed to load recurring tasks</p>
+          <p className="error-detail">
+            {loadError instanceof Error ? loadError.message : "Unknown error"}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="view-container">
+    <div className="view-container list-view">
       <div className="view-header">
-        <h2 className="view-title">Recurring Templates</h2>
+        <h2 className="view-title">
+          Recurring Tasks <span className="list-count">{displayTemplates.length}</span>
+        </h2>
         <button type="button" className="btn btn-primary" onClick={onCreateTemplate}>
-          + New Template
+          + New Recurring Task
         </button>
       </div>
 
-      <div className="filter-bar">
+      <div className="filter-bar list-filters">
+        <input
+          type="search"
+          className="search-input"
+          aria-label="Search recurring tasks"
+          placeholder="Search recurring tasks…"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
         <div className="filter-row">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search templates…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <select
-            className="filter-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "paused")}
+          <label className="list-filter-field">
+            Project
+            <select
+              className="filter-select"
+              value={filterProject}
+              onChange={(e) => setFilterProject(e.target.value)}
+            >
+              <option value="active-projects">Active Projects</option>
+              <option value="">All projects</option>
+              {projects?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="list-filter-field">
+            Status
+            <select
+              className="filter-select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "paused")}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm list-clear-filters"
+            onClick={() => {
+              setFilterStatus("all");
+              setFilterProject("");
+              setSearchText("");
+            }}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="paused">Paused only</option>
-          </select>
-          <select
-            className="filter-select"
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-          >
-            <option value="">All projects</option>
-            {projects?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            Clear filters
+          </button>
         </div>
       </div>
-
-      {!templates || templates.length === 0 ? (
+      <label className="list-sort-control">
+        Sort by
+        <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name">Recurring task: A–Z</option>
+          <option value="nextDue">Next due: earliest first</option>
+          <option value="priority">Priority: high first</option>
+          <option value="status">Status: active first</option>
+        </select>
+      </label>
+      {isLoading || (activeProjectsOnly && !projects) ? (
+        <div className="loading-state">Loading recurring tasks…</div>
+      ) : displayTemplates.length === 0 ? (
         <div className="empty-state">
-          <p>No recurring templates match your filters</p>
+          <p>No recurring tasks match your filters</p>
         </div>
       ) : (
-        <table className="data-table">
+        <table className="data-table recurring-table">
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Schedule</th>
-              <th>Project</th>
+              <th>Recurring task</th>
+              <th>Status</th>
               <th>Priority</th>
               <th>Miss Policy</th>
-              <th>Next Due</th>
-              <th>Status</th>
+              <th>Next due</th>
             </tr>
           </thead>
           <tbody>
-            {templates.map((t) => {
+            {displayTemplates.map((t) => {
               const missPolicy = getRecurringMissPolicy(t);
               return (
                 <tr
                   key={t.id}
                   className="clickable-row"
+                  tabIndex={0}
                   onClick={() => onSelectTemplate(t.id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onSelectTemplate(t.id);
                   }}
                 >
-                  <td className="cell-name">{t.title}</td>
-                  <td className="cell-schedule">{describeSchedule(t.schedule)}</td>
-                  <td className="cell-project">{projectMap.get(t.projectId) ?? "—"}</td>
+                  <td className="cell-name">
+                    <span className="habit-row-title">{t.title}</span>
+                    <span className="habit-row-context">
+                      {(!filterProject || activeProjectsOnly) && (
+                        <>{projectMap.get(t.projectId) ?? "Project unavailable"} · </>
+                      )}
+                      {describeSchedule(t.schedule)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`chip ${t.paused ? "status-paused" : "status-active"}`}>
+                      {t.paused ? "Paused" : "Active"}
+                    </span>
+                  </td>
                   <td>
                     <PriorityChip priority={t.priority} />
                   </td>
                   <td aria-label={`Miss Policy ${missPolicy}`}>
-                    <div>{missPolicy}</div>
                     <div
-                      className="detail-meta-label"
+                      className="recurring-policy-label"
                       title={getRecurringMissPolicyExplanation(missPolicy)}
                     >
                       {getRecurringMissPolicyShortLabel(missPolicy)}
                     </div>
                   </td>
                   <td className="cell-date">{t.nextDue?.slice(0, 10) ?? "—"}</td>
-                  <td>
-                    <span className={`chip ${t.paused ? "status-paused" : "status-active"}`}>
-                      {t.paused ? "paused" : "active"}
-                    </span>
-                  </td>
                 </tr>
               );
             })}

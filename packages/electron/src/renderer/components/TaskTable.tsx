@@ -1,5 +1,7 @@
 import type { Task, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import type { ReactNode } from "react";
+import { useActors } from "../hooks/useTodu.js";
+import { createActorMap, getActorNames } from "../lib/actors.js";
 import { PriorityChip } from "./PriorityChip.js";
 import { StatusChip } from "./StatusChip.js";
 
@@ -23,6 +25,8 @@ function SortHeader({
   return (
     <th
       className="sortable-header"
+      tabIndex={0}
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
       onClick={() => onSort(field)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onSort(field);
@@ -43,6 +47,7 @@ export function TaskTable({
   sort,
   onSort,
   onSelectTask,
+  onSelectAssignee,
   projectMap,
   showProject = true,
 }: {
@@ -50,26 +55,32 @@ export function TaskTable({
   sort?: TaskSortOptions;
   onSort: (field: TaskSortField) => void;
   onSelectTask: (id: string) => void;
+  onSelectAssignee?: (id: string) => void;
   projectMap: Map<string, string>;
   showProject?: boolean;
 }): ReactNode {
   const today = new Date().toISOString().slice(0, 10);
+  const { data: actors } = useActors();
+  const actorMap = createActorMap(actors);
 
   return (
-    <table className="data-table">
+    <table className="data-table task-table">
       <thead>
         <tr>
-          <SortHeader label="Title" field="title" sort={sort} onSort={onSort} />
-          <th>ID</th>
+          <SortHeader label="Task" field="title" sort={sort} onSort={onSort} />
           <th>Status</th>
           <SortHeader label="Priority" field="priority" sort={sort} onSort={onSort} />
-          {showProject && <th>Project</th>}
+          <th>Assignee</th>
           <SortHeader label="Due" field="dueDate" sort={sort} onSort={onSort} />
-          <SortHeader label="Created" field="createdAt" sort={sort} onSort={onSort} />
         </tr>
       </thead>
       <tbody>
         {tasks.map((task) => {
+          const assigneeNames = getActorNames(
+            task.assigneeActorIds ?? [],
+            actorMap,
+            task.assignees ?? [],
+          );
           const overdue =
             task.dueDate &&
             task.dueDate < today &&
@@ -79,26 +90,55 @@ export function TaskTable({
             <tr
               key={task.id}
               className="clickable-row"
+              tabIndex={0}
               onClick={() => onSelectTask(task.id)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") onSelectTask(task.id);
+                if (e.key === "Enter" && e.target === e.currentTarget) onSelectTask(task.id);
               }}
             >
-              <td className="cell-name">{task.title}</td>
-              <td className="cell-id">{task.id}</td>
+              <td className="cell-name">
+                <span className="task-row-title">{task.title}</span>
+                {showProject && (
+                  <span className="task-row-project">{projectMap.get(task.projectId) ?? "—"}</span>
+                )}
+              </td>
               <td>
                 <StatusChip status={task.status} />
               </td>
               <td>
                 <PriorityChip priority={task.priority} />
               </td>
-              {showProject && (
-                <td className="cell-project">{projectMap.get(task.projectId) ?? "—"}</td>
-              )}
+              <td className="cell-assignees">
+                {assigneeNames.length > 0 ? (
+                  assigneeNames.map((name, index) => {
+                    const actorId = task.assigneeActorIds?.[index];
+                    return (
+                      <span key={actorId ?? `${name}-${index}`}>
+                        {index > 0 && ", "}
+                        {actorId && onSelectAssignee ? (
+                          <button
+                            type="button"
+                            className="assignee-name-link"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onSelectAssignee(actorId);
+                            }}
+                          >
+                            {name}
+                          </button>
+                        ) : (
+                          name
+                        )}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="empty-hint">Unassigned</span>
+                )}
+              </td>
               <td className={`cell-date ${overdue ? "cell-overdue" : ""}`}>
                 {task.dueDate?.slice(0, 10) ?? "—"}
               </td>
-              <td className="cell-date">{task.createdAt.slice(0, 10)}</td>
             </tr>
           );
         })}

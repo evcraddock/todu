@@ -164,57 +164,10 @@ describe("SettingsView", () => {
     expect(setModel).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-20250514");
   });
 
-  it("manages actors from settings", async () => {
+  it("keeps people management out of Settings", async () => {
     render(<SettingsView themePreference="system" onThemeChange={() => {}} />);
-
-    expect(await screen.findByText("Actors")).toBeDefined();
-    expect(screen.getByText("Reviewer")).toBeDefined();
-    expect(screen.getByText("ID: actor-reviewer")).toBeDefined();
-
-    fireEvent.change(screen.getByLabelText("New actor ID"), {
-      target: { value: "actor-bot" },
-    });
-    fireEvent.change(screen.getByLabelText("New actor display name"), {
-      target: { value: "Automation Bot" },
-    });
-    fireEvent.click(screen.getByText("Create"));
-
-    await waitFor(() => {
-      expect(actorCreate).toHaveBeenCalledWith({
-        id: "actor-bot",
-        displayName: "Automation Bot",
-      });
-    });
-    await waitFor(() => {
-      expect(screen.getByText("Automation Bot")).toBeDefined();
-    });
-
-    fireEvent.change(screen.getByLabelText("Actor name actor-reviewer"), {
-      target: { value: "Lead Reviewer" },
-    });
-    fireEvent.click(screen.getAllByText("Rename")[1]);
-
-    await waitFor(() => {
-      expect(actorRename).toHaveBeenCalledWith("actor-reviewer", "Lead Reviewer");
-    });
-    await waitFor(() => {
-      expect(screen.getByText("Lead Reviewer")).toBeDefined();
-    });
-
-    fireEvent.click(screen.getAllByText("Archive")[1]);
-    await waitFor(() => {
-      expect(actorArchive).toHaveBeenCalledWith("actor-reviewer");
-    });
-    await waitFor(() => {
-      expect(screen.getByText("Archived")).toBeDefined();
-    });
-
-    fireEvent.click(screen.getByText("Unarchive"));
-    await waitFor(() => {
-      expect(actorUnarchive).toHaveBeenCalledWith("actor-reviewer");
-    });
-    await waitFor(() => {
-      expect(screen.queryByText("Archived")).toBeNull();
-    });
+    expect(await screen.findByText("Settings")).toBeDefined();
+    expect(screen.queryByText("Actors")).toBeNull();
+    expect(actorList).not.toHaveBeenCalled();
   });
 });

@@ -14,13 +14,18 @@ export function TasksView({
   externalFilter,
   focusTaskId,
   onFocusConsumed,
+  returnToHome,
+  onNavigateHome,
 }: {
   triggerCreateTask?: number;
   externalFilter?: TaskFilter | null;
   focusTaskId?: string | null;
   onFocusConsumed?: () => void;
+  returnToHome?: boolean;
+  onNavigateHome?: () => void;
 }): ReactNode {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedFromHome, setSelectedFromHome] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // Open create dialog when triggered externally (tray menu, shortcut)
@@ -35,18 +40,31 @@ export function TasksView({
   useEffect(() => {
     if (focusTaskId) {
       setSelectedTaskId(focusTaskId);
+      setSelectedFromHome(!!returnToHome);
       onFocusConsumed?.();
     }
-  }, [focusTaskId, onFocusConsumed]);
+  }, [focusTaskId, onFocusConsumed, returnToHome]);
 
   if (selectedTaskId) {
-    return <TaskDetail taskId={selectedTaskId} onBack={() => setSelectedTaskId(null)} />;
+    return (
+      <TaskDetail
+        taskId={selectedTaskId}
+        backLabel={selectedFromHome && onNavigateHome ? "Home" : "Tasks"}
+        onBack={() => {
+          if (selectedFromHome && onNavigateHome) onNavigateHome();
+          else setSelectedTaskId(null);
+        }}
+      />
+    );
   }
 
   return (
     <>
       <TaskList
-        onSelectTask={setSelectedTaskId}
+        onSelectTask={(id) => {
+          setSelectedFromHome(false);
+          setSelectedTaskId(id);
+        }}
         onCreateTask={() => setShowCreateDialog(true)}
         externalFilter={externalFilter}
       />

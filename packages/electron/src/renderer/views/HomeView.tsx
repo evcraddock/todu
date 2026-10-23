@@ -147,9 +147,11 @@ function Section({
 export function HomeView({
   onNavigateToTask,
   onNavigateToProject,
+  onNavigateToHabit,
 }: {
   onNavigateToTask: (taskId: string) => void;
   onNavigateToProject: (projectId: string) => void;
+  onNavigateToHabit: (habitId: string) => void;
 }): ReactNode {
   // Fetch all relevant task groups
   const { data: inprogressTasks } = useTasks({ status: "inprogress" });
@@ -198,6 +200,34 @@ export function HomeView({
         <div className="loading-state">Loading…</div>
       ) : (
         <>
+          {/* Today's Habits */}
+          {habits && habits.length > 0 && (
+            <div className="home-section">
+              <h3 className="home-section-title">
+                <span>🔥</span> Today&apos;s Habits
+                <span className="home-section-count">{habits.length}</span>
+              </h3>
+              <div className="home-habit-grid">
+                {habits.map((habit) => (
+                  <div key={habit.id} className="home-habit-row">
+                    <button
+                      type="button"
+                      className="home-task-title home-habit-title"
+                      title={habit.title}
+                      aria-label={habit.title}
+                      onClick={() => onNavigateToHabit(habit.id)}
+                    >
+                      {Array.from(habit.title).length > 32
+                        ? `${Array.from(habit.title).slice(0, 31).join("").trimEnd()}…`
+                        : habit.title}
+                    </button>
+                    <HabitCheckIn habitId={habit.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Section
             title="In Progress"
             icon="▶"
@@ -253,12 +283,13 @@ export function HomeView({
                   </p>
                 </div>
               ) : (
-                <div className="home-task-list">
+                <div className="home-project-grid">
                   {focusProjects.map((project) => (
                     <button
                       key={project.id}
                       type="button"
-                      className="home-task-row"
+                      className="home-task-row home-project-card"
+                      title={project.name}
                       onClick={() => onNavigateToProject(project.id)}
                     >
                       <span className="home-task-title">{project.name}</span>
@@ -266,24 +297,6 @@ export function HomeView({
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Today's Habits */}
-          {habits && habits.length > 0 && (
-            <div className="home-section">
-              <h3 className="home-section-title">
-                <span>🔥</span> Today&apos;s Habits
-                <span className="home-section-count">{habits.length}</span>
-              </h3>
-              <div className="home-task-list">
-                {habits.map((habit) => (
-                  <div key={habit.id} className="home-habit-row">
-                    <span className="home-task-title">{habit.title}</span>
-                    <HabitCheckIn habitId={habit.id} />
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </>

@@ -8,9 +8,10 @@ import {
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { EntityIdCopy } from "../components/EntityIdCopy.js";
+import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { LabelPicker } from "../components/LabelPicker.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
-import { PriorityChip } from "../components/PriorityChip.js";
-import { StatusChip } from "../components/StatusChip.js";
 import { TabBar } from "../components/TabBar.js";
 import {
   useActors,
@@ -22,44 +23,15 @@ import {
   useUpdateTask,
 } from "../hooks/useTodu.js";
 import { createActorMap, getActorName, getActorNames, getApprovalLabel } from "../lib/actors.js";
+import { AssigneeDetail } from "./AssigneeDetail.js";
 
-// ============================================================================
-// Status Shortcuts
-// ============================================================================
-
-function StatusShortcuts({
-  currentStatus,
-  onStatusChange,
-}: {
-  currentStatus: TaskStatus;
-  onStatusChange: (status: TaskStatus) => void;
-}): ReactNode {
-  const shortcuts: { label: string; target: TaskStatus }[] = [
-    { label: "Start", target: "inprogress" },
-    { label: "Done", target: "done" },
-    { label: "Cancel", target: "canceled" },
-    { label: "Reopen", target: "active" },
-  ];
-
-  const allowed = ALLOWED_STATUS_TRANSITIONS[currentStatus] ?? [];
-
-  return (
-    <div className="status-shortcuts">
-      {shortcuts
-        .filter((s) => allowed.includes(s.target))
-        .map((s) => (
-          <button
-            key={s.target}
-            type="button"
-            className={`btn btn-sm status-btn-${s.target}`}
-            onClick={() => onStatusChange(s.target)}
-          >
-            {s.label}
-          </button>
-        ))}
-    </div>
-  );
-}
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  active: "Active",
+  inprogress: "In progress",
+  waiting: "Waiting",
+  done: "Done",
+  canceled: "Canceled",
+};
 
 // ============================================================================
 // Content tabs
@@ -68,13 +40,22 @@ function StatusShortcuts({
 const TABS = [
   { id: "description", label: "Description" },
   { id: "comments", label: "Comments" },
+  { id: "assignees", label: "Assignees" },
 ];
 
 // ============================================================================
 // Task Detail View
 // ============================================================================
 
-export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => void }): ReactNode {
+export function TaskDetail({
+  taskId,
+  onBack,
+  backLabel = "Tasks",
+}: {
+  taskId: string;
+  onBack: () => void;
+  backLabel?: string;
+}): ReactNode {
   const { data: task, isLoading, isError, error } = useTask(taskId);
   const { data: projects } = useProjects();
   const { data: actors } = useActors();
@@ -95,11 +76,15 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const [titleValue, setTitleValue] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
+  const [commentComposerOpen, setCommentComposerOpen] = useState(false);
+  const [openedAssigneeId, setOpenedAssigneeId] = useState<string | null>(null);
   const [selectedAssigneeActorId, setSelectedAssigneeActorId] = useState("");
   const [replacementAssigneeActorIds, setReplacementAssigneeActorIds] = useState<
     Record<string, string>
   >({});
+  const [replacingActorId, setReplacingActorId] = useState<string | null>(null);
   const [approvalMessage, setApprovalMessage] = useState("");
+
   const actorMap = useMemo(() => createActorMap(actors), [actors]);
 
   if (isLoading) {
@@ -114,7 +99,7 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
     return (
       <div className="view-container">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
+          ← {backLabel}
         </button>
         <div className="error-state">
           <p>Failed to load task</p>
@@ -162,7 +147,6 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
   const assigneeEntries = task.assigneeActorIds.map((actorId) => ({
     actorId,
     label: getActorName(actorId, actorMap, undefined, {
-      includeId: true,
       authorizedActorIds,
     }),
     replacementOptions: addableAssigneeActors,
@@ -196,6 +180,7 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
 
   const handleRemoveAssignee = (actorId: string) => {
     updateAssignees(task.assigneeActorIds.filter((currentActorId) => currentActorId !== actorId));
+    if (replacingActorId === actorId) setReplacingActorId(null);
     setReplacementAssigneeActorIds((prev) => {
       const next = { ...prev };
       delete next[actorId];
@@ -218,297 +203,430 @@ export function TaskDetail({ taskId, onBack }: { taskId: string; onBack: () => v
       ),
     );
     setReplacementAssigneeActorIds((prev) => ({ ...prev, [actorId]: "" }));
+    setReplacingActorId(null);
   };
 
-  return (
-    <div className="view-container">
-      {/* Toolbar */}
-      <div className="detail-toolbar">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger btn-sm"
-          onClick={() => setShowDeleteConfirm(true)}
-        >
-          Delete
-        </button>
-      </div>
+  if (openedAssigneeId)
+    return (
+      <AssigneeDetail
+        actorId={openedAssigneeId}
+        backLabel="Task"
+        onBack={() => setOpenedAssigneeId(null)}
+      />
+    );
 
-      {/* Title */}
-      <div className="detail-title-row">
-        {editingTitle ? (
-          <input
-            className="input detail-title-input"
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") setEditingTitle(false);
-            }}
-            autoFocus
-          />
-        ) : (
+  return (
+    <div className="view-container entity-detail-view">
+      <div className="detail-page-header">
+        {/* Toolbar */}
+        <div className="detail-toolbar">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+            ← {backLabel}
+          </button>
           <button
             type="button"
-            className="detail-title clickable"
-            onClick={() => {
-              setTitleValue(task.title);
-              setEditingTitle(true);
-            }}
+            className="btn btn-danger btn-sm"
+            onClick={() => setShowDeleteConfirm(true)}
           >
-            {task.title}
+            Delete
           </button>
+        </div>
+
+        {/* Title */}
+        <div className="detail-title-row">
+          {editingTitle ? (
+            <input
+              className="input detail-title-input"
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTitleSave();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              className="detail-title clickable"
+              onClick={() => {
+                setTitleValue(task.title);
+                setEditingTitle(true);
+              }}
+            >
+              {task.title}
+            </button>
+          )}
+        </div>
+        {updateTask.error && (
+          <div className="error-state" role="alert">
+            {updateTask.error.message}
+          </div>
         )}
-      </div>
-
-      {/* Compressed metadata — Row 1: Status + Priority */}
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <StatusChip status={task.status} />
-          <StatusShortcuts currentStatus={task.status} onStatusChange={handleStatusChange} />
-        </div>
-        <div className="detail-meta-cell">
-          <PriorityChip priority={task.priority} />
-          <select
-            className="filter-select inline-select"
-            value={task.priority}
-            onChange={(e) =>
-              updateTask.mutate({
-                id: task.id as TaskId,
-                input: { priority: e.target.value as TaskPriority },
-              })
-            }
-          >
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Compressed metadata — Row 2: Project, Due Date, Labels */}
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Project</span>
-          <select
-            className="filter-select inline-select"
-            value={task.projectId}
-            onChange={(e) => handleMove(e.target.value)}
-          >
-            {projects?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Due</span>
-          <input
-            type="date"
-            className="input inline-input"
-            value={task.dueDate?.slice(0, 10) ?? ""}
-            onChange={(e) =>
-              updateTask.mutate({
-                id: task.id as TaskId,
-                input: { dueDate: e.target.value || undefined },
-              })
+        {moveTask.error && (
+          <div className="error-state" role="alert">
+            {moveTask.error.message}
+          </div>
+        )}
+        <section className="detail-properties" aria-label="Task details">
+          <div className="detail-property-grid">
+            <label className="list-filter-field">
+              Status
+              <select
+                className="filter-select"
+                value={task.status}
+                disabled={updateTask.isPending}
+                onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
+              >
+                {[task.status, ...ALLOWED_STATUS_TRANSITIONS[task.status]].map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="list-filter-field">
+              Priority
+              <select
+                className="filter-select"
+                value={task.priority}
+                disabled={updateTask.isPending}
+                onChange={(e) =>
+                  updateTask.mutate({
+                    id: task.id as TaskId,
+                    input: { priority: e.target.value as TaskPriority },
+                  })
+                }
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label className="list-filter-field">
+              Project
+              <select
+                className="filter-select"
+                value={task.projectId}
+                disabled={moveTask.isPending}
+                onChange={(e) => handleMove(e.target.value)}
+              >
+                {projects?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="detail-date-grid">
+            <label className="list-filter-field">
+              Scheduled date
+              <input
+                type="date"
+                className="input"
+                value={task.scheduledDate?.slice(0, 10) ?? ""}
+                aria-label="Scheduled date"
+                aria-describedby="task-scheduled-hint"
+                disabled={updateTask.isPending}
+                onChange={(e) => {
+                  if (e.target.value)
+                    updateTask.mutate({
+                      id: task.id as TaskId,
+                      input: { scheduledDate: e.target.value },
+                    });
+                }}
+              />
+              <span className="detail-property-hint" id="task-scheduled-hint">
+                When you plan to work on this task.
+              </span>
+            </label>
+            <label className="list-filter-field">
+              Due date
+              <input
+                type="date"
+                className="input"
+                value={task.dueDate?.slice(0, 10) ?? ""}
+                aria-label="Due date"
+                aria-describedby="task-due-hint"
+                disabled={updateTask.isPending}
+                onChange={(e) => {
+                  if (e.target.value)
+                    updateTask.mutate({
+                      id: task.id as TaskId,
+                      input: { dueDate: e.target.value },
+                    });
+                }}
+              />
+              <span className="detail-property-hint" id="task-due-hint">
+                The deadline for finishing this task.
+              </span>
+            </label>
+          </div>
+          <LabelPicker
+            labels={task.labels}
+            isPending={updateTask.isPending}
+            onSave={(labels, onSuccess) =>
+              updateTask.mutate({ id: task.id as TaskId, input: { labels } }, { onSuccess })
             }
           />
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Labels</span>
-          <div className="label-chips">
-            {task.labels.length > 0 ? (
-              task.labels.map((l) => (
-                <span key={l} className="chip chip-label">
-                  {l}
-                </span>
-              ))
-            ) : (
-              <span className="empty-hint">None</span>
-            )}
-          </div>
-        </div>
+        </section>
       </div>
-
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell detail-meta-cell-wide">
-          <span className="detail-meta-label">Assignees</span>
-
-          {assigneeEntries.length > 0 ? (
-            assigneeEntries.map((entry) => (
-              <div key={entry.actorId} className="settings-key-row">
-                <div className="settings-key-header">
-                  <span className="settings-key-label">{entry.label}</span>
-                </div>
-                <div className="settings-key-input-row">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleRemoveAssignee(entry.actorId)}
-                  >
-                    Remove
-                  </button>
+      <div className="detail-page-content">
+        {/* Tabbed content */}
+        <div className="detail-tabs">
+          <TabBar
+            tabs={TABS}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            actions={
+              activeTab === "comments" && !commentComposerOpen ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setCommentComposerOpen(true)}
+                >
+                  Add Comment
+                </button>
+              ) : activeTab === "assignees" ? (
+                <div className="assignee-add">
                   <select
-                    aria-label={`Replace assignee ${entry.actorId}`}
-                    className="input inline-select"
-                    value={
-                      entry.replacementOptions.some(
-                        (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
-                      )
-                        ? (replacementAssigneeActorIds[entry.actorId] ?? "")
-                        : ""
-                    }
-                    onChange={(e) =>
-                      setReplacementAssigneeActorIds((prev) => ({
-                        ...prev,
-                        [entry.actorId]: e.target.value,
-                      }))
-                    }
+                    aria-label="Add assignee actor"
+                    className="filter-select"
+                    disabled={updateTask.isPending || addableAssigneeActors.length === 0}
+                    value={validatedSelectedAssigneeActorId}
+                    onChange={(e) => setSelectedAssigneeActorId(e.target.value)}
                   >
-                    <option value="">Replace with…</option>
-                    {entry.replacementOptions.map((actor) => (
+                    <option value="">
+                      {addableAssigneeActors.length === 0
+                        ? "No other assignees available"
+                        : "Choose an assignee…"}
+                    </option>
+                    {addableAssigneeActors.map((actor) => (
                       <option key={actor.id} value={actor.id}>
-                        {actor.displayName} ({actor.id})
+                        {actor.displayName}
                       </option>
                     ))}
                   </select>
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
-                    disabled={
-                      !entry.replacementOptions.some(
-                        (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
-                      )
-                    }
-                    onClick={() => handleReplaceAssignee(entry.actorId)}
+                    disabled={!validatedSelectedAssigneeActorId || updateTask.isPending}
+                    onClick={handleAddAssignee}
                   >
-                    Replace
+                    Add assignee
                   </button>
                 </div>
-              </div>
-            ))
-          ) : legacyAssigneeNames.length > 0 ? (
-            <div className="label-chips">
-              {legacyAssigneeNames.map((assignee) => (
-                <span key={assignee} className="chip chip-label">
-                  {assignee}
-                </span>
-              ))}
+              ) : undefined
+            }
+          />
+
+          {activeTab === "description" && (
+            <div className="detail-tab-content">
+              {approvalMessage && <div className="settings-hint">{approvalMessage}</div>}
+              {descriptionApprovalLabel && (
+                <div className="detail-approval-row">
+                  <span className="chip chip-label">{descriptionApprovalLabel}</span>
+                  {task.descriptionApproval?.state === "pendingApproval" && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() =>
+                        approveTaskDescription.mutate(task.id as TaskId, {
+                          onSuccess: () => setApprovalMessage("Task description approved."),
+                          onError: (err) =>
+                            setApprovalMessage(
+                              err instanceof Error
+                                ? err.message
+                                : "Failed to approve task description",
+                            ),
+                        })
+                      }
+                      disabled={approveTaskDescription.isPending}
+                    >
+                      {approveTaskDescription.isPending ? "Approving…" : "Approve"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {editingDescription ? (
+                <MarkdownEditor
+                  value={task.description ?? ""}
+                  onChange={handleDescriptionSave}
+                  placeholder="Add a description…"
+                  minHeight={200}
+                  autoFocus
+                  onBlur={() => setEditingDescription(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="detail-description clickable"
+                  onClick={() => setEditingDescription(true)}
+                >
+                  {task.description ? (
+                    <MarkdownEditor value={task.description} editable={false} minHeight={60} />
+                  ) : (
+                    <span className="empty-hint">Click to add description…</span>
+                  )}
+                </button>
+              )}
             </div>
-          ) : (
-            <span className="empty-hint">None</span>
           )}
 
-          <div className="settings-key-input-row">
-            <select
-              aria-label="Add assignee actor"
-              className="input inline-select"
-              value={validatedSelectedAssigneeActorId}
-              onChange={(e) => setSelectedAssigneeActorId(e.target.value)}
-            >
-              <option value="">Add assignee…</option>
-              {addableAssigneeActors.map((actor) => (
-                <option key={actor.id} value={actor.id}>
-                  {actor.displayName} ({actor.id})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={!validatedSelectedAssigneeActorId}
-              onClick={handleAddAssignee}
-            >
-              Add
-            </button>
-          </div>
-
-          {!currentProject ? (
-            <span className="empty-hint">Task project is unavailable.</span>
-          ) : activeAuthorizedActors.length === 0 ? (
-            <span className="empty-hint">
-              No authorized active actors available for this project.
-            </span>
-          ) : addableAssigneeActors.length === 0 ? (
-            <span className="empty-hint">All authorized active actors are already assigned.</span>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Tabbed content */}
-      <div className="detail-tabs">
-        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {activeTab === "description" && (
-          <div className="detail-tab-content">
-            {approvalMessage && <div className="settings-hint">{approvalMessage}</div>}
-            {descriptionApprovalLabel && (
-              <div className="detail-approval-row">
-                <span className="chip chip-label">{descriptionApprovalLabel}</span>
-                {task.descriptionApproval?.state === "pendingApproval" && (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() =>
-                      approveTaskDescription.mutate(task.id as TaskId, {
-                        onSuccess: () => setApprovalMessage("Task description approved."),
-                        onError: (err) =>
-                          setApprovalMessage(
-                            err instanceof Error
-                              ? err.message
-                              : "Failed to approve task description",
-                          ),
-                      })
-                    }
-                    disabled={approveTaskDescription.isPending}
-                  >
-                    {approveTaskDescription.isPending ? "Approving…" : "Approve"}
-                  </button>
-                )}
-              </div>
-            )}
-            {editingDescription ? (
-              <MarkdownEditor
-                value={task.description ?? ""}
-                onChange={handleDescriptionSave}
-                placeholder="Add a description…"
-                minHeight={200}
-                autoFocus
-                onBlur={() => setEditingDescription(false)}
-              />
-            ) : (
-              <button
-                type="button"
-                className="detail-description clickable"
-                onClick={() => setEditingDescription(true)}
+          {activeTab === "assignees" && (
+            <div className="detail-tab-content">
+              <section
+                className="detail-people task-assignees assignees-panel"
+                aria-label="Task assignees"
               >
-                {task.description ? (
-                  <MarkdownEditor value={task.description} editable={false} minHeight={60} />
-                ) : (
-                  <span className="empty-hint">Click to add description…</span>
-                )}
-              </button>
-            )}
-          </div>
-        )}
+                <div className="assignees-controls">
+                  <table className="data-table assignee-table" aria-label="Assigned people">
+                    <thead>
+                      <tr>
+                        <th>Assignee</th>
+                        <th className="assignee-actions-heading">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assigneeEntries.map((entry) => (
+                        <tr key={entry.actorId} title={entry.actorId}>
+                          <td>
+                            <div className="assignee-person">
+                              <span className="assignee-avatar" aria-hidden="true">
+                                {entry.label.slice(0, 1).toUpperCase()}
+                              </span>
+                              <button
+                                type="button"
+                                className="assignee-name-link"
+                                onClick={() => setOpenedAssigneeId(entry.actorId)}
+                              >
+                                {entry.label}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="cell-actions">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              aria-label={`Remove ${entry.label} from task assignees`}
+                              disabled={updateTask.isPending}
+                              onClick={() => handleRemoveAssignee(entry.actorId)}
+                            >
+                              Remove
+                            </button>
+                            {entry.replacementOptions.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                aria-label={`Replace ${entry.label}`}
+                                disabled={updateTask.isPending}
+                                onClick={() => setReplacingActorId(entry.actorId)}
+                              >
+                                Replace
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {assigneeEntries.length === 0 &&
+                        legacyAssigneeNames.map((name) => (
+                          <tr key={name}>
+                            <td>{name}</td>
+                            <td className="cell-actions">—</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {assigneeEntries.length === 0 && legacyAssigneeNames.length === 0 && (
+                    <span className="detail-property-hint">No one is assigned yet.</span>
+                  )}
+                </div>
+                {assigneeEntries
+                  .filter((entry) => entry.actorId === replacingActorId)
+                  .map((entry) => (
+                    <div className="assignee-replacement" key={entry.actorId}>
+                      <label className="list-filter-field">
+                        Replace {entry.label}
+                        <select
+                          aria-label={`Replace assignee ${entry.actorId}`}
+                          className="filter-select"
+                          disabled={updateTask.isPending}
+                          value={
+                            entry.replacementOptions.some(
+                              (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
+                            )
+                              ? replacementAssigneeActorIds[entry.actorId]
+                              : ""
+                          }
+                          onChange={(e) =>
+                            setReplacementAssigneeActorIds((prev) => ({
+                              ...prev,
+                              [entry.actorId]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Choose an assignee…</option>
+                          {entry.replacementOptions.map((actor) => (
+                            <option key={actor.id} value={actor.id}>
+                              {actor.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={
+                          updateTask.isPending ||
+                          !entry.replacementOptions.some(
+                            (actor) => actor.id === replacementAssigneeActorIds[entry.actorId],
+                          )
+                        }
+                        onClick={() => handleReplaceAssignee(entry.actorId)}
+                      >
+                        Apply replacement
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setReplacingActorId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ))}
+                {!currentProject ? (
+                  <p className="detail-property-hint assignee-notice">
+                    Task project is unavailable.
+                  </p>
+                ) : activeAuthorizedActors.length === 0 ? (
+                  <p className="detail-property-hint assignee-notice">
+                    No authorized active actors available for this project.
+                  </p>
+                ) : null}
+              </section>
+            </div>
+          )}
 
-        {activeTab === "comments" && (
-          <div className="detail-tab-content">
-            <CommentThread entityType="task" entityId={taskId} />
-          </div>
-        )}
+          {activeTab === "comments" && (
+            <div className="detail-tab-content">
+              <CommentThread
+                composerOpen={commentComposerOpen}
+                onComposerOpenChange={setCommentComposerOpen}
+                entityType="task"
+                entityId={taskId}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer metadata */}
       <div className="detail-meta">
-        <span>Created: {task.createdAt.slice(0, 10)}</span>
-        <span>Updated: {task.updatedAt.slice(0, 10)}</span>
-        <span>ID: {task.id}</span>
+        <EntityTimestamps createdAt={task.createdAt} updatedAt={task.updatedAt} />
+        <EntityIdCopy id={task.id} entityName="task" />
       </div>
 
       {/* Delete confirmation */}

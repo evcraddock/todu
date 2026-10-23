@@ -306,6 +306,31 @@ describe("habits", () => {
       }
     });
 
+    it("moves a habit to an existing project without changing its schedule and rejects missing projects", async () => {
+      const created = await todu.habit.create({
+        projectId,
+        title: "Move me",
+        schedule: "FREQ=DAILY",
+        timezone: "UTC",
+        startDate: "2026-02-01",
+      });
+      const other = await todu.project.create({ name: "Other project" });
+      expect(created.ok && other.ok).toBe(true);
+      if (!created.ok || !other.ok) return;
+      const moved = await todu.habit.update(created.value.id, { projectId: other.value.id });
+      expect(moved.ok).toBe(true);
+      if (moved.ok) {
+        expect(moved.value.projectId).toBe(other.value.id);
+        expect(moved.value.nextDue).toBe(created.value.nextDue);
+      }
+      const rejected = await todu.habit.update(created.value.id, {
+        projectId: createProjectId("proj-missing"),
+      });
+      expect(rejected.ok).toBe(false);
+      const persisted = await todu.habit.get(created.value.id);
+      if (persisted.ok) expect(persisted.value.projectId).toBe(other.value.id);
+    });
+
     it("deletes a habit", async () => {
       const create = await todu.habit.create({
         projectId,
