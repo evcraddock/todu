@@ -1,8 +1,6 @@
 import type { ProjectFilter, ProjectStatus, TaskPriority } from "@todu/core/browser";
 import type { ReactNode } from "react";
 
-const STATUS_OPTIONS: ProjectStatus[] = ["active", "done", "canceled"];
-
 export function ProjectFilterBar({
   filter,
   onFilterChange,
@@ -10,61 +8,74 @@ export function ProjectFilterBar({
   filter: ProjectFilter;
   onFilterChange: (filter: ProjectFilter) => void;
 }): ReactNode {
-  const toggleStatus = (status: ProjectStatus) => {
-    const current: ProjectStatus[] = Array.isArray(filter.status)
-      ? filter.status
-      : filter.status
-        ? [filter.status]
-        : [];
-    const next = current.includes(status)
-      ? current.filter((s) => s !== status)
-      : [...current, status];
-    onFilterChange({ ...filter, status: next.length > 0 ? next : undefined });
-  };
+  const statuses = Array.isArray(filter.status)
+    ? filter.status
+    : filter.status
+      ? [filter.status]
+      : [];
+  const statusValue =
+    !statuses.length || statuses.length === 3
+      ? "all"
+      : statuses.length === 1
+        ? statuses[0]
+        : "custom";
 
   return (
-    <div className="filter-bar">
+    <div className="filter-bar list-filters">
+      <input
+        type="search"
+        className="search-input"
+        aria-label="Search projects"
+        placeholder="Search projects…"
+        value={filter.search ?? ""}
+        onChange={(e) => onFilterChange({ ...filter, search: e.target.value || undefined })}
+      />
       <div className="filter-row">
-        <input
-          type="text"
-          className="search-input"
-          placeholder="Search projects…"
-          value={filter.search ?? ""}
-          onChange={(e) => onFilterChange({ ...filter, search: e.target.value || undefined })}
-        />
-        <select
-          className="filter-select"
-          value={filter.priority ?? ""}
-          onChange={(e) =>
-            onFilterChange({
-              ...filter,
-              priority: (e.target.value as TaskPriority) || undefined,
-            })
-          }
+        <label className="list-filter-field">
+          Status
+          <select
+            className="filter-select"
+            value={statusValue}
+            onChange={(e) =>
+              onFilterChange({
+                ...filter,
+                status: e.target.value === "all" ? undefined : (e.target.value as ProjectStatus),
+              })
+            }
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="done">Done</option>
+            <option value="canceled">Canceled</option>
+            {statusValue === "custom" && (
+              <option value="custom" disabled>
+                Custom selection
+              </option>
+            )}
+          </select>
+        </label>
+        <label className="list-filter-field">
+          Priority
+          <select
+            className="filter-select"
+            value={filter.priority ?? ""}
+            onChange={(e) =>
+              onFilterChange({ ...filter, priority: (e.target.value as TaskPriority) || undefined })
+            }
+          >
+            <option value="">All priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm list-clear-filters"
+          onClick={() => onFilterChange({})}
         >
-          <option value="">All priorities</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      <div className="filter-status-chips">
-        {STATUS_OPTIONS.map((s) => {
-          const active = Array.isArray(filter.status)
-            ? filter.status.includes(s)
-            : filter.status === s;
-          return (
-            <button
-              key={s}
-              type="button"
-              className={`chip chip-toggle ${active ? `status-${s}` : "chip-inactive"}`}
-              onClick={() => toggleStatus(s)}
-            >
-              {s}
-            </button>
-          );
-        })}
+          Clear filters
+        </button>
       </div>
     </div>
   );

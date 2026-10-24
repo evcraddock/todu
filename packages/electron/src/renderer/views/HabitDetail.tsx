@@ -1,7 +1,9 @@
-import type { HabitId } from "@todu/core/browser";
+import type { HabitId, ProjectId } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { EntityIdCopy } from "../components/EntityIdCopy.js";
+import { EntityTimestamps } from "../components/EntityTimestamps.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { TabBar } from "../components/TabBar.js";
@@ -130,9 +132,9 @@ function HistoryCalendar({ habitId }: { habitId: string }): ReactNode {
 // ============================================================================
 
 const TABS = [
-  { id: "history", label: "History" },
   { id: "description", label: "Description" },
   { id: "comments", label: "Comments" },
+  { id: "history", label: "History" },
 ];
 
 // ============================================================================
@@ -142,9 +144,11 @@ const TABS = [
 export function HabitDetail({
   habitId,
   onBack,
+  backLabel = "Habits",
 }: {
   habitId: string;
   onBack: () => void;
+  backLabel?: string;
 }): ReactNode {
   const { data: habit, isLoading, isError, error } = useHabitDetail(habitId);
   const { data: projects } = useProjects();
@@ -167,7 +171,8 @@ export function HabitDetail({
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleValue, setScheduleValue] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
-  const [activeTab, setActiveTab] = useState("history");
+  const [activeTab, setActiveTab] = useState("description");
+  const [commentComposerOpen, setCommentComposerOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -181,7 +186,7 @@ export function HabitDetail({
     return (
       <div className="view-container">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
+          ← {backLabel}
         </button>
         <div className="error-state">
           <p>Failed to load habit</p>
@@ -193,7 +198,7 @@ export function HabitDetail({
     );
   }
 
-  const projectName = projects?.find((project) => project.id === habit.projectId)?.name ?? "—";
+  const hasProject = projects?.some((project) => project.id === habit.projectId);
 
   const handleTitleSave = () => {
     setEditingTitle(false);
@@ -203,10 +208,12 @@ export function HabitDetail({
   };
 
   const handleScheduleSave = () => {
-    setEditingSchedule(false);
     if (scheduleValue !== habit.schedule) {
-      updateHabit.mutate({ id: habit.id as HabitId, input: { schedule: scheduleValue } });
-    }
+      updateHabit.mutate(
+        { id: habit.id as HabitId, input: { schedule: scheduleValue } },
+        { onSuccess: () => setEditingSchedule(false) },
+      );
+    } else setEditingSchedule(false);
   };
 
   const handleDescriptionSave = (markdown: string) => {
@@ -228,170 +235,240 @@ export function HabitDetail({
   };
 
   return (
-    <div className="view-container">
-      {/* Toolbar */}
-      <div className="detail-toolbar">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
-        </button>
-        <div className="toolbar-actions">
-          <button
-            type="button"
-            className={`btn btn-sm ${habit.paused ? "btn-primary" : "btn-secondary"}`}
-            onClick={handlePauseToggle}
-          >
-            {habit.paused ? "▶ Resume" : "⏸ Pause"}
+    <div className="view-container entity-detail-view habit-detail-view">
+      <div className="detail-page-header">
+        {/* Toolbar */}
+        <div className="detail-toolbar">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+            ← {backLabel}
           </button>
-          <button
-            type="button"
-            className="btn btn-danger btn-sm"
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            Delete
-          </button>
+          <div className="toolbar-actions">
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Delete
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Title */}
-      <div className="detail-title-row">
-        {editingTitle ? (
-          <input
-            className="input detail-title-input"
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") setEditingTitle(false);
-            }}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            className="detail-title clickable"
-            onClick={() => {
-              setTitleValue(habit.title);
-              setEditingTitle(true);
-            }}
-          >
-            {habit.title}
-            {habit.paused && <span className="chip status-paused detail-paused-badge">paused</span>}
-          </button>
-        )}
-      </div>
-
-      {/* Streak Stats — prominent, above metadata */}
-      <StreakStats habitId={habitId} />
-
-      {/* Compressed metadata */}
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Schedule</span>
-          {editingSchedule ? (
-            <div className="inline-schedule-edit">
-              <SchedulePresetPicker value={scheduleValue} onChange={setScheduleValue} />
-              <button type="button" className="btn btn-primary btn-sm" onClick={handleScheduleSave}>
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setEditingSchedule(false)}
-              >
-                Cancel
-              </button>
-            </div>
+        {/* Title */}
+        <div className="detail-title-row">
+          {editingTitle ? (
+            <input
+              className="input detail-title-input"
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTitleSave();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              autoFocus
+            />
           ) : (
             <button
               type="button"
-              className="clickable-value"
+              className="detail-title clickable"
               onClick={() => {
-                setScheduleValue(habit.schedule);
-                setEditingSchedule(true);
+                setTitleValue(habit.title);
+                setEditingTitle(true);
               }}
             >
-              {describeSchedule(habit.schedule)}
+              {habit.title}
             </button>
+          )}
+        </div>
+        {/* Streak Stats — prominent, above metadata */}
+        <StreakStats habitId={habitId} />
+
+        {(updateHabit.error || pauseHabit.error || resumeHabit.error) && (
+          <div className="error-state" role="alert">
+            {(updateHabit.error || pauseHabit.error || resumeHabit.error)?.message}
+          </div>
+        )}
+        <section className="detail-properties" aria-label="Habit details">
+          <div className="detail-property-grid">
+            <label className="list-filter-field">
+              Status
+              <select
+                className="filter-select"
+                value={habit.paused ? "paused" : "active"}
+                disabled={pauseHabit.isPending || resumeHabit.isPending}
+                onChange={(e) => {
+                  if ((e.target.value === "paused") !== habit.paused) handlePauseToggle();
+                }}
+              >
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+            <label className="list-filter-field">
+              Project
+              <select
+                className="filter-select"
+                value={habit.projectId ?? ""}
+                aria-label="Project"
+                disabled={!projects || updateHabit.isPending}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    updateHabit.mutate({
+                      id: habit.id as HabitId,
+                      input: { projectId: event.target.value as ProjectId },
+                    });
+                  }
+                }}
+              >
+                {!hasProject && (
+                  <option value={habit.projectId ?? ""} disabled>
+                    {habit.projectId ? "Project unavailable" : "Choose a project"}
+                  </option>
+                )}
+                {projects?.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              {!habit.projectId && (
+                <span className="detail-property-hint">
+                  This habit has no project. Assign one to include it in project filters.
+                </span>
+              )}
+            </label>
+            <div className="list-filter-field">
+              Timezone<span className="detail-property-value">{habit.timezone}</span>
+            </div>
+          </div>
+          <div className="detail-schedule-row">
+            <div className="list-filter-field">
+              Schedule
+              <span className="detail-property-value">{describeSchedule(habit.schedule)}</span>
+            </div>
+            {!editingSchedule && (
+              <button
+                type="button"
+                className="btn btn-sm task-label-edit"
+                onClick={() => {
+                  setScheduleValue(habit.schedule);
+                  setEditingSchedule(true);
+                }}
+              >
+                <span aria-hidden="true">✎</span> Edit schedule
+              </button>
+            )}
+          </div>
+          {editingSchedule && (
+            <section className="detail-schedule-editor" aria-label="Edit habit schedule">
+              <SchedulePresetPicker value={scheduleValue} onChange={setScheduleValue} />
+              <div className="detail-schedule-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={!scheduleValue.trim() || updateHabit.isPending}
+                  onClick={handleScheduleSave}
+                >
+                  Save schedule
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={updateHabit.isPending}
+                  onClick={() => setEditingSchedule(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          )}
+          <div className="detail-date-info">
+            <div className="list-filter-field">
+              Start date<span className="detail-property-value">{habit.startDate}</span>
+            </div>
+            {habit.endDate && (
+              <div className="list-filter-field">
+                End date<span className="detail-property-value">{habit.endDate}</span>
+              </div>
+            )}
+            <div className="list-filter-field">
+              Next due
+              <span className="detail-property-value">{habit.nextDue?.slice(0, 10) || "—"}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div className="detail-page-content">
+        {/* Tabbed content */}
+        <div className="detail-tabs">
+          <TabBar
+            tabs={TABS}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            actions={
+              activeTab === "comments" && !commentComposerOpen ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setCommentComposerOpen(true)}
+                >
+                  Add Comment
+                </button>
+              ) : undefined
+            }
+          />
+
+          {activeTab === "history" && (
+            <div className="detail-tab-content">
+              <h3 className="section-title">Last 30 Days</h3>
+              <HistoryCalendar habitId={habitId} />
+            </div>
+          )}
+
+          {activeTab === "description" && (
+            <div className="detail-tab-content">
+              {editingDescription ? (
+                <MarkdownEditor
+                  value={habit.description ?? ""}
+                  onChange={handleDescriptionSave}
+                  placeholder="Add a description…"
+                  minHeight={200}
+                  autoFocus
+                  onBlur={() => setEditingDescription(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="detail-description clickable"
+                  onClick={() => setEditingDescription(true)}
+                >
+                  {habit.description ? (
+                    <MarkdownEditor value={habit.description} editable={false} minHeight={60} />
+                  ) : (
+                    <span className="empty-hint">Click to add description…</span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
+          {activeTab === "comments" && (
+            <div className="detail-tab-content">
+              <CommentThread
+                composerOpen={commentComposerOpen}
+                onComposerOpenChange={setCommentComposerOpen}
+                entityType="habit"
+                entityId={habitId}
+              />
+            </div>
           )}
         </div>
       </div>
 
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Project</span>
-          <span>{projectName}</span>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Start</span>
-          <span>{habit.startDate}</span>
-        </div>
-        {habit.endDate && (
-          <div className="detail-meta-cell">
-            <span className="detail-meta-label">End</span>
-            <span>{habit.endDate}</span>
-          </div>
-        )}
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Next Due</span>
-          <span>{habit.nextDue ?? "—"}</span>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Timezone</span>
-          <span>{habit.timezone}</span>
-        </div>
-      </div>
-
-      {/* Tabbed content */}
-      <div className="detail-tabs">
-        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {activeTab === "history" && (
-          <div className="detail-tab-content">
-            <h3 className="section-title">Last 30 Days</h3>
-            <HistoryCalendar habitId={habitId} />
-          </div>
-        )}
-
-        {activeTab === "description" && (
-          <div className="detail-tab-content">
-            {editingDescription ? (
-              <MarkdownEditor
-                value={habit.description ?? ""}
-                onChange={handleDescriptionSave}
-                placeholder="Add a description…"
-                minHeight={200}
-                autoFocus
-                onBlur={() => setEditingDescription(false)}
-              />
-            ) : (
-              <button
-                type="button"
-                className="detail-description clickable"
-                onClick={() => setEditingDescription(true)}
-              >
-                {habit.description ? (
-                  <MarkdownEditor value={habit.description} editable={false} minHeight={60} />
-                ) : (
-                  <span className="empty-hint">Click to add description…</span>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-
-        {activeTab === "comments" && (
-          <div className="detail-tab-content">
-            <CommentThread entityType="habit" entityId={habitId} />
-          </div>
-        )}
-      </div>
-
       {/* Footer metadata */}
       <div className="detail-meta">
-        <span>Created: {habit.createdAt.slice(0, 10)}</span>
-        <span>Updated: {habit.updatedAt.slice(0, 10)}</span>
-        <span>ID: {habit.id}</span>
+        <EntityTimestamps createdAt={habit.createdAt} updatedAt={habit.updatedAt} />
+        <EntityIdCopy id={habit.id} entityName="habit" />
       </div>
 
       {/* Delete confirmation */}

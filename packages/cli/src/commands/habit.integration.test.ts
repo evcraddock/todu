@@ -116,6 +116,12 @@ describe("habit CLI commands", { timeout: 30000 }, () => {
     const updated = JSON.parse(run(`habit show ${created.id} --format json`));
     expect(updated.title).toBe("Meditate 10min");
 
+    const otherProject = JSON.parse(run('project create --name "Other Habits" --format json'));
+    run(`habit update ${created.id} --project "Other Habits"`);
+    const moved = JSON.parse(run(`habit show ${created.id} --format json`));
+    expect(moved.projectId).toBe(otherProject.id);
+    expect(moved.nextDue).toBe(updated.nextDue);
+
     // Pause
     run(`habit pause ${created.id}`);
     const paused = JSON.parse(run(`habit show ${created.id} --format json`));

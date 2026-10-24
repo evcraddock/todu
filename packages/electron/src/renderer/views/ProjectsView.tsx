@@ -8,30 +8,34 @@ import { TaskDetail } from "./TaskDetail.js";
 
 type ProjectViewState =
   | { view: "list" }
-  | { view: "detail"; projectId: string }
+  | { view: "detail"; projectId: string; returnToHome?: boolean }
   | { view: "create" }
-  | { view: "createTask"; projectId: string }
-  | { view: "taskDetail"; taskId: string; projectId: string };
+  | { view: "createTask"; projectId: string; returnToHome?: boolean }
+  | { view: "taskDetail"; taskId: string; projectId: string; returnToHome?: boolean };
 
 export function ProjectsView({
   externalFilter,
   focusProjectId,
   onFocusConsumed,
+  returnToHome,
+  onNavigateHome,
 }: {
   externalFilter?: ProjectFilter | null;
   focusProjectId?: string | null;
   onFocusConsumed?: () => void;
+  returnToHome?: boolean;
+  onNavigateHome?: () => void;
 }): ReactNode {
   const [state, setState] = useState<ProjectViewState>(
-    focusProjectId ? { view: "detail", projectId: focusProjectId } : { view: "list" },
+    focusProjectId ? { view: "detail", projectId: focusProjectId, returnToHome } : { view: "list" },
   );
 
   useEffect(() => {
     if (focusProjectId) {
-      setState({ view: "detail", projectId: focusProjectId });
+      setState({ view: "detail", projectId: focusProjectId, returnToHome });
       onFocusConsumed?.();
     }
-  }, [focusProjectId, onFocusConsumed]);
+  }, [focusProjectId, onFocusConsumed, returnToHome]);
 
   switch (state.view) {
     case "list":
@@ -47,11 +51,22 @@ export function ProjectsView({
       return (
         <ProjectDetail
           projectId={state.projectId}
-          onBack={() => setState({ view: "list" })}
+          backLabel={state.returnToHome && onNavigateHome ? "Home" : "Projects"}
+          onBack={() => {
+            if (state.returnToHome && onNavigateHome) onNavigateHome();
+            else setState({ view: "list" });
+          }}
           onSelectTask={(taskId) =>
-            setState({ view: "taskDetail", taskId, projectId: state.projectId })
+            setState({
+              view: "taskDetail",
+              taskId,
+              projectId: state.projectId,
+              returnToHome: state.returnToHome,
+            })
           }
-          onCreateTask={(projectId) => setState({ view: "createTask", projectId })}
+          onCreateTask={(projectId) =>
+            setState({ view: "createTask", projectId, returnToHome: state.returnToHome })
+          }
         />
       );
 
@@ -72,14 +87,31 @@ export function ProjectsView({
         <>
           <ProjectDetail
             projectId={state.projectId}
-            onBack={() => setState({ view: "list" })}
+            backLabel={state.returnToHome && onNavigateHome ? "Home" : "Projects"}
+            onBack={() => {
+              if (state.returnToHome && onNavigateHome) onNavigateHome();
+              else setState({ view: "list" });
+            }}
             onSelectTask={(taskId) =>
-              setState({ view: "taskDetail", taskId, projectId: state.projectId })
+              setState({
+                view: "taskDetail",
+                taskId,
+                projectId: state.projectId,
+                returnToHome: state.returnToHome,
+              })
             }
-            onCreateTask={(projectId) => setState({ view: "createTask", projectId })}
+            onCreateTask={(projectId) =>
+              setState({ view: "createTask", projectId, returnToHome: state.returnToHome })
+            }
           />
           <CreateTaskDialog
-            onClose={() => setState({ view: "detail", projectId: state.projectId })}
+            onClose={() =>
+              setState({
+                view: "detail",
+                projectId: state.projectId,
+                returnToHome: state.returnToHome,
+              })
+            }
             defaultProjectId={state.projectId}
           />
         </>
@@ -89,7 +121,13 @@ export function ProjectsView({
       return (
         <TaskDetail
           taskId={state.taskId}
-          onBack={() => setState({ view: "detail", projectId: state.projectId })}
+          onBack={() =>
+            setState({
+              view: "detail",
+              projectId: state.projectId,
+              returnToHome: state.returnToHome,
+            })
+          }
         />
       );
   }

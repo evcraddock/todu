@@ -175,6 +175,9 @@ export function createHabitNamespace(
     async update(id: HabitId, input: UpdateHabitInput): Promise<Result<Habit>> {
       const validationErr = validateUpdateHabitInput(input);
       if (validationErr) return err(validationErr);
+      if (input.projectId !== undefined && !projectExists(input.projectId)) {
+        return err(notFound("project", input.projectId));
+      }
 
       const doc = catalog.doc();
       if (!doc) return err(notFound("habit", id));
@@ -186,6 +189,7 @@ export function createHabitNamespace(
 
       catalog.change((doc) => {
         const h = doc.habits[index];
+        if (input.projectId !== undefined) h.projectId = input.projectId;
         if (input.title !== undefined) h.title = input.title.trim();
         if (input.description !== undefined) h.description = input.description;
         if (input.schedule !== undefined) h.schedule = input.schedule;

@@ -12,9 +12,9 @@ const NAV_ITEMS: NavItem[] = [
   { id: "tasks", label: "Tasks", icon: "☐" },
   { id: "projects", label: "Projects", icon: "▦" },
   { id: "habits", label: "Habits", icon: "🔥" },
-  { id: "recurring", label: "Recurring", icon: "↻" },
+  { id: "recurring", label: "Recurring Tasks", icon: "↻" },
   { id: "journal", label: "Journal", icon: "📓" },
-  { id: "labels", label: "Labels", icon: "●" },
+  { id: "assignees", label: "Assignees", icon: "👤" },
 ];
 
 interface SidebarProps {

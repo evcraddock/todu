@@ -657,6 +657,7 @@ export interface CreateHabitInput {
 }
 
 export interface UpdateHabitInput {
+  projectId?: ProjectId;
   title?: string;
   schedule?: string;
   timezone?: string;

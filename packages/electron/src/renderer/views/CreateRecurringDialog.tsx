@@ -53,7 +53,7 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
       {
         onSuccess: onClose,
         onError: (err) =>
-          setError(err instanceof Error ? err.message : "Failed to create template"),
+          setError(err instanceof Error ? err.message : "Failed to create recurring task"),
       },
     );
   };
@@ -71,7 +71,7 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
         onClick={(e) => e.stopPropagation()}
         onKeyDown={undefined}
       >
-        <h3 className="dialog-title">New Recurring Template</h3>
+        <h3 className="dialog-title">New Recurring Task</h3>
 
         {error && <div className="dialog-error">{error}</div>}
 
@@ -199,7 +199,7 @@ export function CreateRecurringDialog({ onClose }: { onClose: () => void }): Rea
             onClick={handleSubmit}
             disabled={createRecurring.isPending}
           >
-            {createRecurring.isPending ? "Creating…" : "Create Template"}
+            {createRecurring.isPending ? "Creating…" : "Create Recurring Task"}
           </button>
         </div>
       </div>

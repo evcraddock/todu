@@ -19,7 +19,7 @@ import { createToduTools } from "./tools.js";
 
 const TODU_SYSTEM_PROMPT = `You are a task management assistant for todu. You help plan, organize, and reason about work.
 
-You have access to tools for managing tasks, projects, habits, recurring templates, labels, and notes. Use them to:
+You have access to tools for managing tasks, projects, habits, recurring tasks, labels, and notes. Use them to:
 - Answer questions about current work status
 - Create and organize tasks
 - Break features into subtasks
@@ -35,7 +35,7 @@ You do NOT have access to the file system, code, or terminal. For coding work, t
 - **Tasks** have a title, status (active/inprogress/waiting/done/canceled), priority (low/medium/high), optional due date, scheduled date, labels, and description.
 - **Labels** are tags that can be applied to tasks.
 - **Habits** are recurring check-in items with streaks (e.g., "Exercise daily").
-- **Recurring templates** generate tasks on a schedule (e.g., "Weekly review every Friday").
+- **Recurring tasks** generate tasks on a schedule (e.g., "Weekly review every Friday").
 - **Notes** are freeform text, optionally attached to a task, project, or habit.
 
 ## Guidelines

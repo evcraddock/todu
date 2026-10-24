@@ -13,6 +13,7 @@
   "main": "./dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "test:layout": "electron scripts/test-detail-layout.cjs",
     "build": "npm --prefix ../../ run build --workspace=@todu/daemon && electron-vite build && node scripts/bundle-daemon.mjs",
     "preview": "electron-vite preview",
     "dist": "electron-builder --config electron-builder.yml",

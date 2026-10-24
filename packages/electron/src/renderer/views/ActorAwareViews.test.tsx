@@ -18,6 +18,7 @@ vi.mock("../hooks/useTodu.js", () => ({
   useDeleteProject: vi.fn(),
   useDeleteTask: vi.fn(),
   useMoveTask: vi.fn(),
+  useLabels: vi.fn(),
   useNotes: vi.fn(),
   useProject: vi.fn(),
   useProjects: vi.fn(),
@@ -46,16 +47,6 @@ vi.mock("../components/PriorityChip.js", () => ({
 
 vi.mock("../components/StatusChip.js", () => ({
   StatusChip: ({ status }: { status: string }) => <span>{status}</span>,
-}));
-
-vi.mock("../components/TabBar.js", () => ({
-  TabBar: ({ tabs }: { tabs: Array<{ id: string; label: string }> }) => (
-    <div>
-      {tabs.map((tab) => (
-        <span key={tab.id}>{tab.label}</span>
-      ))}
-    </div>
-  ),
 }));
 
 vi.mock("../components/FilterBar.js", () => ({
@@ -151,6 +142,9 @@ describe("actor-aware renderer views", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(hooks.useLabels).mockReturnValue({ data: [] } as unknown as ReturnType<
+      typeof hooks.useLabels
+    >);
     deleteNoteMutate.mockReset();
     deleteProjectMutate.mockReset();
     deleteTaskMutate.mockReset();
@@ -290,24 +284,110 @@ describe("actor-aware renderer views", () => {
     cleanup();
   });
 
-  it("shows assignees, approval state, and explicit task approval actions in task detail", async () => {
+  it("opens an assignee from a task and returns to its Assignees tab", () => {
+    render(<TaskDetail taskId="task-1" onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    fireEvent.click(screen.getByRole("button", { name: "user" }));
+    expect(screen.getByRole("heading", { name: "user" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "← Task" }));
+    expect(screen.getByRole("button", { name: "Remove user from task assignees" })).toBeDefined();
+  });
+
+  it("opens an assignee from a project and returns to its Assignees tab", () => {
+    render(
+      <ProjectDetail
+        projectId="proj-1"
+        onBack={vi.fn()}
+        onSelectTask={vi.fn()}
+        onCreateTask={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    fireEvent.click(screen.getByRole("button", { name: "user" }));
+    expect(screen.getByRole("heading", { name: "user" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "← Project" }));
+    expect(
+      screen.getByRole("button", { name: "Remove user from authorized assignees" }),
+    ).toBeDefined();
+  });
+
+  it("shows task assignees and preserves description approval actions in their tab", () => {
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
-
-    expect(screen.getByText("Assignees")).toBeDefined();
-    expect(screen.getByText("user (actor-user)")).toBeDefined();
-    expect(screen.getByText("Reviewer (actor-reviewer, archived, unauthorized)")).toBeDefined();
     expect(screen.getByText("Approval needed")).toBeDefined();
-    expect(screen.getByText("All authorized active actors are already assigned.")).toBeDefined();
-
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    expect(screen.getByText("user")).toBeDefined();
+    expect(screen.getByText("Reviewer (archived, unauthorized)")).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: "Add assignee" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Description" }));
     fireEvent.click(screen.getByText("Approve"));
-
     expect(approveTaskDescriptionMutate).toHaveBeenCalledWith(
       "task-1",
-      expect.objectContaining({
-        onSuccess: expect.any(Function),
-        onError: expect.any(Function),
-      }),
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
     );
+  });
+
+  it("opens Description as the first default task tab while keeping labels visible across tabs", () => {
+    taskData = makeTask({ description: "Task purpose and desired outcome.", labels: ["preview"] });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    const tabButtons = screen
+      .getAllByRole("button")
+      .filter((button) =>
+        ["Description", "Comments", "Assignees"].includes(button.textContent ?? ""),
+      );
+    expect(tabButtons.map((button) => button.textContent)).toEqual([
+      "Description",
+      "Comments",
+      "Assignees",
+    ]);
+    expect(screen.getByText("Task purpose and desired outcome.")).toBeDefined();
+    expect(screen.getByText("preview")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    expect(screen.getByLabelText("Add assignee actor")).toBeDefined();
+    expect(screen.queryByText("Task purpose and desired outcome.")).toBeNull();
+    expect(screen.getByText("preview")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Comments" }));
+    expect(screen.queryByLabelText("Add assignee actor")).toBeNull();
+    expect(screen.queryByText("Task purpose and desired outcome.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Description" }));
+    expect(screen.getByText("Task purpose and desired outcome.")).toBeDefined();
+  });
+
+  it("hides empty labels and opens editing only through Add labels", () => {
+    taskData = makeTask({ labels: [] });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    expect(screen.queryByText("Labels")).toBeNull();
+    expect(screen.queryByLabelText("Label name")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add labels" }));
+    fireEvent.change(screen.getByLabelText("Label name"), { target: { value: "  preview  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save labels" }));
+    expect(updateTaskMutate).toHaveBeenCalledWith(
+      { id: "task-1", input: { labels: ["preview"] } },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it("allows removing the last label and saves an empty selection", () => {
+    taskData = makeTask({ labels: ["preview"] });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit labels" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove label preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save labels" }));
+    expect(updateTaskMutate).toHaveBeenCalledWith(
+      { id: "task-1", input: { labels: [] } },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it("cancels label changes without updating the task", () => {
+    taskData = makeTask({ labels: [] });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add labels" }));
+    fireEvent.change(screen.getByLabelText("Label name"), { target: { value: "preview" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(updateTaskMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Add labels" })).toBeDefined();
   });
 
   it("shows task approval errors visibly in task detail", async () => {
@@ -322,6 +402,73 @@ describe("actor-aware renderer views", () => {
     await waitFor(() => {
       expect(screen.getByText("description: already approved")).toBeDefined();
     });
+  });
+
+  it("shows the task ID and copies the raw ID", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<TaskDetail taskId="task-1" onBack={vi.fn()} />);
+    expect(screen.getByText("task-1")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Copy task ID" }));
+    await waitFor(() => expect(screen.getByText("Copied!")).toBeDefined());
+    expect(writeText).toHaveBeenCalledWith("task-1");
+  });
+
+  it("reports a clipboard failure without claiming success", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockRejectedValue(new Error("Clipboard unavailable")),
+      },
+    });
+    render(<TaskDetail taskId="task-1" onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy task ID" }));
+    await waitFor(() => expect(screen.getByText("Could not copy ID.")).toBeDefined());
+    expect(screen.queryByText("Copied!")).toBeNull();
+  });
+
+  it("updates project properties through labeled controls", () => {
+    render(
+      <ProjectDetail
+        projectId="proj-1"
+        onBack={() => {}}
+        onSelectTask={() => {}}
+        onCreateTask={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "done" } });
+    expect(updateProjectMutate).toHaveBeenCalledWith({ id: "proj-1", input: { status: "done" } });
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "high" } });
+    expect(updateProjectMutate).toHaveBeenLastCalledWith({
+      id: "proj-1",
+      input: { priority: "high" },
+    });
+  });
+
+  it("moves a task to waiting through the labeled status selector", () => {
+    taskData = makeTask({ status: "inprogress" });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "waiting" } });
+    expect(updateTaskMutate).toHaveBeenCalledWith({ id: "task-1", input: { status: "waiting" } });
+  });
+
+  it("sets the scheduled date independently of its deadline", () => {
+    taskData = makeTask({ dueDate: "2026-10-30", scheduledDate: "2026-10-23" });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    expect((screen.getByLabelText("Scheduled date") as HTMLInputElement).value).toBe("2026-10-23");
+    fireEvent.change(screen.getByLabelText("Scheduled date"), { target: { value: "2026-10-26" } });
+    expect(updateTaskMutate).toHaveBeenCalledWith({
+      id: "task-1",
+      input: { scheduledDate: "2026-10-26" },
+    });
+    expect((screen.getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-10-30");
+  });
+
+  it("only offers valid status transitions for a completed task", () => {
+    taskData = makeTask({ status: "done" });
+    render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    const options = (screen.getByLabelText("Status") as HTMLSelectElement).options;
+    expect(Array.from(options).map((option) => option.value)).toEqual(["done", "active"]);
   });
 
   it("adds actor assignees from the current project's authorized active actors", async () => {
@@ -339,11 +486,12 @@ describe("actor-aware renderer views", () => {
     tasksData = [taskData];
 
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
 
     fireEvent.change(screen.getByLabelText("Add assignee actor"), {
       target: { value: "actor-collab" },
     });
-    fireEvent.click(screen.getByText("Add"));
+    fireEvent.click(screen.getByText("Add assignee"));
 
     expect(updateTaskMutate).toHaveBeenCalledWith({
       id: "task-1",
@@ -363,11 +511,15 @@ describe("actor-aware renderer views", () => {
     projectsData = [projectData, projectsData[1]];
 
     render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Replace Reviewer (archived, unauthorized)" }),
+    );
     fireEvent.change(screen.getByLabelText("Replace assignee actor-reviewer"), {
       target: { value: "actor-collab" },
     });
-    fireEvent.click(screen.getAllByText("Replace")[1]);
+    fireEvent.click(screen.getByText("Apply replacement"));
 
     expect(updateTaskMutate).toHaveBeenCalledWith({
       id: "task-1",
@@ -388,6 +540,7 @@ describe("actor-aware renderer views", () => {
 
   it("updates project-change behavior and shows a no-authorized-actors state", async () => {
     const { rerender } = render(<TaskDetail taskId="task-1" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
 
     fireEvent.change(screen.getByDisplayValue("Inbox"), {
       target: { value: "proj-2" },
@@ -414,7 +567,7 @@ describe("actor-aware renderer views", () => {
 
     rerender(<TaskDetail taskId="task-1" onBack={() => {}} />);
 
-    expect(screen.getByText("Reviewer (actor-reviewer, archived, unauthorized)")).toBeDefined();
+    expect(screen.getByText("Reviewer (archived, unauthorized)")).toBeDefined();
     expect(
       screen.getByText("No authorized active actors available for this project."),
     ).toBeDefined();
@@ -430,8 +583,9 @@ describe("actor-aware renderer views", () => {
       />,
     );
 
-    expect(screen.getByText("Authorized assignees")).toBeDefined();
-    expect(screen.getByText("user (actor-user)")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    expect(screen.getByRole("region", { name: "Authorized assignees" })).toBeDefined();
+    expect(screen.getByText("user")).toBeDefined();
     expect(screen.getByText("Unauthorized task assignees")).toBeDefined();
     expect(
       screen.getByText("Actor task: Reviewer (actor-reviewer, archived, unauthorized)"),
@@ -440,7 +594,7 @@ describe("actor-aware renderer views", () => {
     fireEvent.change(screen.getByLabelText("Add authorized actor"), {
       target: { value: "actor-collab" },
     });
-    fireEvent.click(screen.getByText("Add"));
+    fireEvent.click(screen.getByText("Add assignee"));
 
     expect(updateProjectMutate).toHaveBeenCalledWith({
       id: "proj-1",
@@ -449,7 +603,7 @@ describe("actor-aware renderer views", () => {
       },
     });
 
-    fireEvent.click(screen.getByText("Remove"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove user from authorized assignees" }));
 
     expect(updateProjectMutate).toHaveBeenLastCalledWith({
       id: "proj-1",
@@ -457,6 +611,57 @@ describe("actor-aware renderer views", () => {
         authorizedAssigneeActorIds: [],
       },
     });
+  });
+
+  it("keeps add and remove controls visible when everyone is already authorized", () => {
+    projectData = makeProject({
+      authorizedAssigneeActorIds: [
+        "actor-user",
+        "actor-collab",
+      ] as Project["authorizedAssigneeActorIds"],
+    });
+    render(
+      <ProjectDetail
+        projectId="proj-1"
+        onBack={() => {}}
+        onSelectTask={() => {}}
+        onCreateTask={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    expect((screen.getByLabelText("Add authorized actor") as HTMLSelectElement).disabled).toBe(
+      true,
+    );
+    expect(
+      (screen.getByRole("button", { name: "Add assignee" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      screen.getAllByRole("button", { name: /Remove .* from authorized assignees/ }),
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Remove Collaborator from authorized assignees" }),
+    ).toBeDefined();
+  });
+
+  it("keeps the project description on the main page while assignees use a tab", () => {
+    projectData = makeProject({ description: "Project purpose and desired outcome." });
+    render(
+      <ProjectDetail
+        projectId="proj-1"
+        onBack={() => {}}
+        onSelectTask={() => {}}
+        onCreateTask={() => {}}
+      />,
+    );
+    expect(screen.getByText("Project purpose and desired outcome.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Description" })).toBeNull();
+    expect(screen.queryByLabelText("Add authorized actor")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
+    expect(screen.getByLabelText("Add authorized actor")).toBeDefined();
+    expect(screen.getByText("Project purpose and desired outcome.")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Tasks" }));
+    expect(screen.queryByLabelText("Add authorized actor")).toBeNull();
+    expect(screen.getByText("Project purpose and desired outcome.")).toBeDefined();
   });
 
   it("shows approval-needed discovery plus explicit note approval actions in note list", async () => {

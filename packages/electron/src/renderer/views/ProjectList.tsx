@@ -14,7 +14,8 @@ export function ProjectList({
   onCreateProject: () => void;
   externalFilter?: ProjectFilter | null;
 }): ReactNode {
-  const [filter, setFilter] = useState<ProjectFilter>({});
+  const [filter, setFilter] = useState<ProjectFilter>({ status: "active" });
+  const [sort, setSort] = useState("name");
   const appliedExternalRef = useRef<ProjectFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -34,20 +35,22 @@ export function ProjectList({
     taskCounts.set(task.projectId, (taskCounts.get(task.projectId) ?? 0) + 1);
   }
 
-  if (isLoading) {
-    return (
-      <div className="view-container">
-        <div className="view-header">
-          <h2 className="view-title">Projects</h2>
-        </div>
-        <div className="loading-state">Loading projects…</div>
-      </div>
-    );
-  }
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const displayProjects = [...(projects ?? [])].sort((a, b) => {
+    if (sort === "priority")
+      return priorityOrder[a.priority] - priorityOrder[b.priority] || a.name.localeCompare(b.name);
+    if (sort === "tasks")
+      return (
+        (taskCounts.get(b.id) ?? 0) - (taskCounts.get(a.id) ?? 0) || a.name.localeCompare(b.name)
+      );
+    if (sort === "created")
+      return b.createdAt.localeCompare(a.createdAt) || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
+  });
 
   if (isError) {
     return (
-      <div className="view-container">
+      <div className="view-container list-view">
         <div className="view-header">
           <h2 className="view-title">Projects</h2>
         </div>
@@ -60,34 +63,47 @@ export function ProjectList({
   }
 
   return (
-    <div className="view-container">
+    <div className="view-container list-view">
       <div className="view-header">
-        <h2 className="view-title">Projects</h2>
+        <h2 className="view-title">
+          Projects <span className="list-count">{displayProjects.length}</span>
+        </h2>
         <button type="button" className="btn btn-primary" onClick={onCreateProject}>
           + New Project
         </button>
       </div>
       <ProjectFilterBar filter={filter} onFilterChange={setFilter} />
-      {!projects || projects.length === 0 ? (
+      <label className="list-sort-control">
+        Sort by
+        <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name">Project: A–Z</option>
+          <option value="priority">Priority: high first</option>
+          <option value="tasks">Tasks: most first</option>
+          <option value="created">Created: newest first</option>
+        </select>
+      </label>
+      {isLoading ? (
+        <div className="loading-state">Loading projects…</div>
+      ) : displayProjects.length === 0 ? (
         <div className="empty-state">
           <p>No projects match your filters</p>
         </div>
       ) : (
-        <table className="data-table">
+        <table className="data-table project-list-table">
           <thead>
             <tr>
-              <th>Name</th>
+              <th>Project</th>
               <th>Status</th>
               <th>Priority</th>
               <th>Tasks</th>
-              <th>Created</th>
             </tr>
           </thead>
           <tbody>
-            {projects.map((project) => (
+            {displayProjects.map((project) => (
               <tr
                 key={project.id}
                 className="clickable-row"
+                tabIndex={0}
                 onClick={() => onSelectProject(project.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onSelectProject(project.id);
@@ -101,7 +117,6 @@ export function ProjectList({
                   <PriorityChip priority={project.priority} />
                 </td>
                 <td className="cell-count">{taskCounts.get(project.id) ?? 0}</td>
-                <td className="cell-date">{project.createdAt.slice(0, 10)}</td>
               </tr>
             ))}
           </tbody>

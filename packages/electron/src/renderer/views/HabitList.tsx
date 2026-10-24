@@ -48,7 +48,7 @@ function CheckInToggle({ habitId }: { habitId: string }): ReactNode {
       disabled={isPending}
       title={completed ? "Uncheck today" : "Check in today"}
     >
-      {completed ? "✅" : "—"}
+      {completed ? "✓ Done" : "Check in"}
     </button>
   );
 }
@@ -67,9 +67,10 @@ export function HabitList({
   externalFilter?: HabitFilter | null;
 }): ReactNode {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [filterProject, setFilterProject] = useState("");
+  const [filterProject, setFilterProject] = useState("active-projects");
   const [filterChecked, setFilterChecked] = useState<"all" | "done" | "pending">("all");
   const [searchText, setSearchText] = useState("");
+  const [sort, setSort] = useState("name");
   const appliedExternalRef = useRef<HabitFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -90,14 +91,20 @@ export function HabitList({
   const filter: HabitFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
     ...(filterStatus === "paused" ? { paused: true } : {}),
-    ...(filterProject ? { projectId: filterProject as HabitFilter["projectId"] } : {}),
+    ...(filterProject && filterProject !== "active-projects"
+      ? { projectId: filterProject as HabitFilter["projectId"] }
+      : {}),
     ...(filterChecked === "done" ? { checkedToday: true } : {}),
     ...(filterChecked === "pending" ? { checkedToday: false } : {}),
     ...(searchText ? { search: searchText } : {}),
   };
 
   const { data: habits, isLoading, isError, error } = useHabitList(filter);
-  const { data: projects } = useProjects();
+  const { data: projects, isError: projectsError, error: projectError } = useProjects();
+  const activeProjectsOnly = filterProject === "active-projects";
+  const activeProjectIds = new Set(
+    projects?.filter((project) => project.status === "active").map((project) => project.id),
+  );
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const project of projects ?? []) {
@@ -106,112 +113,165 @@ export function HabitList({
     return map;
   }, [projects]);
 
-  if (isLoading) {
-    return (
-      <div className="view-container">
-        <div className="view-header">
-          <h2 className="view-title">Habits</h2>
-        </div>
-        <div className="loading-state">Loading habits…</div>
-      </div>
-    );
-  }
+  const displayHabits = [...(habits ?? [])]
+    .filter((item) => !activeProjectsOnly || activeProjectIds.has(item.projectId))
+    .sort((a, b) => {
+      if (sort === "nextDue")
+        return (
+          (a.nextDue || "9999").localeCompare(b.nextDue || "9999") || a.title.localeCompare(b.title)
+        );
+      if (sort === "status")
+        return Number(a.paused) - Number(b.paused) || a.title.localeCompare(b.title);
+      return a.title.localeCompare(b.title);
+    });
 
-  if (isError) {
+  if (isError || (activeProjectsOnly && projectsError)) {
+    const loadError = isError ? error : projectError;
     return (
-      <div className="view-container">
+      <div className="view-container list-view">
         <div className="view-header">
           <h2 className="view-title">Habits</h2>
         </div>
         <div className="error-state">
           <p>Failed to load habits</p>
-          <p className="error-detail">{error instanceof Error ? error.message : "Unknown error"}</p>
+          <p className="error-detail">
+            {loadError instanceof Error ? loadError.message : "Unknown error"}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="view-container">
+    <div className="view-container list-view">
       <div className="view-header">
-        <h2 className="view-title">Habits</h2>
+        <h2 className="view-title">
+          Habits <span className="list-count">{displayHabits.length}</span>
+        </h2>
         <button type="button" className="btn btn-primary" onClick={onCreateHabit}>
           + New Habit
         </button>
       </div>
 
-      <div className="filter-bar">
+      <div className="filter-bar list-filters">
+        <input
+          type="search"
+          className="search-input"
+          aria-label="Search habits"
+          placeholder="Search habits…"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
         <div className="filter-row">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search habits…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <select
-            className="filter-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "paused")}
+          <label className="list-filter-field">
+            Project
+            <select
+              className="filter-select"
+              value={filterProject}
+              onChange={(e) => setFilterProject(e.target.value)}
+            >
+              <option value="active-projects">Active Projects</option>
+              <option value="">All projects</option>
+              {projects?.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="list-filter-field">
+            Status
+            <select
+              className="filter-select"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "paused")}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </select>
+          </label>
+          <label className="list-filter-field">
+            Check-in
+            <select
+              className="filter-select"
+              value={filterChecked}
+              onChange={(e) => setFilterChecked(e.target.value as "all" | "done" | "pending")}
+            >
+              <option value="all">All check-ins</option>
+              <option value="done">Done today</option>
+              <option value="pending">Not done today</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm list-clear-filters"
+            onClick={() => {
+              setFilterStatus("all");
+              setFilterProject("");
+              setFilterChecked("all");
+              setSearchText("");
+            }}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="paused">Paused only</option>
-          </select>
-          <select
-            className="filter-select"
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-          >
-            <option value="">All projects</option>
-            {projects?.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="filter-select"
-            value={filterChecked}
-            onChange={(e) => setFilterChecked(e.target.value as "all" | "done" | "pending")}
-          >
-            <option value="all">All check-ins</option>
-            <option value="done">Done today</option>
-            <option value="pending">Not done today</option>
-          </select>
+            Clear filters
+          </button>
         </div>
       </div>
+      <label className="list-sort-control">
+        Sort by
+        <select className="filter-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name">Habit: A–Z</option>
+          <option value="nextDue">Next due: earliest first</option>
+          <option value="status">Status: active first</option>
+        </select>
+      </label>
 
-      {!habits || habits.length === 0 ? (
+      {isLoading || (activeProjectsOnly && !projects) ? (
+        <div className="loading-state">Loading habits…</div>
+      ) : displayHabits.length === 0 ? (
         <div className="empty-state">
           <p>No habits match your filters</p>
         </div>
       ) : (
-        <table className="data-table">
+        <table className="data-table habit-table">
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Project</th>
-              <th>Schedule</th>
+              <th>Habit</th>
+              <th>Status</th>
               <th>Streak</th>
               <th>Today</th>
-              <th>Next Due</th>
-              <th>Status</th>
+              <th>Next due</th>
             </tr>
           </thead>
           <tbody>
-            {habits.map((habit) => (
+            {displayHabits.map((habit) => (
               <tr
                 key={habit.id}
                 className="clickable-row"
+                tabIndex={0}
                 onClick={() => onSelectHabit(habit.id)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") onSelectHabit(habit.id);
+                  if (e.key === "Enter" && e.target === e.currentTarget) onSelectHabit(habit.id);
                 }}
               >
-                <td className="cell-name">{habit.title}</td>
-                <td className="cell-project">{projectMap.get(habit.projectId) ?? "—"}</td>
-                <td className="cell-schedule">{describeSchedule(habit.schedule)}</td>
+                <td className="cell-name">
+                  <span className="habit-row-title">{habit.title}</span>
+                  <span className="habit-row-context">
+                    {(!filterProject || activeProjectsOnly) && (
+                      <>
+                        {projectMap.get(habit.projectId) ??
+                          (habit.projectId ? "Project unavailable" : "No project assigned")}{" "}
+                        ·{" "}
+                      </>
+                    )}
+                    {describeSchedule(habit.schedule)}
+                  </span>
+                </td>
+                <td>
+                  <span className={`chip ${habit.paused ? "status-paused" : "status-active"}`}>
+                    {habit.paused ? "Paused" : "Active"}
+                  </span>
+                </td>
                 <td>
                   <StreakCell habitId={habit.id} />
                 </td>
@@ -219,11 +279,6 @@ export function HabitList({
                   <CheckInToggle habitId={habit.id} />
                 </td>
                 <td className="cell-date">{habit.nextDue?.slice(0, 10) ?? "—"}</td>
-                <td>
-                  <span className={`chip ${habit.paused ? "status-paused" : "status-active"}`}>
-                    {habit.paused ? "paused" : "active"}
-                  </span>
-                </td>
               </tr>
             ))}
           </tbody>

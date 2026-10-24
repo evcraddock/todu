@@ -1152,6 +1152,7 @@ export function validateCreateHabitInput(input: CreateHabitInput): ValidationErr
 
 export function validateUpdateHabitInput(input: UpdateHabitInput): ValidationError | null {
   if (
+    input.projectId === undefined &&
     input.title === undefined &&
     input.schedule === undefined &&
     input.timezone === undefined &&
@@ -1159,6 +1160,10 @@ export function validateUpdateHabitInput(input: UpdateHabitInput): ValidationErr
     input.endDate === undefined
   ) {
     return validationError("input", "At least one field must be provided");
+  }
+
+  if (input.projectId !== undefined && !input.projectId) {
+    return validationError("projectId", "Project ID is required");
   }
 
   if (input.title !== undefined) {

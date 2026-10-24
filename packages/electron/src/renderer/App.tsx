@@ -10,6 +10,7 @@ import { useAgentPane } from "./hooks/useAgentPane.js";
 import { useSidebar } from "./hooks/useSidebar.js";
 import { type ThemePreference, useTheme } from "./hooks/useTheme.js";
 import { queryClient, setupChangeListener } from "./lib/query-client.js";
+import { AssigneesView } from "./views/AssigneesView.js";
 import { HabitsView } from "./views/HabitsView.js";
 import { HomeView } from "./views/HomeView.js";
 import { JournalView } from "./views/JournalView.js";
@@ -31,11 +32,17 @@ function ViewRouter({
   onFocusTaskConsumed,
   focusProjectId,
   onFocusProjectConsumed,
+  focusHabitId,
+  onFocusHabitConsumed,
+  habitFromHome,
+  projectFromHome,
+  taskFromHome,
+  onNavigateHome,
   themePreference,
   onThemeChange,
 }: {
   activeView: string;
-  onNavigateToEntity: (entityType: string, entityId: string) => void;
+  onNavigateToEntity: (entityType: string, entityId: string, source?: string) => void;
   triggerCreateTask: number;
   agentTaskFilter: TaskFilter | null;
   agentProjectFilter: ProjectFilter | null;
@@ -45,6 +52,12 @@ function ViewRouter({
   onFocusTaskConsumed: () => void;
   focusProjectId: string | null;
   onFocusProjectConsumed: () => void;
+  focusHabitId: string | null;
+  onFocusHabitConsumed: () => void;
+  habitFromHome: boolean;
+  projectFromHome: boolean;
+  taskFromHome: boolean;
+  onNavigateHome: () => void;
   themePreference: ThemePreference;
   onThemeChange: (pref: ThemePreference) => void;
 }): ReactNode {
@@ -52,8 +65,9 @@ function ViewRouter({
     case "home":
       return (
         <HomeView
-          onNavigateToTask={(id) => onNavigateToEntity("task", id)}
-          onNavigateToProject={(id) => onNavigateToEntity("project", id)}
+          onNavigateToTask={(id) => onNavigateToEntity("task", id, "home")}
+          onNavigateToProject={(id) => onNavigateToEntity("project", id, "home")}
+          onNavigateToHabit={(id) => onNavigateToEntity("habit", id, "home")}
         />
       );
     case "projects":
@@ -62,6 +76,8 @@ function ViewRouter({
           externalFilter={agentProjectFilter}
           focusProjectId={focusProjectId}
           onFocusConsumed={onFocusProjectConsumed}
+          returnToHome={projectFromHome}
+          onNavigateHome={onNavigateHome}
         />
       );
     case "tasks":
@@ -71,14 +87,26 @@ function ViewRouter({
           externalFilter={agentTaskFilter}
           focusTaskId={focusTaskId}
           onFocusConsumed={onFocusTaskConsumed}
+          returnToHome={taskFromHome}
+          onNavigateHome={onNavigateHome}
         />
       );
     case "habits":
-      return <HabitsView externalFilter={agentHabitFilter} />;
+      return (
+        <HabitsView
+          externalFilter={agentHabitFilter}
+          focusHabitId={focusHabitId}
+          onFocusConsumed={onFocusHabitConsumed}
+          returnToHome={habitFromHome}
+          onNavigateHome={onNavigateHome}
+        />
+      );
     case "recurring":
       return <RecurringView externalFilter={agentRecurringFilter} />;
     case "journal":
       return <JournalView />;
+    case "assignees":
+      return <AssigneesView />;
     case "labels":
       return <LabelsView />;
     case "settings":
@@ -97,6 +125,10 @@ export function App(): ReactNode {
   const [agentRecurringFilter, setAgentRecurringFilter] = useState<RecurringFilter | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusProjectId, setFocusProjectId] = useState<string | null>(null);
+  const [focusHabitId, setFocusHabitId] = useState<string | null>(null);
+  const [habitFromHome, setHabitFromHome] = useState(false);
+  const [projectFromHome, setProjectFromHome] = useState(false);
+  const [taskFromHome, setTaskFromHome] = useState(false);
   const theme = useTheme();
   const sidebar = useSidebar();
   const agentPane = useAgentPane();
@@ -174,23 +206,30 @@ export function App(): ReactNode {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [sidebar.toggleHidden, agentPane.toggle]);
 
-  const handleNavigateToEntity = useCallback((entityType: string, entityId: string) => {
-    switch (entityType) {
-      case "task":
-        setFocusTaskId(entityId);
-        setActiveView("tasks");
-        break;
-      case "project":
-        setFocusProjectId(entityId);
-        setActiveView("projects");
-        break;
-      case "habit":
-        setActiveView("habits");
-        break;
-      default:
-        break;
-    }
-  }, []);
+  const handleNavigateToEntity = useCallback(
+    (entityType: string, entityId: string, source?: string) => {
+      switch (entityType) {
+        case "task":
+          setTaskFromHome(source === "home");
+          setFocusTaskId(entityId);
+          setActiveView("tasks");
+          break;
+        case "project":
+          setProjectFromHome(source === "home");
+          setFocusProjectId(entityId);
+          setActiveView("projects");
+          break;
+        case "habit":
+          setHabitFromHome(source === "home");
+          setFocusHabitId(entityId);
+          setActiveView("habits");
+          break;
+        default:
+          break;
+      }
+    },
+    [],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -218,6 +257,12 @@ export function App(): ReactNode {
             onFocusTaskConsumed={() => setFocusTaskId(null)}
             focusProjectId={focusProjectId}
             onFocusProjectConsumed={() => setFocusProjectId(null)}
+            focusHabitId={focusHabitId}
+            onFocusHabitConsumed={() => setFocusHabitId(null)}
+            habitFromHome={habitFromHome}
+            projectFromHome={projectFromHome}
+            taskFromHome={taskFromHome}
+            onNavigateHome={() => setActiveView("home")}
             themePreference={theme.preference}
             onThemeChange={theme.setPreference}
           />

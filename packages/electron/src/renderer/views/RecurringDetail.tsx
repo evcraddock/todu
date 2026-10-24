@@ -1,8 +1,10 @@
 import type { ProjectId, RecurringId, RecurringMissPolicy } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { EntityIdCopy } from "../components/EntityIdCopy.js";
+import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { LabelPicker } from "../components/LabelPicker.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
-import { PriorityChip } from "../components/PriorityChip.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { TabBar } from "../components/TabBar.js";
 import {
@@ -47,38 +49,45 @@ function UpcomingSection({ templateId }: { templateId: string }): ReactNode {
     return <div className="empty-hint">No upcoming occurrences</div>;
 
   return (
-    <table className="data-table data-table-compact">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {upcoming.map((occ) => {
-          const taskId = generated.get(occ.date);
-          return (
-            <tr key={occ.date}>
-              <td className="cell-date">{occ.date}</td>
-              <td>
-                {taskId ? (
-                  <span className="generated-tag">✓ Task created: {taskId.slice(0, 12)}…</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleGenerate(occ.date)}
-                    disabled={generate.isPending}
-                  >
-                    Generate
-                  </button>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <>
+      {generate.error && (
+        <div className="error-state" role="alert">
+          {generate.error.message}
+        </div>
+      )}
+      <table className="data-table data-table-compact">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {upcoming.map((occ) => {
+            const taskId = generated.get(occ.date);
+            return (
+              <tr key={occ.date}>
+                <td className="cell-date">{occ.date}</td>
+                <td>
+                  {taskId ? (
+                    <span className="generated-tag">✓ Task created: {taskId.slice(0, 12)}…</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleGenerate(occ.date)}
+                      disabled={generate.isPending}
+                    >
+                      Generate
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
@@ -145,7 +154,7 @@ export function RecurringDetail({
   if (isLoading) {
     return (
       <div className="view-container">
-        <div className="loading-state">Loading template…</div>
+        <div className="loading-state">Loading recurring task…</div>
       </div>
     );
   }
@@ -154,12 +163,12 @@ export function RecurringDetail({
     return (
       <div className="view-container">
         <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
+          ← Recurring Tasks
         </button>
         <div className="error-state">
-          <p>Failed to load template</p>
+          <p>Failed to load recurring task</p>
           <p className="error-detail">
-            {error instanceof Error ? error.message : "Template not found"}
+            {error instanceof Error ? error.message : "Recurring task not found"}
           </p>
         </div>
       </div>
@@ -179,13 +188,12 @@ export function RecurringDetail({
   };
 
   const handleScheduleSave = () => {
-    setEditingSchedule(false);
     if (scheduleValue !== template.schedule) {
-      updateRecurring.mutate({
-        id: template.id as RecurringId,
-        input: { schedule: scheduleValue },
-      });
-    }
+      updateRecurring.mutate(
+        { id: template.id as RecurringId, input: { schedule: scheduleValue } },
+        { onSuccess: () => setEditingSchedule(false) },
+      );
+    } else setEditingSchedule(false);
   };
 
   const handleDescriptionSave = (markdown: string) => {
@@ -210,242 +218,265 @@ export function RecurringDetail({
   };
 
   return (
-    <div className="view-container">
-      {/* Toolbar */}
-      <div className="detail-toolbar">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Back
-        </button>
-        <div className="toolbar-actions">
-          <button
-            type="button"
-            className={`btn btn-sm ${template.paused ? "btn-primary" : "btn-secondary"}`}
-            onClick={handlePauseToggle}
-          >
-            {template.paused ? "▶ Resume" : "⏸ Pause"}
+    <div className="view-container entity-detail-view recurring-detail-view">
+      <div className="detail-page-header">
+        {/* Toolbar */}
+        <div className="detail-toolbar">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+            ← Recurring Tasks
           </button>
-          <button
-            type="button"
-            className="btn btn-danger btn-sm"
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            Delete
-          </button>
+          <div className="toolbar-actions">
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Delete
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Title */}
-      <div className="detail-title-row">
-        {editingTitle ? (
-          <input
-            className="input detail-title-input"
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") setEditingTitle(false);
-            }}
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            className="detail-title clickable"
-            onClick={() => {
-              setTitleValue(template.title);
-              setEditingTitle(true);
-            }}
-          >
-            {template.title}
-            {template.paused && (
-              <span className="chip status-paused detail-paused-badge">paused</span>
-            )}
-          </button>
-        )}
-      </div>
-
-      {/* Compressed metadata — Row 1: Schedule, Priority, Project */}
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Schedule</span>
-          {editingSchedule ? (
-            <div className="inline-schedule-edit">
-              <SchedulePresetPicker value={scheduleValue} onChange={setScheduleValue} />
-              <button type="button" className="btn btn-primary btn-sm" onClick={handleScheduleSave}>
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setEditingSchedule(false)}
-              >
-                Cancel
-              </button>
-            </div>
+        {/* Title */}
+        <div className="detail-title-row">
+          {editingTitle ? (
+            <input
+              className="input detail-title-input"
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTitleSave();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+              autoFocus
+            />
           ) : (
             <button
               type="button"
-              className="clickable-value"
+              className="detail-title clickable"
               onClick={() => {
-                setScheduleValue(template.schedule);
-                setEditingSchedule(true);
+                setTitleValue(template.title);
+                setEditingTitle(true);
               }}
             >
-              {describeSchedule(template.schedule)}
+              {template.title}
             </button>
           )}
         </div>
-        <div className="detail-meta-cell">
-          <PriorityChip priority={template.priority} />
-          <select
-            className="filter-select inline-select"
-            value={template.priority}
-            onChange={(e) =>
-              updateRecurring.mutate({
-                id: template.id as RecurringId,
-                input: { priority: e.target.value as "high" | "medium" | "low" },
-              })
-            }
-          >
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Project</span>
-          <select
-            className="filter-select inline-select"
-            value={template.projectId}
-            onChange={(e) =>
-              updateRecurring.mutate({
-                id: template.id as RecurringId,
-                input: { projectId: e.target.value as ProjectId },
-              })
-            }
-          >
-            {projects?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Miss Policy</span>
-          <select
-            aria-label="Miss Policy"
-            className="filter-select inline-select"
-            value={missPolicy}
-            onChange={(e) =>
-              updateRecurring.mutate({
-                id: template.id as RecurringId,
-                input: { missPolicy: e.target.value as RecurringMissPolicy },
-              })
-            }
-          >
-            {RECURRING_MISS_POLICY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="detail-meta-label">{getRecurringMissPolicyExplanation(missPolicy)}</span>
-        </div>
-      </div>
-
-      {/* Compressed metadata — Row 2: Dates, Labels */}
-      <div className="detail-meta-row">
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Start</span>
-          <span>{template.startDate}</span>
-        </div>
-        {template.endDate && (
-          <div className="detail-meta-cell">
-            <span className="detail-meta-label">End</span>
-            <span>{template.endDate}</span>
+        {(updateRecurring.error || pauseRecurring.error || resumeRecurring.error) && (
+          <div className="error-state" role="alert">
+            {(updateRecurring.error || pauseRecurring.error || resumeRecurring.error)?.message}
           </div>
         )}
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Next Due</span>
-          <span>{template.nextDue ?? "—"}</span>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Timezone</span>
-          <span>{template.timezone}</span>
-        </div>
-        <div className="detail-meta-cell">
-          <span className="detail-meta-label">Labels</span>
-          <div className="label-chips">
-            {template.labels.length > 0 ? (
-              template.labels.map((l) => (
-                <span key={l} className="chip chip-label">
-                  {l}
-                </span>
-              ))
-            ) : (
-              <span className="empty-hint">None</span>
-            )}
+        <section className="detail-properties" aria-label="Recurring task details">
+          <div className="detail-property-grid">
+            <label className="list-filter-field">
+              Status
+              <select
+                className="filter-select"
+                value={template.paused ? "paused" : "active"}
+                disabled={pauseRecurring.isPending || resumeRecurring.isPending}
+                onChange={(e) => {
+                  if ((e.target.value === "paused") !== template.paused) handlePauseToggle();
+                }}
+              >
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+            <label className="list-filter-field">
+              Priority
+              <select
+                className="filter-select"
+                value={template.priority}
+                disabled={updateRecurring.isPending}
+                onChange={(e) =>
+                  updateRecurring.mutate({
+                    id: template.id as RecurringId,
+                    input: { priority: e.target.value as "high" | "medium" | "low" },
+                  })
+                }
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label className="list-filter-field">
+              Project
+              <select
+                className="filter-select"
+                value={template.projectId}
+                disabled={updateRecurring.isPending}
+                onChange={(e) =>
+                  updateRecurring.mutate({
+                    id: template.id as RecurringId,
+                    input: { projectId: e.target.value as ProjectId },
+                  })
+                }
+              >
+                {projects?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </div>
-      </div>
-
-      {/* Tabbed content */}
-      <div className="detail-tabs">
-        <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {activeTab === "description" && (
-          <div className="detail-tab-content">
-            {editingDescription ? (
-              <MarkdownEditor
-                value={template.description ?? ""}
-                onChange={handleDescriptionSave}
-                placeholder="Add a description…"
-                minHeight={200}
-                autoFocus
-                onBlur={() => setEditingDescription(false)}
-              />
-            ) : (
+          <div className="detail-schedule-row">
+            <div className="list-filter-field">
+              Schedule
+              <span className="detail-property-value">{describeSchedule(template.schedule)}</span>
+            </div>
+            {!editingSchedule && (
               <button
                 type="button"
-                className="detail-description clickable"
-                onClick={() => setEditingDescription(true)}
+                className="btn btn-sm task-label-edit"
+                onClick={() => {
+                  setScheduleValue(template.schedule);
+                  setEditingSchedule(true);
+                }}
               >
-                {template.description ? (
-                  <MarkdownEditor value={template.description} editable={false} minHeight={60} />
-                ) : (
-                  <span className="empty-hint">Click to add description…</span>
-                )}
+                <span aria-hidden="true">✎</span> Edit schedule
               </button>
             )}
           </div>
-        )}
-
-        {activeTab === "upcoming" && (
-          <div className="detail-tab-content">
-            <h3 className="section-title">Upcoming Occurrences (next 30 days)</h3>
-            <UpcomingSection templateId={templateId} />
-
-            <div className="detail-section">
-              <h3 className="section-title">Skipped Dates</h3>
-              <SkipList dates={template.skippedDates ?? []} />
+          {editingSchedule && (
+            <section className="detail-schedule-editor" aria-label="Edit recurring schedule">
+              <SchedulePresetPicker value={scheduleValue} onChange={setScheduleValue} />
+              <div className="detail-schedule-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={!scheduleValue.trim() || updateRecurring.isPending}
+                  onClick={handleScheduleSave}
+                >
+                  Save schedule
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={updateRecurring.isPending}
+                  onClick={() => setEditingSchedule(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          )}
+          <div className="recurring-policy-field list-filter-field">
+            <label htmlFor="recurring-miss-policy">Missed occurrences</label>
+            <select
+              id="recurring-miss-policy"
+              aria-label="Miss Policy"
+              aria-describedby="recurring-miss-policy-hint"
+              className="filter-select"
+              value={missPolicy}
+              disabled={updateRecurring.isPending}
+              onChange={(e) =>
+                updateRecurring.mutate({
+                  id: template.id as RecurringId,
+                  input: { missPolicy: e.target.value as RecurringMissPolicy },
+                })
+              }
+            >
+              {RECURRING_MISS_POLICY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.value === "accumulate"
+                    ? "Catch up on missed occurrences"
+                    : "Keep only the latest due occurrence"}
+                </option>
+              ))}
+            </select>
+            <span className="detail-property-hint" id="recurring-miss-policy-hint">
+              {getRecurringMissPolicyExplanation(missPolicy)}
+            </span>
+          </div>
+          <div className="detail-date-info">
+            <div className="list-filter-field">
+              Start date<span className="detail-property-value">{template.startDate}</span>
+            </div>
+            {template.endDate && (
+              <div className="list-filter-field">
+                End date<span className="detail-property-value">{template.endDate}</span>
+              </div>
+            )}
+            <div className="list-filter-field">
+              Next due
+              <span className="detail-property-value">{template.nextDue?.slice(0, 10) || "—"}</span>
+            </div>
+            <div className="list-filter-field">
+              Timezone<span className="detail-property-value">{template.timezone}</span>
             </div>
           </div>
-        )}
+          <LabelPicker
+            labels={template.labels}
+            isPending={updateRecurring.isPending}
+            onSave={(labels, onSuccess) =>
+              updateRecurring.mutate(
+                { id: template.id as RecurringId, input: { labels } },
+                { onSuccess },
+              )
+            }
+          />
+        </section>
+      </div>
+      <div className="detail-page-content">
+        {/* Tabbed content */}
+        <div className="detail-tabs">
+          <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+          {activeTab === "description" && (
+            <div className="detail-tab-content">
+              {editingDescription ? (
+                <MarkdownEditor
+                  value={template.description ?? ""}
+                  onChange={handleDescriptionSave}
+                  placeholder="Add a description…"
+                  minHeight={200}
+                  autoFocus
+                  onBlur={() => setEditingDescription(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="detail-description clickable"
+                  onClick={() => setEditingDescription(true)}
+                >
+                  {template.description ? (
+                    <MarkdownEditor value={template.description} editable={false} minHeight={60} />
+                  ) : (
+                    <span className="empty-hint">Click to add description…</span>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
+          {activeTab === "upcoming" && (
+            <div className="detail-tab-content">
+              <h3 className="section-title">Upcoming Occurrences (next 30 days)</h3>
+              <UpcomingSection templateId={templateId} />
+
+              <div className="detail-section">
+                <h3 className="section-title">Skipped Dates</h3>
+                <SkipList dates={template.skippedDates ?? []} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer metadata */}
       <div className="detail-meta">
-        <span>Created: {template.createdAt.slice(0, 10)}</span>
-        <span>Updated: {template.updatedAt.slice(0, 10)}</span>
-        <span>ID: {template.id}</span>
+        <EntityTimestamps createdAt={template.createdAt} updatedAt={template.updatedAt} />
+        <EntityIdCopy id={template.id} entityName="recurring task" />
       </div>
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
         <ConfirmDialog
-          title="Delete Template"
+          title="Delete Recurring Task"
           message={`Delete "${template.title}"? This cannot be undone. Existing generated tasks will not be affected.`}
           onConfirm={handleDelete}
           onCancel={() => setShowDeleteConfirm(false)}

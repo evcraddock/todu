@@ -24,6 +24,7 @@ interface JournalEditorProps {
 export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): ReactNode {
   const [content, setContent] = useState(note?.content ?? "");
   const [tagsInput, setTagsInput] = useState(note?.tags.join(", ") ?? "");
+  const [editingTags, setEditingTags] = useState(false);
   const [error, setError] = useState("");
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
@@ -45,13 +46,17 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
     }
   }, [isDirty, onClose]);
 
-  const parseTags = (): string[] =>
-    tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+  const parseTags = (): string[] => [
+    ...new Set(
+      tagsInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 
   const handleSave = () => {
+    if (isPending) return;
     if (!content.trim()) {
       setError("Content is required");
       return;
@@ -82,11 +87,16 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
   const dateLabel = formatJournalEntryDate(note?.createdAt ?? new Date().toISOString(), timezone);
 
   return (
-    <div className="journal-editor">
+    <div className="view-container entity-detail-view journal-editor">
       {/* Toolbar */}
-      <div className="journal-editor-toolbar">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={handleBack}>
-          ← Back
+      <div className="detail-toolbar">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={handleBack}
+          disabled={isPending}
+        >
+          ← Journal
         </button>
         <button
           type="button"
@@ -94,40 +104,83 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
           onClick={handleSave}
           disabled={!content.trim() || isPending}
         >
-          {isPending ? "Saving…" : "Save"}
+          {isPending ? "Saving…" : "Save entry"}
         </button>
       </div>
 
       {/* Date header */}
-      <div className="journal-editor-date">{dateLabel}</div>
+      <div className="journal-editor-heading">
+        <h2 className="view-title">{isEditing ? "Edit journal entry" : "New journal entry"}</h2>
+        <p className="detail-property-hint">
+          {dateLabel} · {timezone}
+        </p>
+      </div>
 
-      {error && <div className="journal-editor-error">{error}</div>}
+      {error && (
+        <div className="journal-editor-error" role="alert">
+          {error}
+        </div>
+      )}
 
       {/* Editor */}
-      <div className="journal-editor-content">
+      <div className="journal-editor-content journal-content-panel">
         <MarkdownEditor
           value={content}
           onChange={setContent}
           placeholder="Write your thoughts…"
           minHeight={400}
           autoFocus
+          editable={!isPending}
         />
       </div>
 
-      {/* Tags */}
-      <div className="journal-editor-tags">
-        <label className="form-label" htmlFor="journal-tags">
-          Tags
-        </label>
-        <input
-          id="journal-tags"
-          className="input"
-          value={tagsInput}
-          onChange={(e) => setTagsInput(e.target.value)}
-          placeholder="tag1, tag2, tag3"
-        />
-        <span className="form-hint">Comma-separated</span>
-      </div>
+      {editingTags ? (
+        <section className="journal-tag-editor" aria-label="Edit entry tags">
+          <label className="list-filter-field" htmlFor="journal-tags">
+            Tags
+            <input
+              id="journal-tags"
+              className="input"
+              value={tagsInput}
+              disabled={isPending}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="e.g. reflection, ideas"
+            />
+            <span className="detail-property-hint">Separate tags with commas.</span>
+          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setEditingTags(false)}
+          >
+            Done
+          </button>
+        </section>
+      ) : (
+        <div className="journal-tag-summary">
+          {parseTags().length > 0 && (
+            <>
+              <span className="detail-meta-label">Tags</span>
+              <div className="label-chips">
+                {parseTags().map((tag) => (
+                  <span key={tag} className="chip chip-label">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn btn-sm task-label-edit"
+            disabled={isPending}
+            onClick={() => setEditingTags(true)}
+          >
+            <span aria-hidden="true">{parseTags().length ? "✎" : "+"}</span>{" "}
+            {parseTags().length ? "Edit tags" : "Add tags"}
+          </button>
+        </div>
+      )}
 
       {showDiscardConfirm && (
         <ConfirmDialog

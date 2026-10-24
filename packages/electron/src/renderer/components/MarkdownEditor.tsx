@@ -174,7 +174,7 @@ export function MarkdownEditor({
   // Sync editable prop
   useEffect(() => {
     if (editor && editor.isEditable !== editable) {
-      editor.setEditable(editable);
+      editor.setEditable(editable, false);
     }
   }, [editor, editable]);
 

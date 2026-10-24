@@ -1,6 +1,7 @@
 import type { HabitId, Task } from "@todu/core/browser";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
+  useActors,
   useCheckHabit,
   useHabitList,
   useHabitStreak,
@@ -8,6 +9,7 @@ import {
   useTasks,
   useUncheckHabit,
 } from "../hooks/useTodu.js";
+import { createActorMap, getActorNames } from "../lib/actors.js";
 import {
   addDays,
   buildDashboardSections,
@@ -15,6 +17,7 @@ import {
   isOverdue,
   todayStr,
 } from "../lib/home-helpers.js";
+import { AssigneeDetail } from "./AssigneeDetail.js";
 
 // ============================================================================
 // Habit check-in for dashboard
@@ -62,26 +65,70 @@ function TaskRow({
   projectName,
   today,
   onSelect,
+  actorMap,
+  onSelectAssignee,
 }: {
   task: Task;
   projectName?: string;
   today: string;
   onSelect: (id: string) => void;
+  actorMap: ReturnType<typeof createActorMap>;
+  onSelectAssignee: (id: string) => void;
 }): ReactNode {
+  const names = getActorNames(task.assigneeActorIds ?? [], actorMap, task.assignees ?? []);
   const dueLabel = formatDueLabel(task, today);
   const overdue = isOverdue(task, today);
 
   return (
-    <button type="button" className="home-task-row" onClick={() => onSelect(task.id)}>
+    <div
+      role="button"
+      tabIndex={0}
+      className="home-task-row home-task-columns"
+      onClick={() => onSelect(task.id)}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onSelect(task.id);
+        }
+      }}
+    >
       <span className="home-task-title">{task.title}</span>
-      <span className="home-task-meta">
-        {projectName && <span className="home-task-project">{projectName}</span>}
-        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
-        {dueLabel && (
-          <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel}</span>
+      <span className="home-task-project" title={projectName}>
+        {projectName || "—"}
+      </span>
+      <span className="home-task-assignees">
+        {names.length ? (
+          names.map((name, index) => {
+            const actorId = task.assigneeActorIds?.[index];
+            return (
+              <span key={actorId ?? `${name}-${index}`}>
+                {index > 0 && ", "}
+                {actorId ? (
+                  <button
+                    type="button"
+                    className="assignee-name-link"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectAssignee(actorId);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ) : (
+                  name
+                )}
+              </span>
+            );
+          })
+        ) : (
+          <span className="empty-hint">-</span>
         )}
       </span>
-    </button>
+      <span>
+        <span className={`chip priority-${task.priority}`}>{task.priority}</span>
+      </span>
+      <span className={`home-task-due ${overdue ? "cell-overdue" : ""}`}>{dueLabel || "—"}</span>
+    </div>
   );
 }
 
@@ -97,6 +144,8 @@ function Section({
   today,
   onSelectTask,
   emptyText,
+  actorMap,
+  onSelectAssignee,
 }: {
   title: string;
   icon: string;
@@ -105,6 +154,8 @@ function Section({
   today: string;
   onSelectTask: (id: string) => void;
   emptyText?: string;
+  actorMap: ReturnType<typeof createActorMap>;
+  onSelectAssignee: (id: string) => void;
 }): ReactNode {
   if (tasks.length === 0 && emptyText) {
     return (
@@ -126,6 +177,13 @@ function Section({
         <span className="home-section-count">{tasks.length}</span>
       </h3>
       <div className="home-task-list">
+        <div className="home-task-columns home-task-column-headings" aria-hidden="true">
+          <span>Task</span>
+          <span>Project</span>
+          <span>Assignee</span>
+          <span>Priority</span>
+          <span>Due</span>
+        </div>
         {tasks.map((task) => (
           <TaskRow
             key={task.id}
@@ -133,6 +191,8 @@ function Section({
             projectName={projectMap.get(task.projectId)}
             today={today}
             onSelect={onSelectTask}
+            actorMap={actorMap}
+            onSelectAssignee={onSelectAssignee}
           />
         ))}
       </div>
@@ -147,10 +207,16 @@ function Section({
 export function HomeView({
   onNavigateToTask,
   onNavigateToProject,
+  onNavigateToHabit,
 }: {
   onNavigateToTask: (taskId: string) => void;
   onNavigateToProject: (projectId: string) => void;
+  onNavigateToHabit: (habitId: string) => void;
 }): ReactNode {
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string | null>(null);
+  const { data: actors } = useActors();
+  const actorMap = createActorMap(actors);
+
   // Fetch all relevant task groups
   const { data: inprogressTasks } = useTasks({ status: "inprogress" });
   const { data: activeTasks } = useTasks({ status: "active" });
@@ -190,6 +256,15 @@ export function HomeView({
 
   const isLoading = !inprogressTasks && !activeTasks;
 
+  if (selectedAssigneeId)
+    return (
+      <AssigneeDetail
+        actorId={selectedAssigneeId}
+        backLabel="Home"
+        onBack={() => setSelectedAssigneeId(null)}
+      />
+    );
+
   return (
     <div className="home-view">
       <h2 className="view-title">Home</h2>
@@ -198,6 +273,34 @@ export function HomeView({
         <div className="loading-state">Loading…</div>
       ) : (
         <>
+          {/* Today's Habits */}
+          {habits && habits.length > 0 && (
+            <div className="home-section">
+              <h3 className="home-section-title">
+                <span>🔥</span> Today&apos;s Habits
+                <span className="home-section-count">{habits.length}</span>
+              </h3>
+              <div className="home-habit-grid">
+                {habits.map((habit) => (
+                  <div key={habit.id} className="home-habit-row">
+                    <button
+                      type="button"
+                      className="home-task-title home-habit-title"
+                      title={habit.title}
+                      aria-label={habit.title}
+                      onClick={() => onNavigateToHabit(habit.id)}
+                    >
+                      {Array.from(habit.title).length > 32
+                        ? `${Array.from(habit.title).slice(0, 31).join("").trimEnd()}…`
+                        : habit.title}
+                    </button>
+                    <HabitCheckIn habitId={habit.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Section
             title="In Progress"
             icon="▶"
@@ -205,6 +308,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
             emptyText="Nothing in progress right now"
           />
 
@@ -215,6 +320,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           <Section
@@ -224,6 +331,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           <Section
@@ -233,6 +342,8 @@ export function HomeView({
             projectMap={projectMap}
             today={today}
             onSelectTask={onNavigateToTask}
+            actorMap={actorMap}
+            onSelectAssignee={setSelectedAssigneeId}
           />
 
           {(projectsLoading || projectsFailed || focusProjects.length > 0) && (
@@ -253,12 +364,13 @@ export function HomeView({
                   </p>
                 </div>
               ) : (
-                <div className="home-task-list">
+                <div className="home-project-grid">
                   {focusProjects.map((project) => (
                     <button
                       key={project.id}
                       type="button"
-                      className="home-task-row"
+                      className="home-task-row home-project-card"
+                      title={project.name}
                       onClick={() => onNavigateToProject(project.id)}
                     >
                       <span className="home-task-title">{project.name}</span>
@@ -266,24 +378,6 @@ export function HomeView({
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Today's Habits */}
-          {habits && habits.length > 0 && (
-            <div className="home-section">
-              <h3 className="home-section-title">
-                <span>🔥</span> Today&apos;s Habits
-                <span className="home-section-count">{habits.length}</span>
-              </h3>
-              <div className="home-task-list">
-                {habits.map((habit) => (
-                  <div key={habit.id} className="home-habit-row">
-                    <span className="home-task-title">{habit.title}</span>
-                    <HabitCheckIn habitId={habit.id} />
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </>

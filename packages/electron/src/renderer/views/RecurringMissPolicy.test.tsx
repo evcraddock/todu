@@ -11,6 +11,7 @@ import { RecurringList } from "./RecurringList.js";
 
 vi.mock("../hooks/useTodu.js", () => ({
   useProjects: vi.fn(),
+  useLabels: vi.fn(),
   useCreateRecurring: vi.fn(),
   useRecurringDetail: vi.fn(),
   useUpdateRecurring: vi.fn(),
@@ -51,10 +52,25 @@ vi.mock("../components/MarkdownEditor.js", () => ({
 }));
 
 vi.mock("../components/TabBar.js", () => ({
-  TabBar: ({ tabs }: { tabs: Array<{ id: string; label: string }> }) => (
+  TabBar: ({
+    tabs,
+    activeTab,
+    onTabChange,
+  }: {
+    tabs: Array<{ id: string; label: string }>;
+    activeTab: string;
+    onTabChange: (id: string) => void;
+  }) => (
     <div>
       {tabs.map((tab) => (
-        <span key={tab.id}>{tab.label}</span>
+        <button
+          key={tab.id}
+          type="button"
+          aria-pressed={activeTab === tab.id}
+          onClick={() => onTabChange(tab.id)}
+        >
+          {tab.label}
+        </button>
       ))}
     </div>
   ),
@@ -88,6 +104,9 @@ const resumeRecurringMutate = vi.fn();
 const generateOccurrenceMutate = vi.fn();
 
 beforeEach(() => {
+  vi.mocked(hooks.useLabels).mockReturnValue({ data: [] } as unknown as ReturnType<
+    typeof hooks.useLabels
+  >);
   vi.clearAllMocks();
 
   Object.defineProperty(window, "todu", {
@@ -101,7 +120,7 @@ beforeEach(() => {
   });
 
   vi.mocked(hooks.useProjects).mockReturnValue({
-    data: [{ id: "proj-1", name: "Home" }],
+    data: [{ id: "proj-1", name: "Home", status: "active" }],
   } as ReturnType<typeof hooks.useProjects>);
 
   vi.mocked(hooks.useCreateRecurring).mockReturnValue({
@@ -164,7 +183,7 @@ describe("CreateRecurringDialog missPolicy", () => {
     fireEvent.change(screen.getByLabelText("Miss Policy"), {
       target: { value: "rollForward" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Recurring Task" }));
 
     expect(createRecurringMutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -181,7 +200,7 @@ describe("CreateRecurringDialog missPolicy", () => {
     fireEvent.change(screen.getByLabelText("Title *"), {
       target: { value: "Pay rent" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create Template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Recurring Task" }));
 
     expect(screen.getByText("Missed occurrences stack and catch up.")).toBeDefined();
     expect(createRecurringMutate).toHaveBeenCalledWith(
@@ -255,5 +274,98 @@ describe("RecurringList missPolicy", () => {
     expect(screen.getByLabelText("Miss Policy rollForward")).toBeDefined();
     expect(screen.getByText("stacks missed occurrences")).toBeDefined();
     expect(screen.getByText("latest due only")).toBeDefined();
+  });
+});
+
+describe("recurring layout controls", () => {
+  it("defaults to active projects and allows all or a specific project", () => {
+    vi.mocked(hooks.useProjects).mockReturnValue({
+      data: [
+        { id: "proj-1", name: "Home", status: "active" },
+        { id: "proj-canceled", name: "Canceled", status: "canceled" },
+      ],
+    } as ReturnType<typeof hooks.useProjects>);
+    vi.mocked(hooks.useRecurringList).mockReturnValue({
+      data: [
+        makeTemplate(),
+        makeTemplate({
+          id: "rec-2" as RecurringTemplate["id"],
+          projectId: "proj-canceled" as RecurringTemplate["projectId"],
+          title: "Canceled project template",
+        }),
+      ],
+      isLoading: false,
+    } as ReturnType<typeof hooks.useRecurringList>);
+    render(<RecurringList onSelectTemplate={vi.fn()} onCreateTemplate={vi.fn()} />);
+    expect((screen.getByLabelText("Project") as HTMLSelectElement).value).toBe("active-projects");
+    expect(screen.getByText("Water plants")).toBeDefined();
+    expect(screen.queryByText("Canceled project template")).toBeNull();
+    expect(hooks.useRecurringList).toHaveBeenLastCalledWith({});
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "" } });
+    expect(screen.getByText("Canceled project template")).toBeDefined();
+    fireEvent.change(screen.getByLabelText("Project"), { target: { value: "proj-canceled" } });
+    expect(hooks.useRecurringList).toHaveBeenLastCalledWith({ projectId: "proj-canceled" });
+  });
+
+  it("keeps search mounted during loading and clears its filters", () => {
+    const props = { onSelectTemplate: vi.fn(), onCreateTemplate: vi.fn() };
+    const { rerender } = render(<RecurringList {...props} />);
+    const search = screen.getByRole("searchbox");
+    fireEvent.change(search, { target: { value: "review" } });
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "paused" } });
+    expect(hooks.useRecurringList).toHaveBeenLastCalledWith({ search: "review", paused: true });
+    vi.mocked(hooks.useRecurringList).mockReturnValue({ isLoading: true } as ReturnType<
+      typeof hooks.useRecurringList
+    >);
+    rerender(<RecurringList {...props} />);
+    expect(screen.getByRole("searchbox")).toBe(search);
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(hooks.useRecurringList).toHaveBeenLastCalledWith({});
+  });
+
+  it("pauses a template through Status and keeps Description selected by default", () => {
+    render(<RecurringDetail templateId="rec-1" onBack={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Description" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "paused" } });
+    expect(pauseRecurringMutate).toHaveBeenCalledWith("rec-1");
+  });
+
+  it("saves labels for the recurring template through the optional editor", () => {
+    render(<RecurringDetail templateId="rec-1" onBack={vi.fn()} />);
+    expect(screen.queryByText("Labels")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add labels" }));
+    fireEvent.change(screen.getByLabelText("Label name"), { target: { value: "review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save labels" }));
+    expect(updateRecurringMutate).toHaveBeenCalledWith(
+      { id: "rec-1", input: { labels: ["review"] } },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it("opens schedule editing explicitly and saves the selected schedule", () => {
+    render(<RecurringDetail templateId="rec-1" onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit schedule" }));
+    fireEvent.change(screen.getByLabelText("Schedule preset"), { target: { value: "FREQ=DAILY" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save schedule" }));
+    expect(updateRecurringMutate).toHaveBeenCalledWith(
+      { id: "rec-1", input: { schedule: "FREQ=DAILY" } },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it("preserves manual generation in Upcoming", () => {
+    vi.mocked(hooks.useUpcoming).mockReturnValue({
+      data: [{ date: "2026-11-06" }],
+      isLoading: false,
+    } as unknown as ReturnType<typeof hooks.useUpcoming>);
+    render(<RecurringDetail templateId="rec-1" onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Upcoming" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    expect(generateOccurrenceMutate).toHaveBeenCalledWith(
+      { templateId: "rec-1", date: "2026-11-06" },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 });
