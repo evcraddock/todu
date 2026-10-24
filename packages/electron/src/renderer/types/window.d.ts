@@ -126,6 +126,7 @@ export interface OAuthStatus {
 
 export interface OAuthEvent {
   type: "auth-opened" | "prompt" | "progress" | "login-complete" | "login-error";
+  inputType?: "text" | "password";
   providerId: string;
   url?: string;
   message?: string;

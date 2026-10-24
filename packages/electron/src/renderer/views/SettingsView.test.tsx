@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Actor } from "@todu/core/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsView } from "./SettingsView.js";
@@ -125,6 +125,66 @@ describe("SettingsView", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("shows OAuth device-code progress and allows cancellation before a prompt", async () => {
+    oauthStatus.mockResolvedValue([
+      { id: "github-copilot", name: "GitHub Copilot", connected: false, expired: false },
+    ]);
+    let onOAuthEvent: ((data: unknown) => void) | undefined;
+    vi.mocked(window.todu.on).mockImplementation((channel, callback) => {
+      if (channel === "todu:oauth:event") onOAuthEvent = callback;
+      return () => {};
+    });
+    render(<SettingsView themePreference="system" onThemeChange={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Login" }));
+    act(() =>
+      onOAuthEvent?.({
+        type: "progress",
+        providerId: "github-copilot",
+        message: "Enter code ABCD at https://example.com/activate",
+      }),
+    );
+    expect(screen.getByRole("status").textContent).toContain("Enter code ABCD");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(window.todu.oauth.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("shows provider prompt instructions and masks secret responses", async () => {
+    oauthStatus.mockResolvedValue([
+      { id: "anthropic", name: "Anthropic", connected: false, expired: false },
+    ]);
+    let onOAuthEvent: ((data: unknown) => void) | undefined;
+    vi.mocked(window.todu.on).mockImplementation((channel, callback) => {
+      if (channel === "todu:oauth:event") onOAuthEvent = callback;
+      return () => {};
+    });
+    render(<SettingsView themePreference="system" onThemeChange={() => {}} />);
+    await screen.findByRole("button", { name: "Login" });
+    act(() =>
+      onOAuthEvent?.({
+        type: "prompt",
+        providerId: "anthropic",
+        message: "Enter your secret",
+        placeholder: "Secret",
+        inputType: "password",
+      }),
+    );
+    expect(screen.getByText("Enter your secret")).toBeDefined();
+    expect(screen.getByPlaceholderText("Secret").getAttribute("type")).toBe("password");
+  });
+
+  it("shows an unavailable saved model instead of displaying a different model", async () => {
+    settingsGet.mockResolvedValue({
+      provider: "anthropic",
+      modelId: "retired-model",
+      timezone: "America/Chicago",
+    });
+    render(<SettingsView themePreference="system" onThemeChange={() => {}} />);
+    const model = await screen.findByRole("combobox", { name: "Model" });
+    expect((model as HTMLSelectElement).value).toBe("retired-model");
+    expect(screen.getByRole("option", { name: "retired-model (unavailable)" })).toBeDefined();
   });
 
   it("shows the app version in the settings view", async () => {

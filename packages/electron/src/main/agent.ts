@@ -1,16 +1,13 @@
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai";
+import { createHabitId, createProjectId, createRecurringId, createTaskId } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 import { ipcMain } from "electron";
-import {
-  getOAuthApiKeyForProvider,
-  loadOAuthCredentials,
-  OAUTH_PROVIDER_ALIASES,
-} from "./oauth.js";
-import { getApiKey, loadSettings } from "./settings.js";
+import { models } from "./models.js";
+import { loadOAuthCredentials, OAUTH_PROVIDER_ALIASES } from "./oauth.js";
+import { loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";
 
 // ============================================================================
@@ -73,9 +70,15 @@ export function resolveModel(
   } = {
     aliases: OAUTH_PROVIDER_ALIASES,
     hasOAuthCreds: (id) => loadOAuthCredentials(id) !== null,
-    getModelFn: getModel,
+    getModelFn: (provider, modelId) => models.getModel(provider, modelId),
   },
 ): Model<Api> | undefined {
+  // A directly connected provider takes precedence over its legacy aliases.
+  if (deps.hasOAuthCreds(provider)) {
+    const directModel = deps.getModelFn(provider, modelId);
+    if (directModel) return directModel;
+  }
+
   // Check if an OAuth alias provider has credentials and the model
   const providerAliases = deps.aliases[provider];
   if (providerAliases) {
@@ -128,7 +131,7 @@ ${entityData}`;
 async function loadEntityData(todu: Todu, entity: FocusedEntity): Promise<string | undefined> {
   switch (entity.entityType) {
     case "task": {
-      const result = await todu.task.get(entity.entityId);
+      const result = await todu.task.get(createTaskId(entity.entityId));
       if (!result.ok) return undefined;
       const t = result.value;
       return `\`\`\`json
@@ -136,7 +139,7 @@ ${JSON.stringify({ id: t.id, title: t.title, status: t.status, priority: t.prior
 \`\`\``;
     }
     case "project": {
-      const result = await todu.project.get(entity.entityId);
+      const result = await todu.project.get(createProjectId(entity.entityId));
       if (!result.ok) return undefined;
       const p = result.value;
       return `\`\`\`json
@@ -144,7 +147,7 @@ ${JSON.stringify({ id: p.id, name: p.name, status: p.status, priority: p.priorit
 \`\`\``;
     }
     case "habit": {
-      const result = await todu.habit.get(entity.entityId);
+      const result = await todu.habit.get(createHabitId(entity.entityId));
       if (!result.ok) return undefined;
       const h = result.value;
       return `\`\`\`json
@@ -152,7 +155,7 @@ ${JSON.stringify({ id: h.id, title: h.title, paused: h.paused, schedule: h.sched
 \`\`\``;
     }
     case "recurring": {
-      const result = await todu.recurring.get(entity.entityId);
+      const result = await todu.recurring.get(createRecurringId(entity.entityId));
       if (!result.ok) return undefined;
       const r = result.value;
       return `\`\`\`json
@@ -164,16 +167,33 @@ ${JSON.stringify({ id: r.id, title: r.title, paused: r.paused, schedule: r.sched
   }
 }
 
+/** Replace focused instructions while preserving the executable tool declarations. */
+export function setAgentSystemPrompt(target: Agent, prompt: string): void {
+  target.state.messages = [
+    {
+      role: "system",
+      content: prompt,
+      toolsAdded: target.state.tools.map(({ name, description, parameters }) => ({
+        name,
+        description,
+        parameters,
+      })),
+      timestamp: Date.now(),
+    },
+    ...target.state.messages.filter((message) => message.role !== "system"),
+  ];
+}
+
 async function updateAgentContext(todu: Todu): Promise<void> {
   if (!agent) return;
   const gen = ++focusGeneration;
   if (!focusedEntity) {
-    agent.setSystemPrompt(TODU_SYSTEM_PROMPT);
+    setAgentSystemPrompt(agent, TODU_SYSTEM_PROMPT);
     return;
   }
   const entityData = await loadEntityData(todu, focusedEntity);
-  if (gen !== focusGeneration) return; // stale, skip
-  agent.setSystemPrompt(buildSystemPrompt(focusedEntity, entityData));
+  if (!agent || gen !== focusGeneration) return; // stale, skip
+  setAgentSystemPrompt(agent, buildSystemPrompt(focusedEntity, entityData));
 }
 
 /**
@@ -191,12 +211,7 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
       model,
       tools,
     },
-    getApiKey: async (provider: string) => {
-      // OAuth credentials take priority over manual API keys
-      const oauthKey = await getOAuthApiKeyForProvider(provider);
-      if (oauthKey) return oauthKey;
-      return getApiKey(provider);
-    },
+    streamFn: (model, context, options) => models.streamSimple(model, context, options),
   });
 
   // Forward agent events to renderer
@@ -209,6 +224,9 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
   // ── IPC Handlers ─────────────────────────────────────────────────
   ipcMain.handle("todu:agent:send", async (_event, message: string) => {
     if (!agent) throw new Error("Agent not initialized");
+    if (!models.getModel(agent.state.model.provider, agent.state.model.id)) {
+      throw new Error("The selected model is unavailable. Choose an available model in Settings.");
+    }
     try {
       await agent.prompt(message);
     } catch (err) {
@@ -225,15 +243,17 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
 
   ipcMain.handle("todu:agent:clear", () => {
     if (!agent) return;
-    agent.clearMessages();
+    agent.reset();
   });
 
   ipcMain.handle("todu:agent:set-model", (_event, provider: string, modelId: string) => {
     if (!agent) return;
     const newModel = resolveModel(provider, modelId);
-    if (newModel) {
-      agent.setModel(newModel);
-    }
+    if (!newModel)
+      throw new Error(
+        `Model ${provider}/${modelId} is unavailable. Choose an available model in Settings.`,
+      );
+    agent.state.model = newModel;
   });
 
   ipcMain.handle(
@@ -251,7 +271,7 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
         (previousFocusedEntity.entityType !== entityType ||
           previousFocusedEntity.entityId !== entityId)
       ) {
-        agent.clearMessages();
+        agent.reset();
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("todu:agent:event", { type: "messages_cleared" });
         }

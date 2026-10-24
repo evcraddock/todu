@@ -1,5 +1,5 @@
-import { getOAuthProvider, getOAuthProviders } from "@earendil-works/pi-ai/oauth";
 import { describe, expect, it } from "vitest";
+import { models } from "./models.js";
 import { OAUTH_PROVIDER_ALIASES } from "./oauth.js";
 
 // ============================================================================
@@ -8,44 +8,39 @@ import { OAUTH_PROVIDER_ALIASES } from "./oauth.js";
 
 describe("OAuth provider registry", () => {
   it("returns available providers", () => {
-    const providers = getOAuthProviders();
+    const providers = models.getProviders().filter((provider) => provider.auth.oauth);
     expect(providers.length).toBeGreaterThan(0);
   });
 
   it("includes anthropic provider", () => {
-    const provider = getOAuthProvider("anthropic");
+    const provider = models.getProvider("anthropic");
     expect(provider).toBeDefined();
     expect(provider!.id).toBe("anthropic");
-    expect(provider!.name).toBe("Anthropic (Claude Pro/Max)");
+    expect(provider!.auth.oauth!.name).toBe("Anthropic (Claude Pro/Max)");
   });
 
   it("anthropic provider has required methods", () => {
-    const provider = getOAuthProvider("anthropic");
+    const provider = models.getProvider("anthropic");
     expect(provider).toBeDefined();
-    expect(typeof provider!.login).toBe("function");
-    expect(typeof provider!.refreshToken).toBe("function");
-    expect(typeof provider!.getApiKey).toBe("function");
+    expect(typeof provider!.auth.oauth!.login).toBe("function");
+    expect(typeof provider!.auth.oauth!.refresh).toBe("function");
+    expect(typeof provider!.auth.oauth!.toAuth).toBe("function");
   });
 
-  it("anthropic uses callback server", () => {
-    const provider = getOAuthProvider("anthropic");
+  it("derives request auth from an existing access token", async () => {
+    const provider = models.getProvider("anthropic");
     expect(provider).toBeDefined();
-    expect(provider!.usesCallbackServer).toBe(true);
-  });
-
-  it("getApiKey returns the access token", () => {
-    const provider = getOAuthProvider("anthropic");
-    expect(provider).toBeDefined();
-    const key = provider!.getApiKey({
+    const auth = await provider!.auth.oauth!.toAuth({
+      type: "oauth",
       refresh: "refresh-token",
       access: "access-token-123",
       expires: Date.now() + 3600000,
     });
-    expect(key).toBe("access-token-123");
+    expect(auth.apiKey).toBe("access-token-123");
   });
 
   it("returns undefined for unknown provider", () => {
-    const provider = getOAuthProvider("nonexistent-provider");
+    const provider = models.getProvider("nonexistent-provider");
     expect(provider).toBeUndefined();
   });
 });
@@ -66,7 +61,7 @@ describe("OAUTH_PROVIDER_ALIASES", () => {
   it("all alias targets are valid OAuth providers", () => {
     for (const [, aliases] of Object.entries(OAUTH_PROVIDER_ALIASES)) {
       for (const alias of aliases) {
-        const provider = getOAuthProvider(alias);
+        const provider = models.getProvider(alias);
         expect(provider, `${alias} should be a valid OAuth provider`).toBeDefined();
       }
     }

@@ -1,7 +1,7 @@
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
-import type { TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import type { Result, ToduError } from "@todu/core";
+import type { Static, TSchema } from "@earendil-works/pi-ai";
+import { Type } from "@earendil-works/pi-ai";
+import type { HabitId, ProjectId, RecurringId, Result, TaskId, ToduError } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import type { BrowserWindow } from "electron";
 
@@ -25,7 +25,11 @@ function formatResult<T>(result: Result<T, ToduError>): AgentToolResult<unknown>
         message = `Storage error: ${error.message}`;
         break;
     }
-    return { content: [{ type: "text", text: message }], details: { isError: true } };
+    return {
+      content: [{ type: "text", text: message }],
+      details: { isError: true },
+      isError: true,
+    };
   }
   const text = JSON.stringify(result.value, null, 2);
   return { content: [{ type: "text", text }], details: {} };
@@ -67,7 +71,7 @@ const CreateProjectParams = Type.Object({
 });
 
 const UpdateProjectParams = Type.Object({
-  id: Type.String({ description: "Project ID" }),
+  id: Type.Unsafe<ProjectId>(Type.String({ description: "Project ID" })),
   name: Type.Optional(Type.String({ description: "New project name" })),
   description: Type.Optional(Type.String({ description: "New project description" })),
   status: Type.Optional(
@@ -102,7 +106,9 @@ const ListTasksParams = Type.Object({
       description: "Filter by priority",
     }),
   ),
-  projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
+  projectId: Type.Optional(
+    Type.Unsafe<ProjectId>(Type.String({ description: "Filter by project ID" })),
+  ),
   label: Type.Optional(Type.String({ description: "Filter by label" })),
   search: Type.Optional(
     Type.String({ description: "Search query to match against task titles and descriptions" }),
@@ -143,12 +149,14 @@ const ListTasksParams = Type.Object({
 });
 
 const GetTaskParams = Type.Object({
-  id: Type.String({ description: "Task ID" }),
+  id: Type.Unsafe<TaskId>(Type.String({ description: "Task ID" })),
 });
 
 const CreateTaskParams = Type.Object({
   title: Type.String({ description: "Task title" }),
-  projectId: Type.String({ description: "Project ID to create the task in" }),
+  projectId: Type.Unsafe<ProjectId>(
+    Type.String({ description: "Project ID to create the task in" }),
+  ),
   priority: Type.Optional(
     Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")], {
       description: "Task priority (default: medium)",
@@ -161,7 +169,7 @@ const CreateTaskParams = Type.Object({
 });
 
 const UpdateTaskParams = Type.Object({
-  id: Type.String({ description: "Task ID" }),
+  id: Type.Unsafe<TaskId>(Type.String({ description: "Task ID" })),
   title: Type.Optional(Type.String({ description: "New task title" })),
   status: Type.Optional(
     Type.Union(
@@ -187,8 +195,8 @@ const UpdateTaskParams = Type.Object({
 });
 
 const MoveTaskParams = Type.Object({
-  id: Type.String({ description: "Task ID" }),
-  projectId: Type.String({ description: "Target project ID" }),
+  id: Type.Unsafe<TaskId>(Type.String({ description: "Task ID" })),
+  projectId: Type.Unsafe<ProjectId>(Type.String({ description: "Target project ID" })),
 });
 
 const SearchTasksParams = Type.Object({
@@ -206,7 +214,9 @@ const ListHabitsParams = Type.Object({
   paused: Type.Optional(
     Type.Boolean({ description: "Filter by paused state (true = paused, false = active)" }),
   ),
-  projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
+  projectId: Type.Optional(
+    Type.Unsafe<ProjectId>(Type.String({ description: "Filter by project ID" })),
+  ),
   checkedToday: Type.Optional(
     Type.Boolean({
       description:
@@ -217,26 +227,30 @@ const ListHabitsParams = Type.Object({
 });
 
 const CheckHabitParams = Type.Object({
-  id: Type.String({ description: "Habit ID" }),
+  id: Type.Unsafe<HabitId>(Type.String({ description: "Habit ID" })),
 });
 
 const HabitStreakParams = Type.Object({
-  id: Type.String({ description: "Habit ID" }),
+  id: Type.Unsafe<HabitId>(Type.String({ description: "Habit ID" })),
 });
 
 const HabitHistoryParams = Type.Object({
-  id: Type.String({ description: "Habit ID" }),
+  id: Type.Unsafe<HabitId>(Type.String({ description: "Habit ID" })),
   days: Type.Optional(Type.Number({ description: "Number of days of history (default: 30)" })),
 });
 
 const ListRecurringParams = Type.Object({
   paused: Type.Optional(Type.Boolean({ description: "Filter by paused state" })),
-  projectId: Type.Optional(Type.String({ description: "Filter by project ID" })),
+  projectId: Type.Optional(
+    Type.Unsafe<ProjectId>(Type.String({ description: "Filter by project ID" })),
+  ),
   search: Type.Optional(Type.String({ description: "Search recurring tasks by title" })),
 });
 
 const RecurringUpcomingParams = Type.Object({
-  templateId: Type.Optional(Type.String({ description: "Filter by template ID" })),
+  templateId: Type.Optional(
+    Type.Unsafe<RecurringId>(Type.String({ description: "Filter by template ID" })),
+  ),
   days: Type.Optional(Type.Number({ description: "Number of days to look ahead (default: 14)" })),
 });
 
@@ -274,6 +288,15 @@ const ListNotesParams = Type.Object({
 // Tool Factory
 // ============================================================================
 
+/** Keep each callback typed to its schema; Pi validates arguments before execution. */
+function defineTool<T extends TSchema>(tool: AgentTool<T>): AgentTool<TSchema> {
+  return {
+    ...tool,
+    execute: (id, params, signal, onUpdate) =>
+      tool.execute(id, params as Static<T>, signal, onUpdate),
+  };
+}
+
 /**
  * Create all todu agent tools from a Todu engine instance.
  * Each tool wraps an engine SDK method and returns structured results.
@@ -281,7 +304,7 @@ const ListNotesParams = Type.Object({
 export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTool<TSchema>[] {
   return [
     // ── Projects ─────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "list_projects",
       description:
         "List projects with optional filtering by status, priority, or name search. Use filter parameters so the UI updates to show matching projects.",
@@ -300,25 +323,25 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "create_project",
       description: "Create a new project.",
       label: "Create Project",
       parameters: CreateProjectParams,
       execute: async (_toolCallId, params) => formatResult(await todu.project.create(params)),
-    },
-    {
+    }),
+    defineTool({
       name: "update_project",
       description: "Update a project's name, description, status, or priority.",
       label: "Update Project",
       parameters: UpdateProjectParams,
       execute: async (_toolCallId, { id, ...input }) =>
         formatResult(await todu.project.update(id, input)),
-    },
+    }),
 
     // ── Tasks ────────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "list_tasks",
       description:
         "List tasks with optional filtering by status, priority, project, label, search query, due date, or updated-at range. Use updatedFrom/updatedTo with status=done for monthly review. Supports sorting.",
@@ -341,8 +364,8 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "get_task",
       description: "Get full task details including description.",
       label: "Get Task",
@@ -359,8 +382,8 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "create_task",
       description: "Create a new task in a project.",
       label: "Create Task",
@@ -377,49 +400,49 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "update_task",
       description: "Update a task's title, status, priority, description, labels, or dates.",
       label: "Update Task",
       parameters: UpdateTaskParams,
       execute: async (_toolCallId, { id, ...input }) =>
         formatResult(await todu.task.update(id, input)),
-    },
-    {
+    }),
+    defineTool({
       name: "move_task",
       description: "Move a task to a different project.",
       label: "Move Task",
       parameters: MoveTaskParams,
       execute: async (_toolCallId, { id, projectId }) =>
         formatResult(await todu.task.move(id, projectId)),
-    },
-    {
+    }),
+    defineTool({
       name: "search_tasks",
       description: "Search tasks by title and description.",
       label: "Search Tasks",
       parameters: SearchTasksParams,
       execute: async (_toolCallId, { query }) => formatResult(await todu.task.search(query)),
-    },
+    }),
 
     // ── Labels ───────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "list_labels",
       description: "List all labels.",
       label: "List Labels",
       parameters: ListLabelsParams,
       execute: async () => formatResult(await todu.label.list()),
-    },
-    {
+    }),
+    defineTool({
       name: "create_label",
       description: "Create a new label.",
       label: "Create Label",
       parameters: CreateLabelParams,
       execute: async (_toolCallId, params) => formatResult(await todu.label.create(params)),
-    },
+    }),
 
     // ── Habits ───────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "list_habits",
       description:
         "List habits with optional filtering by paused state, project, or title search. Use filter parameters so the UI updates to show matching habits.",
@@ -438,32 +461,32 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "check_habit",
       description: "Check in a habit for today, marking it as completed.",
       label: "Check Habit",
       parameters: CheckHabitParams,
       execute: async (_toolCallId, { id }) => formatResult(await todu.habit.check(id)),
-    },
-    {
+    }),
+    defineTool({
       name: "habit_streak",
       description: "Get current and longest streak info for a habit.",
       label: "Habit Streak",
       parameters: HabitStreakParams,
       execute: async (_toolCallId, { id }) => formatResult(await todu.habit.streak(id)),
-    },
-    {
+    }),
+    defineTool({
       name: "habit_history",
       description: "Get check-in history for a habit over a number of days.",
       label: "Habit History",
       parameters: HabitHistoryParams,
       execute: async (_toolCallId, { id, days }) =>
         formatResult(await todu.habit.history(id, days)),
-    },
+    }),
 
     // ── Recurring ────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "list_recurring",
       description:
         "List recurring task templates with optional filtering by paused state, project, or title search. Use filter parameters so the UI updates.",
@@ -482,8 +505,8 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
 
         return formatResult(result);
       },
-    },
-    {
+    }),
+    defineTool({
       name: "recurring_upcoming",
       description: "Show upcoming occurrences of recurring tasks.",
       label: "Upcoming Recurring",
@@ -492,17 +515,17 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
         const options = Object.keys(params).length > 0 ? params : undefined;
         return formatResult(await todu.recurring.upcoming(options));
       },
-    },
+    }),
 
     // ── Notes ────────────────────────────────────────────────────────
-    {
+    defineTool({
       name: "create_note",
       description: "Create a note, optionally attached to a task, project, or habit.",
       label: "Create Note",
       parameters: CreateNoteParams,
       execute: async (_toolCallId, params) => formatResult(await todu.note.create(params)),
-    },
-    {
+    }),
+    defineTool({
       name: "list_notes",
       description:
         "List notes, optionally filtered by entity, tag, author, or created-at date range.",
@@ -512,6 +535,6 @@ export function createToduTools(todu: Todu, mainWindow?: BrowserWindow): AgentTo
         const filter = Object.keys(params).length > 0 ? params : undefined;
         return formatResult(await todu.note.list(filter));
       },
-    },
+    }),
   ];
 }

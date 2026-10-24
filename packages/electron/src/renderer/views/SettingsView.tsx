@@ -51,8 +51,10 @@ export function SettingsView({
     providerId: string;
     message: string;
     placeholder?: string;
+    inputType?: "text" | "password";
   } | null>(null);
   const [oauthCode, setOauthCode] = useState("");
+  const [oauthProgress, setOauthProgress] = useState<string | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,16 +112,21 @@ export function SettingsView({
     const cleanup = window.todu.on("todu:oauth:event", (data) => {
       const event = data as OAuthEvent;
       switch (event.type) {
+        case "progress":
+          setOauthProgress(event.message ?? null);
+          break;
         case "prompt":
           setOauthPrompt({
             providerId: event.providerId,
             message: event.message ?? "Paste authorization code:",
             placeholder: event.placeholder,
+            inputType: event.inputType,
           });
           // Focus the code input after render
           setTimeout(() => codeInputRef.current?.focus(), 50);
           break;
         case "login-complete":
+          setOauthProgress(null);
           setOauthLoggingIn(null);
           setOauthPrompt(null);
           setOauthCode("");
@@ -128,6 +135,7 @@ export function SettingsView({
           window.todu.oauth.status().then(setOauthStatuses);
           break;
         case "login-error":
+          setOauthProgress(null);
           setOauthLoggingIn(null);
           setOauthPrompt(null);
           setOauthCode("");
@@ -212,6 +220,7 @@ export function SettingsView({
   // ── OAuth handlers ───────────────────────────────────────────────
 
   const handleOAuthLogin = useCallback(async (providerId: string) => {
+    setOauthProgress(null);
     setOauthLoggingIn(providerId);
     setOauthError(null);
     try {
@@ -231,6 +240,7 @@ export function SettingsView({
 
   const handleOAuthCancel = useCallback(async () => {
     await window.todu.oauth.cancel();
+    setOauthProgress(null);
     setOauthLoggingIn(null);
     setOauthPrompt(null);
     setOauthCode("");
@@ -378,6 +388,11 @@ export function SettingsView({
             value={settings.modelId}
             onChange={(e) => handleModelChange(e.target.value)}
           >
+            {!currentProvider?.models.some((model) => model.id === settings.modelId) && (
+              <option value={settings.modelId} disabled>
+                {settings.modelId} (unavailable)
+              </option>
+            )}
             {currentProvider?.models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
@@ -408,6 +423,12 @@ export function SettingsView({
           locally. When connected, subscriptions take priority over API keys.
         </p>
 
+        {oauthProgress && (
+          <p className="settings-hint" role="status">
+            {oauthProgress}
+          </p>
+        )}
+        {oauthPrompt && <p className="settings-hint">{oauthPrompt.message}</p>}
         {oauthError && <div className="settings-oauth-error">{oauthError}</div>}
 
         {oauthStatuses.map((status) => (
@@ -437,7 +458,7 @@ export function SettingsView({
                 <>
                   <input
                     ref={codeInputRef}
-                    type="text"
+                    type={oauthPrompt.inputType ?? "text"}
                     className="input settings-key-input"
                     placeholder={oauthPrompt.placeholder ?? "Paste authorization code"}
                     value={oauthCode}
@@ -477,6 +498,15 @@ export function SettingsView({
                         : status.expired
                           ? "Re-login"
                           : "Login"}
+                    </button>
+                  )}
+                  {oauthLoggingIn === status.id && (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={handleOAuthCancel}
+                    >
+                      Cancel
                     </button>
                   )}
                   {/* Disconnect button */}

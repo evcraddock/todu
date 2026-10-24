@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getModels, getProviders } from "@earendil-works/pi-ai";
-import { app, ipcMain, safeStorage } from "electron";
+import { app, ipcMain } from "electron";
+import { getStoredProviders, removeApiKey, setApiKey } from "./credentials.js";
+import { models } from "./models.js";
+
+export { getApiKey, getStoredProviders, removeApiKey, setApiKey } from "./credentials.js";
 
 // ============================================================================
 // Types
@@ -23,7 +26,7 @@ export interface ProviderInfo {
 
 const DEFAULT_SETTINGS: AgentSettings = {
   provider: "anthropic",
-  modelId: "claude-sonnet-4-20250514",
+  modelId: "claude-sonnet-4-6",
   timezone: resolveSystemTimezone(),
 };
 
@@ -35,10 +38,6 @@ function getSettingsPath(): string {
   return path.join(app.getPath("userData"), "agent-settings.json");
 }
 
-function getKeysPath(): string {
-  return path.join(app.getPath("userData"), "agent-keys.json");
-}
-
 // ============================================================================
 // Settings (provider + model)
 // ============================================================================
@@ -48,9 +47,13 @@ export function loadSettings(): AgentSettings {
     const filePath = getSettingsPath();
     if (fs.existsSync(filePath)) {
       const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Partial<AgentSettings>;
+      const modelId =
+        data.provider === "anthropic" && data.modelId === "claude-sonnet-4-20250514"
+          ? DEFAULT_SETTINGS.modelId
+          : data.modelId || DEFAULT_SETTINGS.modelId;
       return {
         provider: isValidProvider(data.provider) ? data.provider : DEFAULT_SETTINGS.provider,
-        modelId: data.modelId || DEFAULT_SETTINGS.modelId,
+        modelId,
         timezone: isValidTimezone(data.timezone) ? data.timezone : DEFAULT_SETTINGS.timezone,
       };
     }
@@ -67,7 +70,7 @@ export function saveSettings(settings: AgentSettings): void {
 }
 
 function isValidProvider(v: unknown): v is string {
-  return typeof v === "string" && (getProviders() as string[]).includes(v);
+  return typeof v === "string" && models.getProvider(v) !== undefined;
 }
 
 function resolveSystemTimezone(): string {
@@ -91,10 +94,10 @@ function isValidTimezone(value: unknown): value is string {
  * Query the pi-ai model registry for all available providers and their models.
  */
 export function listProviders(): ProviderInfo[] {
-  return getProviders().map((id) => ({
-    id,
-    label: formatProviderLabel(id),
-    models: getModels(id).map((m) => ({ id: m.id, label: m.name ?? m.id })),
+  return models.getProviders().map((provider) => ({
+    id: provider.id,
+    label: formatProviderLabel(provider.id),
+    models: models.getModels(provider.id).map((m) => ({ id: m.id, label: m.name ?? m.id })),
   }));
 }
 
@@ -113,93 +116,6 @@ export function formatProviderLabel(id: string): string {
     .split("-")
     .map((w) => BRAND_CASING[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
-}
-
-// ============================================================================
-// API Keys (encrypted via safeStorage)
-// ============================================================================
-
-interface EncryptedKeys {
-  [provider: string]: string; // base64-encoded encrypted value
-}
-
-function loadEncryptedKeys(): EncryptedKeys {
-  try {
-    const filePath = getKeysPath();
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, "utf-8")) as EncryptedKeys;
-    }
-  } catch {
-    // Corrupt file, start fresh
-  }
-  return {};
-}
-
-function saveEncryptedKeys(keys: EncryptedKeys): void {
-  const filePath = getKeysPath();
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(keys, null, 2), "utf-8");
-}
-
-/**
- * Store an API key securely using Electron's safeStorage.
- * Falls back to plain text if safeStorage is unavailable (e.g., Linux without a keyring).
- */
-export function setApiKey(provider: string, key: string): void {
-  const keys = loadEncryptedKeys();
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(key);
-    keys[provider] = encrypted.toString("base64");
-  } else {
-    // Fallback: base64-encode (not secure, but functional)
-    keys[provider] = Buffer.from(`plain:${key}`).toString("base64");
-  }
-  saveEncryptedKeys(keys);
-}
-
-/**
- * Retrieve a stored API key.
- */
-export function getApiKey(provider: string): string | undefined {
-  const keys = loadEncryptedKeys();
-  const stored = keys[provider];
-  if (!stored) return undefined;
-
-  try {
-    const buf = Buffer.from(stored, "base64");
-    if (safeStorage.isEncryptionAvailable()) {
-      return safeStorage.decryptString(buf);
-    }
-    // Fallback: check for plain prefix
-    const text = buf.toString("utf-8");
-    if (text.startsWith("plain:")) {
-      return text.slice(6);
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Check which providers have API keys stored (without revealing the keys).
- */
-export function getStoredProviders(): Record<string, boolean> {
-  const keys = loadEncryptedKeys();
-  const result: Record<string, boolean> = {};
-  for (const p of Object.keys(keys)) {
-    result[p] = !!getApiKey(p);
-  }
-  return result;
-}
-
-/**
- * Remove a stored API key.
- */
-export function removeApiKey(provider: string): void {
-  const keys = loadEncryptedKeys();
-  delete keys[provider];
-  saveEncryptedKeys(keys);
 }
 
 // ============================================================================
