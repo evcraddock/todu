@@ -239,18 +239,17 @@ describe("local operator sync workflow intent with isolated native storage", () 
     }
   });
 
-  it.each([
-    "done",
-    "inprogress",
-    "waiting",
-  ] as const)("explicitly cancels %s without changing ordinary transition validation", async (status) => {
-    list.change((doc) => {
-      doc.tasks[0].status = status;
-    });
-    const prepared = await preview();
-    expect(prepared.currentStatus).toBe(status);
-    expect(value(await confirm(prepared.token)).status).toBe("canceled");
-  });
+  it.each(["done", "inprogress", "waiting"] as const)(
+    "explicitly cancels %s without changing ordinary transition validation",
+    async (status) => {
+      list.change((doc) => {
+        doc.tasks[0].status = status;
+      });
+      const prepared = await preview();
+      expect(prepared.currentStatus).toBe(status);
+      expect(value(await confirm(prepared.token)).status).toBe("canceled");
+    },
+  );
 
   it("permits canceled -> local reopening -> fresh operator confirmation", async () => {
     value(await confirm((await preview()).token));
@@ -409,21 +408,20 @@ describe("local operator sync workflow intent with isolated native storage", () 
     expect(flush).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "local",
-    "external",
-    "source",
-  ])("rejects ambiguous %s identity in the scoped project", async (field) => {
-    list.change((doc) => {
-      const duplicate = copy(doc.tasks[0]);
-      if (field !== "local") duplicate.id = createTaskId("other");
-      if (field !== "external") duplicate.externalId = "43";
-      if (field !== "source") duplicate.sourceUrl = "other";
-      doc.tasks.push(duplicate);
-    });
-    expect((await tools.prepare(input())).ok).toBe(false);
-    expect(task().status).toBe("active");
-  });
+  it.each(["local", "external", "source"])(
+    "rejects ambiguous %s identity in the scoped project",
+    async (field) => {
+      list.change((doc) => {
+        const duplicate = copy(doc.tasks[0]);
+        if (field !== "local") duplicate.id = createTaskId("other");
+        if (field !== "external") duplicate.externalId = "43";
+        if (field !== "source") duplicate.sourceUrl = "other";
+        doc.tasks.push(duplicate);
+      });
+      expect((await tools.prepare(input())).ok).toBe(false);
+      expect(task().status).toBe("active");
+    },
+  );
 
   it("does not search or cancel a task in another binding's project", async () => {
     const otherProject = createProjectId("other-project");
@@ -528,21 +526,22 @@ describe("local operator sync workflow intent with isolated native storage", () 
     expect((await confirm(beforeRestart.token)).ok).toBe(false);
   });
 
-  it.each([
-    undefined,
-    false,
-    "true",
-    1,
-    null,
-  ])("requires literal confirmed:true, not %s", async (confirmed) => {
-    const prepared = await preview();
-    expect(
-      (await tools.confirm({ token: prepared.token, confirmed } as ConfirmSyncWorkflowIntentInput))
-        .ok,
-    ).toBe(false);
-    expect((await confirm(prepared.token)).ok).toBe(false);
-    expect(task().status).toBe("active");
-  });
+  it.each([undefined, false, "true", 1, null])(
+    "requires literal confirmed:true, not %s",
+    async (confirmed) => {
+      const prepared = await preview();
+      expect(
+        (
+          await tools.confirm({
+            token: prepared.token,
+            confirmed,
+          } as ConfirmSyncWorkflowIntentInput)
+        ).ok,
+      ).toBe(false);
+      expect((await confirm(prepared.token)).ok).toBe(false);
+      expect(task().status).toBe("active");
+    },
+  );
 
   it.each([
     null,
@@ -615,24 +614,22 @@ describe("local operator sync workflow intent with isolated native storage", () 
     expect(flush).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "accessor",
-    "symbol",
-    "hidden",
-    "inherited",
-  ])("rejects %s confirmation extras without leaving a reusable token", async (shape) => {
-    const prepared = await preview();
-    const raw = { token: prepared.token, confirmed: true };
-    const getter = vi.fn(() => true);
-    if (shape === "accessor") Object.defineProperty(raw, "extra", { get: getter });
-    else if (shape === "symbol") Object.assign(raw, { [Symbol("extra")]: true });
-    else if (shape === "hidden") Object.defineProperty(raw, "extra", { value: true });
-    else Object.setPrototypeOf(raw, { extra: true });
-    expect((await tools.confirm(raw as ConfirmSyncWorkflowIntentInput)).ok).toBe(false);
-    expect(getter).not.toHaveBeenCalled();
-    expect((await confirm(prepared.token)).ok).toBe(false);
-    expect(task().status).toBe("active");
-  });
+  it.each(["accessor", "symbol", "hidden", "inherited"])(
+    "rejects %s confirmation extras without leaving a reusable token",
+    async (shape) => {
+      const prepared = await preview();
+      const raw = { token: prepared.token, confirmed: true };
+      const getter = vi.fn(() => true);
+      if (shape === "accessor") Object.defineProperty(raw, "extra", { get: getter });
+      else if (shape === "symbol") Object.assign(raw, { [Symbol("extra")]: true });
+      else if (shape === "hidden") Object.defineProperty(raw, "extra", { value: true });
+      else Object.setPrototypeOf(raw, { extra: true });
+      expect((await tools.confirm(raw as ConfirmSyncWorkflowIntentInput)).ok).toBe(false);
+      expect(getter).not.toHaveBeenCalled();
+      expect((await confirm(prepared.token)).ok).toBe(false);
+      expect(task().status).toBe("active");
+    },
+  );
 
   it("rejects arbitrary confirmation fields and consumes that token", async () => {
     const prepared = await preview();
@@ -700,52 +697,47 @@ describe("local operator sync workflow intent with isolated native storage", () 
     expect(flush).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    "reopen",
-    "body",
-    "identity",
-    "clock",
-    "mapping",
-    "project",
-    "reverted-reopen",
-  ])("never certifies a cancellation superseded by a concurrent post-flush %s edit", async (edit) => {
-    const prepared = await preview();
-    flush = vi.fn(async () => {
-      await repo.flush();
-      if (edit === "body")
-        detail.change((doc) => {
-          doc.description = "Concurrent body";
-        });
-      else if (edit === "identity")
-        list.change((doc) => {
-          doc.tasks[0].externalId = "other";
-        });
-      else if (edit === "clock")
-        list.change((doc) => {
-          doc.tasks[0].updatedAt = originalClock;
-        });
-      else if (edit === "mapping")
-        registry.change((doc) => {
-          doc.bindings[0].options = {};
-        });
-      else if (edit === "project")
-        catalog.change((doc) => {
-          doc.projects[0].name = "Concurrent name";
-        });
-      else {
-        list.change((doc) => {
-          doc.tasks[0].status = "active";
-        });
-        if (edit === "reverted-reopen")
-          list.change((doc) => {
-            doc.tasks[0].status = "canceled";
+  it.each(["reopen", "body", "identity", "clock", "mapping", "project", "reverted-reopen"])(
+    "never certifies a cancellation superseded by a concurrent post-flush %s edit",
+    async (edit) => {
+      const prepared = await preview();
+      flush = vi.fn(async () => {
+        await repo.flush();
+        if (edit === "body")
+          detail.change((doc) => {
+            doc.description = "Concurrent body";
           });
-      }
-    });
-    expect((await confirm(prepared.token)).ok).toBe(false);
-    expect((await confirm(prepared.token)).ok).toBe(false);
-    expect(flush).toHaveBeenCalledOnce();
-  });
+        else if (edit === "identity")
+          list.change((doc) => {
+            doc.tasks[0].externalId = "other";
+          });
+        else if (edit === "clock")
+          list.change((doc) => {
+            doc.tasks[0].updatedAt = originalClock;
+          });
+        else if (edit === "mapping")
+          registry.change((doc) => {
+            doc.bindings[0].options = {};
+          });
+        else if (edit === "project")
+          catalog.change((doc) => {
+            doc.projects[0].name = "Concurrent name";
+          });
+        else {
+          list.change((doc) => {
+            doc.tasks[0].status = "active";
+          });
+          if (edit === "reverted-reopen")
+            list.change((doc) => {
+              doc.tasks[0].status = "canceled";
+            });
+        }
+      });
+      expect((await confirm(prepared.token)).ok).toBe(false);
+      expect((await confirm(prepared.token)).ok).toBe(false);
+      expect(flush).toHaveBeenCalledOnce();
+    },
+  );
 
   it("does not allow a second preview to overwrite a cancellation while its flush is pending", async () => {
     const first = await preview();

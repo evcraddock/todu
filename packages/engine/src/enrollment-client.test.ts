@@ -70,18 +70,21 @@ describe("managed enrollment client boundaries", () => {
     fs.rmSync(directory, { recursive: true });
   });
 
-  it.each([
-    "legacy signal",
-    "options signal",
-  ])("honors cancellation with %s before requesting", async (mode) => {
-    const client = open();
-    const signal = AbortSignal.abort(new Error("Cancelled before request"));
-    expect(
-      await client.begin("http://known-peer:24377", mode === "legacy signal" ? signal : { signal }),
-    ).toMatchObject({ ok: false });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fs.readdirSync(directory)).toEqual([]);
-  });
+  it.each(["legacy signal", "options signal"])(
+    "honors cancellation with %s before requesting",
+    async (mode) => {
+      const client = open();
+      const signal = AbortSignal.abort(new Error("Cancelled before request"));
+      expect(
+        await client.begin(
+          "http://known-peer:24377",
+          mode === "legacy signal" ? signal : { signal },
+        ),
+      ).toMatchObject({ ok: false });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fs.readdirSync(directory)).toEqual([]);
+    },
+  );
   it("retains host-supplied registration metadata through restart and polling", async () => {
     prepareEnrollmentStorage({ storagePath: directory });
     const registration = { ...device, endpoint: "http://laptop.lan:24377" };
@@ -113,22 +116,22 @@ describe("managed enrollment client boundaries", () => {
     await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS);
     expect(activate).not.toHaveBeenCalled();
   });
-  it.each([
-    "denied",
-    "expired",
-  ] as const)("stops polling %s requests without activating or deleting state", async (state) => {
-    prepareEnrollmentStorage({ storagePath: directory });
-    const client = open();
-    await client.begin("http://known-peer:24377");
-    responseState = state;
-    await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS);
-    expect(client.status().stage).toBe(state);
-    expect(activate).not.toHaveBeenCalled();
-    const count = fetchMock.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS * 3);
-    expect(fetchMock.mock.calls.length).toBe(count);
-    expect(readEnrollmentState(directory)?.mode).toBe("pending");
-  });
+  it.each(["denied", "expired"] as const)(
+    "stops polling %s requests without activating or deleting state",
+    async (state) => {
+      prepareEnrollmentStorage({ storagePath: directory });
+      const client = open();
+      await client.begin("http://known-peer:24377");
+      responseState = state;
+      await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS);
+      expect(client.status().stage).toBe(state);
+      expect(activate).not.toHaveBeenCalled();
+      const count = fetchMock.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(ENROLLMENT_POLL_INTERVAL_MS * 3);
+      expect(fetchMock.mock.calls.length).toBe(count);
+      expect(readEnrollmentState(directory)?.mode).toBe("pending");
+    },
+  );
   it("refuses a wrong catalog approval before any state or native adapter mutation", async () => {
     catalogId = CATALOG_A;
     responseState = "approved";

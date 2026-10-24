@@ -36,7 +36,7 @@ export function startWebSocketHeartbeat(
     }
   };
   const onPong = (data: Buffer): void => {
-    if (!pending || !pending.equals(data)) return;
+    if (!pending?.equals(data)) return;
     pending = undefined;
     clearTimeout(deadline);
     deadline = undefined;

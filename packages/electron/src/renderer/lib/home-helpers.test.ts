@@ -127,23 +127,22 @@ describe("buildDashboardSections", () => {
     expect(result.comingSoon[0].id).toBe("t4");
   });
 
-  it.each([
-    "low",
-    "medium",
-    "high",
-  ] as const)("includes %s priority tasks scheduled later this week", (priority) => {
-    const task = makeTask({ priority, scheduledDate: "2025-02-15" });
-    const result = buildDashboardSections([], [task], [], today, threeDaysOut);
-    expect(result.thisWeek).toEqual([task]);
-  });
+  it.each(["low", "medium", "high"] as const)(
+    "includes %s priority tasks scheduled later this week",
+    (priority) => {
+      const task = makeTask({ priority, scheduledDate: "2025-02-15" });
+      const result = buildDashboardSections([], [task], [], today, threeDaysOut);
+      expect(result.thisWeek).toEqual([task]);
+    },
+  );
 
-  it.each([
-    undefined,
-    "2025-02-16",
-  ])("excludes high priority tasks scheduled %s", (scheduledDate) => {
-    const task = makeTask({ priority: "high", scheduledDate });
-    expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
-  });
+  it.each([undefined, "2025-02-16"])(
+    "excludes high priority tasks scheduled %s",
+    (scheduledDate) => {
+      const task = makeTask({ priority: "high", scheduledDate });
+      expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
+    },
+  );
 
   it("retains earlier-week tasks across successive weeks without mutating fields", () => {
     const task = Object.freeze(makeTask({ scheduledDate: "2025-01-27", dueDate: "2025-12-31" }));
@@ -158,15 +157,13 @@ describe("buildDashboardSections", () => {
     expect(tasks).toEqual([snapshot]);
   });
 
-  it.each([
-    "inprogress",
-    "waiting",
-    "done",
-    "canceled",
-  ] as const)("excludes %s tasks from This Week", (status) => {
-    const task = makeTask({ status, scheduledDate: "2025-02-10" });
-    expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
-  });
+  it.each(["inprogress", "waiting", "done", "canceled"] as const)(
+    "excludes %s tasks from This Week",
+    (status) => {
+      const task = makeTask({ status, scheduledDate: "2025-02-10" });
+      expect(buildDashboardSections([], [task], [], today, threeDaysOut).thisWeek).toEqual([]);
+    },
+  );
 
   it("does not treat a passed scheduled date as overdue", () => {
     const task = makeTask({ scheduledDate: "2025-01-27" });

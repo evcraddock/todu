@@ -25,7 +25,7 @@ export function moveSelection<T extends { id: string }>(
   const currentIndex = currentSelectedId
     ? items.findIndex((item) => item.id === currentSelectedId)
     : -1;
-  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  const safeIndex = Math.max(currentIndex, 0);
   const delta = direction === "next" ? 1 : -1;
   const nextIndex = Math.max(0, Math.min(items.length - 1, safeIndex + delta));
 

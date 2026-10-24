@@ -1,5 +1,7 @@
 import type {
   Actor,
+  ApprovalItem,
+  ApprovalListFilter,
   CreateHabitInput,
   CreateLabelInput,
   CreateNoteInput,
@@ -20,8 +22,6 @@ import type {
   Project,
   ProjectFilter,
   ProjectId,
-  ApprovalItem,
-  ApprovalListFilter,
   RecurringFilter,
   RecurringId,
   RecurringTemplate,

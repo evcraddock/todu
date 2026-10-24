@@ -99,15 +99,14 @@ describe("local listener configuration updates", () => {
     });
   });
 
-  it.each([
-    "sync: [unterminated",
-    "- unexpected-root-list",
-    "sync: not-a-mapping",
-  ])("refuses malformed configuration without overwriting it: %s", (original) => {
-    fs.writeFileSync(configPath, original);
-    expect(() =>
-      saveSyncListenerConfig({ enabled: true, bind: "127.0.0.1" }, configPath),
-    ).toThrow();
-    expect(fs.readFileSync(configPath, "utf-8")).toBe(original);
-  });
+  it.each(["sync: [unterminated", "- unexpected-root-list", "sync: not-a-mapping"])(
+    "refuses malformed configuration without overwriting it: %s",
+    (original) => {
+      fs.writeFileSync(configPath, original);
+      expect(() =>
+        saveSyncListenerConfig({ enabled: true, bind: "127.0.0.1" }, configPath),
+      ).toThrow();
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(original);
+    },
+  );
 });

@@ -15,6 +15,7 @@ function renderWithQuery(
   children: ReactNode,
 ): ReturnType<typeof render> & { queryClient: ReturnType<typeof createTuiQueryClient> } {
   const queryClient = createTuiQueryClient();
+  // biome-ignore lint/correctness/noComponentHookFactories: Each test render owns an isolated query client.
   function Wrapper(): JSX.Element {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
@@ -338,89 +339,91 @@ describe("HomeScreen", () => {
     }
   });
 
-  it.each([
-    40, 100,
-  ])("keeps long weekly task rows within the viewport at %s columns", async (width) => {
-    const client = createClient();
-    vi.mocked(client.task.list).mockResolvedValue(
-      Array.from({ length: 14 }, (_, index) =>
-        createTask({
-          id: `weekly-${index}`,
-          title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
-          priority: "high",
-          scheduledDate: "2026-07-19",
-        }),
-      ),
-    );
-    const { stdin, lastFrame, unmount } = renderWithQuery(
-      <Box width={width}>
-        <HomeScreen client={client} today="2026-07-20" />
-      </Box>,
-    );
-    try {
-      await waitForFrameText(lastFrame, "Home • ready");
-      const initialLines = lastFrame()?.split("\n") ?? [];
-      expect(initialLines.length).toBeLessThanOrEqual(17);
-      expect(initialLines.find((line) => line.includes("• Weekly 1 "))).toContain("[high]");
-      stdin.write("J");
-      await waitForFrameText(lastFrame, "> • Weekly 1 ");
-      for (let index = 0; index < 13; index += 1) stdin.write("j");
-      await waitForFrameText(lastFrame, "> • Weekly 14 ");
-      const lines = lastFrame()?.split("\n") ?? [];
-      expect(lines.length).toBeLessThanOrEqual(17);
-      expect(lines.find((line) => line.includes("> • Weekly 14 "))).toContain("[high]");
-      for (const line of lines.filter((line) => line.includes("• Weekly"))) {
-        expect(line).toContain("[high]");
+  it.each([40, 100])(
+    "keeps long weekly task rows within the viewport at %s columns",
+    async (width) => {
+      const client = createClient();
+      vi.mocked(client.task.list).mockResolvedValue(
+        Array.from({ length: 14 }, (_, index) =>
+          createTask({
+            id: `weekly-${index}`,
+            title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
+            priority: "high",
+            scheduledDate: "2026-07-19",
+          }),
+        ),
+      );
+      const { stdin, lastFrame, unmount } = renderWithQuery(
+        <Box width={width}>
+          <HomeScreen client={client} today="2026-07-20" />
+        </Box>,
+      );
+      try {
+        await waitForFrameText(lastFrame, "Home • ready");
+        const initialLines = lastFrame()?.split("\n") ?? [];
+        expect(initialLines.length).toBeLessThanOrEqual(17);
+        expect(initialLines.find((line) => line.includes("• Weekly 1 "))).toContain("[high]");
+        stdin.write("J");
+        await waitForFrameText(lastFrame, "> • Weekly 1 ");
+        for (let index = 0; index < 13; index += 1) stdin.write("j");
+        await waitForFrameText(lastFrame, "> • Weekly 14 ");
+        const lines = lastFrame()?.split("\n") ?? [];
+        expect(lines.length).toBeLessThanOrEqual(17);
+        expect(lines.find((line) => line.includes("> • Weekly 14 "))).toContain("[high]");
+        for (const line of lines.filter((line) => line.includes("• Weekly"))) {
+          expect(line).toContain("[high]");
+        }
+      } finally {
+        unmount();
       }
-    } finally {
-      unmount();
-    }
-  });
+    },
+  );
 
-  it.each([
-    40, 100,
-  ])("keeps intermediate scrolling separate from app chrome at %s columns", async (width) => {
-    const client = createClient();
-    vi.mocked(client.task.list).mockResolvedValue(
-      Array.from({ length: 14 }, (_, index) =>
-        createTask({
-          id: `weekly-${index}`,
-          title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
-          priority: "high",
-          scheduledDate: "2026-07-19",
-        }),
-      ),
-    );
-    const { stdin, lastFrame, unmount } = renderWithQuery(
-      <AppFrame
-        route="home"
-        taskFilter={{ projectFilter: allProjectsFilter }}
-        footerContext="home"
-        terminalWidth={width}
-        terminalHeight={24}
-      >
-        <HomeScreen client={client} today="2026-07-20" />
-      </AppFrame>,
-    );
-    try {
-      await waitForFrameText(lastFrame, "Home • ready");
-      stdin.write("J");
-      await waitForFrameText(lastFrame, "> • Weekly 1 ");
-      for (let index = 0; index < 11; index += 1) stdin.write("j");
-      await waitForFrameText(lastFrame, "> • Weekly 12 ");
-      const frame = lastFrame() ?? "";
-      const lines = frame.split("\n");
-      expect(lines).toHaveLength(24);
-      expect(frame).toMatch(/↑ \d+ more/);
-      expect(frame).toMatch(/↓ \d+ more/);
-      expect(frame).toContain("Home • ready");
-      expect(lines.find((line) => line.includes("> • Weekly 12 "))).toContain("[high]");
-      expect(lines.find((line) => line.includes("• Weekly 14 "))).toContain("[high]");
-      expect(lines.find((line) => line.includes("Waiting (0)"))).not.toContain("[high]");
-    } finally {
-      unmount();
-    }
-  });
+  it.each([40, 100])(
+    "keeps intermediate scrolling separate from app chrome at %s columns",
+    async (width) => {
+      const client = createClient();
+      vi.mocked(client.task.list).mockResolvedValue(
+        Array.from({ length: 14 }, (_, index) =>
+          createTask({
+            id: `weekly-${index}`,
+            title: `Weekly ${index + 1} ${"A very long weekly task title ".repeat(8)}`,
+            priority: "high",
+            scheduledDate: "2026-07-19",
+          }),
+        ),
+      );
+      const { stdin, lastFrame, unmount } = renderWithQuery(
+        <AppFrame
+          route="home"
+          taskFilter={{ projectFilter: allProjectsFilter }}
+          footerContext="home"
+          terminalWidth={width}
+          terminalHeight={24}
+        >
+          <HomeScreen client={client} today="2026-07-20" />
+        </AppFrame>,
+      );
+      try {
+        await waitForFrameText(lastFrame, "Home • ready");
+        stdin.write("J");
+        await waitForFrameText(lastFrame, "> • Weekly 1 ");
+        for (let index = 0; index < 11; index += 1) stdin.write("j");
+        await waitForFrameText(lastFrame, "> • Weekly 12 ");
+        const frame = lastFrame() ?? "";
+        const lines = frame.split("\n");
+        expect(lines).toHaveLength(24);
+        expect(frame).toMatch(/↑ \d+ more/);
+        expect(frame).toMatch(/↓ \d+ more/);
+        expect(frame).toContain("Home • ready");
+        expect(lines.find((line) => line.includes("> • Weekly 12 "))).toContain("[high]");
+        expect(lines.find((line) => line.includes("• Weekly 14 "))).toContain("[high]");
+        expect(lines.find((line) => line.includes("Waiting (0)"))).not.toContain("[high]");
+      } finally {
+        unmount();
+      }
+    },
+  );
 
   it("refreshes weekly membership after scheduling/status changes, not priority changes", async () => {
     const client = createClient();
@@ -579,32 +582,32 @@ describe("HomeScreen", () => {
     unmount();
   });
 
-  it.each([
-    "loading",
-    "failed",
-  ])("keeps focus projects usable while tasks are %s", async (state) => {
-    const client = createClient();
-    const project = createProject();
-    vi.mocked(client.project.list).mockResolvedValue([project]);
-    if (state === "loading") {
-      vi.mocked(client.task.list).mockReturnValue(new Promise(() => {}));
-    } else {
-      vi.mocked(client.task.list).mockRejectedValue(new Error("Fixture tasks failed"));
-    }
-    const onSelectProject = vi.fn();
-    const { stdin, lastFrame, unmount } = renderWithQuery(
-      <HomeScreen client={client} onSelectProject={onSelectProject} />,
-    );
-    await waitForFrameText(lastFrame, "Project Focus (1)");
-    expect(lastFrame()).toContain(`Home • ${state}`);
-    stdin.write("J");
-    stdin.write("J");
-    stdin.write("J");
-    await waitForFrameText(lastFrame, "> • Focus project");
-    stdin.write("\r");
-    expect(onSelectProject).toHaveBeenCalledExactlyOnceWith(project);
-    unmount();
-  });
+  it.each(["loading", "failed"])(
+    "keeps focus projects usable while tasks are %s",
+    async (state) => {
+      const client = createClient();
+      const project = createProject();
+      vi.mocked(client.project.list).mockResolvedValue([project]);
+      if (state === "loading") {
+        vi.mocked(client.task.list).mockReturnValue(new Promise(() => {}));
+      } else {
+        vi.mocked(client.task.list).mockRejectedValue(new Error("Fixture tasks failed"));
+      }
+      const onSelectProject = vi.fn();
+      const { stdin, lastFrame, unmount } = renderWithQuery(
+        <HomeScreen client={client} onSelectProject={onSelectProject} />,
+      );
+      await waitForFrameText(lastFrame, "Project Focus (1)");
+      expect(lastFrame()).toContain(`Home • ${state}`);
+      stdin.write("J");
+      stdin.write("J");
+      stdin.write("J");
+      await waitForFrameText(lastFrame, "> • Focus project");
+      stdin.write("\r");
+      expect(onSelectProject).toHaveBeenCalledExactlyOnceWith(project);
+      unmount();
+    },
+  );
 
   it("selects projects with j/k and arrows, preserves selection, and opens only the project", async () => {
     const client = createClient();

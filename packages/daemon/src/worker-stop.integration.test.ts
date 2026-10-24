@@ -127,64 +127,64 @@ describe("awaitable worker shutdown", () => {
     expect(runtime.getWorker("pending")?.state).toBe("running");
   });
 
-  it.each([
-    "synchronous",
-    "asynchronous",
-  ])("surfaces %s cleanup failure, drains the other workers, and refuses runtime reuse", async (kind) => {
-    expectedFailure = true;
-    const release = deferred();
-    releases.push(release.resolve);
-    const stopped = vi.fn();
-    runtime = createDaemonRuntime({
-      storagePath: directory,
-      logLevel: "error",
-      workerRegistrations: [
-        {
-          manifest: { type: "a-failing", requiredDomains: [] },
-          runtime: {
-            start: () => ({
-              stop() {
-                if (kind === "synchronous") throw new Error("Injected worker cleanup failure");
-                return Promise.reject(new Error("Injected worker cleanup failure"));
-              },
-            }),
+  it.each(["synchronous", "asynchronous"])(
+    "surfaces %s cleanup failure, drains the other workers, and refuses runtime reuse",
+    async (kind) => {
+      expectedFailure = true;
+      const release = deferred();
+      releases.push(release.resolve);
+      const stopped = vi.fn();
+      runtime = createDaemonRuntime({
+        storagePath: directory,
+        logLevel: "error",
+        workerRegistrations: [
+          {
+            manifest: { type: "a-failing", requiredDomains: [] },
+            runtime: {
+              start: () => ({
+                stop() {
+                  if (kind === "synchronous") throw new Error("Injected worker cleanup failure");
+                  return Promise.reject(new Error("Injected worker cleanup failure"));
+                },
+              }),
+            },
           },
-        },
-        {
-          manifest: { type: "b-pending", requiredDomains: [] },
-          runtime: {
-            start: () => ({
-              async stop() {
-                await release.promise;
-                stopped();
-              },
-            }),
+          {
+            manifest: { type: "b-pending", requiredDomains: [] },
+            runtime: {
+              start: () => ({
+                async stop() {
+                  await release.promise;
+                  stopped();
+                },
+              }),
+            },
           },
+        ],
+      });
+      await runtime.start();
+      const stopping = runtime.stop();
+      const rejection = expect(stopping).rejects.toThrow("Injected worker cleanup failure");
+      let settled = false;
+      void stopping.then(
+        () => {
+          settled = true;
         },
-      ],
-    });
-    await runtime.start();
-    const stopping = runtime.stop();
-    const rejection = expect(stopping).rejects.toThrow("Injected worker cleanup failure");
-    let settled = false;
-    void stopping.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(settled).toBe(false);
-    expect(hosts[0].closed).toBe(false);
-    release.resolve();
-    await rejection;
-    expect(stopped).toHaveBeenCalledOnce();
-    expect(hosts[0].closed).toBe(false);
-    expect(runtime.getWorker("a-failing")?.state).toBe("error");
-    await expect(runtime.start()).rejects.toThrow("Previous daemon shutdown failed");
-  });
+        () => {
+          settled = true;
+        },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(settled).toBe(false);
+      expect(hosts[0].closed).toBe(false);
+      release.resolve();
+      await rejection;
+      expect(stopped).toHaveBeenCalledOnce();
+      expect(hosts[0].closed).toBe(false);
+      expect(runtime.getWorker("a-failing")?.state).toBe("error");
+      await expect(runtime.start()).rejects.toThrow("Previous daemon shutdown failed");
+    },
+  );
 
   it("drains an admitted RPC before surfacing worker failure even after the response client disconnects", async () => {
     expectedFailure = true;

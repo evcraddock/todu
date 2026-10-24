@@ -330,212 +330,212 @@ describe("durable isolated v4 drain and v7 initialization recovery", () => {
     );
   }
 
-  it.each([
-    "flush",
-    "ack",
-  ] as const)("drains only the original v4 batch across %s failure, then initializes from fresh observations", async (failure) => {
-    const existing = value(
-      await todu!.task.create({
-        projectId: project.id,
-        externalId: "existing",
-        title: "Old",
+  it.each(["flush", "ack"] as const)(
+    "drains only the original v4 batch across %s failure, then initializes from fresh observations",
+    async (failure) => {
+      const existing = value(
+        await todu!.task.create({
+          projectId: project.id,
+          externalId: "existing",
+          title: "Old",
+          description: "Old body",
+          updatedAt: OLD,
+        }),
+      );
+      const newer = value(
+        await todu!.task.create({
+          projectId: project.id,
+          externalId: "newer",
+          title: "Newer local",
+          description: "Newer local body",
+          updatedAt: LOCAL,
+        }),
+      );
+      const note = value(
+        await todu!.note.create({
+          entityType: "task",
+          entityId: existing.id,
+          content: "Old comment",
+          tags: ["sync:externalId:existing-comment"],
+          createdAt: OLD,
+          updatedAt: OLD,
+        }),
+      );
+      const catalogId = todu!.sync.getCatalogId();
+      await todu!.__internal.syncRuntime.flush();
+      await close();
+
+      // Persist only the task-list half of an interrupted legacy update, leaving the real detail old.
+      const repo = new Repo({ storage: new NodeFSStorageAdapter(path.join(directory, "storage")) });
+      try {
+        const catalog = await repo.find<CatalogDocument>(catalogId as DocumentId);
+        const list = await repo.find<TaskListDocument>(
+          catalog.doc()!.taskListDocIds[project.id] as DocumentId,
+        );
+        list.change((doc) => {
+          const row = doc.tasks.find((task) => task.id === existing.id)!;
+          row.title = "Remote";
+          row.status = "inprogress";
+          row.updatedAt = REMOTE;
+          doc.descriptionSearchTextByTaskId[existing.id] = "remote body";
+        });
+        await repo.flush();
+      } finally {
+        await repo.shutdown();
+      }
+      todu = await open();
+      expect(value(await todu.task.get(existing.id))).toMatchObject({
+        title: "Remote",
         description: "Old body",
-        updatedAt: OLD,
-      }),
-    );
-    const newer = value(
-      await todu!.task.create({
-        projectId: project.id,
-        externalId: "newer",
+        updatedAt: REMOTE,
+      });
+
+      let journal = new DurableProvider(directory, {
+        schema: 4,
+        id: "frozen-legacy-batch",
+        payload: {
+          tasks: [
+            {
+              externalId: "existing",
+              title: "Remote",
+              description: "Remote body",
+              status: "inprogress",
+              updatedAt: REMOTE,
+            },
+            {
+              externalId: "newer",
+              title: "Stale remote",
+              description: "Stale remote body",
+              updatedAt: REMOTE,
+            },
+            { externalId: "new", title: "New remote", description: "New body", updatedAt: REMOTE },
+          ],
+          comments: [
+            {
+              externalId: "existing-comment",
+              externalTaskId: "existing",
+              body: "Remote comment",
+              createdAt: OLD,
+              updatedAt: REMOTE,
+            },
+            {
+              externalId: "new-comment",
+              externalTaskId: "new",
+              body: "New comment",
+              createdAt: REMOTE,
+            },
+          ],
+          checkpoint: CHECKPOINT,
+        },
+      });
+      const originalBytes = fs.readFileSync(journal.file);
+      const blocked = journal.v7();
+      await cycle(blocked, 7, "blocked");
+      expect(blocked.pull).not.toHaveBeenCalled();
+      expect(blocked.acknowledgePull).not.toHaveBeenCalled();
+      expect(blocked.push).not.toHaveBeenCalled();
+      expect(await journal.recovery()).toEqual({
+        state: "legacy-pending",
+        batchIds: ["frozen-legacy-batch"],
+      });
+
+      journal.failAck = failure === "ack";
+      const flush =
+        failure === "flush"
+          ? vi
+              .spyOn(todu.__internal.syncRuntime, "flush")
+              .mockRejectedValueOnce(new Error("injected fixture flush failure"))
+          : undefined;
+      const failed = journal.v4();
+      await cycle(failed, 4, "error");
+      flush?.mockRestore();
+      expect(failed.pull).toHaveBeenCalledTimes(1);
+      expect(failed.acknowledgePull).toHaveBeenCalledTimes(failure === "ack" ? 1 : 0);
+      expect(failed.push).not.toHaveBeenCalled();
+      expect(value(await todu.integration.getStatus(binding.id)).lastErrorSummary).toContain(
+        failure === "flush"
+          ? "injected fixture flush failure"
+          : "injected fixture acknowledgment failure",
+      );
+      expect(fs.readFileSync(journal.file)).toEqual(originalBytes);
+      expect(value(await todu.task.get(existing.id)).description).toBe("Remote body");
+      const taskIds = value(await todu.task.list({ projectId: project.id }))
+        .map((task) => task.id)
+        .sort();
+      const newTask = value(await todu.task.list({ projectId: project.id })).find(
+        (task) => task.externalId === "new",
+      )!;
+      const newNote = value(await todu.note.list({ entityType: "task", entityId: newTask.id }))[0];
+      expect(
+        value(await todu.note.list({ entityType: "task", entityId: existing.id })),
+      ).toMatchObject([{ id: note.id, content: "Remote comment" }]);
+
+      await restart();
+      journal = new DurableProvider(directory);
+      expect(fs.readFileSync(journal.file)).toEqual(originalBytes);
+      expect(value(await todu!.task.get(existing.id)).description).toBe("Remote body");
+      value(await todu!.note.update(note.id, { content: "Newer local comment", updatedAt: LOCAL }));
+      const drained = journal.v4();
+      await cycle(drained, 4, "idle");
+      expect(drained.pull).toHaveBeenCalledTimes(1);
+      expect(drained.acknowledgePull).toHaveBeenCalledTimes(1);
+      const pulled = await vi.mocked(drained.pull).mock.results[0].value;
+      expect(vi.mocked(drained.acknowledgePull).mock.calls[0][1]).toBe(pulled.checkpoint);
+      expect(pulled).toEqual(
+        (JSON.parse(JSON.parse(originalBytes.toString()).pendingBytes) as Pending).payload,
+      );
+      expect(journal.state()).toMatchObject({
+        pendingBytes: null,
+        readCursor: CHECKPOINT,
+        mirrored: [],
+        receipts: [],
+        remoteWrites: [],
+      });
+      expect(value(await todu!.task.get(newer.id))).toMatchObject({
         title: "Newer local",
         description: "Newer local body",
         updatedAt: LOCAL,
-      }),
-    );
-    const note = value(
-      await todu!.note.create({
-        entityType: "task",
-        entityId: existing.id,
-        content: "Old comment",
-        tags: ["sync:externalId:existing-comment"],
-        createdAt: OLD,
-        updatedAt: OLD,
-      }),
-    );
-    const catalogId = todu!.sync.getCatalogId();
-    await todu!.__internal.syncRuntime.flush();
-    await close();
-
-    // Persist only the task-list half of an interrupted legacy update, leaving the real detail old.
-    const repo = new Repo({ storage: new NodeFSStorageAdapter(path.join(directory, "storage")) });
-    try {
-      const catalog = await repo.find<CatalogDocument>(catalogId as DocumentId);
-      const list = await repo.find<TaskListDocument>(
-        catalog.doc()!.taskListDocIds[project.id] as DocumentId,
-      );
-      list.change((doc) => {
-        const row = doc.tasks.find((task) => task.id === existing.id)!;
-        row.title = "Remote";
-        row.status = "inprogress";
-        row.updatedAt = REMOTE;
-        doc.descriptionSearchTextByTaskId[existing.id] = "remote body";
       });
-      await repo.flush();
-    } finally {
-      await repo.shutdown();
-    }
-    todu = await open();
-    expect(value(await todu.task.get(existing.id))).toMatchObject({
-      title: "Remote",
-      description: "Old body",
-      updatedAt: REMOTE,
-    });
+      expect(
+        value(await todu!.task.list({ projectId: project.id }))
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual(taskIds);
+      expect(
+        value(await todu!.note.list({ entityType: "task", entityId: existing.id })),
+      ).toMatchObject([{ id: note.id, content: "Newer local comment" }]);
+      expect(
+        value(await todu!.note.list({ entityType: "task", entityId: newTask.id })),
+      ).toMatchObject([{ id: newNote.id, content: "New comment" }]);
 
-    let journal = new DurableProvider(directory, {
-      schema: 4,
-      id: "frozen-legacy-batch",
-      payload: {
-        tasks: [
-          {
-            externalId: "existing",
-            title: "Remote",
-            description: "Remote body",
-            status: "inprogress",
-            updatedAt: REMOTE,
+      journal.stage(
+        v7Batch({ workflow: { base: { state: "unknown" }, remote: { status: "inprogress" } } }),
+      );
+      const initialized = journal.v7();
+      await cycle(initialized, 7, "idle");
+      expect(initialized.acknowledgePull).toHaveBeenCalledTimes(1);
+      const receipt = journal.state().receipts[0].taskResults[0];
+      expect(receipt).toEqual({
+        externalId: "existing",
+        localTaskId: existing.id,
+        groups: {
+          workflow: {
+            state: "persisted",
+            value: { status: "inprogress" },
+            baseline: "mirrored",
+            remoteWriteRequired: false,
           },
-          {
-            externalId: "newer",
-            title: "Stale remote",
-            description: "Stale remote body",
-            updatedAt: REMOTE,
-          },
-          { externalId: "new", title: "New remote", description: "New body", updatedAt: REMOTE },
-        ],
-        comments: [
-          {
-            externalId: "existing-comment",
-            externalTaskId: "existing",
-            body: "Remote comment",
-            createdAt: OLD,
-            updatedAt: REMOTE,
-          },
-          {
-            externalId: "new-comment",
-            externalTaskId: "new",
-            body: "New comment",
-            createdAt: REMOTE,
-          },
-        ],
-        checkpoint: CHECKPOINT,
-      },
-    });
-    const originalBytes = fs.readFileSync(journal.file);
-    const blocked = journal.v7();
-    await cycle(blocked, 7, "blocked");
-    expect(blocked.pull).not.toHaveBeenCalled();
-    expect(blocked.acknowledgePull).not.toHaveBeenCalled();
-    expect(blocked.push).not.toHaveBeenCalled();
-    expect(await journal.recovery()).toEqual({
-      state: "legacy-pending",
-      batchIds: ["frozen-legacy-batch"],
-    });
-
-    journal.failAck = failure === "ack";
-    const flush =
-      failure === "flush"
-        ? vi
-            .spyOn(todu.__internal.syncRuntime, "flush")
-            .mockRejectedValueOnce(new Error("injected fixture flush failure"))
-        : undefined;
-    const failed = journal.v4();
-    await cycle(failed, 4, "error");
-    flush?.mockRestore();
-    expect(failed.pull).toHaveBeenCalledTimes(1);
-    expect(failed.acknowledgePull).toHaveBeenCalledTimes(failure === "ack" ? 1 : 0);
-    expect(failed.push).not.toHaveBeenCalled();
-    expect(value(await todu.integration.getStatus(binding.id)).lastErrorSummary).toContain(
-      failure === "flush"
-        ? "injected fixture flush failure"
-        : "injected fixture acknowledgment failure",
-    );
-    expect(fs.readFileSync(journal.file)).toEqual(originalBytes);
-    expect(value(await todu.task.get(existing.id)).description).toBe("Remote body");
-    const taskIds = value(await todu.task.list({ projectId: project.id }))
-      .map((task) => task.id)
-      .sort();
-    const newTask = value(await todu.task.list({ projectId: project.id })).find(
-      (task) => task.externalId === "new",
-    )!;
-    const newNote = value(await todu.note.list({ entityType: "task", entityId: newTask.id }))[0];
-    expect(
-      value(await todu.note.list({ entityType: "task", entityId: existing.id })),
-    ).toMatchObject([{ id: note.id, content: "Remote comment" }]);
-
-    await restart();
-    journal = new DurableProvider(directory);
-    expect(fs.readFileSync(journal.file)).toEqual(originalBytes);
-    expect(value(await todu!.task.get(existing.id)).description).toBe("Remote body");
-    value(await todu!.note.update(note.id, { content: "Newer local comment", updatedAt: LOCAL }));
-    const drained = journal.v4();
-    await cycle(drained, 4, "idle");
-    expect(drained.pull).toHaveBeenCalledTimes(1);
-    expect(drained.acknowledgePull).toHaveBeenCalledTimes(1);
-    const pulled = await vi.mocked(drained.pull).mock.results[0].value;
-    expect(vi.mocked(drained.acknowledgePull).mock.calls[0][1]).toBe(pulled.checkpoint);
-    expect(pulled).toEqual(
-      (JSON.parse(JSON.parse(originalBytes.toString()).pendingBytes) as Pending).payload,
-    );
-    expect(journal.state()).toMatchObject({
-      pendingBytes: null,
-      readCursor: CHECKPOINT,
-      mirrored: [],
-      receipts: [],
-      remoteWrites: [],
-    });
-    expect(value(await todu!.task.get(newer.id))).toMatchObject({
-      title: "Newer local",
-      description: "Newer local body",
-      updatedAt: LOCAL,
-    });
-    expect(
-      value(await todu!.task.list({ projectId: project.id }))
-        .map((task) => task.id)
-        .sort(),
-    ).toEqual(taskIds);
-    expect(
-      value(await todu!.note.list({ entityType: "task", entityId: existing.id })),
-    ).toMatchObject([{ id: note.id, content: "Newer local comment" }]);
-    expect(
-      value(await todu!.note.list({ entityType: "task", entityId: newTask.id })),
-    ).toMatchObject([{ id: newNote.id, content: "New comment" }]);
-
-    journal.stage(
-      v7Batch({ workflow: { base: { state: "unknown" }, remote: { status: "inprogress" } } }),
-    );
-    const initialized = journal.v7();
-    await cycle(initialized, 7, "idle");
-    expect(initialized.acknowledgePull).toHaveBeenCalledTimes(1);
-    const receipt = journal.state().receipts[0].taskResults[0];
-    expect(receipt).toEqual({
-      externalId: "existing",
-      localTaskId: existing.id,
-      groups: {
-        workflow: {
-          state: "persisted",
-          value: { status: "inprogress" },
-          baseline: "mirrored",
-          remoteWriteRequired: false,
         },
-      },
-    });
-    expect(journal.state().mirrored).toEqual([receipt]);
-    expect(value(await todu!.task.get(existing.id)).description).toBe("Remote body");
-    await restart();
-    expect(value(await todu!.task.list({ projectId: project.id }))).toHaveLength(3);
-    expect(value(await todu!.note.list({ entityType: "task", entityId: newTask.id }))[0].id).toBe(
-      newNote.id,
-    );
-  });
+      });
+      expect(journal.state().mirrored).toEqual([receipt]);
+      expect(value(await todu!.task.get(existing.id)).description).toBe("Remote body");
+      await restart();
+      expect(value(await todu!.task.list({ projectId: project.id }))).toHaveLength(3);
+      expect(value(await todu!.note.list({ entityType: "task", entityId: newTask.id }))[0].id).toBe(
+        newNote.id,
+      );
+    },
+  );
 
   it("replays original v7 bytes after ack failure and never promotes queued local winners when push fails", async () => {
     const task = await seedLocalWinner();
@@ -606,91 +606,94 @@ describe("durable isolated v4 drain and v7 initialization recovery", () => {
     expect(value(await todu!.task.list({ projectId: project.id }))).toHaveLength(1);
   });
 
-  it.each([
-    "known",
-    "unknown",
-  ] as const)("keeps a pull-only %s-base local winner unproven across reopening", async (baseState) => {
-    const task = await seedLocalWinner();
-    let journal = new DurableProvider(
-      directory,
-      v7Batch({
-        content:
-          baseState === "known"
-            ? localWins.content
-            : {
-                base: { state: "unknown" },
-                remote: { title: "Remote", description: "Remote body" },
-              },
-      }),
-    );
-    const provider = journal.v7();
-    await cycle(provider, 7, "idle");
-    expect(provider.push).not.toHaveBeenCalled();
-    const persisted = journal.state();
-    expect(persisted.receipts[0].taskResults[0]).toEqual({
-      externalId: "existing",
-      localTaskId: task.id,
-      groups: {
-        content: {
-          state: "persisted",
-          value: { title: "Local", description: "Local body" },
-          baseline: "unproven",
-          remoteWriteRequired: baseState === "known",
-          reason: baseState === "known" ? "remote-write-required" : "initialization-disagreement",
+  it.each(["known", "unknown"] as const)(
+    "keeps a pull-only %s-base local winner unproven across reopening",
+    async (baseState) => {
+      const task = await seedLocalWinner();
+      let journal = new DurableProvider(
+        directory,
+        v7Batch({
+          content:
+            baseState === "known"
+              ? localWins.content
+              : {
+                  base: { state: "unknown" },
+                  remote: { title: "Remote", description: "Remote body" },
+                },
+        }),
+      );
+      const provider = journal.v7();
+      await cycle(provider, 7, "idle");
+      expect(provider.push).not.toHaveBeenCalled();
+      const persisted = journal.state();
+      expect(persisted.receipts[0].taskResults[0]).toEqual({
+        externalId: "existing",
+        localTaskId: task.id,
+        groups: {
+          content: {
+            state: "persisted",
+            value: { title: "Local", description: "Local body" },
+            baseline: "unproven",
+            remoteWriteRequired: baseState === "known",
+            reason: baseState === "known" ? "remote-write-required" : "initialization-disagreement",
+          },
         },
-      },
-    });
-    expect(persisted.mirrored).toEqual([]);
-    expect(persisted.remoteWrites).toHaveLength(baseState === "known" ? 1 : 0);
-    expect(persisted.deferred).toHaveLength(1);
-    await restart();
-    journal = new DurableProvider(directory);
-    expect(journal.state()).toEqual(persisted);
-    expect(value(await todu!.task.get(task.id))).toMatchObject({
-      title: "Local",
-      description: "Local body",
-      updatedAt: LOCAL,
-    });
-  });
+      });
+      expect(persisted.mirrored).toEqual([]);
+      expect(persisted.remoteWrites).toHaveLength(baseState === "known" ? 1 : 0);
+      expect(persisted.deferred).toHaveLength(1);
+      await restart();
+      journal = new DurableProvider(directory);
+      expect(journal.state()).toEqual(persisted);
+      expect(value(await todu!.task.get(task.id))).toMatchObject({
+        title: "Local",
+        description: "Local body",
+        updatedAt: LOCAL,
+      });
+    },
+  );
 
   it.each([
     ["pull", "unknown"],
     ["push", "unknown"],
     ["pull", "legacy-pending"],
     ["push", "legacy-pending"],
-  ] as const)("blocks v7 %s work for durable %s state without rewriting it", async (strategy, recoveryState) => {
-    const task = await seedLocalWinner();
-    binding = value(await todu!.integration.update(binding.id, { strategy }));
-    const journal = new DurableProvider(directory, {
-      schema: 4,
-      id: "unprovable-old-history",
-      payload: {
-        tasks: [{ externalId: "existing", title: "Stale remote", updatedAt: OLD }],
-        checkpoint: CHECKPOINT,
-      },
-    });
-    if (recoveryState === "unknown") {
-      const state = journal.state();
-      journal.save({
-        ...state,
-        pendingBytes: JSON.stringify({
-          schema: 99,
-          id: "unprovable-old-history",
-          payload: { updatedAt: OLD },
-        }),
+  ] as const)(
+    "blocks v7 %s work for durable %s state without rewriting it",
+    async (strategy, recoveryState) => {
+      const task = await seedLocalWinner();
+      binding = value(await todu!.integration.update(binding.id, { strategy }));
+      const journal = new DurableProvider(directory, {
+        schema: 4,
+        id: "unprovable-old-history",
+        payload: {
+          tasks: [{ externalId: "existing", title: "Stale remote", updatedAt: OLD }],
+          checkpoint: CHECKPOINT,
+        },
       });
-    }
-    const bytes = fs.readFileSync(journal.file);
-    const provider = journal.v7();
-    await cycle(provider, 7, "blocked");
-    expect(await journal.recovery()).toMatchObject({ state: recoveryState });
-    expect(provider.pull).not.toHaveBeenCalled();
-    expect(provider.acknowledgePull).not.toHaveBeenCalled();
-    expect(provider.push).not.toHaveBeenCalled();
-    expect(fs.readFileSync(journal.file)).toEqual(bytes);
-    expect(value(await todu!.task.get(task.id))).toMatchObject({
-      title: "Local",
-      description: "Local body",
-    });
-  });
+      if (recoveryState === "unknown") {
+        const state = journal.state();
+        journal.save({
+          ...state,
+          pendingBytes: JSON.stringify({
+            schema: 99,
+            id: "unprovable-old-history",
+            payload: { updatedAt: OLD },
+          }),
+        });
+      }
+      const bytes = fs.readFileSync(journal.file);
+      const provider = journal.v7();
+      await cycle(provider, 7, "blocked");
+      expect(await journal.recovery()).toMatchObject({ state: recoveryState });
+      expect(provider.pull).not.toHaveBeenCalled();
+      expect(provider.acknowledgePull).not.toHaveBeenCalled();
+      expect(provider.push).not.toHaveBeenCalled();
+      expect(fs.readFileSync(journal.file)).toEqual(bytes);
+      expect(value(await todu!.task.get(task.id))).toMatchObject({
+        title: "Local",
+        description: "Local body",
+      });
+    },
+  );
 });

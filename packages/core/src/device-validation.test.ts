@@ -2,24 +2,18 @@ import { describe, expect, it } from "vitest";
 import { validateDeviceEndpoint, validateDeviceName } from "./validation.js";
 
 describe("device metadata validation", () => {
-  it.each([
-    "Laptop",
-    "  Mac mini  ",
-    "a".repeat(100),
-  ])("accepts a bounded readable name: %s", (name) => {
-    expect(validateDeviceName(name)).toBeNull();
-  });
-  it.each([
-    "",
-    " ",
-    "a".repeat(101),
-    "host\nname",
-    "host\u001b",
-    1,
-    null,
-  ])("rejects invalid names: %s", (name) => {
-    expect(validateDeviceName(name)?.field).toBe("name");
-  });
+  it.each(["Laptop", "  Mac mini  ", "a".repeat(100)])(
+    "accepts a bounded readable name: %s",
+    (name) => {
+      expect(validateDeviceName(name)).toBeNull();
+    },
+  );
+  it.each(["", " ", "a".repeat(101), "host\nname", "host\u001b", 1, null])(
+    "rejects invalid names: %s",
+    (name) => {
+      expect(validateDeviceName(name)?.field).toBe("name");
+    },
+  );
   it.each([
     null,
     "http://laptop.lan:24377",

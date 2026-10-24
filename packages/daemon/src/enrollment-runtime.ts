@@ -156,7 +156,7 @@ export function createEnrollmentRuntime(options: {
         if (!options.isRunning())
           throw new Error("Daemon stopped before pending catalog activation");
         const local = readEnrollmentState(options.storagePath);
-        if (!local || local.mode !== "pending")
+        if (local?.mode !== "pending")
           throw new Error("Pending setup changed before catalog activation");
         commitEnrollmentCatalog(options.storagePath, { ...local, approval: sourceInfo.approval });
         options.activateTodu(activated);

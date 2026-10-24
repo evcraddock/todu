@@ -41,19 +41,22 @@ describe("optional server CLI", () => {
     ["enable", { enabled: true }],
     ["disable", { enabled: false }],
     ["set", { server: "ws://other:3030" }],
-  ])("sends explicit %s settings and config context through private RPC", async (command, settings) => {
-    const { run, invoke } = setup();
-    await run([
-      "--config",
-      "/other/config.yaml",
-      "sync",
-      "server",
-      command as string,
-      ...(command === "set" ? ["--url", "ws://other:3030"] : []),
-    ]);
-    expect(invoke).toHaveBeenCalledExactlyOnceWith("sync.serverConfigure", {
-      settings,
-      configPath: "/other/config.yaml",
-    });
-  });
+  ])(
+    "sends explicit %s settings and config context through private RPC",
+    async (command, settings) => {
+      const { run, invoke } = setup();
+      await run([
+        "--config",
+        "/other/config.yaml",
+        "sync",
+        "server",
+        command as string,
+        ...(command === "set" ? ["--url", "ws://other:3030"] : []),
+      ]);
+      expect(invoke).toHaveBeenCalledExactlyOnceWith("sync.serverConfigure", {
+        settings,
+        configPath: "/other/config.yaml",
+      });
+    },
+  );
 });

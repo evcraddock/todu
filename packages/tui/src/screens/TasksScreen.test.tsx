@@ -9,6 +9,7 @@ import { TasksScreen } from "./TasksScreen.js";
 
 function renderWithQuery(children: ReactNode): ReturnType<typeof render> {
   const queryClient = createTuiQueryClient();
+  // biome-ignore lint/correctness/noComponentHookFactories: Each test render owns an isolated query client.
   function Wrapper(): JSX.Element {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }

@@ -121,18 +121,16 @@ describe("LAN listener CLI", () => {
     expect(invoke).not.toHaveBeenCalled();
     expect(os.networkInterfaces).not.toHaveBeenCalled();
   });
-  it.each([
-    "http://0.0.0.0:24377",
-    "http://[::]:24377",
-    "http://peer.lan/path",
-    "",
-  ])("refuses unusable advertised override %s without saving or probing", async (advertise) => {
-    const { run } = setup();
-    await run(["sync", "listener", "enable", "--advertise", advertise]);
-    expect(process.exitCode).toBe(1);
-    expect(saveSyncListenerConfig).not.toHaveBeenCalled();
-    expect(os.networkInterfaces).not.toHaveBeenCalled();
-  });
+  it.each(["http://0.0.0.0:24377", "http://[::]:24377", "http://peer.lan/path", ""])(
+    "refuses unusable advertised override %s without saving or probing",
+    async (advertise) => {
+      const { run } = setup();
+      await run(["sync", "listener", "enable", "--advertise", advertise]);
+      expect(process.exitCode).toBe(1);
+      expect(saveSyncListenerConfig).not.toHaveBeenCalled();
+      expect(os.networkInterfaces).not.toHaveBeenCalled();
+    },
+  );
   it("renders publication failures separately from a successfully listening socket", async () => {
     const { run, invoke, log } = setup();
     invoke.mockResolvedValueOnce({
@@ -260,14 +258,17 @@ describe("LAN listener CLI", () => {
     ["--bind", "localhost"],
     ["--bind", "127.0.0.1", "--port", "0"],
     ["--bind", "127.0.0.1", "--port", "24377x"],
-  ])("rejects invalid bindings and ports without saving or invoking the daemon: %s", async (...options) => {
-    const { run, invoke, error } = setup();
-    await run(["sync", "listener", "enable", ...options]);
-    expect(saveSyncListenerConfig).not.toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalled();
-    expect(process.exitCode).toBe(1);
-  });
+  ])(
+    "rejects invalid bindings and ports without saving or invoking the daemon: %s",
+    async (...options) => {
+      const { run, invoke, error } = setup();
+      await run(["sync", "listener", "enable", ...options]);
+      expect(saveSyncListenerConfig).not.toHaveBeenCalled();
+      expect(invoke).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
+      expect(process.exitCode).toBe(1);
+    },
+  );
 
   it("disables only the saved enablement flag, retaining the previous binding", async () => {
     const { run, invoke } = setup();

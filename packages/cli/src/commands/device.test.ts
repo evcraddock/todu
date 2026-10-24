@@ -59,26 +59,32 @@ describe("device CLI commands", () => {
   it.each([
     [["--url", "http://laptop.lan:24377"], "http://laptop.lan:24377"],
     [["--clear"], null],
-  ] as const)("updates/clears endpoint metadata with an automatically supplied ID: %s", async (args, endpoint) => {
-    const { run, invoke } = setup();
-    await run(["device", "endpoint", ...args]);
-    expect(invoke).toHaveBeenCalledWith("device.setEndpoint", { id: "native-local-id", endpoint });
-    expect(invoke.mock.calls.map(([method]) => method)).toEqual([
-      "device.localId",
-      "device.setEndpoint",
-    ]);
-  });
+  ] as const)(
+    "updates/clears endpoint metadata with an automatically supplied ID: %s",
+    async (args, endpoint) => {
+      const { run, invoke } = setup();
+      await run(["device", "endpoint", ...args]);
+      expect(invoke).toHaveBeenCalledWith("device.setEndpoint", {
+        id: "native-local-id",
+        endpoint,
+      });
+      expect(invoke.mock.calls.map(([method]) => method)).toEqual([
+        "device.localId",
+        "device.setEndpoint",
+      ]);
+    },
+  );
 
-  it.each([
-    [],
-    ["--clear", "--url", "http://host"],
-  ])("rejects missing or conflicting endpoint options: %s", async (...args) => {
-    const { run, invoke, error } = setup();
-    await run(["device", "endpoint", ...args]);
-    expect(invoke).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalled();
-    expect(process.exitCode).toBe(1);
-  });
+  it.each([[], ["--clear", "--url", "http://host"]])(
+    "rejects missing or conflicting endpoint options: %s",
+    async (...args) => {
+      const { run, invoke, error } = setup();
+      await run(["device", "endpoint", ...args]);
+      expect(invoke).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
+      expect(process.exitCode).toBe(1);
+    },
+  );
 
   it("removes an explicit device without promising remote deletion", async () => {
     const { run, invoke, log } = setup();

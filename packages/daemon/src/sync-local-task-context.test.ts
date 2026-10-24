@@ -136,19 +136,19 @@ describe("scoped local task pull context", () => {
     expect(guard.context.resolveTask({ externalId: "absent" })).toEqual({ state: "missing" });
   });
 
-  it.each([
-    "externalId",
-    "sourceUrl",
-  ] as const)("rejects duplicate %s even when a local ID disambiguates", async (field) => {
-    const other = task({
-      id: createTaskId("duplicate"),
-      externalId: "different",
-      sourceUrl: "https://different.test",
-    });
-    other[field] = task()[field];
-    const guard = await fixture([task(), other]).create();
-    expect(guard.context.resolveTask({ localTaskId: task().id })).toEqual({ state: "ambiguous" });
-  });
+  it.each(["externalId", "sourceUrl"] as const)(
+    "rejects duplicate %s even when a local ID disambiguates",
+    async (field) => {
+      const other = task({
+        id: createTaskId("duplicate"),
+        externalId: "different",
+        sourceUrl: "https://different.test",
+      });
+      other[field] = task()[field];
+      const guard = await fixture([task(), other]).create();
+      expect(guard.context.resolveTask({ localTaskId: task().id })).toEqual({ state: "ambiguous" });
+    },
+  );
 
   it("fails context creation on read failure or unexpected project exposure", async () => {
     const f = fixture();
@@ -160,19 +160,17 @@ describe("scoped local task pull context", () => {
     await expect(f.create()).rejects.toThrow("scope mismatch");
   });
 
-  it.each([
-    "active",
-    "done",
-    "inprogress",
-    "waiting",
-  ] as const)("does not authorize exclusion of %s tasks", async (status) => {
-    const guard = await fixture([task({ status })]).create();
-    const resolution = guard.context.resolveTask({ localTaskId: task().id });
-    if (resolution.state !== "found") throw new Error("Expected task");
-    expect(() => guard.validate(pull(resolution.task.observationToken))).toThrow(
-      "invalid cancellation exclusion",
-    );
-  });
+  it.each(["active", "done", "inprogress", "waiting"] as const)(
+    "does not authorize exclusion of %s tasks",
+    async (status) => {
+      const guard = await fixture([task({ status })]).create();
+      const resolution = guard.context.resolveTask({ localTaskId: task().id });
+      if (resolution.state !== "found") throw new Error("Expected task");
+      expect(() => guard.validate(pull(resolution.task.observationToken))).toThrow(
+        "invalid cancellation exclusion",
+      );
+    },
+  );
 
   it("rejects fabricated, foreign-cycle, duplicate, or missing exclusion receipts", async () => {
     const f = fixture();

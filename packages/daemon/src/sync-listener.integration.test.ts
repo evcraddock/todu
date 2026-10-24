@@ -127,49 +127,49 @@ describe("daemon LAN listener ownership", () => {
     });
   });
 
-  it.each([
-    "occupied port",
-    "missing bind",
-  ])("keeps private reads, edits, and health available after %s", async (failure) => {
-    const occupied = createServer();
-    occupied.listen(0, "127.0.0.1");
-    await once(occupied, "listening");
-    const address = occupied.address();
-    if (!address || typeof address === "string") throw new Error("Missing test address");
-    try {
-      const runtime = createDaemonRuntime({
-        storagePath: directory,
-        syncListener:
-          failure === "missing bind"
-            ? { enabled: true }
-            : { enabled: true, bind: "127.0.0.1", port: address.port },
-      });
-      runtimes.push(runtime);
-      await runtime.start();
-      expect(await rpc(runtime, "daemon.status")).toMatchObject({
-        ok: true,
-        value: { healthy: true, state: "running" },
-      });
-      expect(await rpc(runtime, "sync.status")).toMatchObject({
-        ok: true,
-        value: {
-          listener: {
-            state: "error",
-            error: expect.stringContaining("Local daemon operations remain available"),
+  it.each(["occupied port", "missing bind"])(
+    "keeps private reads, edits, and health available after %s",
+    async (failure) => {
+      const occupied = createServer();
+      occupied.listen(0, "127.0.0.1");
+      await once(occupied, "listening");
+      const address = occupied.address();
+      if (!address || typeof address === "string") throw new Error("Missing test address");
+      try {
+        const runtime = createDaemonRuntime({
+          storagePath: directory,
+          syncListener:
+            failure === "missing bind"
+              ? { enabled: true }
+              : { enabled: true, bind: "127.0.0.1", port: address.port },
+        });
+        runtimes.push(runtime);
+        await runtime.start();
+        expect(await rpc(runtime, "daemon.status")).toMatchObject({
+          ok: true,
+          value: { healthy: true, state: "running" },
+        });
+        expect(await rpc(runtime, "sync.status")).toMatchObject({
+          ok: true,
+          value: {
+            listener: {
+              state: "error",
+              error: expect.stringContaining("Local daemon operations remain available"),
+            },
           },
-        },
-      });
-      expect(
-        await rpc(runtime, "project.create", { input: { name: "Local edits still work" } }),
-      ).toMatchObject({ ok: true, value: { name: "Local edits still work" } });
-      expect(await rpc(runtime, "project.list")).toMatchObject({
-        ok: true,
-        value: [{ name: "Local edits still work" }],
-      });
-    } finally {
-      await new Promise<void>((resolve) => occupied.close(() => resolve()));
-    }
-  });
+        });
+        expect(
+          await rpc(runtime, "project.create", { input: { name: "Local edits still work" } }),
+        ).toMatchObject({ ok: true, value: { name: "Local edits still work" } });
+        expect(await rpc(runtime, "project.list")).toMatchObject({
+          ok: true,
+          value: [{ name: "Local edits still work" }],
+        });
+      } finally {
+        await new Promise<void>((resolve) => occupied.close(() => resolve()));
+      }
+    },
+  );
 
   it("rebinds only the newly attached catalog after an explicit existing local join", async () => {
     const storage = await initBootstrapStorage(directory);

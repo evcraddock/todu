@@ -117,7 +117,7 @@ export async function createLocalTaskPullGuard(params: {
     const seen = new Set<string>();
     return pull.cancelledTaskExclusions.map((exclusion) => {
       const expected = issued.get(exclusion?.observationToken);
-      if (!expected || expected.status !== "canceled" || !expected.externalId)
+      if (expected?.status !== "canceled" || !expected.externalId)
         throw new Error(`invalid cancellation exclusion receipt for binding ${binding.id}`);
       if (seen.has(expected.localTaskId)) throw new Error("duplicate cancellation exclusion");
       seen.add(expected.localTaskId);

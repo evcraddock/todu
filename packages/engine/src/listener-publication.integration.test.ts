@@ -135,19 +135,19 @@ describe("listener endpoint publication ownership", () => {
     expect(endpoint()).toBe("https://mini.lan:24400");
   });
 
-  it.each([
-    "0.0.0.0",
-    "::",
-  ])("does not invent an endpoint for wildcard %s and withdraws an old automatic endpoint", async (bind) => {
-    expect(await publication.apply(listening(bind))).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining("wildcard") },
-    });
-    expect(endpoint()).toBeUndefined();
-    await publication.apply(listening());
-    expect(await publication.apply(listening(bind))).toMatchObject({ ok: false });
-    expect(endpoint()).toBeUndefined();
-  });
+  it.each(["0.0.0.0", "::"])(
+    "does not invent an endpoint for wildcard %s and withdraws an old automatic endpoint",
+    async (bind) => {
+      expect(await publication.apply(listening(bind))).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining("wildcard") },
+      });
+      expect(endpoint()).toBeUndefined();
+      await publication.apply(listening());
+      expect(await publication.apply(listening(bind))).toMatchObject({ ok: false });
+      expect(endpoint()).toBeUndefined();
+    },
+  );
 
   it("formats IPv6 endpoints and removes only its automatic endpoint on listener failure", async () => {
     await publication.apply(listening("fd12::abcd", 24400));

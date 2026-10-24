@@ -72,27 +72,27 @@ describe("field-group update validation", () => {
     expect(validateSyncTaskFieldGroupUpdate(input)).toMatchObject({ ok: false, error: { field } });
   });
 
-  it.each([
-    "base",
-    "remote",
-  ])("rejects partial or invalid %s values rather than clearing omitted fields", (side) => {
-    for (const [group, value] of [
-      ["content", { title: "Title" }],
-      ["content", { title: "", description: "" }],
-      ["workflow", { status: "closed" }],
-      ["classification", { priority: "urgent", labels: [] }],
-      ["classification", { priority: "high", labels: [1] }],
-      ["assignment", { assignees: [{}] }],
-      ["assignment", { assignees: [{ externalAccountId: " " }] }],
-    ] as const) {
-      const valid = update().groups[group];
-      const input = { externalId: "123", groups: { [group]: { ...valid, [side]: value } } };
-      expect(validateSyncTaskFieldGroupUpdate(input)).toMatchObject({
-        ok: false,
-        error: { field: `groups.${group}.${side}` },
-      });
-    }
-  });
+  it.each(["base", "remote"])(
+    "rejects partial or invalid %s values rather than clearing omitted fields",
+    (side) => {
+      for (const [group, value] of [
+        ["content", { title: "Title" }],
+        ["content", { title: "", description: "" }],
+        ["workflow", { status: "closed" }],
+        ["classification", { priority: "urgent", labels: [] }],
+        ["classification", { priority: "high", labels: [1] }],
+        ["assignment", { assignees: [{}] }],
+        ["assignment", { assignees: [{ externalAccountId: " " }] }],
+      ] as const) {
+        const valid = update().groups[group];
+        const input = { externalId: "123", groups: { [group]: { ...valid, [side]: value } } };
+        expect(validateSyncTaskFieldGroupUpdate(input)).toMatchObject({
+          ok: false,
+          error: { field: `groups.${group}.${side}` },
+        });
+      }
+    },
+  );
 
   it.each([
     "yesterday",

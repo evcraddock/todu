@@ -35,11 +35,10 @@ const timezoneCases = [
 ];
 
 describe("Home local week across daylight-saving transitions", () => {
-  it.each(timezoneCases)("uses local dates and retains carryover in $timezone", ({
-    timezone,
-    dates,
-  }) => {
-    const script = `
+  it.each(timezoneCases)(
+    "uses local dates and retains carryover in $timezone",
+    ({ timezone, dates }) => {
+      const script = `
       import { addCalendarDays, createHomeTaskSections, endOfWeek, localDateString } from ${JSON.stringify(moduleUrl)};
       const dates = ${JSON.stringify(dates)};
       const results = dates.map(([instant, , expectedEnd]) => {
@@ -58,19 +57,20 @@ describe("Home local week across daylight-saving transitions", () => {
       });
       console.log(JSON.stringify(results));
     `;
-    const result = execFileSync(
-      process.execPath,
-      ["--import", "tsx", "--input-type=module", "-e", script],
-      { encoding: "utf8", env: { ...process.env, TZ: timezone }, timeout: 10_000 },
-    );
+      const result = execFileSync(
+        process.execPath,
+        ["--import", "tsx", "--input-type=module", "-e", script],
+        { encoding: "utf8", env: { ...process.env, TZ: timezone }, timeout: 10_000 },
+      );
 
-    expect(JSON.parse(result)).toEqual(
-      dates.map(([, today, weekEnd]) => ({
-        today,
-        weekEnd,
-        included: ["carryover", "saturday"],
-        originalScheduledDate: "2025-01-05",
-      })),
-    );
-  });
+      expect(JSON.parse(result)).toEqual(
+        dates.map(([, today, weekEnd]) => ({
+          today,
+          weekEnd,
+          included: ["carryover", "saturday"],
+          originalScheduledDate: "2025-01-05",
+        })),
+      );
+    },
+  );
 });

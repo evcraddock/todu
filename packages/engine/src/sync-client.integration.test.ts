@@ -139,29 +139,29 @@ async function withSocketFixture(run: (fixture: SocketFixture) => Promise<void>)
 }
 
 describe("replication socket ownership", () => {
-  it.each([
-    false,
-    true,
-  ])("closes every socket after initial handshake retries (delayed=%s)", async (delayed) => {
-    const server = await delayedServer();
-    const repo = new Repo({ network: [] });
-    try {
-      if (!delayed) server.release();
-      const adapter = addRemoteSyncAdapter(repo, server.url, 60);
-      if (delayed) {
-        await until(() => server.attempts() >= 4);
-        server.release();
+  it.each([false, true])(
+    "closes every socket after initial handshake retries (delayed=%s)",
+    async (delayed) => {
+      const server = await delayedServer();
+      const repo = new Repo({ network: [] });
+      try {
+        if (!delayed) server.release();
+        const adapter = addRemoteSyncAdapter(repo, server.url, 60);
+        if (delayed) {
+          await until(() => server.attempts() >= 4);
+          server.release();
+        }
+        await until(() => adapter.socket?.readyState === 1);
+        disposeRemoteSyncAdapter(repo, adapter);
+        await repo.shutdown();
+        expect(adapter.socket).toBeUndefined();
+        await expectNoSockets(server);
+      } finally {
+        await repo.shutdown();
+        await server.close();
       }
-      await until(() => adapter.socket?.readyState === 1);
-      disposeRemoteSyncAdapter(repo, adapter);
-      await repo.shutdown();
-      expect(adapter.socket).toBeUndefined();
-      await expectNoSockets(server);
-    } finally {
-      await repo.shutdown();
-      await server.close();
-    }
-  });
+    },
+  );
 
   it("closes retried sockets through the legacy sync-client disconnect function", async () => {
     const server = await delayedServer();
@@ -330,75 +330,70 @@ describe("replication socket ownership", () => {
     await expectNoSockets(fixture!.server);
   });
 
-  it(
-    "allows natural client process exit while its independent peer is still listening",
-    { timeout: 15_000 },
-    async () => {
-      const server = await delayedServer();
-      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "todu-socket-exit-"));
-      let child: ChildProcess | undefined;
-      let exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }> | undefined;
-      let stderr = "";
-      try {
-        const env = Object.fromEntries(
-          Object.entries(process.env).filter(([key]) => !key.startsWith("TODU_")),
-        );
-        const home = path.join(directory, "home");
-        fs.mkdirSync(home);
-        child = spawn(
-          process.execPath,
-          [
-            "--import",
-            "tsx",
-            fileURLToPath(
-              new URL(
-                "../../../scripts/test-helpers/replication-socket-client.mjs",
-                import.meta.url,
-              ),
-            ),
-            server.url,
-          ],
-          {
-            cwd: fileURLToPath(new URL("../../../", import.meta.url)),
-            env: {
-              ...env,
-              HOME: home,
-              XDG_CONFIG_HOME: path.join(directory, "config"),
-              XDG_DATA_HOME: path.join(directory, "data"),
-              XDG_CACHE_HOME: path.join(directory, "cache"),
-            },
-            stdio: ["ignore", "pipe", "pipe", "ipc"],
+  it("allows natural client process exit while its independent peer is still listening", {
+    timeout: 15_000,
+  }, async () => {
+    const server = await delayedServer();
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "todu-socket-exit-"));
+    let child: ChildProcess | undefined;
+    let exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }> | undefined;
+    let stderr = "";
+    try {
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.startsWith("TODU_")),
+      );
+      const home = path.join(directory, "home");
+      fs.mkdirSync(home);
+      child = spawn(
+        process.execPath,
+        [
+          "--import",
+          "tsx",
+          fileURLToPath(
+            new URL("../../../scripts/test-helpers/replication-socket-client.mjs", import.meta.url),
+          ),
+          server.url,
+        ],
+        {
+          cwd: fileURLToPath(new URL("../../../", import.meta.url)),
+          env: {
+            ...env,
+            HOME: home,
+            XDG_CONFIG_HOME: path.join(directory, "config"),
+            XDG_DATA_HOME: path.join(directory, "data"),
+            XDG_CACHE_HOME: path.join(directory, "cache"),
           },
-        );
-        exit = new Promise((resolve) =>
-          child!.once("exit", (code, signal) => resolve({ code, signal })),
-        );
-        child.stderr?.on("data", (chunk) => {
-          stderr += String(chunk);
-        });
-        const phases = new Set<string>();
-        child.on("message", (message) => {
-          if (typeof message === "object" && message !== null && "phase" in message)
-            phases.add(String(message.phase));
-        });
-        await until(() => server.attempts() >= 4);
-        server.release();
-        await until(() => phases.has("connected"), 8_000);
-        child.send("stop");
-        const result = await within(exit);
-        expect(result, stderr).toEqual({ code: 0, signal: null });
-        expect(phases.has("shutdown-returned")).toBe(true);
-        expect(server.server.listening).toBe(true);
-        await expectNoSockets(server);
-      } finally {
-        // Only a failed fixture is terminated; success must be natural before peer teardown.
-        if (child && exit && child.exitCode === null && child.signalCode === null) {
-          child.kill("SIGKILL");
-          await exit;
-        }
-        await server.close();
-        fs.rmSync(directory, { recursive: true });
+          stdio: ["ignore", "pipe", "pipe", "ipc"],
+        },
+      );
+      exit = new Promise((resolve) =>
+        child!.once("exit", (code, signal) => resolve({ code, signal })),
+      );
+      child.stderr?.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      const phases = new Set<string>();
+      child.on("message", (message) => {
+        if (typeof message === "object" && message !== null && "phase" in message)
+          phases.add(String(message.phase));
+      });
+      await until(() => server.attempts() >= 4);
+      server.release();
+      await until(() => phases.has("connected"), 8_000);
+      child.send("stop");
+      const result = await within(exit);
+      expect(result, stderr).toEqual({ code: 0, signal: null });
+      expect(phases.has("shutdown-returned")).toBe(true);
+      expect(server.server.listening).toBe(true);
+      await expectNoSockets(server);
+    } finally {
+      // Only a failed fixture is terminated; success must be natural before peer teardown.
+      if (child && exit && child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+        await exit;
       }
-    },
-  );
+      await server.close();
+      fs.rmSync(directory, { recursive: true });
+    }
+  });
 });

@@ -19,25 +19,28 @@ describe("three-way task field-group reconciliation", () => {
     [localEdit, base, "local-only", "local", true],
     [base, remoteEdit, "remote-only", "remote", false],
     [remoteEdit, remoteEdit, "converged", "equal", false],
-  ] as const)("resolves %s / %s without using clocks", (local, remote, resolution, winner, remoteWriteRequired) => {
-    const result = reconcileSyncTaskFieldGroup({
-      ...context,
-      group: "content",
-      local,
-      input: { base, remote, sourceTimestamp: older },
-      localTimestamp: newer,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: {
-        resolution,
-        winner,
-        remoteWriteRequired,
-        value: winner === "remote" ? remote : local,
-      },
-    });
-    expect(result.ok && "conflict" in result.value).toBe(false);
-  });
+  ] as const)(
+    "resolves %s / %s without using clocks",
+    (local, remote, resolution, winner, remoteWriteRequired) => {
+      const result = reconcileSyncTaskFieldGroup({
+        ...context,
+        group: "content",
+        local,
+        input: { base, remote, sourceTimestamp: older },
+        localTimestamp: newer,
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          resolution,
+          winner,
+          remoteWriteRequired,
+          value: winner === "remote" ? remote : local,
+        },
+      });
+      expect(result.ok && "conflict" in result.value).toBe(false);
+    },
+  );
 
   it.each([
     [newer, older, "local", "newer-timestamp"],
@@ -47,53 +50,59 @@ describe("three-way task field-group reconciliation", () => {
     [undefined, older, "remote", "remote-wins-missing-timestamp"],
     [newer, undefined, "remote", "remote-wins-missing-timestamp"],
     [undefined, undefined, "remote", "remote-wins-missing-timestamp"],
-  ] as const)("resolves divergent edits with local=%s remote=%s", (localTimestamp, sourceTimestamp, winner, selection) => {
-    const input: SyncTaskFieldGroupInput<"content"> = {
-      base,
-      remote: remoteEdit,
-      ...(sourceTimestamp ? { sourceTimestamp } : {}),
-    };
-    const result = reconcileSyncTaskFieldGroup({
-      ...context,
-      group: "content",
-      local: localEdit,
-      input,
-      ...(localTimestamp ? { localTimestamp } : {}),
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: {
-        resolution: "conflict",
-        winner,
-        remoteWriteRequired: winner === "local",
-        value: winner === "local" ? localEdit : remoteEdit,
-        conflict: {
-          ...context,
-          group: "content",
-          selection,
-          ...(localTimestamp ? { localTimestamp } : {}),
-          ...(sourceTimestamp ? { remoteTimestamp: sourceTimestamp } : {}),
+  ] as const)(
+    "resolves divergent edits with local=%s remote=%s",
+    (localTimestamp, sourceTimestamp, winner, selection) => {
+      const input: SyncTaskFieldGroupInput<"content"> = {
+        base,
+        remote: remoteEdit,
+        ...(sourceTimestamp ? { sourceTimestamp } : {}),
+      };
+      const result = reconcileSyncTaskFieldGroup({
+        ...context,
+        group: "content",
+        local: localEdit,
+        input,
+        ...(localTimestamp ? { localTimestamp } : {}),
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          resolution: "conflict",
+          winner,
+          remoteWriteRequired: winner === "local",
+          value: winner === "local" ? localEdit : remoteEdit,
+          conflict: {
+            ...context,
+            group: "content",
+            selection,
+            ...(localTimestamp ? { localTimestamp } : {}),
+            ...(sourceTimestamp ? { remoteTimestamp: sourceTimestamp } : {}),
+          },
         },
-      },
-    });
-  });
+      });
+    },
+  );
 
-  it.each([
-    "local",
-    "remote",
-  ])("rejects an invalid supplied %s clock even for one-sided changes", (side) => {
-    const result = reconcileSyncTaskFieldGroup({
-      ...context,
-      group: "content",
-      local: base,
-      input: { base, remote: remoteEdit, sourceTimestamp: side === "remote" ? "invalid" : newer },
-      localTimestamp: side === "local" ? "invalid" : older,
-    });
-    expect(result).toMatchObject({
-      ok: false,
-      error: { type: "validation", field: side === "local" ? "localTimestamp" : "sourceTimestamp" },
-    });
-  });
+  it.each(["local", "remote"])(
+    "rejects an invalid supplied %s clock even for one-sided changes",
+    (side) => {
+      const result = reconcileSyncTaskFieldGroup({
+        ...context,
+        group: "content",
+        local: base,
+        input: { base, remote: remoteEdit, sourceTimestamp: side === "remote" ? "invalid" : newer },
+        localTimestamp: side === "local" ? "invalid" : older,
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        error: {
+          type: "validation",
+          field: side === "local" ? "localTimestamp" : "sourceTimestamp",
+        },
+      });
+    },
+  );
 
   it("rejects parseable but non-RFC source timestamps and malformed normalized input", () => {
     for (const input of [

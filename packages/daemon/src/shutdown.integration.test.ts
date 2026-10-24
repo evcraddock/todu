@@ -70,22 +70,22 @@ describe("connected-client shutdown", () => {
     return client;
   }
 
-  it.each([
-    false,
-    true,
-  ])("closes idle clients (allowHalfOpen=%s), handles concurrent stops, and can bind again", async (allowHalfOpen) => {
-    transport = createUdsTransport({ storagePath: tmpDir });
-    const endpoint = await transport.start();
-    const client = await connect(endpoint.path, allowHalfOpen);
-    const ended = new Promise<void>((resolve) => client.once("end", resolve));
-    client.resume();
-    await within(Promise.all([transport.stop(), transport.stop()]), 1_000);
-    await within(ended, 1_000);
-    client.destroy();
-    expect(fs.existsSync(endpoint.path)).toBe(false);
-    await transport.start();
-    expect(fs.existsSync(endpoint.path)).toBe(true);
-  });
+  it.each([false, true])(
+    "closes idle clients (allowHalfOpen=%s), handles concurrent stops, and can bind again",
+    async (allowHalfOpen) => {
+      transport = createUdsTransport({ storagePath: tmpDir });
+      const endpoint = await transport.start();
+      const client = await connect(endpoint.path, allowHalfOpen);
+      const ended = new Promise<void>((resolve) => client.once("end", resolve));
+      client.resume();
+      await within(Promise.all([transport.stop(), transport.stop()]), 1_000);
+      await within(ended, 1_000);
+      client.destroy();
+      expect(fs.existsSync(endpoint.path)).toBe(false);
+      await transport.start();
+      expect(fs.existsSync(endpoint.path)).toBe(true);
+    },
+  );
 
   it("closes subscribed clients and reopens the persisted catalog", async () => {
     runtime = createDaemonRuntime({ storagePath: tmpDir, logLevel: "error" });
@@ -126,114 +126,114 @@ describe("connected-client shutdown", () => {
   it.each([
     { requestTimeoutMs: 20, disconnected: true },
     { requestTimeoutMs: 30_000, disconnected: false },
-  ])("drains actual mutations before storage close ($requestTimeoutMs ms timeout, disconnected=$disconnected)", async ({
-    requestTimeoutMs,
-    disconnected,
-  }) => {
-    const entered = deferred();
-    const release = deferred();
-    releaseWork = release.resolve;
-    let storageClosed = false;
-    let writes = 0;
-    const createTodu = engine.createTodu;
-    vi.spyOn(engine, "createTodu").mockImplementation(async (options) => {
-      const todu = await createTodu(options);
-      const createProject = todu.project.create;
-      vi.spyOn(todu.project, "create").mockImplementation(async (input) => {
-        entered.resolve();
-        await release.promise;
-        expect(storageClosed).toBe(false);
-        writes += 1;
-        return createProject(input);
-      });
-      const close = todu.close;
-      vi.spyOn(todu, "close").mockImplementation(async () => {
-        storageClosed = true;
-        await close();
-      });
-      return todu;
-    });
-    runtime = createDaemonRuntime({ storagePath: tmpDir, requestTimeoutMs, logLevel: "error" });
-    await runtime.start();
-    const client = await connect(runtime.config().socketPath);
-    const read = frameReader(client);
-    const pending = request({
-      client,
-      read,
-      method: "project.create",
-      params: { input: { name: "Delayed" } },
-    });
-    await entered.promise;
-    if (disconnected) {
-      expect((await pending).error).toMatchObject({ code: "TIMEOUT" });
-      client.destroy();
-    }
-    let stopped = false;
-    const stopping = runtime.stop().then(() => {
-      stopped = true;
-    });
-    await delay(50);
-    expect(stopped).toBe(false);
-    expect(storageClosed).toBe(false);
-    release.resolve();
-    if (!disconnected) {
-      expect((await pending).result).toMatchObject({ name: "Delayed" });
-    }
-    await within(stopping, 2_000);
-    expect(writes).toBe(1);
-    expect(storageClosed).toBe(true);
-    vi.restoreAllMocks();
-    await runtime.start();
-    const reopened = await connect(runtime.config().socketPath);
-    const projects = await request({
-      client: reopened,
-      read: frameReader(reopened),
-      method: "project.list",
-      params: {},
-    });
-    expect(projects.result).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "Delayed" })]),
-    );
-  });
-
-  it.each([
-    false,
-    true,
-  ])("rejects requests while an accepted handler drains (queued=%s)", async (queued) => {
-    const entered = deferred();
-    const release = deferred();
-    releaseWork = release.resolve;
-    let calls = 0;
-    runtime = createDaemonRuntime({
-      storagePath: tmpDir,
-      requestTimeoutMs: 20,
-      logLevel: "error",
-      rpcMethodHandlers: {
-        "test.work": async (request) => {
-          calls += 1;
+  ])(
+    "drains actual mutations before storage close ($requestTimeoutMs ms timeout, disconnected=$disconnected)",
+    async ({ requestTimeoutMs, disconnected }) => {
+      const entered = deferred();
+      const release = deferred();
+      releaseWork = release.resolve;
+      let storageClosed = false;
+      let writes = 0;
+      const createTodu = engine.createTodu;
+      vi.spyOn(engine, "createTodu").mockImplementation(async (options) => {
+        const todu = await createTodu(options);
+        const createProject = todu.project.create;
+        vi.spyOn(todu.project, "create").mockImplementation(async (input) => {
           entered.resolve();
           await release.promise;
-          return createProtocolSuccessFrame(request.id, true);
+          expect(storageClosed).toBe(false);
+          writes += 1;
+          return createProject(input);
+        });
+        const close = todu.close;
+        vi.spyOn(todu, "close").mockImplementation(async () => {
+          storageClosed = true;
+          await close();
+        });
+        return todu;
+      });
+      runtime = createDaemonRuntime({ storagePath: tmpDir, requestTimeoutMs, logLevel: "error" });
+      await runtime.start();
+      const client = await connect(runtime.config().socketPath);
+      const read = frameReader(client);
+      const pending = request({
+        client,
+        read,
+        method: "project.create",
+        params: { input: { name: "Delayed" } },
+      });
+      await entered.promise;
+      if (disconnected) {
+        expect((await pending).error).toMatchObject({ code: "TIMEOUT" });
+        client.destroy();
+      }
+      let stopped = false;
+      const stopping = runtime.stop().then(() => {
+        stopped = true;
+      });
+      await delay(50);
+      expect(stopped).toBe(false);
+      expect(storageClosed).toBe(false);
+      release.resolve();
+      if (!disconnected) {
+        expect((await pending).result).toMatchObject({ name: "Delayed" });
+      }
+      await within(stopping, 2_000);
+      expect(writes).toBe(1);
+      expect(storageClosed).toBe(true);
+      vi.restoreAllMocks();
+      await runtime.start();
+      const reopened = await connect(runtime.config().socketPath);
+      const projects = await request({
+        client: reopened,
+        read: frameReader(reopened),
+        method: "project.list",
+        params: {},
+      });
+      expect(projects.result).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "Delayed" })]),
+      );
+    },
+  );
+
+  it.each([false, true])(
+    "rejects requests while an accepted handler drains (queued=%s)",
+    async (queued) => {
+      const entered = deferred();
+      const release = deferred();
+      releaseWork = release.resolve;
+      let calls = 0;
+      runtime = createDaemonRuntime({
+        storagePath: tmpDir,
+        requestTimeoutMs: 20,
+        logLevel: "error",
+        rpcMethodHandlers: {
+          "test.work": async (request) => {
+            calls += 1;
+            entered.resolve();
+            await release.promise;
+            return createProtocolSuccessFrame(request.id, true);
+          },
         },
-      },
-    });
-    await runtime.start();
-    const client = await connect(runtime.config().socketPath);
-    const read = frameReader(client);
-    const first = request({ client, read, method: "test.work", params: {} });
-    if (queued)
-      client.write(`${JSON.stringify({ id: "queued", method: "test.work", params: {} })}\n`);
-    await entered.promise;
-    const stopping = runtime.stop();
-    expect((await first).error).toMatchObject({ code: "TIMEOUT" });
-    const rejected = queued
-      ? await read()
-      : await request({ client, read, method: "test.work", params: {} });
-    expect(rejected.error).toMatchObject({ code: "DAEMON_UNAVAILABLE" });
-    expect(calls).toBe(1);
-    release.resolve();
-    await within(stopping, 2_000);
-  });
+      });
+      await runtime.start();
+      const client = await connect(runtime.config().socketPath);
+      const read = frameReader(client);
+      const first = request({ client, read, method: "test.work", params: {} });
+      if (queued)
+        client.write(`${JSON.stringify({ id: "queued", method: "test.work", params: {} })}\n`);
+      await entered.promise;
+      const stopping = runtime.stop();
+      expect((await first).error).toMatchObject({ code: "TIMEOUT" });
+      const rejected = queued
+        ? await read()
+        : await request({ client, read, method: "test.work", params: {} });
+      expect(rejected.error).toMatchObject({ code: "DAEMON_UNAVAILABLE" });
+      expect(calls).toBe(1);
+      release.resolve();
+      await within(stopping, 2_000);
+    },
+  );
 
   it("closes the final engine after an accepted join without restarting workers", async () => {
     const storage = await engine.initBootstrapStorage(tmpDir);
@@ -386,51 +386,50 @@ describe("connected-client shutdown", () => {
     ["shutdown", "initialize", "pull", "acknowledge", "push"].flatMap((phase) =>
       [false, true].map((disconnected) => ({ phase, disconnected })),
     ),
-  )("drains provider $phase before natural exit (disconnected=$disconnected) and preserves history", async ({
-    phase,
-    disconnected,
-  }) => {
-    const rootDir = fileURLToPath(new URL("../../../", import.meta.url));
-    const pluginPath = path.join(tmpDir, "shutdown-provider.mjs");
-    const releasePath = path.join(tmpDir, "release-provider");
-    const configPath = path.join(tmpDir, "config.yaml");
-    let originalTask: Task;
-    let originalNote: Note;
-    const seeded = await engine.createTodu({ storagePath: tmpDir });
-    try {
-      const project = await seeded.project.create({ name: "Provider shutdown fixture" });
-      if (!project.ok) throw new Error(project.error.message);
-      const binding = await seeded.integration.create({
-        provider: "shutdown-fixture",
-        projectId: project.value.id,
-        targetKind: "repository",
-        targetRef: "fixture/local",
-        enabled: true,
-        strategy: phase === "push" ? "push" : "pull",
-      });
-      if (!binding.ok) throw new Error(binding.error.message);
-      const task = await seeded.task.create({
-        projectId: project.value.id,
-        title: "Retained task",
-        description: "Retained description",
-        status: "done",
-      });
-      if (!task.ok) throw new Error(task.error.message);
-      originalTask = task.value;
-      const note = await seeded.note.create({
-        entityType: "task",
-        entityId: task.value.id,
-        content: "Retained note",
-      });
-      if (!note.ok) throw new Error(note.error.message);
-      originalNote = note.value;
-    } finally {
-      await seeded.close();
-    }
-    fs.writeFileSync(configPath, "sync:\n  remote:\n    enabled: false\n");
-    fs.writeFileSync(
-      pluginPath,
-      `import fs from "node:fs";
+  )(
+    "drains provider $phase before natural exit (disconnected=$disconnected) and preserves history",
+    async ({ phase, disconnected }) => {
+      const rootDir = fileURLToPath(new URL("../../../", import.meta.url));
+      const pluginPath = path.join(tmpDir, "shutdown-provider.mjs");
+      const releasePath = path.join(tmpDir, "release-provider");
+      const configPath = path.join(tmpDir, "config.yaml");
+      let originalTask: Task;
+      let originalNote: Note;
+      const seeded = await engine.createTodu({ storagePath: tmpDir });
+      try {
+        const project = await seeded.project.create({ name: "Provider shutdown fixture" });
+        if (!project.ok) throw new Error(project.error.message);
+        const binding = await seeded.integration.create({
+          provider: "shutdown-fixture",
+          projectId: project.value.id,
+          targetKind: "repository",
+          targetRef: "fixture/local",
+          enabled: true,
+          strategy: phase === "push" ? "push" : "pull",
+        });
+        if (!binding.ok) throw new Error(binding.error.message);
+        const task = await seeded.task.create({
+          projectId: project.value.id,
+          title: "Retained task",
+          description: "Retained description",
+          status: "done",
+        });
+        if (!task.ok) throw new Error(task.error.message);
+        originalTask = task.value;
+        const note = await seeded.note.create({
+          entityType: "task",
+          entityId: task.value.id,
+          content: "Retained note",
+        });
+        if (!note.ok) throw new Error(note.error.message);
+        originalNote = note.value;
+      } finally {
+        await seeded.close();
+      }
+      fs.writeFileSync(configPath, "sync:\n  remote:\n    enabled: false\n");
+      fs.writeFileSync(
+        pluginPath,
+        `import fs from "node:fs";
        async function gate(phase) {
          console.log("PHASE_ENTERED:" + phase);
          if (phase === ${JSON.stringify(phase)}) {
@@ -450,87 +449,89 @@ describe("connected-client shutdown", () => {
            async shutdown() { await gate("shutdown"); },
          },
        };`,
-    );
-    releaseWork = () => fs.writeFileSync(releasePath, "released");
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(([name]) => !name.startsWith("TODU_")),
-    );
-    const spawningAt = performance.now();
-    child = spawn(
-      process.execPath,
-      ["--import", "tsx", path.join(rootDir, "packages/daemon/src/entrypoint.ts")],
-      {
-        cwd: rootDir,
-        env: {
-          ...env,
-          HOME: tmpDir,
-          XDG_CONFIG_HOME: path.join(tmpDir, "config"),
-          XDG_DATA_HOME: path.join(tmpDir, "data"),
-          TODU_CONFIG: configPath,
-          TODU_DATA_DIR: tmpDir,
-          TODU_SYNC_ENABLED: "false",
-          TODU_DAEMON_PLUGIN_PATHS: pluginPath,
-          TODU_DAEMON_ASSIGNED_WORKERS: "shutdown-fixture-sync",
+      );
+      releaseWork = () => fs.writeFileSync(releasePath, "released");
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => !name.startsWith("TODU_")),
+      );
+      const spawningAt = performance.now();
+      child = spawn(
+        process.execPath,
+        ["--import", "tsx", path.join(rootDir, "packages/daemon/src/entrypoint.ts")],
+        {
+          cwd: rootDir,
+          env: {
+            ...env,
+            HOME: tmpDir,
+            XDG_CONFIG_HOME: path.join(tmpDir, "config"),
+            XDG_DATA_HOME: path.join(tmpDir, "data"),
+            TODU_CONFIG: configPath,
+            TODU_DATA_DIR: tmpDir,
+            TODU_SYNC_ENABLED: "false",
+            TODU_DAEMON_PLUGIN_PATHS: pluginPath,
+            TODU_DAEMON_ASSIGNED_WORKERS: "shutdown-fixture-sync",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    let logs = "";
-    child.stdout?.on("data", (chunk: Buffer) => {
-      logs += chunk.toString();
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      logs += chunk.toString();
-    });
-    childExit = new Promise((resolve, reject) => {
-      child?.once("error", reject);
-      child?.once("close", (code, signal) => resolve({ code, signal }));
-    });
-    const readyMarker =
-      phase === "shutdown" ? "sync plugin cycle completed" : `PHASE_ENTERED:${phase}`;
-    await vi.waitFor(() => expect(logs).toContain(readyMarker), { timeout: 5_000 });
-    const spawnToReadyMs = performance.now() - spawningAt;
-    const client = await connect(path.join(tmpDir, "daemon.sock"));
-    const read = frameReader(client);
-    const statusAt = performance.now();
-    const status = await request({ client, read, method: "daemon.status", params: {} });
-    const statusRpcMs = performance.now() - statusAt;
-    expect(status.result).toMatchObject({ state: "running", healthy: true });
-    console.info(
-      "SHUTDOWN_STARTUP_TIMING",
-      JSON.stringify({ phase, disconnected, spawnToReadyMs, statusRpcMs }),
-    );
-    await request({
-      client,
-      read,
-      method: "events.subscribe",
-      params: { events: ["data.changed"] },
-    });
-    if (disconnected) client.destroy();
-    child.kill("SIGTERM");
-    if (phase === "shutdown")
-      await vi.waitFor(() => expect(logs).toContain("PHASE_ENTERED:shutdown"));
-    await delay(350);
-    expect(child.exitCode).toBeNull();
-    expect(logs).not.toContain('"message":"daemon process stopped"');
-    releaseWork();
-    expect(await within(childExit, 2_000)).toEqual({ code: 0, signal: null });
-    expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeGreaterThan(-1);
-    expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeLessThan(
-      logs.indexOf('"message":"daemon process stopped"'),
-    );
-    expect(logs).not.toMatch(/UnhandledPromiseRejection|shutdown failed|storage.*race/);
-    expect(fs.existsSync(path.join(tmpDir, "daemon.sock"))).toBe(false);
-    const reopened = await engine.createTodu({ storagePath: tmpDir });
-    try {
-      const task = await reopened.task.get(originalTask.id);
-      expect(task.ok && task.value).toEqual(originalTask);
-      const note = await reopened.note.get(originalNote.id);
-      expect(note.ok && note.value).toEqual(originalNote);
-    } finally {
-      await reopened.close();
-    }
-  }, 10_000);
+      );
+      let logs = "";
+      child.stdout?.on("data", (chunk: Buffer) => {
+        logs += chunk.toString();
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        logs += chunk.toString();
+      });
+      childExit = new Promise((resolve, reject) => {
+        child?.once("error", reject);
+        child?.once("close", (code, signal) => resolve({ code, signal }));
+      });
+      const readyMarker =
+        phase === "shutdown" ? "sync plugin cycle completed" : `PHASE_ENTERED:${phase}`;
+      await vi.waitFor(() => expect(logs).toContain(readyMarker), { timeout: 5_000 });
+      const spawnToReadyMs = performance.now() - spawningAt;
+      const client = await connect(path.join(tmpDir, "daemon.sock"));
+      const read = frameReader(client);
+      const statusAt = performance.now();
+      const status = await request({ client, read, method: "daemon.status", params: {} });
+      const statusRpcMs = performance.now() - statusAt;
+      expect(status.result).toMatchObject({ state: "running", healthy: true });
+      console.info(
+        "SHUTDOWN_STARTUP_TIMING",
+        JSON.stringify({ phase, disconnected, spawnToReadyMs, statusRpcMs }),
+      );
+      await request({
+        client,
+        read,
+        method: "events.subscribe",
+        params: { events: ["data.changed"] },
+      });
+      if (disconnected) client.destroy();
+      child.kill("SIGTERM");
+      if (phase === "shutdown")
+        await vi.waitFor(() => expect(logs).toContain("PHASE_ENTERED:shutdown"));
+      await delay(350);
+      expect(child.exitCode).toBeNull();
+      expect(logs).not.toContain('"message":"daemon process stopped"');
+      releaseWork();
+      expect(await within(childExit, 2_000)).toEqual({ code: 0, signal: null });
+      expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeGreaterThan(-1);
+      expect(logs.indexOf("PHASE_COMPLETED:shutdown")).toBeLessThan(
+        logs.indexOf('"message":"daemon process stopped"'),
+      );
+      expect(logs).not.toMatch(/UnhandledPromiseRejection|shutdown failed|storage.*race/);
+      expect(fs.existsSync(path.join(tmpDir, "daemon.sock"))).toBe(false);
+      const reopened = await engine.createTodu({ storagePath: tmpDir });
+      try {
+        const task = await reopened.task.get(originalTask.id);
+        expect(task.ok && task.value).toEqual(originalTask);
+        const note = await reopened.note.get(originalNote.id);
+        expect(note.ok && note.value).toEqual(originalNote);
+      } finally {
+        await reopened.close();
+      }
+    },
+    10_000,
+  );
 
   it("propagates process shutdown failures without firing the successful stopped hook", async () => {
     const stopped = vi.fn();
