@@ -152,7 +152,7 @@ Use `Shift+J/K` to focus a Home section, `j/k` or arrow keys to select a project
 
 ### Build from source
 
-Use Node.js 24 for source development and tests, matching CI.
+Use Node.js 24.15 or newer on the Node 24 line for source development and tests. Run `nvm use` to select the installed version specified in `.nvmrc`. CI uses Node 24.
 
 Additional prerequisite for standalone CLI binaries:
 

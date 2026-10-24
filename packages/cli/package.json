@@ -12,8 +12,8 @@
   ],
   "scripts": {
     "prebuild": "node generate-version.mjs",
-    "build": "tsgo -p tsconfig.build.json",
-    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
     "@todu/daemon": "*",

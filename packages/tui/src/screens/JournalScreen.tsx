@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Note, NoteFilter } from "@todu/core";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useWindowSize } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
@@ -39,7 +39,7 @@ export function JournalScreen({
 }: JournalScreenProps): JSX.Element {
   const queryClient = useQueryClient();
   const { suspendTerminal } = useApp();
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const [selectedDate, setSelectedDate] = useState(() => initialDate ?? new Date());
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
@@ -70,7 +70,7 @@ export function JournalScreen({
   const entryWindow = getVisibleTaskWindow(
     entries,
     effectiveSelectedEntryId,
-    resolveMaxVisibleEntries(stdout.rows),
+    resolveMaxVisibleEntries(terminal.rows),
   );
   const saveMutation = useMutation({
     mutationFn: ({ entry, content }: SaveEntryInput) =>

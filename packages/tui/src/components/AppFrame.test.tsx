@@ -1,6 +1,6 @@
 import { Text } from "ink";
 import { render } from "ink-testing-library";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { allProjectsFilter } from "../state/project-filter.js";
 import { AppFrame, resolveTerminalSize } from "./AppFrame.js";
 
@@ -42,5 +42,31 @@ describe("AppFrame", () => {
     expect(lastFrame()).toContain("↑↓ Select");
     expect(lastFrame()).toContain("← Projects");
     expect(lastFrame()).toContain("Enter Details");
+  });
+
+  it("updates the frame height when the terminal is resized", async () => {
+    const { stdout, lastFrame, unmount } = render(
+      <AppFrame
+        route="tasks"
+        taskFilter={{ projectFilter: allProjectsFilter }}
+        footerContext="tasks-list"
+      >
+        <Text>body content</Text>
+      </AppFrame>,
+    );
+
+    try {
+      for (const rows of [20, 12]) {
+        Object.defineProperty(stdout, "rows", { value: rows, configurable: true });
+        stdout.emit("resize");
+        await vi.waitFor(() => {
+          expect(lastFrame()?.split("\n")).toHaveLength(rows);
+          expect(lastFrame()).toContain("body content");
+          expect(lastFrame()).toContain("Enter Details");
+        });
+      }
+    } finally {
+      unmount();
+    }
   });
 });

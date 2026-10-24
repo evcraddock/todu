@@ -103,3 +103,8 @@ PR Pipeline Status
 Both Vitest configurations build the workspace once in global setup before test workers start. CLI tests use those compiled artifacts instead of rebuilding from each test file. This also applies to filtered test runs and rebuilds before watch-mode reruns. A build failure stops the run before tests execute.
 
 The full suite uses half the available workers to leave capacity for child CLI and daemon processes. Command suites that launch multiple CLI subprocesses have a 30-second test budget; ordinary unit-test limits remain unchanged.
+
+## Dependency holds
+
+- Automerge Repo packages remain pinned to 2.5.6. The newer 2.6 release is an alpha, and this project applies local compatibility patches that must be reassessed before upgrading.
+- Biome is pinned to 2.6.2. As of October 24, 2026, 2.6.3 references an unpublished `@biomejs/cli-android-arm64@2.6.3` package; generating a lockfile and running `npm ci` fails with a missing-package error. Retry the patch upgrade once the release is complete.

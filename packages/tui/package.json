@@ -13,17 +13,17 @@
   ],
   "scripts": {
     "prebuild": "node generate-version.mjs",
-    "build": "tsgo -p tsconfig.build.json && chmod +x dist/index.js",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
     "prepack": "npm run build",
     "test": "cd ../.. && vitest run $(find packages/tui/src \\( -name '*.test.ts' -o -name '*.test.tsx' \\))",
-    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
     "@todu/core": "*",
-    "ink": "^7.1.1",
+    "ink": "^8.0.0",
     "react": "^19.3.1",
-    "react-devtools-core": "^7.0.1",
+    "react-devtools-core": "^8.0.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

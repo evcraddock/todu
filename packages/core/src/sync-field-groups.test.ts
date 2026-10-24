@@ -215,7 +215,7 @@ describe("field-group acknowledgment contract", () => {
 describe("field-group types", () => {
   it("compiles the contract type assertions with the project compiler", () => {
     const compiler = fileURLToPath(
-      new URL("../../../node_modules/@typescript/native-preview/bin/tsgo.js", import.meta.url),
+      new URL("../../../node_modules/typescript/bin/tsc", import.meta.url),
     );
     execFileSync(
       process.execPath,
@@ -228,6 +228,8 @@ describe("field-group types", () => {
         "Node16",
         "--target",
         "ES2022",
+        "--types",
+        "node",
         "--skipLibCheck",
         fileURLToPath(import.meta.url),
       ],

@@ -1,4 +1,4 @@
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useWindowSize } from "ink";
 import type { JSX, ReactNode } from "react";
 import { type FooterContext, primaryRouteKeyBindings } from "../app/keymap.js";
 import { type AppRoute, routeLabels } from "../app/routes.js";
@@ -23,10 +23,10 @@ export function AppFrame({
   terminalWidth,
   terminalHeight,
 }: AppFrameProps): JSX.Element {
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const size = resolveTerminalSize({
-    width: terminalWidth ?? stdout.columns,
-    height: terminalHeight ?? stdout.rows,
+    width: terminalWidth ?? terminal.columns,
+    height: terminalHeight ?? terminal.rows,
   });
 
   return (

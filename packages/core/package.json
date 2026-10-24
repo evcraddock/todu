@@ -19,8 +19,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsgo -p tsconfig.build.json",
-    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "publishConfig": {
     "access": "public"

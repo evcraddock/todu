@@ -7,7 +7,7 @@ Standards for writing and reviewing code in todu. This is a living document — 
 | Tool | Purpose | Command |
 |------|---------|---------|
 | **Biome** | Linting + formatting | `make check` or `biome check --write .` |
-| **tsgo** or **tsc** | Type checking + compilation | `make build` |
+| **tsc** (TypeScript 7) | Type checking + compilation | `make build` |
 | **Vitest** | Testing | `make test` |
 | **Husky** | Pre-commit hook | Runs `make check`, re-stages formatted files |
 
