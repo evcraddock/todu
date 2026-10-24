@@ -996,6 +996,22 @@ body,
   max-width: 520px;
 }
 
+.creation-dialog {
+  width: min(860px, calc(100vw - 32px));
+  min-width: 0;
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.creation-dialog .form-row {
+  flex-wrap: wrap;
+}
+
+.creation-dialog .form-row .form-field {
+  min-width: min(180px, 100%);
+}
+
 .dialog-title {
   font-size: 16px;
   font-weight: 600;

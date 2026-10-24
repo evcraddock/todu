@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { Icon } from "../components/Icon.js";
+import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { useCreateProject } from "../hooks/useTodu.js";
 
 export function CreateProjectDialog({ onClose }: { onClose: () => void }): ReactNode {
@@ -28,8 +29,17 @@ export function CreateProjectDialog({ onClose }: { onClose: () => void }): React
         if (e.key === "Escape") onClose();
       }}
     >
-      <div className="dialog" onClick={(e) => e.stopPropagation()} onKeyDown={undefined}>
-        <h2 className="dialog-title">New Project</h2>
+      <div
+        className="dialog creation-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-project-title"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={undefined}
+      >
+        <h2 className="dialog-title" id="new-project-title">
+          New Project
+        </h2>
         <div className="form-field">
           <label className="form-label" htmlFor="proj-name">
             Name <span className="required">*</span>
@@ -58,17 +68,16 @@ export function CreateProjectDialog({ onClose }: { onClose: () => void }): React
             <option value="low">Low</option>
           </select>
         </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="proj-desc">
+        <div className="form-field" role="group" aria-labelledby="proj-desc-label">
+          <div className="form-label" id="proj-desc-label">
             Description
-          </label>
-          <textarea
-            id="proj-desc"
-            className="input"
-            rows={3}
+          </div>
+          <MarkdownEditor
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             placeholder="Optional description"
+            minHeight={260}
+            editable={!createProject.isPending}
           />
         </div>
         <div className="dialog-actions">

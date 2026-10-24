@@ -12,6 +12,8 @@ See [Desktop settings](docs/desktop-settings.md) for model connections, sync set
 
 List pages remember filter dropdowns and sort selections locally on this computer. Each page keeps its own preferences; use **Clear filters** to clear its filters. Project and assignee dropdowns list names alphabetically.
 
+New Task and New Project dialogs include a larger Markdown description editor with formatting controls. The dialogs resize to fit smaller windows and scroll when needed.
+
 The desktop app is a client of your existing local daemon. Start the daemon explicitly with `todu daemon start` (or configure a user service), then open the desktop app. Desktop startup and reconnect never automatically launch, replace, or restart a daemon. If connection fails, the error explains how to check the daemon and where to find the desktop error log. See [Daemon Service Operations](docs/daemon-service-operations.md).
 
 #### Linux install

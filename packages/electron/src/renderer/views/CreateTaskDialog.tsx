@@ -1,6 +1,7 @@
 import { createProjectId, type TaskPriority } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { Icon } from "../components/Icon.js";
+import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { ProjectOptions } from "../components/ProjectOptions.js";
 import { useCreateTask, useProjects } from "../hooks/useTodu.js";
 
@@ -57,11 +58,16 @@ export function CreateTaskDialog({
       }}
     >
       <div
-        className="dialog dialog-wide"
+        className="dialog creation-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-task-title"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={undefined}
       >
-        <h3 className="dialog-title">New Task</h3>
+        <h3 className="dialog-title" id="new-task-title">
+          New Task
+        </h3>
 
         {error && <div className="dialog-error">{error}</div>}
 
@@ -127,17 +133,16 @@ export function CreateTaskDialog({
           </div>
         </div>
 
-        <div className="form-field">
-          <label className="form-label" htmlFor="task-desc">
+        <div className="form-field" role="group" aria-labelledby="task-desc-label">
+          <div className="form-label" id="task-desc-label">
             Description
-          </label>
-          <textarea
-            id="task-desc"
-            className="input"
-            rows={3}
+          </div>
+          <MarkdownEditor
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             placeholder="Optional description"
+            minHeight={260}
+            editable={!createTask.isPending}
           />
         </div>
 
