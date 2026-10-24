@@ -84,6 +84,15 @@ describe("resolveModel", () => {
     expect(model?.id).toBe("gpt-4o");
   });
 
+  it("prefers a directly connected provider over legacy alias credentials", () => {
+    const model = resolveModel("openai", "gpt-5.1", {
+      aliases: ALIASES,
+      hasOAuthCreds: () => true,
+      getModelFn: fakeGetModel,
+    });
+    expect(model?.provider).toBe("openai");
+  });
+
   it("returns undefined when model not found anywhere", () => {
     const model = resolveModel("openai", "nonexistent", {
       aliases: ALIASES,

@@ -59,7 +59,7 @@ Use the CLI when you want power-user workflows like:
 
 Prerequisites:
 
-- Node.js 20+
+- Node.js 22.12+
 - npm
 
 Install the latest CLI:
@@ -151,6 +151,8 @@ TUI Home includes **Project Focus** after Now, This Week, and Waiting. Projects 
 Use `Shift+J/K` to focus a Home section, `j/k` or arrow keys to select a project, and `Enter` to open Tasks filtered by that project, just like selecting it in Projects. Navigation keeps the selection visible. An empty focus section shows `No focused projects.` Project Focus is guidance only: displaying or opening projects does not schedule, start, or reprioritize tasks, change project fields, or alter the existing Home task selection rules. No weekly reset is needed.
 
 ### Build from source
+
+Use Node.js 24.15 or newer on the Node 24 line for source development and tests. Run `nvm use` to select the installed version specified in `.nvmrc`. CI uses Node 24.
 
 Additional prerequisite for standalone CLI binaries:
 

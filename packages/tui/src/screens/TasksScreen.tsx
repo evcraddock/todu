@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project, Task, TaskStatus } from "@todu/core";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Text, useApp, useInput, useWindowSize } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { TasksFooterContext } from "../app/keymap.js";
@@ -99,7 +99,7 @@ export function TasksScreen({
   const projectListFilter = projectListFilterProp ?? defaultProjectListFilter;
   const queryClient = useQueryClient();
   const { suspendTerminal } = useApp();
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const [selectedProjectOptionId, setSelectedProjectOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
   );
@@ -445,10 +445,10 @@ export function TasksScreen({
     );
   }
 
-  const maxVisibleListItems = resolveMaxVisibleListItems(stdout.rows);
-  const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
-  const detailContentWidth = resolveDetailContentWidth(stdout.columns);
-  const detailContentRows = resolveDetailContentRows(stdout.rows);
+  const maxVisibleListItems = resolveMaxVisibleListItems(terminal.rows);
+  const maxProjectLabelLength = resolveProjectLabelLength(terminal.columns);
+  const detailContentWidth = resolveDetailContentWidth(terminal.columns);
+  const detailContentRows = resolveDetailContentRows(terminal.rows);
   const error = tasksQuery.error ?? projectsQuery.error;
   if (error) {
     return (

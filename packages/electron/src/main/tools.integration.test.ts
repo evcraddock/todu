@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { TSchema } from "@sinclair/typebox";
+import type { TSchema } from "@earendil-works/pi-ai";
 import type { ProjectId } from "@todu/core";
 import type { Todu } from "@todu/engine";
 import { createTodu } from "@todu/engine";
@@ -134,6 +134,7 @@ describe("todu agent tools", () => {
         expect(text.text).toContain("Not found");
       }
       expect(result.details).toEqual({ isError: true });
+      expect(result.isError).toBe(true);
     });
   });
 
@@ -233,6 +234,7 @@ describe("todu agent tools", () => {
     it("returns error for non-existent task", async () => {
       const result = await exec("get_task", { id: "task-nonexistent" });
       expect(result.details).toEqual({ isError: true });
+      expect(result.isError).toBe(true);
     });
   });
 
@@ -409,6 +411,7 @@ describe("todu agent tools", () => {
         expect(text.text).toContain("Not found");
       }
       expect(result.details).toEqual({ isError: true });
+      expect(result.isError).toBe(true);
     });
 
     it("returns error content for invalid update", async () => {
@@ -419,6 +422,7 @@ describe("todu agent tools", () => {
         expect(text.text).toMatch(/Not found|error/i);
       }
       expect(result.details).toEqual({ isError: true });
+      expect(result.isError).toBe(true);
     });
   });
 

@@ -1,9 +1,9 @@
-import { execSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 const ROOT_DIR = path.resolve(import.meta.dirname, "../../..");
 const CLI_PATH = path.resolve(ROOT_DIR, "packages/cli/dist/index.js");
@@ -21,10 +21,6 @@ type MockDaemonRequest = {
 
 describe("daemon-mode CLI integration error behavior", { timeout: 45000 }, () => {
   const tmpDirs: string[] = [];
-
-  beforeAll(() => {
-    execSync("npm run build", { cwd: ROOT_DIR, stdio: "pipe", timeout: 30000 });
-  });
 
   afterEach(() => {
     while (tmpDirs.length > 0) {

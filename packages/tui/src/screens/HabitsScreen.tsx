@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Habit, HabitFilter } from "@todu/core";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput, useWindowSize } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
@@ -28,7 +28,7 @@ export function HabitsScreen({
   dataQueriesEnabled = true,
 }: HabitsScreenProps): JSX.Element {
   const queryClient = useQueryClient();
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const habitsQuery = useQuery({
@@ -51,7 +51,7 @@ export function HabitsScreen({
   const habitWindow = getVisibleTaskWindow(
     habits,
     effectiveSelectedHabitId,
-    resolveMaxVisibleHabits(stdout.rows),
+    resolveMaxVisibleHabits(terminal.rows),
   );
   const toggleMutation = useMutation({
     mutationFn: ({ habit, completed }: { habit: Habit; completed: boolean }) =>

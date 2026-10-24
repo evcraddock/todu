@@ -1,8 +1,8 @@
-import { type ChildProcess, execSync, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
 describe("daemon CLI commands", { timeout: 30000 }, () => {
@@ -13,10 +13,6 @@ describe("daemon CLI commands", { timeout: 30000 }, () => {
   let homeDir: string;
   let daemon: DaemonHandle | null = null;
   let daemonRunProcess: ChildProcess | null = null;
-
-  beforeAll(() => {
-    execSync("npm run build", { cwd: rootDir, stdio: "pipe", timeout: 30000 });
-  });
 
   afterEach(async () => {
     if (daemon) {

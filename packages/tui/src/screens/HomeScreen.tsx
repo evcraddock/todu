@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Project, Task } from "@todu/core";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput, useWindowSize } from "ink";
 import type { JSX } from "react";
 import { useMemo, useState } from "react";
 import { Pane } from "../components/Pane.js";
@@ -42,7 +42,7 @@ export function HomeScreen({
   onOpenTask,
   onSelectProject,
 }: HomeScreenProps): JSX.Element {
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const [focusedSection, setFocusedSection] = useState<HomeSection>("now");
   const [selectedItemIds, setSelectedItemIds] = useState<Record<HomeSection, string | null>>({
     now: null,
@@ -143,7 +143,7 @@ export function HomeScreen({
   const homeWindow = getVisibleTaskWindow(
     homeRows,
     activeRowId,
-    resolveHomeViewportRows(stdout.rows, tasksQuery.isPending ? 1 : 0),
+    resolveHomeViewportRows(terminal.rows, tasksQuery.isPending ? 1 : 0),
   );
   const aboveIndicator = formatListWindowIndicator(homeWindow, "above");
   const belowIndicator = formatListWindowIndicator(homeWindow, "below");

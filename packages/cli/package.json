@@ -12,13 +12,13 @@
   ],
   "scripts": {
     "prebuild": "node generate-version.mjs",
-    "build": "tsgo -p tsconfig.build.json",
-    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
     "@todu/daemon": "*",
     "@todu/engine": "*",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "picocolors": "^1.1.1",
     "yaml": "^2.9.1"
   },
@@ -39,6 +39,6 @@
     "productivity"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   }
 }

@@ -7,6 +7,7 @@ const root = import.meta.dirname;
 export default defineConfig({
   plugins: [react()],
   test: {
+    globalSetup: ["./scripts/test-global-setup.ts"],
     include: ["packages/*/src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
     exclude: [
       "**/node_modules/**",

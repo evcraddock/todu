@@ -4,20 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { type CatalogDocument, createEmptyCatalog } from "@todu/core";
 import * as engine from "@todu/engine";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { invokeDaemonMethod } from "../daemon-transport.js";
 import { type DaemonHandle, startDaemonForTests } from "../test-helpers/daemon-process.js";
 
-describe("sync CLI commands", () => {
+describe("sync CLI commands", { timeout: 30000 }, () => {
   let tmpDir: string;
   let alternateCatalogId: string;
   let daemon: DaemonHandle | null = null;
   const rootDir = path.resolve(__dirname, "../../../..");
   const cliPath = path.resolve(rootDir, "packages/cli/dist/index.js");
-
-  beforeAll(() => {
-    execSync("npm run build", { cwd: rootDir, stdio: "pipe", timeout: 30000 });
-  });
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-cli-sync-test-"));

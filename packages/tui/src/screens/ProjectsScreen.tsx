@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Project } from "@todu/core";
-import { Box, Text, useInput, useStdout } from "ink";
+import { Box, Text, useInput, useWindowSize } from "ink";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ListFilterModal } from "../components/ListFilterModal.js";
@@ -59,7 +59,7 @@ export function ProjectsScreen({
   dataQueriesEnabled = true,
 }: ProjectsScreenProps): JSX.Element {
   const listFilter = listFilterProp ?? defaultProjectListFilter;
-  const { stdout } = useStdout();
+  const terminal = useWindowSize();
   const [selectedOptionId, setSelectedOptionId] = useState<string>(
     projectFilter.projectId ?? ALL_PROJECTS_OPTION_ID,
   );
@@ -81,8 +81,8 @@ export function ProjectsScreen({
   );
   const selectedOption =
     projectOptions.find((option) => option.id === selectedOptionId) ?? projectOptions[0];
-  const maxVisibleProjects = resolveMaxVisibleProjects(stdout.rows);
-  const maxProjectLabelLength = resolveProjectLabelLength(stdout.columns);
+  const maxVisibleProjects = resolveMaxVisibleProjects(terminal.rows);
+  const maxProjectLabelLength = resolveProjectLabelLength(terminal.columns);
   const projectWindow = getVisibleTaskWindow(
     projectOptions,
     selectedOption?.id ?? selectedOptionId,

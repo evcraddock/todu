@@ -16,9 +16,9 @@
   ],
   "scripts": {
     "prebuild": "node generate-version.mjs",
-    "build": "tsgo -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json",
     "pretypecheck": "node generate-version.mjs",
-    "typecheck": "tsgo -p tsconfig.build.json --noEmit"
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "dependencies": {
     "@todu/core": "^0.28.0",

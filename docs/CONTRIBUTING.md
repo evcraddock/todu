@@ -1,16 +1,15 @@
 # Contributing
 
-This project uses an AI-first development process. Agents do the work, automation enforces quality, and humans decide merges.
+This project uses an AI-first development process. Agents do the work, and automation enforces quality.
 
 ## Task execution summary template
 
-Before starting implementation, prepare one markdown summary. Use the template below as a starting point and replace placeholders with task-specific details. Checklist lines are examples of what to include. After displaying the Work Summary, ask the user if they want to continue before starting implementation.
+Before starting implementation, prepare one markdown summary. Use the template below as a starting point and replace placeholders with task-specific details.
 
 ```md
 ## Work Summary
 
 - Task: #<id> — <title>
-  Example: #1951 — Implement required-domain capability gating
 - Objective: <what this task must achieve>
 - In scope:
   - <scope item>
@@ -29,84 +28,23 @@ Before starting implementation, prepare one markdown summary. Use the template b
 2. <specific step 2>
 3. <specific step 3>
 
-Ask for approval only after showing this concrete plan. The plan must be specific enough that the reviewer can tell what files, workflows, or release steps will be changed or run.
+The plan must identify the files, workflows, or release steps that will be changed or run.
 
-### Required workflow checklist (example items from CONTRIBUTING)
+### Required workflow checklist
 
-- [ ] Work only within task scope.
-- [ ] Read relevant files before editing.
-- [ ] Make the smallest change that satisfies the task.
-- [ ] Follow `docs/CODE_STANDARDS.md` and `docs/ARCHITECTURE.md`.
-- [ ] Set task status to `inprogress` with `task-update` when implementation starts.
-- [ ] Stop and report `BLOCKED` if requirements are blocked, ambiguous, or conflicting.
-- [ ] Add task comments only via `task-comment-create`.
-- [ ] Do not add manual line breaks in markdown paragraphs.
-- [ ] Summarize changed files and verification results in handoff.
+- [ ] Set task status to `inprogress` when work begins.
 
-### Branch and commit checklist (example)
-
-- [ ] Update local `main` and create a task branch (`feat/`, `fix/`, `docs/`, or `chore/` as appropriate).
-- [ ] Use commit format:
-
-  ```text
-  <type>: <short description>
-
-  <optional body explaining why>
-
-  Task: #<task-id>
-  ```
-
-### Required post-PR pipeline checklist (example)
-
-- [ ] Run `make pre-pr` and fix all failures.
-- [ ] Commit changes.
-- [ ] Push branch and open/update PR.
-- [ ] Wait for CI to pass before requesting review.
-- [ ] Treat unhandled rejections and race-signature failures as merge blockers and fix root cause.
-- [ ] Run `pr-review` in a visible tmux sub-agent session.
-- [ ] Report review result, fix warnings by default unless waived, and fix requested changes.
-- [ ] Stop and wait for explicit human merge approval.
-- [ ] If CI fails at any point, fix, recommit, push, and wait for passing CI.
-
-### PR pipeline status (copy/paste)
-
-```text
-PR Pipeline Status
-- local_checks: pass|fail
-- push: done|pending
-- ci: pass|fail|unavailable-needs-human-decision
-- review: pending|approved|warnings|changes-requested
-- merge_approval: waiting-human|approved
-```
-
-### Verification plan (example)
+### Verification plan
 
 - [ ] `make check`
 - [ ] `make test`
 - [ ] <targeted test command>
 - [ ] Record pass/fail for each command.
 
-### Documentation updates (example)
+### Documentation updates
 
 - [ ] Update relevant docs in the same PR, or explicitly justify why no doc change is needed.
-
-### Stuck protocol (example)
-
-- [ ] After 3 failed attempts: stop, document attempts and failures, then ask for guidance.
 ```
-
-## Required workflow
-
-1. Work only within task scope.
-2. Read relevant files before editing.
-3. Make the smallest change that satisfies the task.
-4. Follow [CODE_STANDARDS.md](CODE_STANDARDS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
-5. Show a concrete, task-specific plan before asking the user for approval to implement or release.
-6. Use the `task-update` skill to set task status to `inprogress` when implementation starts.
-7. If blocked, ambiguous, or conflicting requirements are found, stop and report `BLOCKED` with reason.
-8. Add task comments only via the `task-comment-create` skill.
-9. Do not add manual line breaks in markdown paragraphs.
-10. Summarize changed files and verification results in your handoff.
 
 ## Branch and commits
 
@@ -143,11 +81,12 @@ After implementation is complete, follow this sequence in order:
 3. Push branch and open/update PR.
 4. Wait for CI to finish and pass before requesting review.
 5. Treat any unhandled rejection or race-signature failure in candidate CI runs as a merge blocker (even if a rerun later passes); root-cause and fix before proceeding.
-6. Start independent review in a visible tmux sub-agent and run the `pr-review` skill in that session.
+6. Run review using the `pr-review` skill.
 7. Report review result to the human, fix warnings by default unless explicitly waived, and fix all requested changes.
-8. Stop and wait for explicit human merge approval (`merge`, `approved`, `LGTM`, etc.).
 
 If CI fails, fix the issue, recommit, push again, and wait for CI to pass.
+
+`main` must be protected by pre-merge CI and merge policy; do not rely on post-merge rollback automation.
 
 Use this status format at gates:
 
@@ -155,59 +94,17 @@ Use this status format at gates:
 PR Pipeline Status
 - local_checks: pass|fail
 - push: done|pending
-- ci: pass|fail|unavailable-needs-human-decision
+- ci: pass|fail|unavailable
 - review: pending|approved|warnings|changes-requested
-- merge_approval: waiting-human|approved
 ```
 
-## Review and merge rules
+## Test builds
 
-- CI must pass before requesting review.
-- Any unhandled rejection in CI is treated as a failure and must be fixed, even if retries pass.
-- Agent review helps catch issues early and does not grant merge permission.
-- Never merge without explicit human approval.
-- `main` must be protected by pre-merge CI and merge policy; do not rely on post-merge rollback automation.
+Both Vitest configurations build the workspace once in global setup before test workers start. CLI tests use those compiled artifacts instead of rebuilding from each test file. This also applies to filtered test runs and rebuilds before watch-mode reruns. A build failure stops the run before tests execute.
 
-## Tooling
+The full suite uses half the available workers to leave capacity for child CLI and daemon processes. Command suites that launch multiple CLI subprocesses have a 30-second test budget; ordinary unit-test limits remain unchanged.
 
-| Command | Purpose |
-|---------|---------|
-| `npm run changeset` | Add a package changeset for npm releases |
-| `npm run version-packages` | Apply pending changesets to package versions and generated version sources |
-| `npm run release-packages` | Build and publish changed npm packages through Changesets |
-| `make build` | Build all packages (core → engine → recurring-worker → daemon → cli → tui) |
-| `make test` | Run unit tests only (fast, no Automerge/storage) |
-| `make test-all` | Run all tests, including integration and local sync-server coverage (CI default) |
-| `make test-integration` | Run integration tests only (Automerge/storage/local servers) |
-| `make test-sync-server-integration` | Run the focused local sync-server suites without an opt-in flag |
-| `make check` | Lint + format + typecheck |
-| `make pre-pr` | Full pre-PR checks (check + unit tests + build) |
-| `npm run test:storage-stability` | Repeat storage teardown tests to detect race leaks |
-| `make run ARGS="..."` | Run CLI |
+## Dependency holds
 
-For targeted verification during daemon protocol work:
-
-```bash
-npm run test:conformance
-npm run test -- packages/daemon/src/events-parity.test.ts packages/daemon/src/daemon-engine-parity.test.ts
-```
-
-The default full suite (`npm run test:all` / `make test-all`) includes retained sync-server coverage without an environment flag. CI builds the packages before running the full suite so daemon/CLI subprocess tests use current artifacts. `make test` and `make pre-pr` deliberately retain fast unit-only coverage; run `make build` followed by `make test-all` before handing off changes that affect integration behavior.
-
-For focused sync verification, use `make test-sync-server-integration`. These suites start loopback-only servers on dynamically allocated ports, use temporary storage, and close clients/daemons before deleting storage. Tests must not contact live provider integrations or use live daemon settings. When validating changes locally, isolate `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` in temporary directories as CI does.
-
-Unhandled errors fail Vitest by default; do not use retries, ignore-unhandled-error settings, or relaxed assertions to make integration runs green. The [test coverage audit](testing/task-f3ec895a-coverage-audit.md) records deleted/consolidated cases, retained regression coverage, and legitimate platform skips.
-
-See also:
-
-- [Release Process](release.md) for Changesets-based npm package releases and tag-based desktop/binary releases
-- [CLI Daemon Usage](cli-daemon-usage.md) for daemon-required CLI behavior
-- [Daemon Service Operations](daemon-service-operations.md) for Linux/macOS service setup and lifecycle commands
-
-## When stuck
-
-After 3 failed attempts at the same problem:
-
-1. Stop.
-2. Document what was tried and why it failed.
-3. Ask for guidance or propose alternatives.
+- Automerge Repo packages remain pinned to 2.5.6. The newer 2.6 release is an alpha, and this project applies local compatibility patches that must be reassessed before upgrading.
+- Biome is pinned to 2.6.2. As of October 24, 2026, 2.6.3 references an unpublished `@biomejs/cli-android-arm64@2.6.3` package; generating a lockfile and running `npm ci` fails with a missing-package error. Retry the patch upgrade once the release is complete.
