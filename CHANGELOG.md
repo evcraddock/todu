@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-10-24
+
+### Changed
+- Unified desktop controls and navigation around a shared outline icon set, retaining accessible labels and tooltips for icon-only actions (#595).
+- Renamed Home to Overview and updated dashboard and detail-page return navigation (#595).
+- Remembered per-list dropdown selections and task sorting locally, and sorted project and assignee options alphabetically while preserving special choices and defaults (#595).
+- Enlarged New Task and New Project dialogs and replaced description textareas with the shared Markdown editor, retaining small-window usability (#595).
+- Kept Electron 45.0.0 and independent component versions unchanged: core 0.28.0, engine 0.24.6, daemon 0.28.2, CLI 0.25.2, and TUI 0.27.0. This desktop release does not publish new npm versions.
+- Prepared the Apple Silicon macOS installer with Developer ID signing; Apple notarization is not included.
+
+### Fixed
+- Used standard and Retina monochrome template icons for the macOS menu bar while retaining colored Dock and Windows/Linux tray icons (#595).
+
 ## [0.26.0] - 2026-10-24
 
 ### Added
