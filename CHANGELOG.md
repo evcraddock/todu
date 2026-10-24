@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-23
+
+### Added
+- Added a dedicated Assignees page with assignment details, task filtering, and add, rename, and archive controls (#587).
+- Added editable Markdown comments, task waiting status and scheduled date controls, optional task labels, and habit project changes in Electron (#587).
+
+### Changed
+- Simplified task, project, habit, recurring task, and journal lists with compact rows, clearer filters, and active/open defaults (#587).
+- Reorganized detail pages with consistent tabs, sticky controls, timestamps, and copyable IDs; improved small-window layouts and navigation back to Home (#587).
+- Aligned Home task columns, placed assignees before priority, and compacted Home habits and project cards (#587).
+- Bundled core 0.28.0, engine 0.24.6, and daemon 0.28.2. Companion npm versions remain independent: CLI 0.25.2 and TUI 0.27.0. This desktop release does not publish new npm versions.
+- Prepared the Apple Silicon macOS installer with Developer ID signing; Apple notarization is not included.
+
+### Fixed
+- Retired half-open outbound peer connections through heartbeat/pong deadlines and the existing reconnect path, while preserving live duplicate-identity protection (#582).
+
 ## [0.24.1] - 2026-10-18
 
 ### Fixed
