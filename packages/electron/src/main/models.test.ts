@@ -10,17 +10,32 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai";
 import type { Todu } from "@todu/engine";
+import type { BrowserWindow } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSystemPrompt, resetAgentConversation, setAgentSystemPrompt } from "./agent.js";
+import {
+  buildSystemPrompt,
+  resetAgentConversation,
+  setAgentSystemPrompt,
+  setupAgent,
+  teardownAgent,
+} from "./agent.js";
 import { getApiKey, loadOAuthCredentials, saveOAuthCredentials, setApiKey } from "./credentials.js";
 import { createCredentialStore, models } from "./models.js";
 import { loadSettings } from "./settings.js";
 import { createToduTools } from "./tools.js";
 
-const desktop = vi.hoisted(() => ({ userData: "", encrypted: true }));
+const desktop = vi.hoisted(() => ({
+  userData: "",
+  encrypted: true,
+  handlers: new Map<string, (...args: unknown[]) => unknown>(),
+}));
 vi.mock("electron", () => ({
   app: { getPath: () => desktop.userData },
-  ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
+  ipcMain: {
+    handle: (channel: string, callback: (...args: unknown[]) => unknown) =>
+      desktop.handlers.set(channel, callback),
+    removeHandler: (channel: string) => desktop.handlers.delete(channel),
+  },
   safeStorage: {
     isEncryptionAvailable: () => desktop.encrypted,
     encryptString: (value: string) => Buffer.from(`encrypted:${value}`),
@@ -33,6 +48,7 @@ beforeEach(() => {
   desktop.encrypted = true;
 });
 afterEach(() => {
+  teardownAgent();
   fs.rmSync(desktop.userData, { recursive: true, force: true });
 });
 
@@ -160,6 +176,17 @@ describe("desktop Pi credentials", () => {
 });
 
 describe("Pi agent runtime", () => {
+  it("notifies the renderer after Clear finishes resetting the conversation", async () => {
+    const send = vi.fn();
+    const mainWindow = {
+      isDestroyed: () => false,
+      webContents: { send },
+    } as unknown as BrowserWindow;
+    setupAgent({} as Todu, mainWindow);
+    await desktop.handlers.get("todu:agent:clear")?.(null);
+    expect(send).toHaveBeenLastCalledWith("todu:agent:event", { type: "messages_cleared" });
+  });
+
   it("aborts and settles a streaming response before clearing the conversation", async () => {
     const faux = fauxProvider();
     const started = vi.fn();

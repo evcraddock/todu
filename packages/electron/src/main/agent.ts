@@ -251,6 +251,9 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
   ipcMain.handle("todu:agent:clear", async () => {
     if (!agent) return;
     await resetAgentConversation(agent);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("todu:agent:event", { type: "messages_cleared" });
+    }
   });
 
   ipcMain.handle("todu:agent:set-model", (_event, provider: string, modelId: string) => {
