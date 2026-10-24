@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,6 +27,22 @@ describe("CLI version output", { timeout: 30000 }, () => {
     });
 
     expect(output).toContain("Usage: todu");
+  });
+
+  it.each([
+    { args: ["--unknown-option"], message: "unknown option '--unknown-option'" },
+    { args: ["task", "show"], message: "missing required argument 'id'" },
+  ])("rejects invalid arguments: $args", ({ args, message }) => {
+    const result = spawnSync(process.execPath, [cliPath, ...args], {
+      cwd: rootDir,
+      encoding: "utf-8",
+      timeout: 10000,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(message);
   });
 
   it("publishes only the todu CLI bin entry", async () => {

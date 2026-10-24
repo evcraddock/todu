@@ -59,7 +59,7 @@ Use the CLI when you want power-user workflows like:
 
 Prerequisites:
 
-- Node.js 20+
+- Node.js 22.12+
 - npm
 
 Install the latest CLI:
