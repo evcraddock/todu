@@ -152,6 +152,8 @@ Use `Shift+J/K` to focus a Home section, `j/k` or arrow keys to select a project
 
 ### Build from source
 
+Use Node.js 24 for source development and tests, matching CI.
+
 Additional prerequisite for standalone CLI binaries:
 
 - Bun 1.0+
