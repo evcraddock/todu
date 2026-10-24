@@ -28,7 +28,7 @@ This installs `todu.AppImage` into `~/.local/bin` and creates a desktop launcher
 
 #### macOS install (Apple Silicon only)
 
-Todu supports macOS on Apple Silicon (`arm64`) only. New releases no longer provide Intel Mac desktop or standalone CLI builds; historical release assets remain available unchanged.
+The desktop app requires **macOS 13 Ventura or later** on Apple Silicon (`arm64`). New releases no longer provide Intel Mac desktop or standalone CLI builds; historical release assets remain available unchanged.
 
 Install the latest Apple Silicon macOS desktop build into `/Applications`:
 

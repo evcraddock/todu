@@ -65,20 +65,16 @@ describe("explicit listener enablement address resolution", () => {
     expect(mocks.createSocket).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "10.42.1.2",
-    "172.16.0.2",
-    "172.31.255.254",
-    "192.168.0.2",
-    "fd12::abcd",
-    "fc00::1",
-  ])("accepts an unambiguous private address: %s", async (bind) => {
-    interfaces(bind);
-    expect(await resolveSyncListenerEnableConfig({})).toEqual({
-      ok: true,
-      value: { bind, port: 24377 },
-    });
-  });
+  it.each(["10.42.1.2", "172.16.0.2", "172.31.255.254", "192.168.0.2", "fd12::abcd", "fc00::1"])(
+    "accepts an unambiguous private address: %s",
+    async (bind) => {
+      interfaces(bind);
+      expect(await resolveSyncListenerEnableConfig({})).toEqual({
+        ok: true,
+        value: { bind, port: 24377 },
+      });
+    },
+  );
 
   it("preserves a saved advertisement through detection and prefers an explicit advertised override", async () => {
     interfaces("192.168.4.12");
@@ -270,29 +266,28 @@ describe("explicit listener enablement address resolution", () => {
       port: 24500,
     },
     { options: { saved: { enabled: false, bind: "::", port: 24400 } }, bind: "::", port: 24400 },
-  ])("overrides only supplied settings without redetecting: $options", async ({
-    options,
-    bind,
-    port,
-  }) => {
-    expect(await resolveSyncListenerEnableConfig(options)).toEqual({
-      ok: true,
-      value: { bind, port },
-    });
-    expect(mocks.interfaces).not.toHaveBeenCalled();
-  });
+  ])(
+    "overrides only supplied settings without redetecting: $options",
+    async ({ options, bind, port }) => {
+      expect(await resolveSyncListenerEnableConfig(options)).toEqual({
+        ok: true,
+        value: { bind, port },
+      });
+      expect(mocks.interfaces).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each([
-    { saved: { bind: null } },
-    { saved: { port: null } },
-  ])("rejects invalid saved YAML values instead of substituting defaults: %j", async (options) => {
-    expect(
-      await resolveSyncListenerEnableConfig(
-        options as unknown as Parameters<typeof resolveSyncListenerEnableConfig>[0],
-      ),
-    ).toMatchObject({ ok: false });
-    expect(mocks.interfaces).not.toHaveBeenCalled();
-  });
+  it.each([{ saved: { bind: null } }, { saved: { port: null } }])(
+    "rejects invalid saved YAML values instead of substituting defaults: %j",
+    async (options) => {
+      expect(
+        await resolveSyncListenerEnableConfig(
+          options as unknown as Parameters<typeof resolveSyncListenerEnableConfig>[0],
+        ),
+      ).toMatchObject({ ok: false });
+      expect(mocks.interfaces).not.toHaveBeenCalled();
+    },
+  );
 
   it("detects only the missing bind while retaining the saved port", async () => {
     interfaces("192.168.4.12");
@@ -302,22 +297,19 @@ describe("explicit listener enablement address resolution", () => {
     });
   });
 
-  it.each([
-    "0.0.0.0",
-    "::",
-    "::1",
-    "127.0.0.1",
-    "203.0.113.2",
-  ])("preserves an explicit override, including deliberate wildcard bindings: %s", async (bind) => {
-    expect(
-      await resolveSyncListenerEnableConfig({
-        bind,
-        port: 24500,
-        saved: { bind: "192.168.4.12", port: 24400 },
-      }),
-    ).toEqual({ ok: true, value: { bind, port: 24500 } });
-    expect(mocks.interfaces).not.toHaveBeenCalled();
-  });
+  it.each(["0.0.0.0", "::", "::1", "127.0.0.1", "203.0.113.2"])(
+    "preserves an explicit override, including deliberate wildcard bindings: %s",
+    async (bind) => {
+      expect(
+        await resolveSyncListenerEnableConfig({
+          bind,
+          port: 24500,
+          saved: { bind: "192.168.4.12", port: 24400 },
+        }),
+      ).toEqual({ ok: true, value: { bind, port: 24500 } });
+      expect(mocks.interfaces).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     { bind: "localhost" },
@@ -326,8 +318,11 @@ describe("explicit listener enablement address resolution", () => {
     { port: Number.NaN },
     { saved: { bind: "localhost" } },
     { saved: { port: 0 } },
-  ])("validates supplied settings before detection without silent replacement: %j", async (options) => {
-    expect(await resolveSyncListenerEnableConfig(options)).toMatchObject({ ok: false });
-    expect(mocks.interfaces).not.toHaveBeenCalled();
-  });
+  ])(
+    "validates supplied settings before detection without silent replacement: %j",
+    async (options) => {
+      expect(await resolveSyncListenerEnableConfig(options)).toMatchObject({ ok: false });
+      expect(mocks.interfaces).not.toHaveBeenCalled();
+    },
+  );
 });

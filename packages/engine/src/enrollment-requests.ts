@@ -254,7 +254,7 @@ export function createEnrollmentRequestStore(options: {
         if ((await context()).catalogId !== record.catalogId)
           return err(validationError("catalogId", "The active catalog changed during approval"));
         const finalized = load().find((candidate) => candidate.requestId === id);
-        if (!finalized || finalized.state !== "approving")
+        if (finalized?.state !== "approving")
           throw new Error("Durable approval intent is no longer available");
         finalized.approval = {
           catalogId: record.catalogId,

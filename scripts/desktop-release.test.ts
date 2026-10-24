@@ -157,14 +157,12 @@ describe("desktop release metadata", () => {
     });
   });
 
-  it.each([
-    "1.2.3",
-    "v1.2",
-    "v1.2.4",
-    "v1.2.3;echo bad",
-  ])("rejects invalid or mismatched tag %s", (tag) => {
-    expect(validateTag(tag, releaseFixture()).status).not.toBe(0);
-  });
+  it.each(["1.2.3", "v1.2", "v1.2.4", "v1.2.3;echo bad"])(
+    "rejects invalid or mismatched tag %s",
+    (tag) => {
+      expect(validateTag(tag, releaseFixture()).status).not.toBe(0);
+    },
+  );
 
   it("rejects mismatched source metadata rather than renaming installers", () => {
     const directory = releaseFixture();
@@ -359,12 +357,15 @@ describe("macOS installer architecture eligibility", () => {
     { arch: "x86_64", hardwareArm64: "0" },
     { arch: "x86_64", sysctlFails: true },
     { arch: "unknown" },
-  ])("rejects unsupported or unverified hardware before side effects: $arch $sysctlFails", (options) => {
-    const { result, commands } = runMacInstaller(options);
-    expect(result.status).toBe(1);
-    expect(result.stdout + result.stderr).toMatch(/Apple Silicon.*arm64/);
-    expect(commands).not.toMatch(/^(curl|mktemp|rm|hdiutil|ditto|shasum)\b/m);
-  });
+  ])(
+    "rejects unsupported or unverified hardware before side effects: $arch $sysctlFails",
+    (options) => {
+      const { result, commands } = runMacInstaller(options);
+      expect(result.status).toBe(1);
+      expect(result.stdout + result.stderr).toMatch(/Apple Silicon.*arm64/);
+      expect(commands).not.toMatch(/^(curl|mktemp|rm|hdiutil|ditto|shasum)\b/m);
+    },
+  );
 });
 
 describe("packaged desktop contents", () => {

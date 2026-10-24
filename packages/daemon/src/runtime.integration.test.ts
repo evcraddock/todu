@@ -1812,142 +1812,145 @@ describe("createDaemonRuntime", () => {
     await observerRuntime.stop();
   });
 
-  it.each([
-    3, 4,
-  ] as const)("executes v%s sync provider work from integration bindings and persists status", async (apiVersion) => {
-    const outputPath = path.join(tmpDir, "forgejo-provider-events.ndjson");
-    const pluginPath = writeRecordingSyncPluginModule(tmpDir, "forgejo-recording-plugin.mjs", {
-      providerName: "forgejo",
-      providerVersion: "2.0.0",
-      outputPath,
-      apiVersion,
-    });
-
-    const runtime = createDaemonRuntime({
-      storagePath: tmpDir,
-      socketPath: path.join(tmpDir, "forgejo-authority.sock"),
-      syncPluginModulePaths: [pluginPath],
-      syncPluginConfigs: {
-        forgejo: {
-          intervalSeconds: 0.05,
-          settings: {
-            token: "env:FORGEJO_TOKEN",
-          },
-        },
-      },
-      enabledWorkerDomains: ["project", "task", "sync"],
-    });
-
-    await runtime.start();
-
-    const createProjectResponse = await sendRequest(runtime.config().socketPath, {
-      id: "project-integration-provider-v3-create",
-      method: "project.create",
-      params: {
-        input: {
-          name: "Provider Project V3",
-        },
-      },
-    });
-
-    const projectId = (createProjectResponse.result as { id: string }).id;
-
-    await sendRequest(runtime.config().socketPath, {
-      id: "task-integration-provider-v3-create",
-      method: "task.create",
-      params: {
-        input: {
-          title: "Existing Task V3",
-          projectId,
-        },
-      },
-    });
-
-    const createIntegrationResponse = await sendRequest(runtime.config().socketPath, {
-      id: "integration-provider-v3-create",
-      method: "integration.create",
-      params: {
-        input: {
-          provider: "forgejo",
-          projectId,
-          targetKind: "repository",
-          targetRef: "team/repo",
-          strategy: "bidirectional",
-          enabled: true,
-        },
-      },
-    });
-
-    const bindingId = (createIntegrationResponse.result as { id: string }).id;
-
-    await waitForProviderEvent(
-      outputPath,
-      (event) => event.type === "push" && event.bindingId === bindingId,
-    );
-
-    const events = readProviderEvents(outputPath);
-    const acknowledgmentIndex = events.findIndex((event) => event.type === "acknowledgePull");
-    if (apiVersion === 4) {
-      expect(acknowledgmentIndex).toBeGreaterThan(
-        events.findIndex((event) => event.type === "pull"),
-      );
-      expect(acknowledgmentIndex).toBeLessThan(events.findIndex((event) => event.type === "push"));
-      expect(events[acknowledgmentIndex]).toMatchObject({
-        bindingId,
-        checkpoint: { cursor: "opaque" },
+  it.each([3, 4] as const)(
+    "executes v%s sync provider work from integration bindings and persists status",
+    async (apiVersion) => {
+      const outputPath = path.join(tmpDir, "forgejo-provider-events.ndjson");
+      const pluginPath = writeRecordingSyncPluginModule(tmpDir, "forgejo-recording-plugin.mjs", {
+        providerName: "forgejo",
+        providerVersion: "2.0.0",
+        outputPath,
+        apiVersion,
       });
-    } else {
-      expect(acknowledgmentIndex).toBe(-1);
-    }
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "initialize",
-          settings: {
-            token: "env:FORGEJO_TOKEN",
+
+      const runtime = createDaemonRuntime({
+        storagePath: tmpDir,
+        socketPath: path.join(tmpDir, "forgejo-authority.sock"),
+        syncPluginModulePaths: [pluginPath],
+        syncPluginConfigs: {
+          forgejo: {
+            intervalSeconds: 0.05,
+            settings: {
+              token: "env:FORGEJO_TOKEN",
+            },
           },
-        }),
-        expect.objectContaining({
-          type: "pull",
+        },
+        enabledWorkerDomains: ["project", "task", "sync"],
+      });
+
+      await runtime.start();
+
+      const createProjectResponse = await sendRequest(runtime.config().socketPath, {
+        id: "project-integration-provider-v3-create",
+        method: "project.create",
+        params: {
+          input: {
+            name: "Provider Project V3",
+          },
+        },
+      });
+
+      const projectId = (createProjectResponse.result as { id: string }).id;
+
+      await sendRequest(runtime.config().socketPath, {
+        id: "task-integration-provider-v3-create",
+        method: "task.create",
+        params: {
+          input: {
+            title: "Existing Task V3",
+            projectId,
+          },
+        },
+      });
+
+      const createIntegrationResponse = await sendRequest(runtime.config().socketPath, {
+        id: "integration-provider-v3-create",
+        method: "integration.create",
+        params: {
+          input: {
+            provider: "forgejo",
+            projectId,
+            targetKind: "repository",
+            targetRef: "team/repo",
+            strategy: "bidirectional",
+            enabled: true,
+          },
+        },
+      });
+
+      const bindingId = (createIntegrationResponse.result as { id: string }).id;
+
+      await waitForProviderEvent(
+        outputPath,
+        (event) => event.type === "push" && event.bindingId === bindingId,
+      );
+
+      const events = readProviderEvents(outputPath);
+      const acknowledgmentIndex = events.findIndex((event) => event.type === "acknowledgePull");
+      if (apiVersion === 4) {
+        expect(acknowledgmentIndex).toBeGreaterThan(
+          events.findIndex((event) => event.type === "pull"),
+        );
+        expect(acknowledgmentIndex).toBeLessThan(
+          events.findIndex((event) => event.type === "push"),
+        );
+        expect(events[acknowledgmentIndex]).toMatchObject({
           bindingId,
-          provider: "forgejo",
-          targetRef: "team/repo",
-          projectId,
-          strategy: "bidirectional",
-        }),
+          checkpoint: { cursor: "opaque" },
+        });
+      } else {
+        expect(acknowledgmentIndex).toBe(-1);
+      }
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "initialize",
+            settings: {
+              token: "env:FORGEJO_TOKEN",
+            },
+          }),
+          expect.objectContaining({
+            type: "pull",
+            bindingId,
+            provider: "forgejo",
+            targetRef: "team/repo",
+            projectId,
+            strategy: "bidirectional",
+          }),
+          expect.objectContaining({
+            type: "push",
+            bindingId,
+            provider: "forgejo",
+            targetRef: "team/repo",
+            projectId,
+            strategy: "bidirectional",
+            taskCount: 1,
+          }),
+        ]),
+      );
+
+      const statusResponse = await sendRequest(runtime.config().socketPath, {
+        id: "integration-provider-v3-status",
+        method: "integration.status",
+        params: {
+          id: bindingId,
+        },
+      });
+
+      expect(statusResponse.result).toEqual(
         expect.objectContaining({
-          type: "push",
           bindingId,
-          provider: "forgejo",
-          targetRef: "team/repo",
-          projectId,
-          strategy: "bidirectional",
-          taskCount: 1,
+          state: "idle",
+          authorityId: runtime.config().socketPath,
+          lastAttemptedSyncAt: expect.any(String),
+          lastSuccessfulSyncAt: expect.any(String),
+          lastErrorSummary: null,
         }),
-      ]),
-    );
+      );
 
-    const statusResponse = await sendRequest(runtime.config().socketPath, {
-      id: "integration-provider-v3-status",
-      method: "integration.status",
-      params: {
-        id: bindingId,
-      },
-    });
-
-    expect(statusResponse.result).toEqual(
-      expect.objectContaining({
-        bindingId,
-        state: "idle",
-        authorityId: runtime.config().socketPath,
-        lastAttemptedSyncAt: expect.any(String),
-        lastSuccessfulSyncAt: expect.any(String),
-        lastErrorSummary: null,
-      }),
-    );
-
-    await runtime.stop();
-  });
+      await runtime.stop();
+    },
+  );
 
   it("loads configured worker plugins and surfaces runtime state via worker.status", async () => {
     const pluginPath = writeValidWorkerPluginModule(tmpDir, "recurring-plugin.mjs", {

@@ -65,25 +65,23 @@ describe("ensureDaemonReady", () => {
     expect(waitForConnection).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    "ENOENT",
-    "ECONNREFUSED",
-    "EACCES",
-    "EPERM",
-  ])("reports %s with socket context and manual-start guidance", async (reason) => {
-    const request = vi.fn();
-    const waitForConnection = vi.fn().mockResolvedValue({
-      ok: false,
-      error: {
-        code: "DAEMON_UNAVAILABLE",
-        message: `Cannot connect to daemon socket: /tmp/todu.sock (${reason})`,
-      },
-    });
-    await expect(
-      ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1", maxAttempts: 1 }),
-    ).rejects.toThrow(
-      `Could not connect to the local daemon (DAEMON_UNAVAILABLE: Cannot connect to daemon socket: /tmp/todu.sock (${reason})). Check 'todu daemon status'. If no daemon is running, start it with 'todu daemon start', then relaunch the desktop app. The desktop app does not start or restart daemons automatically.`,
-    );
-    expect(request).not.toHaveBeenCalled();
-  });
+  it.each(["ENOENT", "ECONNREFUSED", "EACCES", "EPERM"])(
+    "reports %s with socket context and manual-start guidance",
+    async (reason) => {
+      const request = vi.fn();
+      const waitForConnection = vi.fn().mockResolvedValue({
+        ok: false,
+        error: {
+          code: "DAEMON_UNAVAILABLE",
+          message: `Cannot connect to daemon socket: /tmp/todu.sock (${reason})`,
+        },
+      });
+      await expect(
+        ensureDaemonReady({ request, waitForConnection }, { protocolVersion: "1", maxAttempts: 1 }),
+      ).rejects.toThrow(
+        `Could not connect to the local daemon (DAEMON_UNAVAILABLE: Cannot connect to daemon socket: /tmp/todu.sock (${reason})). Check 'todu daemon status'. If no daemon is running, start it with 'todu daemon start', then relaunch the desktop app. The desktop app does not start or restart daemons automatically.`,
+      );
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
 });

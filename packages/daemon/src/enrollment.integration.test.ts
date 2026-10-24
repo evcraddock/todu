@@ -110,99 +110,98 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
       );
   }
 
-  it.each([
-    "disable",
-    "enable",
-    "repoint",
-    "failed apply",
-    "shutdown",
-  ])("coordinates %s with barrier-held pristine engine construction", async (action) => {
-    const receiving = await source();
-    const clientPath = prepare();
-    const configPath = path.join(clientPath, "config.yaml");
-    const settings = { server: "ws://127.0.0.1:1", enabled: action === "disable" };
-    fs.writeFileSync(
-      configPath,
-      `sync:\n  remote:\n    server: ${settings.server}\n    enabled: ${settings.enabled}\n`,
-    );
-    const joining = runtime("client", { configPath, remoteSyncSettings: settings });
-    await joining.start();
-    const release = Promise.withResolvers<void>();
-    let constructed: engine.Todu | undefined;
-    const create = engine.createTodu;
-    vi.spyOn(engine, "createTodu").mockImplementation(async (config) => {
-      const created = await create(config);
-      if (config.storagePath === clientPath && config.joinedStorage) {
-        constructed = created;
-        await release.promise;
-      }
-      return created;
-    });
-    try {
-      const requested = await value<EnrollmentClientStatus>(joining, "sync.enroll", {
-        endpoint: receiving.endpoint,
-      });
-      await value(receiving.instance, "sync.enrollmentApprove", { requestId: requested.requestId });
-      await expect.poll(() => Boolean(constructed), { timeout: 15000 }).toBe(true);
-      expect(joining.status().catalogId).toBeUndefined();
-      const activateNetworking = vi.spyOn(
-        (constructed as engine.ToduWithInternalTools).__internal.syncRuntime,
-        "activateDeviceNetworking",
+  it.each(["disable", "enable", "repoint", "failed apply", "shutdown"])(
+    "coordinates %s with barrier-held pristine engine construction",
+    async (action) => {
+      const receiving = await source();
+      const clientPath = prepare();
+      const configPath = path.join(clientPath, "config.yaml");
+      const settings = { server: "ws://127.0.0.1:1", enabled: action === "disable" };
+      fs.writeFileSync(
+        configPath,
+        `sync:\n  remote:\n    server: ${settings.server}\n    enabled: ${settings.enabled}\n`,
       );
-      expect(activateNetworking).not.toHaveBeenCalled();
-      expect(constructed!.sync.status().listener.publication).toBeUndefined();
-      const update =
-        action === "disable"
-          ? { enabled: false }
-          : action === "enable"
-            ? { enabled: true }
-            : { server: "ws://127.0.0.1:2" };
-      const expected = { ...settings, ...update };
-      expect(
-        await value(joining, "sync.serverConfigure", { settings: update, configPath }),
-      ).toMatchObject({ ...expected, running: false });
-      expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
-      expect(joining.config().remoteSyncSettings).toEqual(expected);
-      if (action === "failed apply") {
-        vi.spyOn(constructed!.sync, "configureServer").mockResolvedValueOnce(
-          err(storageError("Injected activation settings failure")),
+      const joining = runtime("client", { configPath, remoteSyncSettings: settings });
+      await joining.start();
+      const release = Promise.withResolvers<void>();
+      let constructed: engine.Todu | undefined;
+      const create = engine.createTodu;
+      vi.spyOn(engine, "createTodu").mockImplementation(async (config) => {
+        const created = await create(config);
+        if (config.storagePath === clientPath && config.joinedStorage) {
+          constructed = created;
+          await release.promise;
+        }
+        return created;
+      });
+      try {
+        const requested = await value<EnrollmentClientStatus>(joining, "sync.enroll", {
+          endpoint: receiving.endpoint,
+        });
+        await value(receiving.instance, "sync.enrollmentApprove", {
+          requestId: requested.requestId,
+        });
+        await expect.poll(() => Boolean(constructed), { timeout: 15000 }).toBe(true);
+        expect(joining.status().catalogId).toBeUndefined();
+        const activateNetworking = vi.spyOn(
+          (constructed as engine.ToduWithInternalTools).__internal.syncRuntime,
+          "activateDeviceNetworking",
         );
-        const close = vi.spyOn(constructed!, "close");
-        release.resolve();
-        await expect.poll(() => close.mock.calls.length, { timeout: 15000 }).toBe(1);
-        expect(joining.status().catalogId).toBeUndefined();
-        expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
         expect(activateNetworking).not.toHaveBeenCalled();
-      } else if (action === "shutdown") {
-        const stop = joining.stop();
+        expect(constructed!.sync.status().listener.publication).toBeUndefined();
+        const update =
+          action === "disable"
+            ? { enabled: false }
+            : action === "enable"
+              ? { enabled: true }
+              : { server: "ws://127.0.0.1:2" };
+        const expected = { ...settings, ...update };
+        expect(
+          await value(joining, "sync.serverConfigure", { settings: update, configPath }),
+        ).toMatchObject({ ...expected, running: false });
+        expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
+        expect(joining.config().remoteSyncSettings).toEqual(expected);
+        if (action === "failed apply") {
+          vi.spyOn(constructed!.sync, "configureServer").mockResolvedValueOnce(
+            err(storageError("Injected activation settings failure")),
+          );
+          const close = vi.spyOn(constructed!, "close");
+          release.resolve();
+          await expect.poll(() => close.mock.calls.length, { timeout: 15000 }).toBe(1);
+          expect(joining.status().catalogId).toBeUndefined();
+          expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+          expect(activateNetworking).not.toHaveBeenCalled();
+        } else if (action === "shutdown") {
+          const stop = joining.stop();
+          release.resolve();
+          await stop;
+          expect(joining.status().catalogId).toBeUndefined();
+          expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
+          expect(activateNetworking).not.toHaveBeenCalled();
+        } else {
+          release.resolve();
+          await active(joining, receiving.instance.status().catalogId!);
+          expect(activateNetworking).toHaveBeenCalledOnce();
+          expect(constructed!.sync.status().listener.publication).toMatchObject({
+            state: "manual",
+            endpoint: `http://127.0.0.1:${clientPort}`,
+          });
+          expect(await value(joining, "sync.serverStatus")).toMatchObject({
+            ...expected,
+            running: expected.enabled,
+          });
+          expect(constructed!.sync.serverStatus()).toMatchObject({
+            ...expected,
+            running: expected.enabled,
+          });
+        }
+        expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
+        expect(joining.config().remoteSyncSettings).toEqual(expected);
+      } finally {
         release.resolve();
-        await stop;
-        expect(joining.status().catalogId).toBeUndefined();
-        expect(readEnrollmentState(clientPath)?.mode).toBe("pending");
-        expect(activateNetworking).not.toHaveBeenCalled();
-      } else {
-        release.resolve();
-        await active(joining, receiving.instance.status().catalogId!);
-        expect(activateNetworking).toHaveBeenCalledOnce();
-        expect(constructed!.sync.status().listener.publication).toMatchObject({
-          state: "manual",
-          endpoint: `http://127.0.0.1:${clientPort}`,
-        });
-        expect(await value(joining, "sync.serverStatus")).toMatchObject({
-          ...expected,
-          running: expected.enabled,
-        });
-        expect(constructed!.sync.serverStatus()).toMatchObject({
-          ...expected,
-          running: expected.enabled,
-        });
       }
-      expect(parse(fs.readFileSync(configPath, "utf8")).sync.remote).toEqual(expected);
-      expect(joining.config().remoteSyncSettings).toEqual(expected);
-    } finally {
-      release.resolve();
-    }
-  });
+    },
+  );
 
   it("keeps pristine startup inert, then attaches the approved catalog and replicates both ways without enabling workers", async () => {
     const receiving = await source();
@@ -292,103 +291,105 @@ describe("locally approved device enrollment", { timeout: 30_000 }, () => {
     );
   });
 
-  it.each([
-    "separate configured server",
-    "same configured source",
-  ])("preserves an existing same-dataset replica, data, provider state, and workers with %s", async (serverMode) => {
-    const receiving = await source();
-    const catalogId = receiving.instance.status().catalogId!;
-    const clientPath = path.join(directory, "client");
-    const repo = createPersistentRepo(clientPath);
-    const replica = createDeviceId((await repo.storageId())!);
-    const sourceId = await value<DeviceId>(receiving.instance, "device.localId");
-    const connection = createEnrollmentPeerConnection({
-      repo,
-      source: {
+  it.each(["separate configured server", "same configured source"])(
+    "preserves an existing same-dataset replica, data, provider state, and workers with %s",
+    async (serverMode) => {
+      const receiving = await source();
+      const catalogId = receiving.instance.status().catalogId!;
+      const clientPath = path.join(directory, "client");
+      const repo = createPersistentRepo(clientPath);
+      const replica = createDeviceId((await repo.storageId())!);
+      const sourceId = await value<DeviceId>(receiving.instance, "device.localId");
+      const connection = createEnrollmentPeerConnection({
+        repo,
+        source: {
+          endpoint: receiving.endpoint,
+          approval: {
+            catalogId,
+            deviceId: replica,
+            sourceDeviceId: sourceId,
+            syncPath: `/sync/${catalogId}`,
+          },
+        },
+      });
+      await connection.ready();
+      const storage = await initJoinStorage(clientPath, catalogId as DocumentId, repo);
+      await repo.flush([storage.catalog.documentId]);
+      beginCatalogJoinSwitch(clientPath, catalogId as DocumentId).commit();
+      connection.close();
+      await storage.close();
+      fs.writeFileSync(path.join(clientPath, "provider-state.json"), "existing provider cursor");
+      const workerStop = vi.fn();
+      const workerStart = vi.fn(() => ({ stop: workerStop }));
+      const makeRepo = engineStorage.createPersistentRepo;
+      let liveRepo: ReturnType<typeof createPersistentRepo> | undefined;
+      vi.spyOn(engineStorage, "createPersistentRepo").mockImplementation((storagePath) => {
+        const created = makeRepo(storagePath);
+        if (storagePath === clientPath) liveRepo = created;
+        return created;
+      });
+      const sourceSyncUrl = `${receiving.endpoint.replace("http:", "ws:")}/sync/${catalogId}`;
+      const originalServer =
+        serverMode === "same configured source"
+          ? sourceSyncUrl
+          : `ws://127.0.0.1:${await reservePort()}`;
+      const joining = runtime("client", {
+        remoteSync: { server: originalServer },
+        assignedWorkerTypes: ["existing-worker"],
+        workerRegistrations: [
+          {
+            manifest: { type: "existing-worker", requiredDomains: ["task"] },
+            runtime: { start: workerStart },
+          },
+        ],
+      });
+      await joining.start();
+      const originalConfig = joining.config();
+      const project = await value<Project>(joining, "project.create", {
+        input: { name: "Previously local project" },
+      });
+      await value(joining, "task.create", {
+        input: { projectId: project.id, title: "Previously local task" },
+      });
+      const requested = await value<EnrollmentClientStatus>(joining, "sync.enroll", {
         endpoint: receiving.endpoint,
-        approval: {
-          catalogId,
-          deviceId: replica,
-          sourceDeviceId: sourceId,
-          syncPath: `/sync/${catalogId}`,
-        },
-      },
-    });
-    await connection.ready();
-    const storage = await initJoinStorage(clientPath, catalogId as DocumentId, repo);
-    await repo.flush([storage.catalog.documentId]);
-    beginCatalogJoinSwitch(clientPath, catalogId as DocumentId).commit();
-    connection.close();
-    await storage.close();
-    fs.writeFileSync(path.join(clientPath, "provider-state.json"), "existing provider cursor");
-    const workerStop = vi.fn();
-    const workerStart = vi.fn(() => ({ stop: workerStop }));
-    const makeRepo = engineStorage.createPersistentRepo;
-    let liveRepo: ReturnType<typeof createPersistentRepo> | undefined;
-    vi.spyOn(engineStorage, "createPersistentRepo").mockImplementation((storagePath) => {
-      const created = makeRepo(storagePath);
-      if (storagePath === clientPath) liveRepo = created;
-      return created;
-    });
-    const sourceSyncUrl = `${receiving.endpoint.replace("http:", "ws:")}/sync/${catalogId}`;
-    const originalServer =
-      serverMode === "same configured source"
-        ? sourceSyncUrl
-        : `ws://127.0.0.1:${await reservePort()}`;
-    const joining = runtime("client", {
-      remoteSync: { server: originalServer },
-      assignedWorkerTypes: ["existing-worker"],
-      workerRegistrations: [
-        {
-          manifest: { type: "existing-worker", requiredDomains: ["task"] },
-          runtime: { start: workerStart },
-        },
-      ],
-    });
-    await joining.start();
-    const originalConfig = joining.config();
-    const project = await value<Project>(joining, "project.create", {
-      input: { name: "Previously local project" },
-    });
-    await value(joining, "task.create", {
-      input: { projectId: project.id, title: "Previously local task" },
-    });
-    const requested = await value<EnrollmentClientStatus>(joining, "sync.enroll", {
-      endpoint: receiving.endpoint,
-    });
-    expect(requested.stage).toBe("pending");
-    await value(receiving.instance, "sync.enrollmentApprove", { requestId: requested.requestId });
-    await active(joining, catalogId);
-    expect(await value(joining, "device.localId")).toBe(replica);
-    expect(joining.status().catalogId).toBe(catalogId);
-    expect(workerStart).toHaveBeenCalledTimes(1);
-    expect(workerStop).not.toHaveBeenCalled();
-    expect(joining.config()).toEqual(originalConfig);
-    expect(joining.config().remoteSync).toEqual({ server: originalServer });
-    expect(liveRepo).toBeDefined();
-    const sourceAdapters = () =>
-      liveRepo!.networkSubsystem.adapters.filter(
-        (adapter) => "url" in adapter && adapter.url === sourceSyncUrl,
+      });
+      expect(requested.stage).toBe("pending");
+      await value(receiving.instance, "sync.enrollmentApprove", { requestId: requested.requestId });
+      await active(joining, catalogId);
+      expect(await value(joining, "device.localId")).toBe(replica);
+      expect(joining.status().catalogId).toBe(catalogId);
+      expect(workerStart).toHaveBeenCalledTimes(1);
+      expect(workerStop).not.toHaveBeenCalled();
+      expect(joining.config()).toEqual(originalConfig);
+      expect(joining.config().remoteSync).toEqual({ server: originalServer });
+      expect(liveRepo).toBeDefined();
+      const sourceAdapters = () =>
+        liveRepo!.networkSubsystem.adapters.filter(
+          (adapter) => "url" in adapter && adapter.url === sourceSyncUrl,
+        );
+      expect(sourceAdapters()).toHaveLength(1);
+      expect(
+        await value<EnrollmentClientStatus>(joining, "sync.enroll", {
+          endpoint: receiving.endpoint,
+        }),
+      ).toMatchObject({ stage: "active", deviceId: replica });
+      expect(sourceAdapters()).toHaveLength(1);
+      expect(fs.readFileSync(path.join(clientPath, "provider-state.json"), "utf-8")).toBe(
+        "existing provider cursor",
       );
-    expect(sourceAdapters()).toHaveLength(1);
-    expect(
-      await value<EnrollmentClientStatus>(joining, "sync.enroll", { endpoint: receiving.endpoint }),
-    ).toMatchObject({ stage: "active", deviceId: replica });
-    expect(sourceAdapters()).toHaveLength(1);
-    expect(fs.readFileSync(path.join(clientPath, "provider-state.json"), "utf-8")).toBe(
-      "existing provider cursor",
-    );
-    await vi.waitFor(
-      async () =>
-        expect(await value(receiving.instance, "task.list")).toEqual(
-          expect.arrayContaining([expect.objectContaining({ title: "Previously local task" })]),
-        ),
-      { timeout: 5_000 },
-    );
-    expect(await value(joining, "task.list")).toEqual(
-      expect.arrayContaining([expect.objectContaining({ title: "Previously local task" })]),
-    );
-  });
+      await vi.waitFor(
+        async () =>
+          expect(await value(receiving.instance, "task.list")).toEqual(
+            expect.arrayContaining([expect.objectContaining({ title: "Previously local task" })]),
+          ),
+        { timeout: 5_000 },
+      );
+      expect(await value(joining, "task.list")).toEqual(
+        expect.arrayContaining([expect.objectContaining({ title: "Previously local task" })]),
+      );
+    },
+  );
 
   it("refuses a different initialized dataset even when empty without touching catalog, identity, settings, provider state, or workers", async () => {
     const receiving = await source();

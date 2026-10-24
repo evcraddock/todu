@@ -114,33 +114,29 @@ describe("home sections", () => {
     expect(sections.thisWeek).toEqual([]);
   });
 
-  it.each([
-    "2026-07-25",
-    "2026-07-26",
-    "2026-08-02",
-    "2027-01-03",
-  ])("keeps an unfinished task from an earlier week visible on %s without rescheduling", (date) => {
-    const task = Object.freeze(createTask({ priority: "low", scheduledDate: "2026-07-19" }));
-    const sections = createHomeTaskSections([task], date);
+  it.each(["2026-07-25", "2026-07-26", "2026-08-02", "2027-01-03"])(
+    "keeps an unfinished task from an earlier week visible on %s without rescheduling",
+    (date) => {
+      const task = Object.freeze(createTask({ priority: "low", scheduledDate: "2026-07-19" }));
+      const sections = createHomeTaskSections([task], date);
 
-    expect(sections.thisWeek).toEqual([task]);
-    expect(sections.thisWeek[0]).toBe(task);
-    expect(task.scheduledDate).toBe("2026-07-19");
-  });
+      expect(sections.thisWeek).toEqual([task]);
+      expect(sections.thisWeek[0]).toBe(task);
+      expect(task.scheduledDate).toBe("2026-07-19");
+    },
+  );
 
-  it.each([
-    "waiting",
-    "done",
-    "canceled",
-    "inprogress",
-  ] as const)("does not include a %s task in This Week even with an earlier scheduled date", (status) => {
-    const task = createTask({ status, priority: "high", scheduledDate: "2026-07-12" });
-    const sections = createHomeTaskSections([task], today);
+  it.each(["waiting", "done", "canceled", "inprogress"] as const)(
+    "does not include a %s task in This Week even with an earlier scheduled date",
+    (status) => {
+      const task = createTask({ status, priority: "high", scheduledDate: "2026-07-12" });
+      const sections = createHomeTaskSections([task], today);
 
-    expect(sections.thisWeek).toEqual([]);
-    expect(sections.now).toEqual(status === "inprogress" ? [task] : []);
-    expect(sections.waiting).toEqual(status === "waiting" ? [task] : []);
-  });
+      expect(sections.thisWeek).toEqual([]);
+      expect(sections.now).toEqual(status === "inprogress" ? [task] : []);
+      expect(sections.waiting).toEqual(status === "waiting" ? [task] : []);
+    },
+  );
 
   it("preserves fields and input order without mutating tasks or marking carryover overdue", () => {
     const tasks = [

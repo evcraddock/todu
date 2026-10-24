@@ -268,30 +268,30 @@ describe("Home project focus", () => {
     expect(screen.queryByRole("heading", { name: /Project Focus/ })).toBeNull();
   });
 
-  it.each([
-    "loading",
-    "failure",
-  ])("shows project %s without blocking tasks or habits", (condition) => {
-    state.projectsLoading = condition === "loading";
-    state.projectsError = condition === "failure" ? new Error("Daemon query failed") : null;
-    state.tasks = [makeTask("Planned work", { scheduledDate: "2026-10-12" })];
-    render(
-      <HomeView
-        onNavigateToHabit={vi.fn()}
-        onNavigateToTask={vi.fn()}
-        onNavigateToProject={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: /Project Focus/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Planned work/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /Today's Habits/ })).toBeTruthy();
-    if (condition === "loading") {
-      expect(screen.getByText("Loading projects…")).toBeTruthy();
-    } else {
-      expect(screen.getByRole("alert").textContent).toContain("Failed to load projects");
-      expect(screen.getByRole("alert").textContent).toContain("Daemon query failed");
-    }
-  });
+  it.each(["loading", "failure"])(
+    "shows project %s without blocking tasks or habits",
+    (condition) => {
+      state.projectsLoading = condition === "loading";
+      state.projectsError = condition === "failure" ? new Error("Daemon query failed") : null;
+      state.tasks = [makeTask("Planned work", { scheduledDate: "2026-10-12" })];
+      render(
+        <HomeView
+          onNavigateToHabit={vi.fn()}
+          onNavigateToTask={vi.fn()}
+          onNavigateToProject={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole("heading", { name: /Project Focus/ })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /Planned work/ })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: /Today's Habits/ })).toBeTruthy();
+      if (condition === "loading") {
+        expect(screen.getByText("Loading projects…")).toBeTruthy();
+      } else {
+        expect(screen.getByRole("alert").textContent).toContain("Failed to load projects");
+        expect(screen.getByRole("alert").textContent).toContain("Daemon query failed");
+      }
+    },
+  );
 });
 
 it("shows assignees and opens their details without opening the task", () => {

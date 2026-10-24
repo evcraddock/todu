@@ -148,20 +148,22 @@ describe("opt-in LAN sync listener", () => {
     await closed;
   });
 
-  it.each([
-    JSON.stringify({ method: "daemon.status", params: {} }),
-    new Uint8Array([0xf6]),
-  ])("contains invalid native messages without dispatching remote daemon operations: %s", async (message) => {
-    const port = await availablePort();
-    const engine = await open({ syncListener: { enabled: true, bind: "127.0.0.1", port } });
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/sync/${engine.sync.getCatalogId()}`);
-    await once(socket, "open");
-    const closed = once(socket, "close");
-    socket.send(message);
-    await closed;
-    expect(engine.sync.status().listener.state).toBe("listening");
-    expect((await engine.project.create({ name: "Local work after invalid frame" })).ok).toBe(true);
-  });
+  it.each([JSON.stringify({ method: "daemon.status", params: {} }), new Uint8Array([0xf6])])(
+    "contains invalid native messages without dispatching remote daemon operations: %s",
+    async (message) => {
+      const port = await availablePort();
+      const engine = await open({ syncListener: { enabled: true, bind: "127.0.0.1", port } });
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/sync/${engine.sync.getCatalogId()}`);
+      await once(socket, "open");
+      const closed = once(socket, "close");
+      socket.send(message);
+      await closed;
+      expect(engine.sync.status().listener.state).toBe("listening");
+      expect((await engine.project.create({ name: "Local work after invalid frame" })).ok).toBe(
+        true,
+      );
+    },
+  );
 
   it("terminates admitted and idle connections on close, releases the port, and can restart", async () => {
     const port = await availablePort();
@@ -203,56 +205,54 @@ describe("opt-in LAN sync listener", () => {
     expect(listening.sync.status().remote.server).toBe(server);
   });
 
-  it(
-    "synchronizes registered persistent peers bidirectionally through the current catalog route",
-    { timeout: 20_000 },
-    async () => {
-      const firstPath = path.join(directory, "first");
-      const secondPath = path.join(directory, "second");
-      const firstStorage = await initBootstrapStorage(firstPath);
-      const catalogId = firstStorage.catalog.documentId;
-      const binary = await firstStorage.repo.export(catalogId);
-      if (!binary) throw new Error("Missing native catalog export");
-      const secondRepo = createPersistentRepo(secondPath);
-      secondRepo.import<CatalogDocument>(binary, { docId: catalogId });
-      await secondRepo.flush();
-      fs.writeFileSync(path.join(secondPath, "todu-catalog.id"), catalogId);
-      const secondStorage = await initBootstrapStorage(secondPath, secondRepo);
-      const registered = await secondRepo.export(catalogId);
-      if (!registered) throw new Error("Missing registered catalog export");
-      firstStorage.repo.import<CatalogDocument>(registered, { docId: catalogId });
-      await Promise.all([firstStorage.close(), secondStorage.close()]);
+  it("synchronizes registered persistent peers bidirectionally through the current catalog route", {
+    timeout: 20_000,
+  }, async () => {
+    const firstPath = path.join(directory, "first");
+    const secondPath = path.join(directory, "second");
+    const firstStorage = await initBootstrapStorage(firstPath);
+    const catalogId = firstStorage.catalog.documentId;
+    const binary = await firstStorage.repo.export(catalogId);
+    if (!binary) throw new Error("Missing native catalog export");
+    const secondRepo = createPersistentRepo(secondPath);
+    secondRepo.import<CatalogDocument>(binary, { docId: catalogId });
+    await secondRepo.flush();
+    fs.writeFileSync(path.join(secondPath, "todu-catalog.id"), catalogId);
+    const secondStorage = await initBootstrapStorage(secondPath, secondRepo);
+    const registered = await secondRepo.export(catalogId);
+    if (!registered) throw new Error("Missing registered catalog export");
+    firstStorage.repo.import<CatalogDocument>(registered, { docId: catalogId });
+    await Promise.all([firstStorage.close(), secondStorage.close()]);
 
-      const port = await availablePort();
-      const first = await open({
-        storagePath: firstPath,
-        syncListener: { enabled: true, bind: "127.0.0.1", port },
-      });
-      const second = await open({
-        storagePath: secondPath,
-        remoteSync: { server: `ws://127.0.0.1:${port}/sync/${catalogId}` },
-      });
-      expect(value(await first.device.list())).toHaveLength(2);
-      expect(value(await first.device.localId())).not.toBe(value(await second.device.localId()));
-      const fromFirst = value(await first.project.create({ name: "From first" }));
-      const fromSecond = value(await second.project.create({ name: "From second" }));
-      await waitFor(
-        async () =>
-          value(await first.project.list()).some((project) => project.id === fromSecond.id) &&
-          value(await second.project.list()).some((project) => project.id === fromFirst.id),
-      );
-      const task = value(
-        await first.task.create({ title: "Native task document", projectId: fromFirst.id }),
-      );
-      await waitFor(async () =>
-        value(await second.task.list()).some((candidate) => candidate.id === task.id),
-      );
-      value(await second.task.update(task.id, { title: "Edited by second peer" }));
-      await waitFor(
-        async () => value(await first.task.get(task.id)).title === "Edited by second peer",
-      );
-    },
-  );
+    const port = await availablePort();
+    const first = await open({
+      storagePath: firstPath,
+      syncListener: { enabled: true, bind: "127.0.0.1", port },
+    });
+    const second = await open({
+      storagePath: secondPath,
+      remoteSync: { server: `ws://127.0.0.1:${port}/sync/${catalogId}` },
+    });
+    expect(value(await first.device.list())).toHaveLength(2);
+    expect(value(await first.device.localId())).not.toBe(value(await second.device.localId()));
+    const fromFirst = value(await first.project.create({ name: "From first" }));
+    const fromSecond = value(await second.project.create({ name: "From second" }));
+    await waitFor(
+      async () =>
+        value(await first.project.list()).some((project) => project.id === fromSecond.id) &&
+        value(await second.project.list()).some((project) => project.id === fromFirst.id),
+    );
+    const task = value(
+      await first.task.create({ title: "Native task document", projectId: fromFirst.id }),
+    );
+    await waitFor(async () =>
+      value(await second.task.list()).some((candidate) => candidate.id === task.id),
+    );
+    value(await second.task.update(task.id, { title: "Edited by second peer" }));
+    await waitFor(
+      async () => value(await first.task.get(task.id)).title === "Edited by second peer",
+    );
+  });
 });
 
 function rejectedUpgrade(port: number, route: string): Promise<number | undefined> {

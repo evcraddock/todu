@@ -105,40 +105,39 @@ describe("configured server and cached peer role independence", () => {
     expect(createEnrollmentPeerConnection).not.toHaveBeenCalled();
     return { adapter: vi.mocked(addRemoteSyncAdapter).mock.results[0].value, catalogId };
   }
-  it.each([
-    "stop",
-    "disable",
-    "repoint",
-  ])("preserves a borrowed peer across %s using the actual engine boundary", async (action) => {
-    const { adapter, catalogId } = await open();
-    if (action === "stop") await todu!.sync.stop();
-    else
-      expect(
-        (
-          await todu!.sync.configureServer(
-            action === "disable" ? { enabled: false } : { server: "ws://127.0.0.1:2" },
-          )
-        ).ok,
-      ).toBe(true);
-    expect(adapter.socket?.readyState).toBe(1);
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
-    const direct = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ adapter }),
-    );
-    expect(direct.close).not.toHaveBeenCalled();
-    expect(await todu!.sync.reloadPeers()).toMatchObject({
-      ok: true,
-      value: { retained: 1, added: 0, removed: 0 },
-    });
-    expect(todu!.sync.getCatalogId()).toBe(catalogId);
-    await todu!.sync.start();
-    expect(direct.close).not.toHaveBeenCalled();
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
-    await todu!.close();
-    todu = undefined;
-    expect(direct.close).toHaveBeenCalledOnce();
-  });
+  it.each(["stop", "disable", "repoint"])(
+    "preserves a borrowed peer across %s using the actual engine boundary",
+    async (action) => {
+      const { adapter, catalogId } = await open();
+      if (action === "stop") await todu!.sync.stop();
+      else
+        expect(
+          (
+            await todu!.sync.configureServer(
+              action === "disable" ? { enabled: false } : { server: "ws://127.0.0.1:2" },
+            )
+          ).ok,
+        ).toBe(true);
+      expect(adapter.socket?.readyState).toBe(1);
+      expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+      const direct = vi.mocked(createEnrollmentPeerConnection).mock.results[0].value;
+      expect(createEnrollmentPeerConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ adapter }),
+      );
+      expect(direct.close).not.toHaveBeenCalled();
+      expect(await todu!.sync.reloadPeers()).toMatchObject({
+        ok: true,
+        value: { retained: 1, added: 0, removed: 0 },
+      });
+      expect(todu!.sync.getCatalogId()).toBe(catalogId);
+      await todu!.sync.start();
+      expect(direct.close).not.toHaveBeenCalled();
+      expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+      await todu!.close();
+      todu = undefined;
+      expect(direct.close).toHaveBeenCalledOnce();
+    },
+  );
   it("restores prior server intent if replacement adapter creation fails while keeping its promoted peer", async () => {
     await open();
     const before = todu!.sync.serverStatus();
@@ -160,57 +159,57 @@ describe("configured server and cached peer role independence", () => {
     { enabled: false, managed: true },
     { enabled: false, managed: false },
     { enabled: true, managed: false },
-  ])("preserves the same-address approved source for server/roster roles $enabled/$managed", async ({
-    enabled,
-    managed,
-  }) => {
-    const storage = await initBootstrapStorage(directory);
-    const catalogId = storage.catalog.documentId;
-    const deviceId = createDeviceId((await storage.repo.storageId())!);
-    const sourceDeviceId = createDeviceId("fixture-source");
-    vi.spyOn(Repo.prototype, "getStorageIdOfPeer").mockReturnValue(
-      sourceDeviceId as ReturnType<Repo["getStorageIdOfPeer"]>,
-    );
-    const endpoint = "http://127.0.0.1:1";
-    storage.catalog.change((doc) => {
-      doc[deviceRegistryKey(sourceDeviceId)] = { id: sourceDeviceId, name: "Source", endpoint };
-    });
-    await storage.close();
-    const source = {
-      endpoint,
-      approval: { catalogId, deviceId, sourceDeviceId, syncPath: `/sync/${catalogId}` },
-    };
-    todu = await createTodu({
-      storagePath: directory,
-      registeredPeerConnections: managed,
-      remoteSyncSettings: { server: `ws://127.0.0.1:1/sync/${catalogId}`, enabled },
-      enrollmentSource: source,
-    });
-    expect(addRemoteSyncAdapter).toHaveBeenCalledTimes(enabled ? 1 : 0);
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(enabled ? 0 : 1);
-    await todu.sync.stop();
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
-    if (managed)
-      expect(await todu.sync.reloadPeers()).toMatchObject({
-        ok: true,
-        value: { retained: 1, added: 0 },
+  ])(
+    "preserves the same-address approved source for server/roster roles $enabled/$managed",
+    async ({ enabled, managed }) => {
+      const storage = await initBootstrapStorage(directory);
+      const catalogId = storage.catalog.documentId;
+      const deviceId = createDeviceId((await storage.repo.storageId())!);
+      const sourceDeviceId = createDeviceId("fixture-source");
+      vi.spyOn(Repo.prototype, "getStorageIdOfPeer").mockReturnValue(
+        sourceDeviceId as ReturnType<Repo["getStorageIdOfPeer"]>,
+      );
+      const endpoint = "http://127.0.0.1:1";
+      storage.catalog.change((doc) => {
+        doc[deviceRegistryKey(sourceDeviceId)] = { id: sourceDeviceId, name: "Source", endpoint };
       });
-    expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
-    expect(
-      vi.mocked(createEnrollmentPeerConnection).mock.results[0].value.close,
-    ).not.toHaveBeenCalled();
-    expect(todu.sync.serverStatus()).toMatchObject({ enabled, running: false });
-    if (managed) {
-      expect((await todu.device.remove(sourceDeviceId)).ok).toBe(true);
-      expect(await todu.sync.reloadPeers()).toMatchObject({ ok: true, value: { removed: 1 } });
-      await todu.sync.start();
+      await storage.close();
+      const source = {
+        endpoint,
+        approval: { catalogId, deviceId, sourceDeviceId, syncPath: `/sync/${catalogId}` },
+      };
+      todu = await createTodu({
+        storagePath: directory,
+        registeredPeerConnections: managed,
+        remoteSyncSettings: { server: `ws://127.0.0.1:1/sync/${catalogId}`, enabled },
+        enrollmentSource: source,
+      });
+      expect(addRemoteSyncAdapter).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      expect(createEnrollmentPeerConnection).toHaveBeenCalledTimes(enabled ? 0 : 1);
       await todu.sync.stop();
+      expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+      if (managed)
+        expect(await todu.sync.reloadPeers()).toMatchObject({
+          ok: true,
+          value: { retained: 1, added: 0 },
+        });
       expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
       expect(
         vi.mocked(createEnrollmentPeerConnection).mock.results[0].value.close,
-      ).toHaveBeenCalledOnce();
-    }
-  });
+      ).not.toHaveBeenCalled();
+      expect(todu.sync.serverStatus()).toMatchObject({ enabled, running: false });
+      if (managed) {
+        expect((await todu.device.remove(sourceDeviceId)).ok).toBe(true);
+        expect(await todu.sync.reloadPeers()).toMatchObject({ ok: true, value: { removed: 1 } });
+        await todu.sync.start();
+        await todu.sync.stop();
+        expect(createEnrollmentPeerConnection).toHaveBeenCalledOnce();
+        expect(
+          vi.mocked(createEnrollmentPeerConnection).mock.results[0].value.close,
+        ).toHaveBeenCalledOnce();
+      }
+    },
+  );
   it("promotes a cached peer after server connection loss without a roster refresh", async () => {
     const { adapter } = await open();
     adapter.remotePeerId = undefined;

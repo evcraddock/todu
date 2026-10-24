@@ -212,94 +212,94 @@ describe("v6 scoped pull decisions against a real persistent engine", () => {
     expect(value(await todu.task.get(task.id)).status).toBe("active");
   });
 
-  it.each([
-    "pull",
-    "flush",
-  ])("rejects cancellation followed by reactivation during %s without acknowledgment or push", async (boundary) => {
-    value(await todu.integration.update(binding.id, { strategy: "bidirectional" }));
-    const p = provider(async (_binding, _project, context) => {
-      const result = missingTargetPull(context, task);
-      if (boundary === "pull") value(await todu.task.update(task.id, { status: "active" }));
-      return result;
-    });
-    if (boundary === "flush") {
-      const flush = todu.__internal.syncRuntime.flush;
-      vi.spyOn(todu.__internal.syncRuntime, "flush").mockImplementation(async () => {
-        value(await todu.task.update(task.id, { status: "active" }));
-        await flush();
-      });
-    }
-    await cycle(p);
-    expect(value(await todu.integration.getStatus(binding.id))).toMatchObject({
-      state: "error",
-      lastErrorSummary: expect.stringContaining("stale cancellation"),
-    });
-    expect(p.acknowledgePull).not.toHaveBeenCalled();
-    expect(p.push).not.toHaveBeenCalled();
-    expect(value(await todu.task.get(task.id)).status).toBe("active");
-    expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(
-      boundary === "pull" ? 1 : 2,
-    );
-  });
-
-  it.each([
-    "flush",
-    "acknowledgment",
-  ])("retains a provider-owned pending batch across %s failure/restart and reevaluates exclusions before replay", async (failure) => {
-    const pending = path.join(directory, "fixture-pending.json");
-    const committed = path.join(directory, "fixture-checkpoint.json");
-    function replayProvider(): SyncProviderV6 {
+  it.each(["pull", "flush"])(
+    "rejects cancellation followed by reactivation during %s without acknowledgment or push",
+    async (boundary) => {
+      value(await todu.integration.update(binding.id, { strategy: "bidirectional" }));
       const p = provider(async (_binding, _project, context) => {
-        const fresh = missingTargetPull(context, task);
-        if (fs.existsSync(pending)) {
-          const staged = JSON.parse(fs.readFileSync(pending, "utf8")) as SyncProviderPullResultV6;
-          return { ...staged, cancelledTaskExclusions: fresh.cancelledTaskExclusions };
-        }
-        fs.writeFileSync(pending, JSON.stringify(fresh));
-        return fresh;
+        const result = missingTargetPull(context, task);
+        if (boundary === "pull") value(await todu.task.update(task.id, { status: "active" }));
+        return result;
       });
-      vi.mocked(p.acknowledgePull).mockImplementation(async (_binding, checkpoint) => {
-        fs.writeFileSync(committed, JSON.stringify(checkpoint));
+      if (boundary === "flush") {
+        const flush = todu.__internal.syncRuntime.flush;
+        vi.spyOn(todu.__internal.syncRuntime, "flush").mockImplementation(async () => {
+          value(await todu.task.update(task.id, { status: "active" }));
+          await flush();
+        });
+      }
+      await cycle(p);
+      expect(value(await todu.integration.getStatus(binding.id))).toMatchObject({
+        state: "error",
+        lastErrorSummary: expect.stringContaining("stale cancellation"),
       });
-      return p;
-    }
-    const p = replayProvider();
-    const flush = vi.spyOn(todu.__internal.syncRuntime, "flush");
-    if (failure === "flush") flush.mockRejectedValueOnce(new Error("injected flush failure"));
-    else
-      vi.mocked(p.acknowledgePull).mockRejectedValueOnce(
-        new Error("injected acknowledgment failure"),
+      expect(p.acknowledgePull).not.toHaveBeenCalled();
+      expect(p.push).not.toHaveBeenCalled();
+      expect(value(await todu.task.get(task.id)).status).toBe("active");
+      expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(
+        boundary === "pull" ? 1 : 2,
       );
-    await cycle(p);
-    expect(p.acknowledgePull).toHaveBeenCalledTimes(failure === "flush" ? 0 : 1);
-    expect(fs.existsSync(pending)).toBe(true);
-    expect(fs.existsSync(committed)).toBe(false);
-    const originalPending = fs.readFileSync(pending, "utf8");
-    flush.mockRestore();
-    const imported = value(await todu.task.list({ projectId: project.id })).find(
-      (row) => row.externalId === "owner/repo#9",
-    )!;
-    value(
-      await todu.task.update(imported.id, {
-        title: "Newer local edit",
-        updatedAt: "2026-04-03T00:00:00Z",
-      }),
-    );
-    await todu.close();
-    todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
-    value(await todu.task.update(task.id, { status: "active" }));
-    const replay = replayProvider();
-    await cycle(replay);
-    expect(replay.acknowledgePull).not.toHaveBeenCalled();
-    expect(fs.readFileSync(pending, "utf8")).toBe(originalPending);
-    expect(fs.existsSync(committed)).toBe(false);
-    value(await todu.task.update(task.id, { status: "canceled" }));
-    await cycle(replay);
-    expect(replay.acknowledgePull).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(fs.readFileSync(committed, "utf8"))).toBe("window-1");
-    expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(2);
-    expect(value(await todu.task.get(imported.id)).title).toBe("Newer local edit");
-  });
+    },
+  );
+
+  it.each(["flush", "acknowledgment"])(
+    "retains a provider-owned pending batch across %s failure/restart and reevaluates exclusions before replay",
+    async (failure) => {
+      const pending = path.join(directory, "fixture-pending.json");
+      const committed = path.join(directory, "fixture-checkpoint.json");
+      function replayProvider(): SyncProviderV6 {
+        const p = provider(async (_binding, _project, context) => {
+          const fresh = missingTargetPull(context, task);
+          if (fs.existsSync(pending)) {
+            const staged = JSON.parse(fs.readFileSync(pending, "utf8")) as SyncProviderPullResultV6;
+            return { ...staged, cancelledTaskExclusions: fresh.cancelledTaskExclusions };
+          }
+          fs.writeFileSync(pending, JSON.stringify(fresh));
+          return fresh;
+        });
+        vi.mocked(p.acknowledgePull).mockImplementation(async (_binding, checkpoint) => {
+          fs.writeFileSync(committed, JSON.stringify(checkpoint));
+        });
+        return p;
+      }
+      const p = replayProvider();
+      const flush = vi.spyOn(todu.__internal.syncRuntime, "flush");
+      if (failure === "flush") flush.mockRejectedValueOnce(new Error("injected flush failure"));
+      else
+        vi.mocked(p.acknowledgePull).mockRejectedValueOnce(
+          new Error("injected acknowledgment failure"),
+        );
+      await cycle(p);
+      expect(p.acknowledgePull).toHaveBeenCalledTimes(failure === "flush" ? 0 : 1);
+      expect(fs.existsSync(pending)).toBe(true);
+      expect(fs.existsSync(committed)).toBe(false);
+      const originalPending = fs.readFileSync(pending, "utf8");
+      flush.mockRestore();
+      const imported = value(await todu.task.list({ projectId: project.id })).find(
+        (row) => row.externalId === "owner/repo#9",
+      )!;
+      value(
+        await todu.task.update(imported.id, {
+          title: "Newer local edit",
+          updatedAt: "2026-04-03T00:00:00Z",
+        }),
+      );
+      await todu.close();
+      todu = (await createTodu({ storagePath: directory })) as ToduWithInternalTools;
+      value(await todu.task.update(task.id, { status: "active" }));
+      const replay = replayProvider();
+      await cycle(replay);
+      expect(replay.acknowledgePull).not.toHaveBeenCalled();
+      expect(fs.readFileSync(pending, "utf8")).toBe(originalPending);
+      expect(fs.existsSync(committed)).toBe(false);
+      value(await todu.task.update(task.id, { status: "canceled" }));
+      await cycle(replay);
+      expect(replay.acknowledgePull).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(fs.readFileSync(committed, "utf8"))).toBe("window-1");
+      expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(2);
+      expect(value(await todu.task.get(imported.id)).title).toBe("Newer local edit");
+    },
+  );
 
   it("rejects a persisted old receipt after restart even if the task is still cancelled", async () => {
     let saved: SyncProviderPullResultV6 | undefined;
@@ -320,20 +320,18 @@ describe("v6 scoped pull decisions against a real persistent engine", () => {
     expect(p.acknowledgePull).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "active",
-    "done",
-    "inprogress",
-    "waiting",
-  ] as const)("does not suppress an unavailable remote endpoint for %s", async (status) => {
-    value(await todu.task.update(task.id, { status: "active" }));
-    if (status !== "active") value(await todu.task.update(task.id, { status }));
-    const p = provider(async (_binding, _project, context) => missingTargetPull(context, task));
-    await cycle(p);
-    expect(value(await todu.integration.getStatus(binding.id)).state).toBe("error");
-    expect(p.acknowledgePull).not.toHaveBeenCalled();
-    expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(1);
-  });
+  it.each(["active", "done", "inprogress", "waiting"] as const)(
+    "does not suppress an unavailable remote endpoint for %s",
+    async (status) => {
+      value(await todu.task.update(task.id, { status: "active" }));
+      if (status !== "active") value(await todu.task.update(task.id, { status }));
+      const p = provider(async (_binding, _project, context) => missingTargetPull(context, task));
+      await cycle(p);
+      expect(value(await todu.integration.getStatus(binding.id)).state).toBe("error");
+      expect(p.acknowledgePull).not.toHaveBeenCalled();
+      expect(value(await todu.task.list({ projectId: project.id }))).toHaveLength(1);
+    },
+  );
 
   it("fails closed for missing, contradictory, ambiguous, and unrelated-project identities", async () => {
     const other = value(await todu.project.create({ name: "Other project" }));
@@ -426,31 +424,28 @@ describe("v6 scoped pull decisions against a real persistent engine", () => {
     expect(value(await todu.task.get(task.id)).assigneeActorIds).toEqual([actor.id]);
   });
 
-  it.each([
-    "pull",
-    "bidirectional",
-    "push",
-    "none",
-    "disabled",
-  ])("respects %s strategy and does not seed lifecycle context through push", async (strategy) => {
-    value(
-      await todu.integration.update(binding.id, {
-        strategy: strategy === "disabled" ? "pull" : (strategy as IntegrationBinding["strategy"]),
-        enabled: strategy !== "disabled",
-      }),
-    );
-    const p = provider(async (_binding, _project, context) => {
-      expect(context.resolveTask({ localTaskId: task.id })).toMatchObject({ state: "found" });
-      return emptyPull();
-    });
-    await cycle(p);
-    const pulls = strategy === "pull" || strategy === "bidirectional";
-    expect(p.pull).toHaveBeenCalledTimes(pulls ? 1 : 0);
-    expect(p.acknowledgePull).toHaveBeenCalledTimes(pulls ? 1 : 0);
-    expect(p.push).toHaveBeenCalledTimes(
-      strategy === "push" || strategy === "bidirectional" ? 1 : 0,
-    );
-  });
+  it.each(["pull", "bidirectional", "push", "none", "disabled"])(
+    "respects %s strategy and does not seed lifecycle context through push",
+    async (strategy) => {
+      value(
+        await todu.integration.update(binding.id, {
+          strategy: strategy === "disabled" ? "pull" : (strategy as IntegrationBinding["strategy"]),
+          enabled: strategy !== "disabled",
+        }),
+      );
+      const p = provider(async (_binding, _project, context) => {
+        expect(context.resolveTask({ localTaskId: task.id })).toMatchObject({ state: "found" });
+        return emptyPull();
+      });
+      await cycle(p);
+      const pulls = strategy === "pull" || strategy === "bidirectional";
+      expect(p.pull).toHaveBeenCalledTimes(pulls ? 1 : 0);
+      expect(p.acknowledgePull).toHaveBeenCalledTimes(pulls ? 1 : 0);
+      expect(p.push).toHaveBeenCalledTimes(
+        strategy === "push" || strategy === "bidirectional" ? 1 : 0,
+      );
+    },
+  );
 
   it.each([
     "status",

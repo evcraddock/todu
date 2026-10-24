@@ -421,61 +421,61 @@ describe("App", () => {
     unmount();
   });
 
-  it.each([
-    "priority",
-    "status",
-  ])("opens the focused project's Tasks despite an incompatible saved project %s filter", async (filterKind) => {
-    const client = createFakeClient();
-    const projects = await client.project.list();
-    vi.mocked(client.project.list).mockResolvedValue(
-      projects.map((project) => ({ ...project, priority: "high" })),
-    );
-    const { stdin, lastFrame, unmount } = render(
-      <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
-    );
-    try {
-      await waitForFrameText(lastFrame, "Home • ready");
-      stdin.write("5");
-      await waitForFrameText(lastFrame, "Projects (1)");
-      stdin.write("\u0006");
-      await waitForFrameText(lastFrame, "Filter projects");
-      if (filterKind === "priority") {
-        stdin.write("j");
-        stdin.write("j");
-        stdin.write("j");
-        await waitForFrameText(lastFrame, "> Priority: Any");
-        stdin.write("\u001B[C");
-        await waitForFrameText(lastFrame, "> Priority: High");
-        stdin.write("\u001B[C");
-        await waitForFrameText(lastFrame, "> Priority: Medium");
-      } else {
-        stdin.write(" ");
-        await waitForFrameText(lastFrame, "> [ ] Active");
-      }
-      await actWithTestEnvironment(() => stdin.write("\r"));
-      await waitForFrameText(lastFrame, "No projects available.");
-      stdin.write("1");
-      await waitForFrameText(lastFrame, "Home • ready");
-      stdin.write("J");
-      await waitForFrameText(lastFrame, "> This Week");
-      stdin.write("J");
-      await waitForFrameText(lastFrame, "> Waiting");
-      stdin.write("J");
-      await waitForFrameText(lastFrame, "> • Inbox");
-      stdin.write("\r");
-      await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
-      await vi.waitFor(() => {
-        expect(client.task.list).toHaveBeenCalledWith({
-          status: ["active", "inprogress", "waiting"],
-          projectId: "project-1",
+  it.each(["priority", "status"])(
+    "opens the focused project's Tasks despite an incompatible saved project %s filter",
+    async (filterKind) => {
+      const client = createFakeClient();
+      const projects = await client.project.list();
+      vi.mocked(client.project.list).mockResolvedValue(
+        projects.map((project) => ({ ...project, priority: "high" })),
+      );
+      const { stdin, lastFrame, unmount } = render(
+        <App connection={createFakeConnection(createConnectedSnapshot())} toduClient={client} />,
+      );
+      try {
+        await waitForFrameText(lastFrame, "Home • ready");
+        stdin.write("5");
+        await waitForFrameText(lastFrame, "Projects (1)");
+        stdin.write("\u0006");
+        await waitForFrameText(lastFrame, "Filter projects");
+        if (filterKind === "priority") {
+          stdin.write("j");
+          stdin.write("j");
+          stdin.write("j");
+          await waitForFrameText(lastFrame, "> Priority: Any");
+          stdin.write("\u001B[C");
+          await waitForFrameText(lastFrame, "> Priority: High");
+          stdin.write("\u001B[C");
+          await waitForFrameText(lastFrame, "> Priority: Medium");
+        } else {
+          stdin.write(" ");
+          await waitForFrameText(lastFrame, "> [ ] Active");
+        }
+        await actWithTestEnvironment(() => stdin.write("\r"));
+        await waitForFrameText(lastFrame, "No projects available.");
+        stdin.write("1");
+        await waitForFrameText(lastFrame, "Home • ready");
+        stdin.write("J");
+        await waitForFrameText(lastFrame, "> This Week");
+        stdin.write("J");
+        await waitForFrameText(lastFrame, "> Waiting");
+        stdin.write("J");
+        await waitForFrameText(lastFrame, "> • Inbox");
+        stdin.write("\r");
+        await waitForFrameText(lastFrame, "Open · Any priority · Inbox");
+        await vi.waitFor(() => {
+          expect(client.task.list).toHaveBeenCalledWith({
+            status: ["active", "inprogress", "waiting"],
+            projectId: "project-1",
+          });
         });
-      });
-      expect(lastFrame()).toContain("> Inbox");
-      expect(client.task.update).not.toHaveBeenCalled();
-    } finally {
-      unmount();
-    }
-  });
+        expect(lastFrame()).toContain("> Inbox");
+        expect(client.task.update).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    },
+  );
 
   it("refreshes Project Focus on data changes and reconnect without hiding cached projects", async () => {
     const connection = createFakeConnection(createConnectedSnapshot());

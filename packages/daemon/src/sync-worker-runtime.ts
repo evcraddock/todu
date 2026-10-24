@@ -958,7 +958,7 @@ async function applyPushCommentLinks(
     const noteResult = await todu.note.get(link.localNoteId);
     const note = noteResult.ok ? noteResult.value : null;
 
-    if (!note || note.entityType !== "task" || !note.entityId) {
+    if (note?.entityType !== "task" || !note.entityId) {
       throw new Error(
         `push comment link references missing task note: note=${link.localNoteId} task=${link.externalTaskId}`,
       );

@@ -89,17 +89,17 @@ describe("device enrollment CLI", () => {
     expect(error.mock.calls.flat().join(" ")).toContain("do not replace");
     expect(process.exitCode).toBe(1);
   });
-  it.each([
-    "approve",
-    "deny",
-  ] as const)("sends %s only through private local RPC", async (action) => {
-    const { run, invoke } = setup();
-    await run(["sync", "enrollment", action, "550e8400-e29b-41d4-a716-446655440000"]);
-    expect(invoke).toHaveBeenCalledExactlyOnceWith(
-      action === "approve" ? "sync.enrollmentApprove" : "sync.enrollmentDeny",
-      { requestId: "550e8400-e29b-41d4-a716-446655440000" },
-    );
-  });
+  it.each(["approve", "deny"] as const)(
+    "sends %s only through private local RPC",
+    async (action) => {
+      const { run, invoke } = setup();
+      await run(["sync", "enrollment", action, "550e8400-e29b-41d4-a716-446655440000"]);
+      expect(invoke).toHaveBeenCalledExactlyOnceWith(
+        action === "approve" ? "sync.enrollmentApprove" : "sync.enrollmentDeny",
+        { requestId: "550e8400-e29b-41d4-a716-446655440000" },
+      );
+    },
+  );
   it("renders local status as JSON and cancels without a membership removal call", async () => {
     const { run, invoke, log } = setup();
     await run(["--format", "json", "sync", "enrollment", "status"]);

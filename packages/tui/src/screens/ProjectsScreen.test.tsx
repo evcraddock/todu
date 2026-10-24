@@ -15,6 +15,7 @@ import {
 
 function renderWithQuery(children: ReactNode): ReturnType<typeof render> {
   const queryClient = createTuiQueryClient();
+  // biome-ignore lint/correctness/noComponentHookFactories: Each test render owns an isolated query client.
   function Wrapper(): JSX.Element {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
@@ -104,39 +105,42 @@ describe("ProjectsScreen", () => {
     [["done"], ["Finished"], ["Inbox", "Abandoned"]],
     [["canceled"], ["Abandoned"], ["Inbox", "Finished"]],
     [["active", "canceled"], ["Inbox", "Abandoned"], ["Finished"]],
-  ] as const)("only displays projects with selected statuses %j", async (statuses, visible, hidden) => {
-    const client = createClient({
-      project: {
-        list: vi
-          .fn()
-          .mockResolvedValue([
-            createProject(),
-            createProject({ id: "project-done", name: "Finished", status: "done" }),
-            createProject({ id: "project-canceled", name: "Abandoned", status: "canceled" }),
-          ]),
-        get: vi.fn(),
-      },
-    });
-    const { lastFrame } = renderWithQuery(
-      <ProjectsScreen
-        client={client}
-        projectFilter={allProjectsFilter}
-        listFilter={{ statuses }}
-        onSelectProject={vi.fn()}
-        onSelectAllProjects={vi.fn()}
-      />,
-    );
+  ] as const)(
+    "only displays projects with selected statuses %j",
+    async (statuses, visible, hidden) => {
+      const client = createClient({
+        project: {
+          list: vi
+            .fn()
+            .mockResolvedValue([
+              createProject(),
+              createProject({ id: "project-done", name: "Finished", status: "done" }),
+              createProject({ id: "project-canceled", name: "Abandoned", status: "canceled" }),
+            ]),
+          get: vi.fn(),
+        },
+      });
+      const { lastFrame } = renderWithQuery(
+        <ProjectsScreen
+          client={client}
+          projectFilter={allProjectsFilter}
+          listFilter={{ statuses }}
+          onSelectProject={vi.fn()}
+          onSelectAllProjects={vi.fn()}
+        />,
+      );
 
-    await waitForFrameText(lastFrame, "> All projects");
-    for (const name of visible) {
-      expect(lastFrame()).toContain(name);
-    }
-    for (const name of hidden) {
-      expect(lastFrame()).not.toContain(name);
-    }
-    expect(lastFrame()).toContain(`Projects (${visible.length})`);
-    expect(client.project.list).toHaveBeenCalledWith({ status: [...statuses] });
-  });
+      await waitForFrameText(lastFrame, "> All projects");
+      for (const name of visible) {
+        expect(lastFrame()).toContain(name);
+      }
+      for (const name of hidden) {
+        expect(lastFrame()).not.toContain(name);
+      }
+      expect(lastFrame()).toContain(`Projects (${visible.length})`);
+      expect(client.project.list).toHaveBeenCalledWith({ status: [...statuses] });
+    },
+  );
 
   it("hides Done projects after unchecking Done and restores them when selected again", async () => {
     const client = createClient({
@@ -150,6 +154,7 @@ describe("ProjectsScreen", () => {
         get: vi.fn(),
       },
     });
+    // biome-ignore lint/correctness/noComponentHookFactories: This component is created once for this test.
     function FilteredProjects(): JSX.Element {
       const [listFilter, setListFilter] =
         useState<ProjectListFilterState>(defaultProjectListFilter);

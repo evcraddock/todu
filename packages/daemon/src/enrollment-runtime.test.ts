@@ -94,15 +94,15 @@ describe("daemon enrollment endpoint wiring", () => {
       { registration: expect.objectContaining({ endpoint: "http://127.0.0.1:24400" }) },
     );
   });
-  it.each([
-    { enabled: false },
-    { enabled: true, bind: "0.0.0.0" },
-  ])("refuses missing or ambiguous setup before any request: %j", async (listener) => {
-    const { run } = setup(listener);
-    expect(await run()).toHaveProperty("error");
-    expect(createEnrollmentClient).not.toHaveBeenCalled();
-    expect(fs.readdirSync(directory)).toEqual([]);
-  });
+  it.each([{ enabled: false }, { enabled: true, bind: "0.0.0.0" }])(
+    "refuses missing or ambiguous setup before any request: %j",
+    async (listener) => {
+      const { run } = setup(listener);
+      expect(await run()).toHaveProperty("error");
+      expect(createEnrollmentClient).not.toHaveBeenCalled();
+      expect(fs.readdirSync(directory)).toEqual([]);
+    },
+  );
   it("rejects non-string advertised overrides without invoking the client", async () => {
     expect(await setup().run({ advertisedEndpoint: 123 })).toHaveProperty("error");
     expect(createEnrollmentClient).not.toHaveBeenCalled();

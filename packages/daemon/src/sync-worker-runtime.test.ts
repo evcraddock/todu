@@ -1217,72 +1217,72 @@ describe("sync-worker-runtime", () => {
     handle.stop();
   });
 
-  it.each([
-    undefined,
-    "2026-03-11T10:00:00+02:00",
-  ])("pull preserves creation/edit clocks on new comments (updatedAt=%s)", async (updatedAt) => {
-    const project = createProject();
-    const task = createTask(project.id, { externalId: "gh-task-1" });
-    const binding = createBinding(project.id, { strategy: "pull" });
-    const pulledComments: ImportedCommentInput[] = [
-      {
-        externalId: "gh-comment-1",
-        externalTaskId: task.externalId!,
-        body: "New comment from GitHub",
-        author: { externalLogin: "octocat", displayName: "octocat" },
-        createdAt: "2026-03-10T10:00:00Z",
-        updatedAt,
-      },
-    ];
-    const provider = createProvider({
-      pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
-        tasks: [],
-        comments: pulledComments,
-      }),
-    });
-    const todu = createTodu(project, [task], [binding]);
-
-    const runtime = createSyncPluginWorkerRuntime({
-      pluginName: "github",
-      pluginVersion: "1.0.0",
-      modulePath: "/plugins/github.js",
-      authorityId: "daemon://authority-1",
-      provider,
-      config: {
-        enabled: true,
-        intervalMs: 1_000,
-        retryInitialMs: 100,
-        retryMaxMs: 800,
-        settings: {},
-      },
-      logger: createLogger(),
-      getTodu: () => todu.instance,
-    });
-
-    const handle = runtime.start();
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(todu.note.create).toHaveBeenCalledTimes(1);
-    expect(todu.note.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: "New comment from GitHub",
-        author: "octocat",
-        authorActorId: expect.stringMatching(/^actor-imported-/),
-        contentApproval: expect.objectContaining({
-          state: "pendingApproval",
-          sourceBindingId: binding.id,
-          sourceActorId: expect.stringMatching(/^actor-imported-/),
+  it.each([undefined, "2026-03-11T10:00:00+02:00"])(
+    "pull preserves creation/edit clocks on new comments (updatedAt=%s)",
+    async (updatedAt) => {
+      const project = createProject();
+      const task = createTask(project.id, { externalId: "gh-task-1" });
+      const binding = createBinding(project.id, { strategy: "pull" });
+      const pulledComments: ImportedCommentInput[] = [
+        {
+          externalId: "gh-comment-1",
+          externalTaskId: task.externalId!,
+          body: "New comment from GitHub",
+          author: { externalLogin: "octocat", displayName: "octocat" },
+          createdAt: "2026-03-10T10:00:00Z",
+          updatedAt,
+        },
+      ];
+      const provider = createProvider({
+        pull: vi.fn<SyncProvider["pull"]>().mockResolvedValue({
+          tasks: [],
+          comments: pulledComments,
         }),
-        entityType: "task",
-        entityId: task.id,
-        tags: [],
-        createdAt: "2026-03-10T10:00:00.000Z",
-        updatedAt: updatedAt ? "2026-03-11T08:00:00.000Z" : "2026-03-10T10:00:00.000Z",
-      }),
-    );
+      });
+      const todu = createTodu(project, [task], [binding]);
 
-    handle.stop();
-  });
+      const runtime = createSyncPluginWorkerRuntime({
+        pluginName: "github",
+        pluginVersion: "1.0.0",
+        modulePath: "/plugins/github.js",
+        authorityId: "daemon://authority-1",
+        provider,
+        config: {
+          enabled: true,
+          intervalMs: 1_000,
+          retryInitialMs: 100,
+          retryMaxMs: 800,
+          settings: {},
+        },
+        logger: createLogger(),
+        getTodu: () => todu.instance,
+      });
+
+      const handle = runtime.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(todu.note.create).toHaveBeenCalledTimes(1);
+      expect(todu.note.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: "New comment from GitHub",
+          author: "octocat",
+          authorActorId: expect.stringMatching(/^actor-imported-/),
+          contentApproval: expect.objectContaining({
+            state: "pendingApproval",
+            sourceBindingId: binding.id,
+            sourceActorId: expect.stringMatching(/^actor-imported-/),
+          }),
+          entityType: "task",
+          entityId: task.id,
+          tags: [],
+          createdAt: "2026-03-10T10:00:00.000Z",
+          updatedAt: updatedAt ? "2026-03-11T08:00:00.000Z" : "2026-03-10T10:00:00.000Z",
+        }),
+      );
+
+      handle.stop();
+    },
+  );
 
   it("bidirectional sync exposes provenance for newly imported comments before push", async () => {
     const project = createProject();
@@ -2390,61 +2390,64 @@ describe("acknowledged pulls", () => {
     "provenance delete",
     "mapping",
     "flush",
-  ])("does not acknowledge or push when %s fails, and replays without duplicates", async (phase) => {
-    const { provider, todu, binding, handle } = createAcknowledgedPull();
-    const internals = todu.instance.__internal.syncRuntime;
-    const failure = err(validationError("test", `${phase} failed`));
-    switch (phase) {
-      case "task create":
-        todu.task.create.mockResolvedValueOnce(failure);
-        break;
-      case "task update":
-        todu.task.update.mockResolvedValueOnce(failure);
-        break;
-      case "comment read":
-        todu.note.list.mockResolvedValueOnce(failure);
-        break;
-      case "comment create":
-        vi.mocked(internals.notes.createWithId).mockResolvedValueOnce(failure);
-        break;
-      case "comment update":
-        todu.note.update.mockResolvedValueOnce(failure);
-        break;
-      case "comment delete":
-        todu.note.delete.mockResolvedValueOnce(failure);
-        break;
-      case "provenance list":
-        vi.mocked(internals.commentProvenance.list).mockResolvedValueOnce(failure);
-        break;
-      case "provenance upsert":
-        vi.mocked(internals.commentProvenance.upsert).mockResolvedValueOnce(failure);
-        break;
-      case "provenance delete":
-        vi.mocked(internals.commentProvenance.deleteForNote).mockResolvedValueOnce(failure);
-        break;
-      case "mapping":
-        todu.integration.update.mockResolvedValueOnce(failure);
-        break;
-      case "flush":
-        vi.mocked(internals.flush).mockRejectedValueOnce(new Error("storage failed"));
-        break;
-    }
-    await vi.advanceTimersByTimeAsync(0);
-    expect(provider.acknowledgePull).not.toHaveBeenCalled();
-    expect(provider.push).not.toHaveBeenCalled();
-    expect(todu.integration.updateStatus).toHaveBeenLastCalledWith(
-      binding.id,
-      expect.objectContaining({ state: "error" }),
-    );
-    await vi.advanceTimersByTimeAsync(100);
-    expect(provider.pull).toHaveBeenCalledTimes(2);
-    expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
-    const tasks = await todu.instance.task.list({ projectId: binding.projectId });
-    expect(tasks.ok && tasks.value).toHaveLength(2);
-    const notes = await todu.instance.note.list();
-    expect(notes.ok && notes.value).toHaveLength(2);
-    handle.stop();
-  });
+  ])(
+    "does not acknowledge or push when %s fails, and replays without duplicates",
+    async (phase) => {
+      const { provider, todu, binding, handle } = createAcknowledgedPull();
+      const internals = todu.instance.__internal.syncRuntime;
+      const failure = err(validationError("test", `${phase} failed`));
+      switch (phase) {
+        case "task create":
+          todu.task.create.mockResolvedValueOnce(failure);
+          break;
+        case "task update":
+          todu.task.update.mockResolvedValueOnce(failure);
+          break;
+        case "comment read":
+          todu.note.list.mockResolvedValueOnce(failure);
+          break;
+        case "comment create":
+          vi.mocked(internals.notes.createWithId).mockResolvedValueOnce(failure);
+          break;
+        case "comment update":
+          todu.note.update.mockResolvedValueOnce(failure);
+          break;
+        case "comment delete":
+          todu.note.delete.mockResolvedValueOnce(failure);
+          break;
+        case "provenance list":
+          vi.mocked(internals.commentProvenance.list).mockResolvedValueOnce(failure);
+          break;
+        case "provenance upsert":
+          vi.mocked(internals.commentProvenance.upsert).mockResolvedValueOnce(failure);
+          break;
+        case "provenance delete":
+          vi.mocked(internals.commentProvenance.deleteForNote).mockResolvedValueOnce(failure);
+          break;
+        case "mapping":
+          todu.integration.update.mockResolvedValueOnce(failure);
+          break;
+        case "flush":
+          vi.mocked(internals.flush).mockRejectedValueOnce(new Error("storage failed"));
+          break;
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(provider.acknowledgePull).not.toHaveBeenCalled();
+      expect(provider.push).not.toHaveBeenCalled();
+      expect(todu.integration.updateStatus).toHaveBeenLastCalledWith(
+        binding.id,
+        expect.objectContaining({ state: "error" }),
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(provider.pull).toHaveBeenCalledTimes(2);
+      expect(provider.acknowledgePull).toHaveBeenCalledTimes(1);
+      const tasks = await todu.instance.task.list({ projectId: binding.projectId });
+      expect(tasks.ok && tasks.value).toHaveLength(2);
+      const notes = await todu.instance.note.list();
+      expect(notes.ok && notes.value).toHaveLength(2);
+      handle.stop();
+    },
+  );
 
   it("recovers a created comment whose provenance write failed without duplicating it", async () => {
     const { provider, todu, handle } = createAcknowledgedPull();
@@ -2510,33 +2513,32 @@ describe("acknowledged pulls", () => {
     handle.stop();
   });
 
-  it.each([
-    "comments",
-    "deletedComments",
-    "completeCommentExternalTaskIds",
-  ] as const)("does not acknowledge %s for an unavailable task", async (field) => {
-    const { provider, handle } = createAcknowledgedPull();
-    const result = {
-      tasks: [],
-      checkpoint: "missing-task",
-      [field]:
-        field === "completeCommentExternalTaskIds"
-          ? ["unknown-task"]
-          : [
-              {
-                externalId: "comment",
-                externalTaskId: "unknown-task",
-                body: "body",
-                createdAt: "2026-04-01T00:00:00.000Z",
-              },
-            ],
-    };
-    vi.mocked(provider.pull).mockResolvedValue(result);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(provider.acknowledgePull).not.toHaveBeenCalled();
-    expect(provider.push).not.toHaveBeenCalled();
-    handle.stop();
-  });
+  it.each(["comments", "deletedComments", "completeCommentExternalTaskIds"] as const)(
+    "does not acknowledge %s for an unavailable task",
+    async (field) => {
+      const { provider, handle } = createAcknowledgedPull();
+      const result = {
+        tasks: [],
+        checkpoint: "missing-task",
+        [field]:
+          field === "completeCommentExternalTaskIds"
+            ? ["unknown-task"]
+            : [
+                {
+                  externalId: "comment",
+                  externalTaskId: "unknown-task",
+                  body: "body",
+                  createdAt: "2026-04-01T00:00:00.000Z",
+                },
+              ],
+      };
+      vi.mocked(provider.pull).mockResolvedValue(result);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(provider.acknowledgePull).not.toHaveBeenCalled();
+      expect(provider.push).not.toHaveBeenCalled();
+      handle.stop();
+    },
+  );
 
   it("deduplicates repeated comment identities within one pull batch", async () => {
     const { provider, todu, handle } = createAcknowledgedPull();
@@ -2557,30 +2559,30 @@ describe("acknowledged pulls", () => {
     handle.stop();
   });
 
-  it.each([
-    "read",
-    "repair",
-  ])("does not acknowledge when equal-timestamp task detail %s fails", async (phase) => {
-    const { provider, todu, handle } = createAcknowledgedPull();
-    vi.mocked(provider.pull).mockResolvedValue({
-      tasks: [
-        {
-          externalId: "remote-1",
-          title: "Task",
-          description: "Restored detail",
-          updatedAt: new Date(0).toISOString(),
-        },
-      ],
-      checkpoint: "equal-timestamp",
-    });
-    const failure = err(validationError("detail", "unavailable"));
-    if (phase === "read") todu.task.get.mockResolvedValueOnce(failure);
-    else todu.task.update.mockResolvedValueOnce(failure);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(provider.acknowledgePull).not.toHaveBeenCalled();
-    expect(provider.push).not.toHaveBeenCalled();
-    handle.stop();
-  });
+  it.each(["read", "repair"])(
+    "does not acknowledge when equal-timestamp task detail %s fails",
+    async (phase) => {
+      const { provider, todu, handle } = createAcknowledgedPull();
+      vi.mocked(provider.pull).mockResolvedValue({
+        tasks: [
+          {
+            externalId: "remote-1",
+            title: "Task",
+            description: "Restored detail",
+            updatedAt: new Date(0).toISOString(),
+          },
+        ],
+        checkpoint: "equal-timestamp",
+      });
+      const failure = err(validationError("detail", "unavailable"));
+      if (phase === "read") todu.task.get.mockResolvedValueOnce(failure);
+      else todu.task.update.mockResolvedValueOnce(failure);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(provider.acknowledgePull).not.toHaveBeenCalled();
+      expect(provider.push).not.toHaveBeenCalled();
+      handle.stop();
+    },
+  );
 
   it("does not rewrite matching v4 replay content or reset its approval", async () => {
     const { provider, todu, handle } = createAcknowledgedPull();
@@ -2747,48 +2749,47 @@ describe("v5 field-group pulls", () => {
     fixture.handle.stop();
   });
 
-  it.each([
-    "equal",
-    "missing-remote",
-    "missing-local",
-  ])("selects remote and emits diagnostics for %s conflict clocks", async (clock) => {
-    const fixture = createFieldGroupPull({
-      task: {
-        status: "waiting",
-        updatedAt: clock === "missing-local" ? (undefined as never) : "2026-04-02T00:00:00Z",
-      },
-    });
-    const sourceTimestamp = clock === "missing-remote" ? undefined : "2026-04-02T01:00:00+01:00";
-    vi.mocked(fixture.provider.pull).mockResolvedValue({
-      tasks: [],
-      checkpoint: null,
-      taskUpdates: [
-        {
-          externalId: "remote-1",
-          groups: {
-            workflow: {
-              base: { status: "active" },
-              remote: { status: "done" },
-              ...(sourceTimestamp ? { sourceTimestamp } : {}),
+  it.each(["equal", "missing-remote", "missing-local"])(
+    "selects remote and emits diagnostics for %s conflict clocks",
+    async (clock) => {
+      const fixture = createFieldGroupPull({
+        task: {
+          status: "waiting",
+          updatedAt: clock === "missing-local" ? (undefined as never) : "2026-04-02T00:00:00Z",
+        },
+      });
+      const sourceTimestamp = clock === "missing-remote" ? undefined : "2026-04-02T01:00:00+01:00";
+      vi.mocked(fixture.provider.pull).mockResolvedValue({
+        tasks: [],
+        checkpoint: null,
+        taskUpdates: [
+          {
+            externalId: "remote-1",
+            groups: {
+              workflow: {
+                base: { status: "active" },
+                remote: { status: "done" },
+                ...(sourceTimestamp ? { sourceTimestamp } : {}),
+              },
             },
           },
-        },
-      ],
-    });
-    if (clock === "missing-local") fixture.task.updatedAt = undefined as never;
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fixture.task.status).toBe("done");
-    expect(fixture.logger.warn).toHaveBeenCalledWith(
-      "sync field-group conflict",
-      expect.objectContaining({
-        winner: "remote",
-        selection:
-          clock === "equal" ? "remote-wins-equal-timestamps" : "remote-wins-missing-timestamp",
-      }),
-    );
-    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
-    fixture.handle.stop();
-  });
+        ],
+      });
+      if (clock === "missing-local") fixture.task.updatedAt = undefined as never;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fixture.task.status).toBe("done");
+      expect(fixture.logger.warn).toHaveBeenCalledWith(
+        "sync field-group conflict",
+        expect.objectContaining({
+          winner: "remote",
+          selection:
+            clock === "equal" ? "remote-wins-equal-timestamps" : "remote-wins-missing-timestamp",
+        }),
+      );
+      expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+      fixture.handle.stop();
+    },
+  );
 
   it("does not rewrite converged values or approved descriptions", async () => {
     const fixture = createFieldGroupPull({
@@ -3329,33 +3330,36 @@ describe("v5 field-group pulls", () => {
     ["active", "done", "remote-only", "remote"],
     ["done", "done", "converged", "equal"],
     ["waiting", "done", "conflict", "local"],
-  ] as const)("reports the %s/%s workflow decision as %s", async (local, remote, resolution, winner) => {
-    const fixture = createFieldGroupPull({
-      task: { status: local, updatedAt: "2026-04-03T00:00:00Z" },
-    });
-    vi.mocked(fixture.provider.pull).mockResolvedValue({
-      tasks: [],
-      checkpoint: null,
-      taskUpdates: [
-        {
-          externalId: "remote-1",
-          groups: {
-            workflow: {
-              base: { status: "active" },
-              remote: { status: remote },
-              sourceTimestamp: "2026-04-01T00:00:00Z",
+  ] as const)(
+    "reports the %s/%s workflow decision as %s",
+    async (local, remote, resolution, winner) => {
+      const fixture = createFieldGroupPull({
+        task: { status: local, updatedAt: "2026-04-03T00:00:00Z" },
+      });
+      vi.mocked(fixture.provider.pull).mockResolvedValue({
+        tasks: [],
+        checkpoint: null,
+        taskUpdates: [
+          {
+            externalId: "remote-1",
+            groups: {
+              workflow: {
+                base: { status: "active" },
+                remote: { status: remote },
+                sourceTimestamp: "2026-04-01T00:00:00Z",
+              },
             },
           },
-        },
-      ],
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(
-      vi.mocked(fixture.provider.acknowledgePull).mock.calls[0][3].taskResults[0].groups.workflow,
-    ).toMatchObject({ resolution, winner });
-    expect(fixture.todu.task.update).toHaveBeenCalledTimes(winner === "remote" ? 1 : 0);
-    fixture.handle.stop();
-  });
+        ],
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        vi.mocked(fixture.provider.acknowledgePull).mock.calls[0][3].taskResults[0].groups.workflow,
+      ).toMatchObject({ resolution, winner });
+      expect(fixture.todu.task.update).toHaveBeenCalledTimes(winner === "remote" ? 1 : 0);
+      fixture.handle.stop();
+    },
+  );
 
   it("updates only classification fields and exports fresh values", async () => {
     const fixture = createFieldGroupPull({
@@ -3398,21 +3402,21 @@ describe("v5 field-group pulls", () => {
     fixture.handle.stop();
   });
 
-  it.each([
-    "detail",
-    "comments",
-  ])("fails v5 push closed when fresh %s reads fail after acknowledgment", async (phase) => {
-    const fixture = createFieldGroupPull();
-    vi.mocked(fixture.provider.acknowledgePull).mockImplementationOnce(async () => {
-      const failure = err(validationError("read", "unavailable"));
-      if (phase === "detail") fixture.todu.task.get.mockResolvedValueOnce(failure);
-      else fixture.todu.note.list.mockResolvedValueOnce(failure);
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
-    expect(fixture.provider.push).not.toHaveBeenCalled();
-    fixture.handle.stop();
-  });
+  it.each(["detail", "comments"])(
+    "fails v5 push closed when fresh %s reads fail after acknowledgment",
+    async (phase) => {
+      const fixture = createFieldGroupPull();
+      vi.mocked(fixture.provider.acknowledgePull).mockImplementationOnce(async () => {
+        const failure = err(validationError("read", "unavailable"));
+        if (phase === "detail") fixture.todu.task.get.mockResolvedValueOnce(failure);
+        else fixture.todu.note.list.mockResolvedValueOnce(failure);
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fixture.provider.acknowledgePull).toHaveBeenCalledTimes(1);
+      expect(fixture.provider.push).not.toHaveBeenCalled();
+      fixture.handle.stop();
+    },
+  );
 
   it("skips push until acknowledgment succeeds and recomputes replay outcomes", async () => {
     const fixture = createFieldGroupPull();

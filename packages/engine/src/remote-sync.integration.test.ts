@@ -106,87 +106,85 @@ describe("remote sync", () => {
     expect(todu.sync.status().remote.state).toBe("connected");
   });
 
-  it(
-    "repeatedly replaces stale adapters without retaining sync resources",
-    { timeout: 20000 },
-    async () => {
-      const server = await openRelay();
-      let connectedAdapter: WebSocketClientAdapter | undefined;
-      const observedAdapters = new Set<WebSocketClientAdapter>();
-      const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
-      const peerCandidate = WebSocketClientAdapter.prototype.peerCandidate;
-      vi.spyOn(WebSocketClientAdapter.prototype, "peerCandidate").mockImplementation(function (
-        this: WebSocketClientAdapter,
-        ...args: Parameters<WebSocketClientAdapter["peerCandidate"]>
-      ) {
-        connectedAdapter = this;
-        observedAdapters.add(this);
-        return peerCandidate.apply(this, args);
-      });
-      const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-      todu = await createTodu({
-        storagePath: path.join(tmpDir, "client"),
-        remoteSync: { server },
-        remoteSyncWatchdogIntervalMs: 20,
-        remoteSyncAvailabilityTimeoutMs: 200,
-        syncLogger: logger,
-      });
-      await waitForRemoteState(todu, "connected");
-      const project = await todu.project.create({ name: "Reconnect regression" });
-      expect(project.ok).toBe(true);
-      if (!project.ok) throw new Error(JSON.stringify(project.error));
-      const task = await todu.task.create({
-        title: "Loaded during reconnect",
-        projectId: project.value.id,
-      });
-      expect(task.ok).toBe(true);
-      if (!task.ok) throw new Error(JSON.stringify(task.error));
+  it("repeatedly replaces stale adapters without retaining sync resources", {
+    timeout: 20000,
+  }, async () => {
+    const server = await openRelay();
+    let connectedAdapter: WebSocketClientAdapter | undefined;
+    const observedAdapters = new Set<WebSocketClientAdapter>();
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    const peerCandidate = WebSocketClientAdapter.prototype.peerCandidate;
+    vi.spyOn(WebSocketClientAdapter.prototype, "peerCandidate").mockImplementation(function (
+      this: WebSocketClientAdapter,
+      ...args: Parameters<WebSocketClientAdapter["peerCandidate"]>
+    ) {
+      connectedAdapter = this;
+      observedAdapters.add(this);
+      return peerCandidate.apply(this, args);
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    todu = await createTodu({
+      storagePath: path.join(tmpDir, "client"),
+      remoteSync: { server },
+      remoteSyncWatchdogIntervalMs: 20,
+      remoteSyncAvailabilityTimeoutMs: 200,
+      syncLogger: logger,
+    });
+    await waitForRemoteState(todu, "connected");
+    const project = await todu.project.create({ name: "Reconnect regression" });
+    expect(project.ok).toBe(true);
+    if (!project.ok) throw new Error(JSON.stringify(project.error));
+    const task = await todu.task.create({
+      title: "Loaded during reconnect",
+      projectId: project.value.id,
+    });
+    expect(task.ok).toBe(true);
+    if (!task.ok) throw new Error(JSON.stringify(task.error));
 
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const staleAdapter = connectedAdapter;
-        expect(staleAdapter).toBeDefined();
-        const staleSocket = staleAdapter?.socket as
-          | (WebSocketClientAdapter["socket"] & { terminate?: () => void })
-          | undefined;
-        if (staleSocket?.terminate) staleSocket.terminate();
-        else staleSocket?.close();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const staleAdapter = connectedAdapter;
+      expect(staleAdapter).toBeDefined();
+      const staleSocket = staleAdapter?.socket as
+        | (WebSocketClientAdapter["socket"] & { terminate?: () => void })
+        | undefined;
+      if (staleSocket?.terminate) staleSocket.terminate();
+      else staleSocket?.close();
 
-        const deadline = Date.now() + 3000;
-        while (connectedAdapter === staleAdapter && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        await waitForRemoteState(todu, "connected");
-        expect(connectedAdapter).not.toBe(staleAdapter);
-        expect(staleAdapter?.socket).toBeUndefined();
-        expect(staleAdapter?.eventNames()).toEqual([]);
-
-        const listStartedAt = performance.now();
-        const list = await todu.task.list({ projectId: project.value.id });
-        expect(performance.now() - listStartedAt).toBeLessThan(1000);
-        expect(list.ok).toBe(true);
-        if (!list.ok) throw new Error(JSON.stringify(list.error));
-        expect(list.value.map((entry) => entry.id)).toContain(task.value.id);
+      const deadline = Date.now() + 3000;
+      while (connectedAdapter === staleAdapter && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
       }
+      await waitForRemoteState(todu, "connected");
+      expect(connectedAdapter).not.toBe(staleAdapter);
+      expect(staleAdapter?.socket).toBeUndefined();
+      expect(staleAdapter?.eventNames()).toEqual([]);
 
-      expect(observedAdapters.size).toBe(4);
-      expect(logger.warn).toHaveBeenCalledWith(
-        "remote sync watchdog restarting stale adapter",
-        expect.objectContaining({ server }),
-      );
-      expect(
-        consoleLog.mock.calls.some((args) =>
-          args.some((value) => {
-            if (value instanceof Error) return value.message.includes("outdated document");
-            if (typeof value === "object" && value !== null && "err" in value) {
-              const error = (value as { err?: unknown }).err;
-              return error instanceof Error && error.message.includes("outdated document");
-            }
-            return String(value).includes("outdated document");
-          }),
-        ),
-      ).toBe(false);
-    },
-  );
+      const listStartedAt = performance.now();
+      const list = await todu.task.list({ projectId: project.value.id });
+      expect(performance.now() - listStartedAt).toBeLessThan(1000);
+      expect(list.ok).toBe(true);
+      if (!list.ok) throw new Error(JSON.stringify(list.error));
+      expect(list.value.map((entry) => entry.id)).toContain(task.value.id);
+    }
+
+    expect(observedAdapters.size).toBe(4);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "remote sync watchdog restarting stale adapter",
+      expect.objectContaining({ server }),
+    );
+    expect(
+      consoleLog.mock.calls.some((args) =>
+        args.some((value) => {
+          if (value instanceof Error) return value.message.includes("outdated document");
+          if (typeof value === "object" && value !== null && "err" in value) {
+            const error = (value as { err?: unknown }).err;
+            return error instanceof Error && error.message.includes("outdated document");
+          }
+          return String(value).includes("outdated document");
+        }),
+      ),
+    ).toBe(false);
+  });
 
   it("keeps local operations available when remote adapter emits ECONNRESET", async () => {
     vi.spyOn(WebSocketClientAdapter.prototype, "connect").mockImplementation(function (
