@@ -15,6 +15,7 @@ const archive = vi.fn();
 const restore = vi.fn();
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   people = [
     { id: "actor-user" as Actor["id"], displayName: "User" },
@@ -83,7 +84,7 @@ it("lists active people by default and supports search and archived filters", as
 it("creates with a stable custom ID, renames, archives, and restores", async () => {
   open();
   await screen.findByText("Reviewer");
-  fireEvent.click(screen.getByRole("button", { name: "+ Add assignee" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add assignee", exact: true }));
   const form = screen.getByRole("form", { name: "Add assignee" });
   fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "Automation Bot" } });
   fireEvent.click(screen.getByText("Custom identifier (optional)"));
@@ -116,9 +117,13 @@ it("creates with a stable custom ID, renames, archives, and restores", async () 
 it("generates an ID when none is supplied", async () => {
   open();
   await screen.findByText("Reviewer");
-  fireEvent.click(screen.getByRole("button", { name: "+ Add assignee" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add assignee", exact: true }));
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New person" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add assignee" }));
+  fireEvent.click(
+    within(screen.getByRole("form", { name: "Add assignee" })).getByRole("button", {
+      name: "Add assignee",
+    }),
+  );
   expect(await screen.findByText("New person")).toBeDefined();
   expect(create).toHaveBeenCalledWith({
     id: expect.stringMatching(/^actor-[a-f0-9]{8}$/),
@@ -129,7 +134,7 @@ it("generates an ID when none is supplied", async () => {
 it("opens a modal dialog and cancels with Escape without creating an assignee", async () => {
   open();
   await screen.findByText("Reviewer");
-  fireEvent.click(screen.getByRole("button", { name: "+ Add assignee" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add assignee", exact: true }));
   const dialog = screen.getByRole("dialog", { name: "New Assignee" });
   expect(dialog.getAttribute("aria-modal")).toBe("true");
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Draft assignee" } });
@@ -145,9 +150,13 @@ it("keeps a failed creation open with the error and draft", async () => {
   });
   open();
   await screen.findByText("Reviewer");
-  fireEvent.click(screen.getByRole("button", { name: "+ Add assignee" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add assignee", exact: true }));
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New person" } });
-  fireEvent.click(screen.getByRole("button", { name: "Add assignee" }));
+  fireEvent.click(
+    within(screen.getByRole("form", { name: "Add assignee" })).getByRole("button", {
+      name: "Add assignee",
+    }),
+  );
   expect((await screen.findByRole("alert")).textContent).toContain("Already exists");
   expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("New person");
 });

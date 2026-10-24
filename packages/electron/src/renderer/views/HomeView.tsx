@@ -1,5 +1,6 @@
 import type { HabitId, Task } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
+import { Icon, type IconName } from "../components/Icon.js";
 import {
   useActors,
   useCheckHabit,
@@ -42,15 +43,21 @@ function HabitCheckIn({ habitId }: { habitId: string }): ReactNode {
 
   return (
     <span className="home-habit-row-right">
-      {streak ? <span className="streak-count">🔥 {streak.current}</span> : null}
+      {streak ? (
+        <span className="streak-count" role="img" aria-label={`Current streak: ${streak.current}`}>
+          <Icon name="habits" /> {streak.current}
+        </span>
+      ) : null}
       <button
         type="button"
         className={`checkin-toggle ${completed ? "checkin-done" : "checkin-pending"}`}
         onClick={handleToggle}
         disabled={isPending}
         title={completed ? "Uncheck today" : "Check in today"}
+        aria-label={completed ? "Uncheck today" : "Check in today"}
+        aria-pressed={completed}
       >
-        {completed ? "✅" : "⬜"}
+        <Icon name={completed ? "checked-square" : "square"} />
       </button>
     </span>
   );
@@ -148,7 +155,7 @@ function Section({
   onSelectAssignee,
 }: {
   title: string;
-  icon: string;
+  icon: IconName;
   tasks: Task[];
   projectMap: Map<string, string>;
   today: string;
@@ -161,7 +168,7 @@ function Section({
     return (
       <div className="home-section">
         <h3 className="home-section-title">
-          <span>{icon}</span> {title}
+          <Icon name={icon} /> {title}
         </h3>
         <p className="home-section-empty">{emptyText}</p>
       </div>
@@ -173,7 +180,7 @@ function Section({
   return (
     <div className="home-section">
       <h3 className="home-section-title">
-        <span>{icon}</span> {title}
+        <Icon name={icon} /> {title}
         <span className="home-section-count">{tasks.length}</span>
       </h3>
       <div className="home-task-list">
@@ -260,14 +267,14 @@ export function HomeView({
     return (
       <AssigneeDetail
         actorId={selectedAssigneeId}
-        backLabel="Home"
+        backLabel="Overview"
         onBack={() => setSelectedAssigneeId(null)}
       />
     );
 
   return (
     <div className="home-view">
-      <h2 className="view-title">Home</h2>
+      <h2 className="view-title">Overview</h2>
 
       {isLoading ? (
         <div className="loading-state">Loading…</div>
@@ -277,7 +284,7 @@ export function HomeView({
           {habits && habits.length > 0 && (
             <div className="home-section">
               <h3 className="home-section-title">
-                <span>🔥</span> Today&apos;s Habits
+                <Icon name="habits" /> Today&apos;s Habits
                 <span className="home-section-count">{habits.length}</span>
               </h3>
               <div className="home-habit-grid">
@@ -303,7 +310,7 @@ export function HomeView({
 
           <Section
             title="In Progress"
-            icon="▶"
+            icon="progress"
             tasks={inProgressSection}
             projectMap={projectMap}
             today={today}
@@ -315,7 +322,7 @@ export function HomeView({
 
           <Section
             title="Coming Soon"
-            icon="📅"
+            icon="calendar"
             tasks={comingSoon}
             projectMap={projectMap}
             today={today}
@@ -326,7 +333,7 @@ export function HomeView({
 
           <Section
             title="This Week"
-            icon="⚡"
+            icon="week"
             tasks={thisWeek}
             projectMap={projectMap}
             today={today}
@@ -337,7 +344,7 @@ export function HomeView({
 
           <Section
             title="Waiting"
-            icon="⏳"
+            icon="waiting"
             tasks={waiting}
             projectMap={projectMap}
             today={today}
@@ -349,7 +356,7 @@ export function HomeView({
           {(projectsLoading || projectsFailed || focusProjects.length > 0) && (
             <div className="home-section">
               <h3 className="home-section-title">
-                <span>◎</span> Project Focus
+                <Icon name="projects" /> Project Focus
                 {!projectsLoading && !projectsFailed && (
                   <span className="home-section-count">{focusProjects.length}</span>
                 )}

@@ -104,6 +104,7 @@ const resumeRecurringMutate = vi.fn();
 const generateOccurrenceMutate = vi.fn();
 
 beforeEach(() => {
+  localStorage.clear();
   vi.mocked(hooks.useLabels).mockReturnValue({ data: [] } as unknown as ReturnType<
     typeof hooks.useLabels
   >);

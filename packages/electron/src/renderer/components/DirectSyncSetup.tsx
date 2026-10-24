@@ -1,5 +1,6 @@
 import type { EnrollmentClientStatus, EnrollmentRequest } from "@todu/core";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "./Icon.js";
 
 const stageMessages: Record<EnrollmentClientStatus["stage"], string> = {
   idle: "Ready to request a connection.",
@@ -95,7 +96,8 @@ export function DirectSyncSetup({
       {!listenerReady && (
         <div className="settings-hint">
           <p>Enable and apply Direct Sync on this computer before requesting a connection.</p>
-          <button type="button" className="btn btn-sm" onClick={onSetup}>
+          <button type="button" className="btn btn-sm btn-with-icon" onClick={onSetup}>
+            <Icon name="settings" />
             Set up Direct Sync
           </button>
         </div>
@@ -122,9 +124,10 @@ export function DirectSyncSetup({
           />
           <button
             type="submit"
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm btn-with-icon"
             disabled={!listenerReady || !endpoint.trim() || busy || active}
           >
+            <Icon name="connect" />
             {busy ? "Working..." : "Request connection"}
           </button>
         </div>
@@ -143,10 +146,11 @@ export function DirectSyncSetup({
       {active && (
         <button
           type="button"
-          className="btn btn-sm"
+          className="btn btn-sm btn-with-icon"
           disabled={busy}
           onClick={() => void act(() => window.todu.sync.enrollmentCancel())}
         >
+          <Icon name="cancel" />
           Cancel request
         </button>
       )}
@@ -240,18 +244,20 @@ export function DirectSyncRequests() {
           <div className="settings-key-input-row">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm btn-with-icon"
               disabled={busy || request.state === "approving"}
               onClick={() => void decide(request.requestId, true)}
             >
+              <Icon name="check" />
               {request.state === "approving" ? "Approving..." : "Approve"}
             </button>
             <button
               type="button"
-              className="btn btn-sm"
+              className="btn btn-sm btn-with-icon"
               disabled={busy || request.state === "approving"}
               onClick={() => void decide(request.requestId, false)}
             >
+              <Icon name="cancel" />
               Deny
             </button>
           </div>

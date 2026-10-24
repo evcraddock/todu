@@ -1,5 +1,6 @@
 import type { ProjectFilter, ProjectStatus, TaskPriority } from "@todu/core/browser";
 import type { ReactNode } from "react";
+import { Icon } from "./Icon.js";
 
 export function ProjectFilterBar({
   filter,
@@ -71,10 +72,10 @@ export function ProjectFilterBar({
         </label>
         <button
           type="button"
-          className="btn btn-secondary btn-sm list-clear-filters"
+          className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
           onClick={() => onFilterChange({})}
         >
-          Clear filters
+          <Icon name="clear-filters" /> Clear filters
         </button>
       </div>
     </div>

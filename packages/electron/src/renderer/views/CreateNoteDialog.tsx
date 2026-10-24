@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { useCreateNote } from "../hooks/useTodu.js";
 
 export function CreateNoteDialog({ onClose }: { onClose: () => void }): ReactNode {
@@ -76,15 +77,16 @@ export function CreateNoteDialog({ onClose }: { onClose: () => void }): ReactNod
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+          <button type="button" className="btn btn-secondary btn-with-icon" onClick={onClose}>
+            <Icon name="cancel" /> Cancel
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={handleSubmit}
             disabled={!content.trim() || createNote.isPending}
           >
+            <Icon name="add" />
             {createNote.isPending ? "Creating…" : "Create Note"}
           </button>
         </div>

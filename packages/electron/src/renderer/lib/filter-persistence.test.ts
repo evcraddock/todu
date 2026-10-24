@@ -2,11 +2,29 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_FILTER, loadFilter, saveFilter } from "./filter-persistence.js";
+import {
+  DEFAULT_FILTER,
+  loadFilter,
+  loadProjectFilter,
+  loadTaskSort,
+  saveFilter,
+  saveProjectFilter,
+  saveTaskSort,
+} from "./filter-persistence.js";
 
 describe("filter-persistence", () => {
   afterEach(() => {
     localStorage.clear();
+  });
+
+  it("remembers project status and priority without persisting search text", () => {
+    expect(loadProjectFilter()).toEqual({ status: "active" });
+    saveProjectFilter({ status: "done", priority: "high", search: "temporary" });
+    expect(loadProjectFilter()).toEqual({ status: "done", priority: "high" });
+    saveProjectFilter({});
+    expect(loadProjectFilter()).toEqual({});
+    localStorage.setItem("todu:list:projects:filter", '{"status":"invalid"}');
+    expect(loadProjectFilter()).toEqual({ status: "active" });
   });
 
   describe("loadFilter", () => {
@@ -59,5 +77,36 @@ describe("filter-persistence", () => {
     it("includes all unfinished statuses", () => {
       expect(DEFAULT_FILTER.status).toEqual(["active", "inprogress", "waiting"]);
     });
+  });
+
+  it("restores all task filter selections together", () => {
+    const filter = {
+      projectId: "proj-1" as never,
+      activeProjects: false,
+      status: "waiting" as const,
+      priority: "high" as const,
+      assignee: "actor-user",
+      today: true,
+    };
+    saveFilter(filter);
+    expect(loadFilter()).toEqual(filter);
+  });
+
+  it("remembers the selected sort and a return to default ordering", () => {
+    expect(loadTaskSort()).toBeUndefined();
+    saveTaskSort({ field: "title", direction: "asc" });
+    expect(loadTaskSort()).toEqual({ field: "title", direction: "asc" });
+    saveTaskSort(undefined);
+    expect(loadTaskSort()).toBeUndefined();
+  });
+
+  it.each([
+    "not-json",
+    "null",
+    '{"field":"invalid","direction":"asc"}',
+    '{"field":"title","direction":"invalid"}',
+  ])("falls back to default ordering for invalid saved sort %s", (raw) => {
+    localStorage.setItem("todu:task-sort", raw);
+    expect(loadTaskSort()).toBeUndefined();
   });
 });

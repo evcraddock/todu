@@ -8,13 +8,20 @@ let tray: Tray | null = null;
  * Create a tray icon from the resources directory.
  */
 function createTrayIcon(): Tray {
-  const iconPath = path.join(__dirname, "../../resources/app-icon.png");
+  const isMac = process.platform === "darwin";
+  const iconPath = path.join(
+    __dirname,
+    "../../resources",
+    isMac ? "trayTemplate.png" : "app-icon.png",
+  );
   const img = nativeImage.createFromPath(iconPath);
 
-  // Keep the app icon's colors; a template image would turn its tile into a solid mask.
-  const size = process.platform === "darwin" ? 20 : 24;
-  const resized = img.resize({ width: size, height: size });
-  return new Tray(resized);
+  // The macOS template has a transparent background so only the mark is tinted.
+  if (isMac) {
+    img.setTemplateImage(true);
+    return new Tray(img);
+  }
+  return new Tray(img.resize({ width: 24, height: 24 }));
 }
 
 /**

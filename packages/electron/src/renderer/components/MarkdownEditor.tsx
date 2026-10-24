@@ -4,6 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import { Markdown } from "tiptap-markdown";
+import { Icon, type IconName } from "./Icon.js";
 
 // ============================================================================
 // Types
@@ -33,54 +34,64 @@ export interface MarkdownEditorProps {
 function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }): ReactNode {
   if (!editor) return null;
 
-  const items: { label: string; action: () => void; isActive?: () => boolean }[] = [
+  const items: { label: string; icon: IconName; action: () => void; isActive?: () => boolean }[] = [
     {
-      label: "B",
+      label: "Bold",
+      icon: "bold",
       action: () => editor.chain().focus().toggleBold().run(),
       isActive: () => editor.isActive("bold"),
     },
     {
-      label: "I",
+      label: "Italic",
+      icon: "italic",
       action: () => editor.chain().focus().toggleItalic().run(),
       isActive: () => editor.isActive("italic"),
     },
     {
-      label: "S",
+      label: "Strikethrough",
+      icon: "strike",
       action: () => editor.chain().focus().toggleStrike().run(),
       isActive: () => editor.isActive("strike"),
     },
     {
-      label: "H1",
+      label: "Heading 1",
+      icon: "heading1",
       action: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
       isActive: () => editor.isActive("heading", { level: 1 }),
     },
     {
-      label: "H2",
+      label: "Heading 2",
+      icon: "heading2",
       action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
       isActive: () => editor.isActive("heading", { level: 2 }),
     },
     {
-      label: "H3",
+      label: "Heading 3",
+      icon: "heading3",
       action: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
       isActive: () => editor.isActive("heading", { level: 3 }),
     },
     {
-      label: "•",
+      label: "Bullet list",
+      icon: "list",
       action: () => editor.chain().focus().toggleBulletList().run(),
       isActive: () => editor.isActive("bulletList"),
     },
     {
-      label: "1.",
+      label: "Numbered list",
+      icon: "ordered-list",
       action: () => editor.chain().focus().toggleOrderedList().run(),
       isActive: () => editor.isActive("orderedList"),
     },
     {
-      label: "</>",
+      label: "Code block",
+      icon: "code",
       action: () => editor.chain().focus().toggleCodeBlock().run(),
       isActive: () => editor.isActive("codeBlock"),
     },
     {
-      label: "🔗",
+      label: "Link",
+      icon: "link",
       action: () => {
         if (editor.isActive("link")) {
           editor.chain().focus().unsetLink().run();
@@ -94,7 +105,8 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }): ReactNod
       isActive: () => editor.isActive("link"),
     },
     {
-      label: "—",
+      label: "Horizontal rule",
+      icon: "rule",
       action: () => editor.chain().focus().setHorizontalRule().run(),
     },
   ];
@@ -111,8 +123,10 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }): ReactNod
             item.action();
           }}
           title={item.label}
+          aria-label={item.label}
+          aria-pressed={item.isActive ? item.isActive() : undefined}
         >
-          {item.label}
+          <Icon name={item.icon} />
         </button>
       ))}
     </div>

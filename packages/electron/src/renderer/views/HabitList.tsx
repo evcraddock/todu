@@ -1,5 +1,8 @@
 import type { HabitFilter, HabitId } from "@todu/core/browser";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../components/Icon.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import {
   useCheckHabit,
   useHabitList,
@@ -16,7 +19,11 @@ import { describeSchedule } from "../lib/describe-schedule.js";
 function StreakCell({ habitId }: { habitId: string }): ReactNode {
   const { data: streak } = useHabitStreak(habitId);
   if (!streak) return <span className="empty-hint">—</span>;
-  return <span className="streak-count">🔥 {streak.current}</span>;
+  return (
+    <span className="streak-count" role="img" aria-label={`Current streak: ${streak.current}`}>
+      <Icon name="habits" /> {streak.current}
+    </span>
+  );
 }
 
 // ============================================================================
@@ -47,8 +54,10 @@ function CheckInToggle({ habitId }: { habitId: string }): ReactNode {
       onClick={handleToggle}
       disabled={isPending}
       title={completed ? "Uncheck today" : "Check in today"}
+      aria-pressed={completed}
     >
-      {completed ? "✓ Done" : "Check in"}
+      <Icon name={completed ? "checked-square" : "square"} />
+      {completed ? "Done" : "Check in"}
     </button>
   );
 }
@@ -66,11 +75,26 @@ export function HabitList({
   onCreateHabit: () => void;
   externalFilter?: HabitFilter | null;
 }): ReactNode {
-  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [filterProject, setFilterProject] = useState("active-projects");
-  const [filterChecked, setFilterChecked] = useState<"all" | "done" | "pending">("all");
+  const [filterStatus, setFilterStatus] = useSavedSelection<"all" | "active" | "paused">(
+    "habits:status",
+    "all",
+    ["all", "active", "paused"],
+  );
+  const [filterProject, setFilterProject] = useSavedSelection<string>(
+    "habits:project",
+    "active-projects",
+  );
+  const [filterChecked, setFilterChecked] = useSavedSelection<"all" | "done" | "pending">(
+    "habits:checked",
+    "all",
+    ["all", "done", "pending"],
+  );
   const [searchText, setSearchText] = useState("");
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useSavedSelection<string>("habits:sort", "name", [
+    "name",
+    "nextDue",
+    "status",
+  ]);
   const appliedExternalRef = useRef<HabitFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -86,7 +110,7 @@ export function HabitList({
       else setFilterChecked("all");
       setSearchText(externalFilter.search ?? "");
     }
-  }, [externalFilter]);
+  }, [externalFilter, setFilterChecked, setFilterProject, setFilterStatus]);
 
   const filter: HabitFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
@@ -148,8 +172,8 @@ export function HabitList({
         <h2 className="view-title">
           Habits <span className="list-count">{displayHabits.length}</span>
         </h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateHabit}>
-          + New Habit
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateHabit}>
+          <Icon name="add" /> New Habit
         </button>
       </div>
 
@@ -172,11 +196,7 @@ export function HabitList({
             >
               <option value="active-projects">Active Projects</option>
               <option value="">All projects</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
+              <ProjectOptions projects={projects} />
             </select>
           </label>
           <label className="list-filter-field">
@@ -205,7 +225,7 @@ export function HabitList({
           </label>
           <button
             type="button"
-            className="btn btn-secondary btn-sm list-clear-filters"
+            className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
             onClick={() => {
               setFilterStatus("all");
               setFilterProject("");
@@ -213,7 +233,7 @@ export function HabitList({
               setSearchText("");
             }}
           >
-            Clear filters
+            <Icon name="clear-filters" /> Clear filters
           </button>
         </div>
       </div>

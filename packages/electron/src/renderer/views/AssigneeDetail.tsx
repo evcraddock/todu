@@ -1,5 +1,6 @@
 import type { ProjectFilter, TaskSortOptions } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
+import { BackButton } from "../components/BackButton.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { FilterBar } from "../components/FilterBar.js";
 import { PriorityChip } from "../components/PriorityChip.js";
@@ -99,9 +100,7 @@ export function AssigneeDetail({
     <div className="view-container entity-detail-view">
       <div className="detail-page-header">
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← {backLabel}
-          </button>
+          <BackButton label={backLabel} onClick={onBack} />
         </div>
         <div className="detail-title-row">
           <h2 className="view-title">{actor?.displayName ?? "Assignee"}</h2>

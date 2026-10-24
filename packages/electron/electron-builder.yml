@@ -12,6 +12,7 @@ files:
   - dist/**/*
   - package.json
   - resources/app-icon.png
+  - resources/trayTemplate*.png
   - "!dist/**/*.map"
 
 extraMetadata:

@@ -26,7 +26,8 @@
     "validate:daemon-bundle:linux": "node scripts/validate-daemon-bundle.mjs --unpacked-dir ../../dist/installers/linux-unpacked",
     "validate:daemon-bundle:mac": "node scripts/validate-daemon-bundle.mjs --app-bundle ../../dist/installers/mac-arm64/todu.app",
     "validate:daemon-bundle:win": "node scripts/validate-daemon-bundle.mjs --unpacked-dir ../../dist/installers/win-unpacked",
-    "generate:icons": "node scripts/generate-icons.mjs"
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "generate:tray-icon": "swift scripts/generate-tray-icon.swift"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^1.4.0",

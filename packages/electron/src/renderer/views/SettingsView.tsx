@@ -1,6 +1,7 @@
 import type { Device } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { DirectSyncRequests, DirectSyncSetup } from "../components/DirectSyncSetup.js";
+import { Icon } from "../components/Icon.js";
 import { ProviderConnectionDialog } from "../components/ProviderConnectionDialog.js";
 import { TabBar } from "../components/TabBar.js";
 import type { ThemePreference } from "../hooks/useTheme.js";
@@ -618,7 +619,7 @@ export function SettingsView({
               <td>
                 <button
                   type="button"
-                  className="btn btn-sm"
+                  className="btn btn-sm btn-with-icon"
                   aria-label={`${configured ? "Manage" : "Connect"} ${provider.label}`}
                   aria-haspopup="dialog"
                   disabled={oauthLoggingIn !== null || credentialSaving}
@@ -628,6 +629,7 @@ export function SettingsView({
                     setOauthError(null);
                   }}
                 >
+                  <Icon name={configured ? "settings" : "connect"} />
                   {configured ? "Manage" : "Connect"}
                 </button>
               </td>
@@ -695,10 +697,11 @@ export function SettingsView({
         <div className="settings-actions">
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={() => void handleSaveGeneral()}
             disabled={saving}
           >
+            <Icon name="save" />
             {saving ? "Saving..." : "Save"}
           </button>
           {saveMessage && (
@@ -847,11 +850,19 @@ export function SettingsView({
                             : "settings-key-missing"
                         }`}
                       >
-                        {status.connected
-                          ? status.expired
-                            ? "⚠ Expired"
-                            : "✓ Connected"
-                          : "Not connected"}
+                        {status.connected ? (
+                          status.expired ? (
+                            <>
+                              <Icon name="warning" /> Expired
+                            </>
+                          ) : (
+                            <>
+                              <Icon name="check" /> Connected
+                            </>
+                          )
+                        ) : (
+                          "Not connected"
+                        )}
                       </span>
                     </div>
 
@@ -883,18 +894,19 @@ export function SettingsView({
                           />
                           <button
                             type="button"
-                            className="btn btn-primary btn-sm"
+                            className="btn btn-primary btn-sm btn-with-icon"
                             disabled={!oauthCode.trim()}
                             onClick={handleOAuthSubmitCode}
                           >
+                            <Icon name="check" />
                             Submit
                           </button>
                           <button
                             type="button"
-                            className="btn btn-danger btn-sm"
+                            className="btn btn-danger btn-sm btn-with-icon"
                             onClick={handleOAuthCancel}
                           >
-                            Cancel
+                            <Icon name="cancel" /> Cancel
                           </button>
                         </>
                       ) : (
@@ -903,10 +915,11 @@ export function SettingsView({
                           {(!status.connected || status.expired) && (
                             <button
                               type="button"
-                              className="btn btn-primary btn-sm"
+                              className="btn btn-primary btn-sm btn-with-icon"
                               disabled={oauthLoggingIn !== null || credentialSaving}
                               onClick={() => handleOAuthLogin(status.id)}
                             >
+                              <Icon name="connect" />
                               {oauthLoggingIn === status.id
                                 ? "Opening browser..."
                                 : status.expired
@@ -917,20 +930,21 @@ export function SettingsView({
                           {oauthLoggingIn === status.id && (
                             <button
                               type="button"
-                              className="btn btn-danger btn-sm"
+                              className="btn btn-danger btn-sm btn-with-icon"
                               onClick={handleOAuthCancel}
                             >
-                              Cancel
+                              <Icon name="cancel" /> Cancel
                             </button>
                           )}
                           {/* Disconnect button */}
                           {status.connected && (
                             <button
                               type="button"
-                              className="btn btn-danger btn-sm"
+                              className="btn btn-danger btn-sm btn-with-icon"
                               disabled={credentialSaving || oauthLoggingIn !== null}
                               onClick={() => handleOAuthDisconnect(status.id)}
                             >
+                              <Icon name="disconnect" />
                               Disconnect
                             </button>
                           )}
@@ -971,7 +985,7 @@ export function SettingsView({
                       />
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm btn-with-icon"
                         disabled={
                           credentialSaving ||
                           oauthLoggingIn !== null ||
@@ -979,15 +993,16 @@ export function SettingsView({
                         }
                         onClick={() => handleSetApiKey(provider.id)}
                       >
-                        Save key
+                        <Icon name="save" /> Save key
                       </button>
                       {storedKeys[provider.id] && (
                         <button
                           type="button"
-                          className="btn btn-danger btn-sm"
+                          className="btn btn-danger btn-sm btn-with-icon"
                           disabled={credentialSaving || oauthLoggingIn !== null}
                           onClick={() => handleRemoveApiKey(provider.id)}
                         >
+                          <Icon name="delete" />
                           Remove key
                         </button>
                       )}
@@ -1053,10 +1068,11 @@ export function SettingsView({
                   <code>{catalogId || "Unavailable"}</code>
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="btn btn-sm btn-with-icon"
                     disabled={!catalogId}
                     onClick={handleCopyCatalogId}
                   >
+                    <Icon name={copied ? "check" : "copy"} />
                     {copied ? "Copied!" : "Copy"}
                   </button>
                 </div>
@@ -1064,18 +1080,20 @@ export function SettingsView({
               <div className="sync-flow-actions">
                 <button
                   type="button"
-                  className={`btn ${syncFlow === "share" ? "btn-primary" : ""}`}
+                  className={`btn-with-icon btn ${syncFlow === "share" ? "btn-primary" : ""}`}
                   aria-expanded={syncFlow === "share"}
                   onClick={() => setSyncFlow(syncFlow === "share" ? null : "share")}
                 >
+                  <Icon name="connect" />
                   Connect another computer to this data
                 </button>
                 <button
                   type="button"
-                  className={`btn ${syncFlow === "connect" ? "btn-primary" : ""}`}
+                  className={`btn-with-icon btn ${syncFlow === "connect" ? "btn-primary" : ""}`}
                   aria-expanded={syncFlow === "connect"}
                   onClick={() => setSyncFlow(syncFlow === "connect" ? null : "connect")}
                 >
+                  <Icon name="connect" />
                   Connect this computer to existing data
                 </button>
               </div>
@@ -1112,7 +1130,7 @@ export function SettingsView({
                   )}
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="btn btn-sm btn-with-icon"
                     onClick={() =>
                       connectionMethodsRef.current?.scrollIntoView({
                         behavior: "smooth",
@@ -1120,6 +1138,7 @@ export function SettingsView({
                       })
                     }
                   >
+                    <Icon name="settings" />
                     Set up a connection method
                   </button>
                   <p className="settings-hint">
@@ -1136,18 +1155,20 @@ export function SettingsView({
                   <div className="sync-flow-actions" role="group" aria-label="Connection method">
                     <button
                       type="button"
-                      className={`btn btn-sm ${connectMethod === "direct" ? "btn-primary" : ""}`}
+                      className={`btn-with-icon btn btn-sm ${connectMethod === "direct" ? "btn-primary" : ""}`}
                       aria-pressed={connectMethod === "direct"}
                       onClick={() => setConnectMethod("direct")}
                     >
+                      <Icon name="connect" />
                       Direct connection
                     </button>
                     <button
                       type="button"
-                      className={`btn btn-sm ${connectMethod === "server" ? "btn-primary" : ""}`}
+                      className={`btn-with-icon btn btn-sm ${connectMethod === "server" ? "btn-primary" : ""}`}
                       aria-pressed={connectMethod === "server"}
                       onClick={() => setConnectMethod("server")}
                     >
+                      <Icon name="server" />
                       Via sync server
                     </button>
                   </div>
@@ -1201,15 +1222,16 @@ export function SettingsView({
                           />
                           <button
                             type="button"
-                            className="btn btn-primary btn-sm"
+                            className="btn btn-primary btn-sm btn-with-icon"
                             disabled={!joinCode.trim() || validatingJoin || joining}
                             onClick={() => void handleValidateJoin()}
                           >
+                            <Icon name="check" />
                             {validatingJoin ? "Checking..." : "Check connection"}
                           </button>
                           <button
                             type="button"
-                            className="btn btn-primary btn-sm"
+                            className="btn btn-primary btn-sm btn-with-icon"
                             disabled={
                               joining ||
                               validatingJoin ||
@@ -1218,6 +1240,7 @@ export function SettingsView({
                             }
                             onClick={() => void handleJoin()}
                           >
+                            <Icon name="connect" />
                             {joining ? "Connecting..." : "Connect to dataset"}
                           </button>
                         </div>
@@ -1365,11 +1388,12 @@ export function SettingsView({
                       />
                       <button
                         type="submit"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm btn-with-icon"
                         disabled={
                           serverSaving || !(serverAddress ?? serverStatus?.server ?? "").trim()
                         }
                       >
+                        <Icon name="save" />
                         {serverSaving ? "Saving..." : "Save address"}
                       </button>
                     </div>
@@ -1457,10 +1481,11 @@ export function SettingsView({
           <div className="settings-actions">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm btn-with-icon"
               disabled={daemonRestarting || listenerSaving || serverSaving || !daemonStatus}
               onClick={() => void handleDaemonRestart()}
             >
+              <Icon name="recurring" />
               {daemonRestarting ? "Restarting daemon..." : "Restart daemon"}
             </button>
             {daemonRestarting && (

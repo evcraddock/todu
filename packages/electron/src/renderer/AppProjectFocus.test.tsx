@@ -108,7 +108,7 @@ vi.mock("./components/Sidebar.js", () => ({
   Sidebar: ({ onNavigate }: { onNavigate: (view: string) => void }) => (
     <>
       <button type="button" onClick={() => onNavigate("home")}>
-        Home
+        Overview
       </button>
       <button type="button" onClick={() => onNavigate("habits")}>
         Habits
@@ -146,21 +146,21 @@ describe("Project Focus navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to project list" }));
     expect(screen.getByRole("button", { name: "Focus A" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
     expect(screen.getByRole("heading", { name: "Project list" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     fireEvent.click(screen.getByRole("button", { name: "Focus B" }));
     expect(screen.getByRole("heading", { name: "Project detail: project-b" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     fireEvent.click(screen.getByRole("button", { name: "Focus B" }));
     expect(screen.getByRole("heading", { name: "Project detail: project-b" })).toBeTruthy();
   });
 });
 
-it("returns a Home habit to Home and a list habit to the habits list", () => {
+it("returns a Overview habit to Overview and a list habit to the habits list", () => {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Open home habit" }));
   expect(screen.getByRole("heading", { name: "Habit detail: habit-a" })).toBeTruthy();
@@ -181,7 +181,7 @@ it("returns projects opened from the projects list to that list", () => {
   expect(screen.getByRole("heading", { name: "Project list" })).toBeTruthy();
 });
 
-it("returns a Home task to Home and a list task to the task list", () => {
+it("returns a Overview task to Overview and a list task to the task list", () => {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "Open home task" }));
   expect(screen.getByRole("heading", { name: "Task detail: task-a" })).toBeTruthy();

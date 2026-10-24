@@ -1,10 +1,13 @@
 import type { ProjectId, RecurringId, RecurringMissPolicy } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
+import { BackButton } from "../components/BackButton.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { Icon } from "../components/Icon.js";
 import { LabelPicker } from "../components/LabelPicker.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { TabBar } from "../components/TabBar.js";
 import {
@@ -70,14 +73,17 @@ function UpcomingSection({ templateId }: { templateId: string }): ReactNode {
                 <td className="cell-date">{occ.date}</td>
                 <td>
                   {taskId ? (
-                    <span className="generated-tag">✓ Task created: {taskId.slice(0, 12)}…</span>
+                    <span className="generated-tag">
+                      <Icon name="check" /> Task created: {taskId.slice(0, 12)}…
+                    </span>
                   ) : (
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-secondary btn-sm btn-with-icon"
                       onClick={() => handleGenerate(occ.date)}
                       disabled={generate.isPending}
                     >
+                      <Icon name="add" />
                       Generate
                     </button>
                   )}
@@ -162,9 +168,7 @@ export function RecurringDetail({
   if (isError || !template) {
     return (
       <div className="view-container">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← Recurring Tasks
-        </button>
+        <BackButton label="Recurring Tasks" onClick={onBack} />
         <div className="error-state">
           <p>Failed to load recurring task</p>
           <p className="error-detail">
@@ -222,16 +226,16 @@ export function RecurringDetail({
       <div className="detail-page-header">
         {/* Toolbar */}
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← Recurring Tasks
-          </button>
+          <BackButton label="Recurring Tasks" onClick={onBack} />
           <div className="toolbar-actions">
             <button
               type="button"
-              className="btn btn-danger btn-sm"
+              className="btn-icon"
+              title="Delete"
+              aria-label="Delete"
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete
+              <Icon name="delete" />
             </button>
           </div>
         </div>
@@ -315,11 +319,7 @@ export function RecurringDetail({
                   })
                 }
               >
-                {projects?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <ProjectOptions projects={projects} />
               </select>
             </label>
           </div>
@@ -337,7 +337,7 @@ export function RecurringDetail({
                   setEditingSchedule(true);
                 }}
               >
-                <span aria-hidden="true">✎</span> Edit schedule
+                <Icon name="edit" /> Edit schedule
               </button>
             )}
           </div>
@@ -347,19 +347,19 @@ export function RecurringDetail({
               <div className="detail-schedule-actions">
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   disabled={!scheduleValue.trim() || updateRecurring.isPending}
                   onClick={handleScheduleSave}
                 >
-                  Save schedule
+                  <Icon name="save" /> Save schedule
                 </button>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm btn-with-icon"
                   disabled={updateRecurring.isPending}
                   onClick={() => setEditingSchedule(false)}
                 >
-                  Cancel
+                  <Icon name="cancel" /> Cancel
                 </button>
               </div>
             </section>

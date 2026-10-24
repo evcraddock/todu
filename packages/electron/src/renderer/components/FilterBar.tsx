@@ -3,6 +3,9 @@ import { createProjectId } from "@todu/core/browser";
 import type { ReactNode } from "react";
 import { useActors, useProjects } from "../hooks/useTodu.js";
 import type { TaskListFilter } from "../lib/filter-persistence.js";
+import { AssigneeOptions } from "./AssigneeOptions.js";
+import { Icon } from "./Icon.js";
+import { ProjectOptions } from "./ProjectOptions.js";
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "active", label: "Active" },
@@ -71,11 +74,7 @@ export function FilterBar({
             >
               <option value="active-projects">Active Projects</option>
               <option value="">All projects</option>
-              {projects?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <ProjectOptions projects={projects} />
             </select>
           </label>
         )}
@@ -137,16 +136,7 @@ export function FilterBar({
             >
               <option value="">All assignees</option>
               <option value="unassigned">Unassigned</option>
-              {[...(actors ?? [])]
-                .sort(
-                  (a, b) => a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id),
-                )
-                .map((actor) => (
-                  <option key={actor.id} value={actor.id}>
-                    {actor.displayName}
-                    {actor.archived ? " (archived)" : ""}
-                  </option>
-                ))}
+              <AssigneeOptions assignees={actors} showArchived />
               {filter.assignee &&
                 filter.assignee !== "unassigned" &&
                 !actors?.some((actor) => actor.id === filter.assignee) && (
@@ -188,10 +178,10 @@ export function FilterBar({
         </label>
         <button
           type="button"
-          className="btn btn-secondary btn-sm list-clear-filters"
+          className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
           onClick={() => onFilterChange(hideProject ? {} : { activeProjects: false })}
         >
-          Clear filters
+          <Icon name="clear-filters" /> Clear filters
         </button>
       </div>
     </div>

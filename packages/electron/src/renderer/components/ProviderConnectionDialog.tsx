@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
+import { Icon } from "./Icon.js";
 
 export function ProviderConnectionDialog({
   title,
@@ -78,7 +79,13 @@ export function ProviderConnectionDialog({
           <h3 className="dialog-title" id={titleId}>
             {title}
           </h3>
-          <button type="button" className="btn btn-sm" disabled={pending} onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-sm btn-with-icon"
+            disabled={pending}
+            onClick={onClose}
+          >
+            <Icon name="cancel" />
             Close
           </button>
         </div>

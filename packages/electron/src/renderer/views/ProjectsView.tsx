@@ -51,7 +51,7 @@ export function ProjectsView({
       return (
         <ProjectDetail
           projectId={state.projectId}
-          backLabel={state.returnToHome && onNavigateHome ? "Home" : "Projects"}
+          backLabel={state.returnToHome && onNavigateHome ? "Overview" : "Projects"}
           onBack={() => {
             if (state.returnToHome && onNavigateHome) onNavigateHome();
             else setState({ view: "list" });
@@ -87,7 +87,7 @@ export function ProjectsView({
         <>
           <ProjectDetail
             projectId={state.projectId}
-            backLabel={state.returnToHome && onNavigateHome ? "Home" : "Projects"}
+            backLabel={state.returnToHome && onNavigateHome ? "Overview" : "Projects"}
             onBack={() => {
               if (state.returnToHome && onNavigateHome) onNavigateHome();
               else setState({ view: "list" });

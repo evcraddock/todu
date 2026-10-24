@@ -56,6 +56,7 @@ const update = vi.fn();
 const listProps = { timezone: "America/Chicago", onCreateEntry: vi.fn(), onViewEntry: vi.fn() };
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-23T16:00:00Z"));
@@ -92,6 +93,17 @@ it("provides plain excerpts and opens the selected entry in date order", () => {
     screen.getByRole("button", { name: /quiet morning/ }).compareDocumentPosition(excerpt) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
+});
+
+it("restores tag and sort dropdowns after returning to the journal", () => {
+  const first = render(<JournalList {...listProps} />);
+  fireEvent.change(screen.getByLabelText("Tag"), { target: { value: "reflection" } });
+  fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "oldest" } });
+  first.unmount();
+  render(<JournalList {...listProps} />);
+  expect((screen.getByLabelText("Tag") as HTMLSelectElement).value).toBe("reflection");
+  expect((screen.getByLabelText("Sort by") as HTMLSelectElement).value).toBe("oldest");
+  expect(screen.queryByRole("button", { name: /quiet morning/ })).toBeNull();
 });
 
 it("combines search and tag filters and retains search through loading", () => {

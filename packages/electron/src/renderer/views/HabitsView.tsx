@@ -46,7 +46,7 @@ export function HabitsView({
       return (
         <HabitDetail
           habitId={state.habitId}
-          backLabel={state.returnToHome && onNavigateHome ? "Home" : "Habits"}
+          backLabel={state.returnToHome && onNavigateHome ? "Overview" : "Habits"}
           onBack={() => {
             if (state.returnToHome && onNavigateHome) onNavigateHome();
             else setState({ view: "list" });

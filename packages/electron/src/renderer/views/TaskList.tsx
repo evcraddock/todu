@@ -1,9 +1,16 @@
 import type { TaskFilter, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilterBar } from "../components/FilterBar.js";
+import { Icon } from "../components/Icon.js";
 import { TaskTable } from "../components/TaskTable.js";
 import { useProjects, useTasks } from "../hooks/useTodu.js";
-import { loadFilter, saveFilter, type TaskListFilter } from "../lib/filter-persistence.js";
+import {
+  loadFilter,
+  loadTaskSort,
+  saveFilter,
+  saveTaskSort,
+  type TaskListFilter,
+} from "../lib/filter-persistence.js";
 import { matchesTaskAssignee } from "../lib/task-assignee-filter.js";
 import { defaultTaskComparator } from "../lib/task-sort.js";
 import { AssigneeDetail } from "./AssigneeDetail.js";
@@ -19,7 +26,7 @@ export function TaskList({
 }): ReactNode {
   // Load persisted filter on mount
   const [filter, setFilter] = useState<TaskListFilter>(loadFilter);
-  const [sort, setSort] = useState<TaskSortOptions | undefined>(undefined);
+  const [sort, setSort] = useState<TaskSortOptions | undefined>(loadTaskSort);
   const [openedAssigneeId, setOpenedAssigneeId] = useState<string | null>(null);
 
   // Track the last externalFilter we applied so we only react to new ones
@@ -41,6 +48,10 @@ export function TaskList({
   useEffect(() => {
     saveFilter(filter);
   }, [filter]);
+
+  useEffect(() => {
+    saveTaskSort(sort);
+  }, [sort]);
 
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -105,8 +116,8 @@ export function TaskList({
         <h2 className="view-title">
           Tasks <span className="list-count">{displayTasks?.length ?? 0}</span>
         </h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateTask}>
-          + New Task
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateTask}>
+          <Icon name="add" /> New Task
         </button>
       </div>
       <FilterBar filter={filter} onFilterChange={setFilter} />

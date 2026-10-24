@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { useRenameActor } from "../hooks/useTodu.js";
 
 export function RenameAssigneeDialog({
@@ -86,15 +87,20 @@ export function RenameAssigneeDialog({
             </div>
           )}
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" disabled={pending} onClick={close}>
-              Cancel
+            <button
+              type="button"
+              className="btn btn-secondary btn-with-icon"
+              disabled={pending}
+              onClick={close}
+            >
+              <Icon name="cancel" /> Cancel
             </button>
             <button
               type="submit"
-              className="btn btn-primary"
+              className="btn btn-primary btn-with-icon"
               disabled={!name.trim() || name.trim() === currentName || pending}
             >
-              {pending ? "Saving…" : "Save"}
+              <Icon name="save" /> {pending ? "Saving…" : "Save"}
             </button>
           </div>
         </form>

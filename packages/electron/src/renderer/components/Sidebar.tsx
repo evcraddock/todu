@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
 import type { SidebarMode } from "../hooks/useSidebar.js";
-import { SidebarIcon, type SidebarIconName } from "./SidebarIcon.js";
+import { Icon, type IconName } from "./Icon.js";
 
 export interface NavItem {
   id: string;
   label: string;
-  icon: SidebarIconName;
+  icon: IconName;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "home", label: "Home", icon: "home" },
+  { id: "home", label: "Overview", icon: "overview" },
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "projects", label: "Projects", icon: "projects" },
   { id: "habits", label: "Habits", icon: "habits" },
@@ -56,7 +56,7 @@ export function Sidebar({
           onClick={onToggleCollapse}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <SidebarIcon name={collapsed ? "expand" : "collapse"} />
+          <Icon name={collapsed ? "expand" : "collapse"} />
         </button>
       </div>
 
@@ -71,7 +71,7 @@ export function Sidebar({
               title={collapsed ? item.label : undefined}
             >
               <span className="sidebar-nav-icon">
-                <SidebarIcon name={item.icon} />
+                <Icon name={item.icon} />
               </span>
               {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
             </button>
@@ -88,7 +88,7 @@ export function Sidebar({
           title={collapsed ? "Agent (⌘J)" : undefined}
         >
           <span className="sidebar-nav-icon">
-            <SidebarIcon name="agent" />
+            <Icon name="agent" />
           </span>
           {!collapsed && <span className="sidebar-nav-label">Agent</span>}
         </button>
@@ -100,7 +100,7 @@ export function Sidebar({
           title={collapsed ? "Settings" : undefined}
         >
           <span className="sidebar-nav-icon">
-            <SidebarIcon name="settings" />
+            <Icon name="settings" />
           </span>
           {!collapsed && <span className="sidebar-nav-label">Settings</span>}
         </button>
