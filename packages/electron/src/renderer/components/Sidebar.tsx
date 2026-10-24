@@ -1,20 +1,21 @@
 import type { ReactNode } from "react";
 import type { SidebarMode } from "../hooks/useSidebar.js";
+import { SidebarIcon, type SidebarIconName } from "./SidebarIcon.js";
 
 export interface NavItem {
   id: string;
   label: string;
-  icon: string;
+  icon: SidebarIconName;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "home", label: "Home", icon: "⌂" },
-  { id: "tasks", label: "Tasks", icon: "☐" },
-  { id: "projects", label: "Projects", icon: "▦" },
-  { id: "habits", label: "Habits", icon: "🔥" },
-  { id: "recurring", label: "Recurring Tasks", icon: "↻" },
-  { id: "journal", label: "Journal", icon: "📓" },
-  { id: "assignees", label: "Assignees", icon: "👤" },
+  { id: "home", label: "Home", icon: "home" },
+  { id: "tasks", label: "Tasks", icon: "tasks" },
+  { id: "projects", label: "Projects", icon: "projects" },
+  { id: "habits", label: "Habits", icon: "habits" },
+  { id: "recurring", label: "Recurring Tasks", icon: "recurring" },
+  { id: "journal", label: "Journal", icon: "journal" },
+  { id: "assignees", label: "Assignees", icon: "assignees" },
 ];
 
 interface SidebarProps {
@@ -55,7 +56,7 @@ export function Sidebar({
           onClick={onToggleCollapse}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? "»" : "«"}
+          <SidebarIcon name={collapsed ? "expand" : "collapse"} />
         </button>
       </div>
 
@@ -66,9 +67,12 @@ export function Sidebar({
               type="button"
               className={`sidebar-nav-item ${activeView === item.id ? "active" : ""}`}
               onClick={() => onNavigate(item.id)}
+              aria-label={item.label}
               title={collapsed ? item.label : undefined}
             >
-              <span className="sidebar-nav-icon">{item.icon}</span>
+              <span className="sidebar-nav-icon">
+                <SidebarIcon name={item.icon} />
+              </span>
               {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
             </button>
           </li>
@@ -80,18 +84,24 @@ export function Sidebar({
           type="button"
           className={`sidebar-nav-item ${agentPaneVisible ? "active" : ""}`}
           onClick={onToggleAgentPane}
+          aria-label="Agent"
           title={collapsed ? "Agent (⌘J)" : undefined}
         >
-          <span className="sidebar-nav-icon">💬</span>
+          <span className="sidebar-nav-icon">
+            <SidebarIcon name="agent" />
+          </span>
           {!collapsed && <span className="sidebar-nav-label">Agent</span>}
         </button>
         <button
           type="button"
           className={`sidebar-nav-item ${activeView === "settings" ? "active" : ""}`}
           onClick={() => onNavigate("settings")}
+          aria-label="Settings"
           title={collapsed ? "Settings" : undefined}
         >
-          <span className="sidebar-nav-icon">⚙</span>
+          <span className="sidebar-nav-icon">
+            <SidebarIcon name="settings" />
+          </span>
           {!collapsed && <span className="sidebar-nav-label">Settings</span>}
         </button>
       </div>

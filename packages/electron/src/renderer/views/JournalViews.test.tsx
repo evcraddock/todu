@@ -150,7 +150,7 @@ it("makes tags optional and saves trimmed Markdown with deduplicated tags", () =
   fireEvent.change(screen.getByLabelText(/^Tags/), {
     target: { value: "ideas, reflection, ideas" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(create).toHaveBeenCalledWith(
     { content: "**A good day.**", tags: ["ideas", "reflection"] },
     expect.objectContaining({ onSuccess: close }),
@@ -161,7 +161,7 @@ it("can remove existing tags without changing the entry identity", () => {
   render(<JournalEditor note={note} timezone="America/Chicago" onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Edit tags" }));
   fireEvent.change(screen.getByLabelText(/^Tags/), { target: { value: "" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(update).toHaveBeenCalledWith(
     { id: note.id, input: { content: note.content, tags: [] } },
     expect.any(Object),
@@ -174,4 +174,26 @@ it("reduces Markdown to a bounded, readable excerpt", () => {
   );
   expect(journalPreview("  ")).toBe("Empty entry");
   expect(journalPreview("a".repeat(300))).toHaveLength(240);
+});
+
+it("lets an empty new entry be cancelled without a confirmation", () => {
+  const close = vi.fn();
+  render(<JournalEditor timezone="America/Chicago" onClose={close} />);
+  expect(screen.queryByRole("heading", { name: "New journal entry" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel", exact: true }));
+  expect(close).toHaveBeenCalledOnce();
+  expect(create).not.toHaveBeenCalled();
+});
+
+it("protects an unsaved entry when Cancel is clicked", () => {
+  const close = vi.fn();
+  render(<JournalEditor timezone="America/Chicago" onClose={close} />);
+  fireEvent.change(screen.getByLabelText("Entry content"), {
+    target: { value: "Unsaved thoughts" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel", exact: true }));
+  expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeDefined();
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Discard", exact: true }));
+  expect(close).toHaveBeenCalledOnce();
 });

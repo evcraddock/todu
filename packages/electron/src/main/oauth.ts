@@ -1,7 +1,8 @@
 import type { AuthPrompt } from "@earendil-works/pi-ai";
 import type { BrowserWindow } from "electron";
-import { ipcMain, shell } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { loadOAuthCredentials } from "./credentials.js";
+import { getInstallationId } from "./installation-id.js";
 import { models } from "./models.js";
 
 export {
@@ -80,59 +81,67 @@ async function runOAuthLogin(providerId: string, mainWindow: BrowserWindow): Pro
     }
   };
   try {
-    await models.login(providerId, "oauth", {
-      signal: controller.signal,
-      prompt: (prompt: AuthPrompt) =>
-        new Promise<string>((resolve, reject) => {
-          const signal = prompt.signal ?? controller.signal;
-          const cleanup = (): void => {
-            signal.removeEventListener("abort", cancel);
-            pendingPromptResolve = null;
-            pendingPromptReject = null;
-          };
-          const cancel = (): void => {
-            cleanup();
-            reject(new Error("Login cancelled"));
-          };
-          pendingPromptResolve = (value) => {
-            cleanup();
-            resolve(value);
-          };
-          pendingPromptReject = (reason) => {
-            cleanup();
-            reject(reason);
-          };
-          signal.addEventListener("abort", cancel, { once: true });
-          if (signal.aborted) {
-            cancel();
-            return;
+    await models.login(
+      providerId,
+      "oauth",
+      {
+        signal: controller.signal,
+        prompt: (prompt: AuthPrompt) =>
+          new Promise<string>((resolve, reject) => {
+            const signal = prompt.signal ?? controller.signal;
+            const cleanup = (): void => {
+              signal.removeEventListener("abort", cancel);
+              pendingPromptResolve = null;
+              pendingPromptReject = null;
+            };
+            const cancel = (): void => {
+              cleanup();
+              reject(new Error("Login cancelled"));
+            };
+            pendingPromptResolve = (value) => {
+              cleanup();
+              resolve(value);
+            };
+            pendingPromptReject = (reason) => {
+              cleanup();
+              reject(reason);
+            };
+            signal.addEventListener("abort", cancel, { once: true });
+            if (signal.aborted) {
+              cancel();
+              return;
+            }
+            const choices =
+              prompt.type === "select"
+                ? `\n${prompt.options.map((option) => `${option.id}: ${option.label}`).join("\n")}`
+                : "";
+            send({
+              type: "prompt",
+              inputType: prompt.type === "secret" ? "password" : "text",
+              message: prompt.message + choices,
+              placeholder: "placeholder" in prompt ? prompt.placeholder : undefined,
+            });
+          }),
+        notify: (event) => {
+          if (event.type === "auth_url") {
+            void shell.openExternal(event.url);
+            send({ type: "auth-opened", url: event.url });
+          } else if (event.type === "device_code") {
+            void shell.openExternal(event.verificationUri);
+            send({
+              type: "progress",
+              message: `Enter code ${event.userCode} at ${event.verificationUri}`,
+            });
+          } else {
+            send({ type: "progress", message: event.message });
           }
-          const choices =
-            prompt.type === "select"
-              ? `\n${prompt.options.map((option) => `${option.id}: ${option.label}`).join("\n")}`
-              : "";
-          send({
-            type: "prompt",
-            inputType: prompt.type === "secret" ? "password" : "text",
-            message: prompt.message + choices,
-            placeholder: "placeholder" in prompt ? prompt.placeholder : undefined,
-          });
-        }),
-      notify: (event) => {
-        if (event.type === "auth_url") {
-          void shell.openExternal(event.url);
-          send({ type: "auth-opened", url: event.url });
-        } else if (event.type === "device_code") {
-          void shell.openExternal(event.verificationUri);
-          send({
-            type: "progress",
-            message: `Enter code ${event.userCode} at ${event.verificationUri}`,
-          });
-        } else {
-          send({ type: "progress", message: event.message });
-        }
+        },
       },
-    });
+      {
+        getDeviceId: () => getInstallationId(app.getPath("userData")),
+        agentName: "Todu",
+      },
+    );
   } finally {
     pendingPromptReject?.(new Error("Login finished"));
     pendingAbortController = null;

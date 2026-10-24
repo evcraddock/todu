@@ -195,6 +195,65 @@ describe("createDaemonIpcHandlers", () => {
     expect(result).toEqual(syncStatus);
   });
 
+  it.each([
+    ["todu:sync:daemon-status", "daemon.status", { state: "running", healthy: true }],
+    ["todu:sync:devices", "device.list", [{ id: "local-device", name: "Laptop" }]],
+    [
+      "todu:sync:server-status",
+      "sync.serverStatus",
+      { enabled: false, running: false, state: "disconnected" },
+    ],
+  ])("forwards %s as a read-only daemon request", async (channel, method, value) => {
+    const daemon = { request: vi.fn().mockResolvedValue({ ok: true, value }) };
+    const handlers = createDaemonIpcHandlers({ daemon, storagePath: "/tmp/todu-ipc-test" });
+    expect(await handlers[channel as string](undefined)).toEqual(value);
+    expect(daemon.request).toHaveBeenCalledWith(method, {});
+  });
+
+  it("forwards server settings to the daemon for persistence and application", async () => {
+    const value = {
+      server: "wss://sync.example.com",
+      enabled: true,
+      running: true,
+      state: "disconnected",
+    };
+    const daemon = { request: vi.fn().mockResolvedValue({ ok: true, value }) };
+    const handlers = createDaemonIpcHandlers({ daemon, storagePath: "/tmp/todu-ipc-test" });
+    const settings = { server: value.server, enabled: true };
+    expect(await handlers["todu:sync:configure-server"](undefined, settings)).toEqual(value);
+    expect(daemon.request).toHaveBeenCalledWith("sync.serverConfigure", { settings });
+  });
+
+  it("invokes the injected daemon lifecycle restart", async () => {
+    const restartDaemon = vi.fn().mockResolvedValue(undefined);
+    const handlers = createDaemonIpcHandlers({
+      daemon: { request: vi.fn() },
+      storagePath: "/tmp/todu-ipc-test",
+      restartDaemon,
+    });
+    await handlers["todu:sync:restart-daemon"](undefined);
+    expect(restartDaemon).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["enroll", "sync.enroll", "http://peer:24377", { endpoint: "http://peer:24377" }],
+    ["enrollment-status", "sync.enrollmentStatus", undefined, {}],
+    ["enrollment-cancel", "sync.enrollmentCancel", undefined, {}],
+    ["enrollment-requests", "sync.enrollmentRequests", undefined, {}],
+    ["enrollment-approve", "sync.enrollmentApprove", "request-id", { requestId: "request-id" }],
+    ["enrollment-deny", "sync.enrollmentDeny", "request-id", { requestId: "request-id" }],
+  ])(
+    "forwards %s through the daemon's enrollment API",
+    async (channel, method, argument, params) => {
+      const daemon = {
+        request: vi.fn().mockResolvedValue({ ok: true, value: { stage: "pending" } }),
+      };
+      const handlers = createDaemonIpcHandlers({ daemon, storagePath: "/tmp/todu-ipc-test" });
+      await handlers[`todu:sync:${channel}`](undefined, argument);
+      expect(daemon.request).toHaveBeenCalledWith(method, params);
+    },
+  );
+
   it("invokes daemon sync.join for join-check", async () => {
     const daemon = {
       request: vi.fn().mockResolvedValue({

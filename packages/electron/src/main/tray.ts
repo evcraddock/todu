@@ -8,15 +8,12 @@ let tray: Tray | null = null;
  * Create a tray icon from the resources directory.
  */
 function createTrayIcon(): Tray {
-  const iconPath = path.join(__dirname, "../../resources/tray-icon.png");
+  const iconPath = path.join(__dirname, "../../resources/app-icon.png");
   const img = nativeImage.createFromPath(iconPath);
 
-  if (process.platform === "darwin") {
-    img.setTemplateImage(true);
-  }
-
-  // Resize if needed — tray icons should be ~22-24px on most platforms
-  const resized = img.resize({ width: 24, height: 24 });
+  // Keep the app icon's colors; a template image would turn its tile into a solid mask.
+  const size = process.platform === "darwin" ? 20 : 24;
+  const resized = img.resize({ width: size, height: size });
   return new Tray(resized);
 }
 

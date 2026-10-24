@@ -1,3 +1,4 @@
+import path from "node:path";
 import { app, BrowserWindow, dialog } from "electron";
 import { setupAgent, teardownAgent } from "./agent.js";
 import {
@@ -14,6 +15,7 @@ import {
   type DaemonConnectionResult,
   resolveDaemonSocketPath,
 } from "./daemon-connection-manager.js";
+import { createDaemonRestarter } from "./daemon-restart.js";
 import { ensureDaemonReady } from "./daemon-startup.js";
 import { createDaemonToduClient } from "./daemon-todu-client.js";
 import { createDesktopErrorLog, formatDesktopStartupError } from "./error-log.js";
@@ -70,6 +72,8 @@ function assertRequestOk<T>(
 }
 
 async function init(): Promise<void> {
+  if (process.platform === "darwin")
+    app.dock?.setIcon(path.join(__dirname, "../../resources/app-icon.png"));
   const { storagePath } = loadElectronConfig();
   const socketPath = resolveDaemonSocketPath(storagePath);
 
@@ -126,6 +130,14 @@ async function init(): Promise<void> {
   registerIpcHandlers({
     daemon: daemonConnectionManager,
     storagePath,
+    restartDaemon: createDaemonRestarter({
+      daemon: daemonConnectionManager,
+      appPath: app.getAppPath(),
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      storagePath,
+      socketPath,
+    }),
   });
 
   // Create the main window

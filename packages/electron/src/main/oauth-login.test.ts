@@ -143,3 +143,27 @@ it("cancels a pending prompt without storing credentials", async () => {
     expect.objectContaining({ type: "login-error" }),
   );
 });
+
+it("supplies OpenAI a stable installation ID and Todu app name", async () => {
+  const ids: string[] = [];
+  const login = vi
+    .spyOn(models, "login")
+    .mockImplementation(async (_provider, _type, _interaction, options) => {
+      expect(options?.agentName).toBe("Todu");
+      ids.push(options!.getDeviceId!());
+      return credential;
+    });
+  try {
+    await invoke("todu:oauth:login", "openai");
+    await invoke("todu:oauth:login", "openai");
+    expect(login).toHaveBeenCalledTimes(2);
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(ids[1]).toBe(ids[0]);
+    expect(send).toHaveBeenCalledWith("todu:oauth:event", {
+      type: "login-complete",
+      providerId: "openai",
+    });
+  } finally {
+    login.mockRestore();
+  }
+});
