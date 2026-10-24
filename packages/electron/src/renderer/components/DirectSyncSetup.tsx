@@ -184,6 +184,7 @@ export function DirectSyncRequests() {
         if (!disposed && current === revision.current) {
           setRequests(next);
           setLoaded(true);
+          setPollError(null);
         }
       } catch {
         if (!disposed) setPollError("Connection requests unavailable.");

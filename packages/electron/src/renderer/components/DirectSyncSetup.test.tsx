@@ -86,6 +86,21 @@ describe("direct connection flow", () => {
     expect(screen.getByText("shared-catalog")).toBeDefined();
   });
 
+  it("clears incoming request polling errors after the daemon recovers", async () => {
+    vi.useFakeTimers();
+    vi.mocked(window.todu.sync.enrollmentRequests)
+      .mockRejectedValueOnce(new Error("Daemon unavailable"))
+      .mockResolvedValue([]);
+    render(<DirectSyncRequests />);
+    await act(async () => {});
+    expect(screen.getByText("Connection requests unavailable.")).toBeDefined();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(screen.queryByText("Connection requests unavailable.")).toBeNull();
+    expect(screen.getByText("No pending connection requests.")).toBeDefined();
+  });
+
   it.each(["Approve", "Deny"])(
     "lets the sharing computer %s an incoming request",
     async (action) => {
