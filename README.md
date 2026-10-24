@@ -8,6 +8,8 @@ todu is a local-first task management project with CLI, terminal UI, and Electro
 
 ### Desktop app (recommended on Linux and Apple Silicon macOS)
 
+See [Desktop settings](docs/desktop-settings.md) for model connections, sync setup, and daemon restart controls.
+
 The desktop app is a client of your existing local daemon. Start the daemon explicitly with `todu daemon start` (or configure a user service), then open the desktop app. Desktop startup and reconnect never automatically launch, replace, or restart a daemon. If connection fails, the error explains how to check the daemon and where to find the desktop error log. See [Daemon Service Operations](docs/daemon-service-operations.md).
 
 #### Linux install
@@ -83,7 +85,7 @@ npm install -g @todu/cli@latest
 Compatibility guidance:
 
 - CLI, daemon, and desktop package versions are independent. Use the companion versions recorded in the desktop release; compatible daemon protocol versions, not identical package version numbers, determine connectivity.
-- The desktop app version is shown in Settings and in release notes.
+- The desktop app version is available from the About menu and in release notes.
 - The CLI and desktop app both use the same default user-local config and data paths, so the CLI targets the same local daemon and dataset unless you override paths with env vars.
 - For automatic recurring task generation, follow [Recurring Worker Installation](docs/recurring-worker-installation.md).
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, ipcMain } from "electron";
 import { getStoredProviders, removeApiKey, setApiKey } from "./credentials.js";
 import { models } from "./models.js";
+import { OAUTH_PROVIDER_ALIASES } from "./oauth.js";
 
 export { getApiKey, getStoredProviders, removeApiKey, setApiKey } from "./credentials.js";
 
@@ -22,6 +23,8 @@ export interface ProviderInfo {
   id: string;
   label: string;
   models: { id: string; label: string }[];
+  supportsApiKey: boolean;
+  oauthAliases?: string[];
 }
 
 const DEFAULT_SETTINGS: AgentSettings = {
@@ -97,6 +100,8 @@ export function listProviders(): ProviderInfo[] {
   return models.getProviders().map((provider) => ({
     id: provider.id,
     label: formatProviderLabel(provider.id),
+    supportsApiKey: provider.auth.apiKey !== undefined,
+    oauthAliases: OAUTH_PROVIDER_ALIASES[provider.id] ?? [],
     models: models.getModels(provider.id).map((m) => ({ id: m.id, label: m.name ?? m.id })),
   }));
 }

@@ -130,6 +130,23 @@ const api = {
 
   // ── Sync ─────────────────────────────────────────────────────────
   sync: {
+    enroll: (endpoint: string) => ipcRenderer.invoke("todu:sync:enroll", endpoint),
+    enrollmentStatus: () => ipcRenderer.invoke("todu:sync:enrollment-status"),
+    enrollmentCancel: () => ipcRenderer.invoke("todu:sync:enrollment-cancel"),
+    enrollmentRequests: () => ipcRenderer.invoke("todu:sync:enrollment-requests"),
+    enrollmentApprove: (requestId: string) =>
+      ipcRenderer.invoke("todu:sync:enrollment-approve", requestId),
+    enrollmentDeny: (requestId: string) =>
+      ipcRenderer.invoke("todu:sync:enrollment-deny", requestId),
+    daemonStatus: () => ipcRenderer.invoke("todu:sync:daemon-status"),
+    restartDaemon: () => ipcRenderer.invoke("todu:sync:restart-daemon"),
+    listenerSettings: () => ipcRenderer.invoke("todu:sync:listener-settings"),
+    configureListener: (enabled: boolean) =>
+      ipcRenderer.invoke("todu:sync:configure-listener", enabled),
+    devices: () => ipcRenderer.invoke("todu:sync:devices"),
+    serverStatus: () => ipcRenderer.invoke("todu:sync:server-status"),
+    configureServer: (settings: { server?: string; enabled?: boolean }) =>
+      ipcRenderer.invoke("todu:sync:configure-server", settings),
     status: () => ipcRenderer.invoke("todu:sync:status"),
     start: () => ipcRenderer.invoke("todu:sync:start"),
     stop: () => ipcRenderer.invoke("todu:sync:stop"),

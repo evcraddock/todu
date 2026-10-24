@@ -1,3 +1,4 @@
+import type { EnrollmentClientStatus, EnrollmentRequest } from "@todu/core";
 import type {
   Actor,
   ApprovalItem,
@@ -8,6 +9,7 @@ import type {
   CreateProjectInput,
   CreateRecurringInput,
   CreateTaskInput,
+  Device,
   Habit,
   HabitEntry,
   HabitFilter,
@@ -157,6 +159,8 @@ export interface AgentSettings {
 }
 
 export interface ProviderInfo {
+  supportsApiKey?: boolean;
+  oauthAliases?: string[];
   id: string;
   label: string;
   models: { id: string; label: string }[];
@@ -174,7 +178,21 @@ export interface ToduSettingsApi {
 
 export type RemoteSyncState = "disconnected" | "connected" | "syncing";
 
+export interface SyncServerStatus {
+  server?: string;
+  enabled: boolean;
+  running: boolean;
+  state: RemoteSyncState;
+}
+
 export interface SyncStatus {
+  listener?: {
+    state: "disabled" | "listening" | "error";
+    bind?: string;
+    port?: number;
+    error?: string;
+    publication?: { state: string; endpoint?: string; error?: string };
+  };
   local: { mode: string };
   remote: { state: RemoteSyncState; server?: string; lastSync?: string };
 }
@@ -187,7 +205,29 @@ export interface SyncJoinResult {
   rolledBack: boolean;
 }
 
+export interface DaemonStatus {
+  role: string;
+  state: "stopped" | "starting" | "running" | "stopping";
+  healthy: boolean;
+  startedAt: string | null;
+  transport: { kind: string; path: string; mode: number } | null;
+  catalog: { id: string | null };
+}
+
 export interface ToduSyncApi {
+  enroll(endpoint: string): Promise<EnrollmentClientStatus>;
+  enrollmentStatus(): Promise<EnrollmentClientStatus>;
+  enrollmentCancel(): Promise<EnrollmentClientStatus>;
+  enrollmentRequests(): Promise<EnrollmentRequest[]>;
+  enrollmentApprove(requestId: string): Promise<unknown>;
+  enrollmentDeny(requestId: string): Promise<unknown>;
+  daemonStatus(): Promise<DaemonStatus>;
+  restartDaemon(): Promise<void>;
+  listenerSettings(): Promise<{ enabled?: boolean; bind?: string; port?: number }>;
+  configureListener(enabled: boolean): Promise<{ enabled?: boolean; bind?: string; port?: number }>;
+  devices(): Promise<Device[]>;
+  serverStatus(): Promise<SyncServerStatus>;
+  configureServer(settings: { server?: string; enabled?: boolean }): Promise<SyncServerStatus>;
   /** Get current sync status. */
   status(): Promise<SyncStatus>;
   /** Start remote multi-device sync connection. */

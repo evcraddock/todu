@@ -60,6 +60,13 @@ describe("listProviders", () => {
     }
   });
 
+  it("reports supported credential methods and legacy subscription aliases", () => {
+    for (const provider of listProviders()) expect(typeof provider.supportsApiKey).toBe("boolean");
+    expect(listProviders().find((provider) => provider.id === "openai")?.oauthAliases).toContain(
+      "openai-codex",
+    );
+  });
+
   it("includes known providers", () => {
     const providers = listProviders();
     const ids = providers.map((p) => p.id);

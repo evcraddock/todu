@@ -2,10 +2,12 @@ import { err, ok, type Result, type ToduError } from "@todu/core";
 import { ipcMain } from "electron";
 import type { DaemonConnectionManager } from "./daemon-connection-manager.js";
 import { formatDaemonInvocationError, mapDaemonErrorToToduError } from "./daemon-error-mapping.js";
+import { configureListener, getListenerSettings } from "./listener-settings.js";
 
 interface RegisterIpcHandlersOptions {
   daemon: Pick<DaemonConnectionManager, "request">;
   storagePath: string;
+  restartDaemon?: () => Promise<void>;
 }
 
 type IpcHandler = (_event: unknown, ...args: unknown[]) => Promise<unknown> | unknown;
@@ -107,6 +109,31 @@ export function createDaemonIpcHandlers(
     "todu:habit:history": (_event, id, days) => invokeResult("habit.history", { id, days }),
 
     // ── Sync ──────────────────────────────────────────────────────────────
+    "todu:sync:enroll": (_event, endpoint) => invokeRaw("sync.enroll", { endpoint }),
+    "todu:sync:enrollment-status": () => invokeRaw("sync.enrollmentStatus"),
+    "todu:sync:enrollment-cancel": () => invokeRaw("sync.enrollmentCancel"),
+    "todu:sync:enrollment-requests": () => invokeRaw("sync.enrollmentRequests"),
+    "todu:sync:enrollment-approve": (_event, requestId) =>
+      invokeRaw("sync.enrollmentApprove", { requestId }),
+    "todu:sync:enrollment-deny": (_event, requestId) =>
+      invokeRaw("sync.enrollmentDeny", { requestId }),
+    "todu:sync:daemon-status": () => invokeRaw("daemon.status"),
+    "todu:sync:restart-daemon": () => {
+      if (!options.restartDaemon) throw new Error("Daemon restart is unavailable");
+      return options.restartDaemon();
+    },
+    "todu:sync:listener-settings": async () => {
+      const { configPath } = await invokeRaw<{ configPath: string }>("sync.serverStatus");
+      return getListenerSettings(configPath);
+    },
+    "todu:sync:configure-listener": async (_event, enabled) => {
+      const { configPath } = await invokeRaw<{ configPath: string }>("sync.serverStatus");
+      return configureListener(configPath, enabled);
+    },
+    "todu:sync:devices": () => invokeRaw("device.list"),
+    "todu:sync:server-status": () => invokeRaw("sync.serverStatus"),
+    "todu:sync:configure-server": (_event, settings) =>
+      invokeRaw("sync.serverConfigure", { settings }),
     "todu:sync:status": () => invokeRaw("sync.status"),
     "todu:sync:start": () => invokeRaw("sync.start"),
     "todu:sync:stop": () => invokeRaw("sync.stop"),

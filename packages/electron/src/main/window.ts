@@ -84,6 +84,7 @@ export function createWindow(state: WindowState): BrowserWindow {
     minHeight: 600,
     show: false,
     title: "todu",
+    icon: path.join(__dirname, "../../resources/app-icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.mjs"),
       sandbox: false,

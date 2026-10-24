@@ -11,6 +11,7 @@ directories:
 files:
   - dist/**/*
   - package.json
+  - resources/app-icon.png
   - "!dist/**/*.map"
 
 extraMetadata:
