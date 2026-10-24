@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
 import {
+  AssistantMessageEventStream,
   createModels,
   fauxAssistantMessage,
   fauxProvider,
@@ -10,7 +11,7 @@ import {
 } from "@earendil-works/pi-ai";
 import type { Todu } from "@todu/engine";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSystemPrompt, setAgentSystemPrompt } from "./agent.js";
+import { buildSystemPrompt, resetAgentConversation, setAgentSystemPrompt } from "./agent.js";
 import { getApiKey, loadOAuthCredentials, saveOAuthCredentials, setApiKey } from "./credentials.js";
 import { createCredentialStore, models } from "./models.js";
 import { loadSettings } from "./settings.js";
@@ -159,6 +160,38 @@ describe("desktop Pi credentials", () => {
 });
 
 describe("Pi agent runtime", () => {
+  it("aborts and settles a streaming response before clearing the conversation", async () => {
+    const faux = fauxProvider();
+    const started = vi.fn();
+    const agent = new Agent({
+      initialState: { model: faux.getModel(), systemPrompt: "Keep this context" },
+      streamFn: (_model, _context, options) => {
+        const stream = new AssistantMessageEventStream();
+        options?.signal?.addEventListener(
+          "abort",
+          () => {
+            stream.push({
+              type: "error",
+              reason: "aborted",
+              error: fauxAssistantMessage("", { stopReason: "aborted", errorMessage: "Aborted" }),
+            });
+          },
+          { once: true },
+        );
+        started();
+        return stream;
+      },
+    });
+    const response = agent.prompt("Start a response");
+    await vi.waitFor(() => expect(started).toHaveBeenCalled());
+    expect(agent.state.isStreaming).toBe(true);
+    await resetAgentConversation(agent);
+    await response;
+    expect(agent.state.isStreaming).toBe(false);
+    expect(agent.state.messages.map((message) => message.role)).toEqual(["system"]);
+    expect(agent.state.systemPrompt).toBe("Keep this context");
+  });
+
   it("executes a schema-validated Todu tool, forwards lifecycle events, and retains tools across context changes and reset", async () => {
     const list = vi.fn(async () => ({ ok: true as const, value: [] }));
     const todu = { task: { list } } as unknown as Todu;

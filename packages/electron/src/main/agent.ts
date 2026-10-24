@@ -167,6 +167,13 @@ ${JSON.stringify({ id: r.id, title: r.title, paused: r.paused, schedule: r.sched
   }
 }
 
+/** Settle the active response before Pi resets the conversation. */
+export async function resetAgentConversation(target: Agent): Promise<void> {
+  target.abort();
+  await target.waitForIdle();
+  target.reset();
+}
+
 /** Replace focused instructions while preserving the executable tool declarations. */
 export function setAgentSystemPrompt(target: Agent, prompt: string): void {
   target.state.messages = [
@@ -241,9 +248,9 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
     agent.abort();
   });
 
-  ipcMain.handle("todu:agent:clear", () => {
+  ipcMain.handle("todu:agent:clear", async () => {
     if (!agent) return;
-    agent.reset();
+    await resetAgentConversation(agent);
   });
 
   ipcMain.handle("todu:agent:set-model", (_event, provider: string, modelId: string) => {
@@ -271,7 +278,9 @@ export function setupAgent(todu: Todu, mainWindow: BrowserWindow): void {
         (previousFocusedEntity.entityType !== entityType ||
           previousFocusedEntity.entityId !== entityId)
       ) {
-        agent.reset();
+        const currentAgent = agent;
+        await resetAgentConversation(currentAgent);
+        if (agent !== currentAgent) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("todu:agent:event", { type: "messages_cleared" });
         }
