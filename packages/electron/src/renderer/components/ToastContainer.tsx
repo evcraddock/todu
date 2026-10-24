@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
+import { Icon } from "./Icon.js";
 
 interface Toast {
   id: number;
@@ -45,10 +46,11 @@ export function ToastContainer(): ReactNode {
           <span className="toast-message">{toast.message}</span>
           <button
             type="button"
-            className="toast-dismiss"
+            className="toast-dismiss btn-with-icon"
+            aria-label="Dismiss notification"
             onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
           >
-            ✕
+            <Icon name="cancel" />
           </button>
         </div>
       ))}

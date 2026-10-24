@@ -1,6 +1,7 @@
 import type { LabelId } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
 import { ColorPicker } from "../components/ColorPicker.js";
+import { Icon } from "../components/Icon.js";
 import { useCreateLabel, useLabels, useUpdateLabel } from "../hooks/useTodu.js";
 
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
@@ -114,15 +115,16 @@ export function LabelDialog({
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+          <button type="button" className="btn btn-secondary btn-with-icon" onClick={onClose}>
+            <Icon name="cancel" /> Cancel
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={handleSubmit}
             disabled={!name.trim() || isPending}
           >
+            <Icon name={isEdit ? "save" : "add"} />{" "}
             {isPending ? "Saving…" : isEdit ? "Save" : "Create"}
           </button>
         </div>

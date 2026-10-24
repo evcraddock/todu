@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Icon } from "../components/Icon.js";
 
 // ============================================================================
 // Types — mirror the AgentEvent shape from pi-agent-core
@@ -325,18 +326,24 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
         <h2 className="view-title">Agent</h2>
         <div className="agent-header-actions">
           {items.length > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleClear}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm btn-with-icon"
+              onClick={handleClear}
+            >
+              <Icon name="delete" />
               Clear
             </button>
           )}
           {onClose && (
             <button
               type="button"
-              className="btn-icon agent-close-btn"
+              className="btn-icon agent-close-btn btn-with-icon"
               onClick={onClose}
               title="Close agent pane (⌘J)"
+              aria-label="Close agent pane"
             >
-              ✕
+              <Icon name="cancel" />
             </button>
           )}
         </div>
@@ -345,7 +352,9 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
       <div className="agent-messages">
         {isEmpty && (
           <div className="agent-empty">
-            <p className="agent-empty-icon">💬</p>
+            <p className="agent-empty-icon">
+              <Icon name="agent" size={40} />
+            </p>
             <p className="agent-empty-text">Ask me about your tasks, projects, or habits</p>
             <p className="agent-empty-hint">
               Try: &quot;What are my high priority tasks?&quot; or &quot;Create a task to review
@@ -400,11 +409,21 @@ export function AgentView({ onClose }: AgentViewProps): ReactNode {
           disabled={isStreaming}
         />
         {isStreaming ? (
-          <button type="button" className="btn btn-danger btn-sm" onClick={handleAbort}>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm btn-with-icon"
+            onClick={handleAbort}
+          >
+            <Icon name="stop" />
             Stop
           </button>
         ) : (
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!inputValue.trim()}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-sm btn-with-icon"
+            disabled={!inputValue.trim()}
+          >
+            <Icon name="send" />
             Send
           </button>
         )}
@@ -455,14 +474,16 @@ function ToolCallCard({
   status: "running" | "done" | "error";
   result?: string;
 }): ReactNode {
-  const icon = status === "running" ? "⏳" : status === "error" ? "❌" : "✅";
+  const icon = status === "running" ? "waiting" : status === "error" ? "error" : "check";
   const label = formatToolName(toolName);
   const argsPreview = formatArgs(args);
 
   return (
     <div className="agent-tool-card">
       <div className="agent-tool-header">
-        <span className="agent-tool-icon">{icon}</span>
+        <span className="agent-tool-icon" role="img" aria-label={status}>
+          <Icon name={icon} />
+        </span>
         <span className="agent-tool-label">{status === "running" ? `${label}...` : label}</span>
       </div>
       {argsPreview && <div className="agent-tool-args">{argsPreview}</div>}

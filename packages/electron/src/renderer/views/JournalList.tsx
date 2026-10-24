@@ -1,5 +1,7 @@
 import type { Note } from "@todu/core/browser";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../components/Icon.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import { useNotes } from "../hooks/useTodu.js";
 import { journalPreview } from "../lib/journal-preview.js";
 import {
@@ -29,14 +31,17 @@ interface JournalListProps {
 export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalListProps): ReactNode {
   const currentWeek = useMemo(() => currentWeekStart(timezone), [timezone]);
   const [searchText, setSearchText] = useState("");
-  const [sort, setSort] = useState("newest");
-  const [filterTag, setFilterTag] = useState("");
+  const [sort, setSort] = useSavedSelection<string>("journal:sort", "newest", ["newest", "oldest"]);
+  const [filterTag, setFilterTag] = useSavedSelection<string>("journal:tag", "");
   const [visibleWeek, setVisibleWeek] = useState(currentWeek);
 
+  const previousWeek = useRef(currentWeek);
   useEffect(() => {
+    if (previousWeek.current === currentWeek) return;
+    previousWeek.current = currentWeek;
     setVisibleWeek(currentWeek);
     setFilterTag("");
-  }, [currentWeek]);
+  }, [currentWeek, setFilterTag]);
 
   const filter = useMemo(() => weekRangeFilter(visibleWeek, timezone), [timezone, visibleWeek]);
   const { data: journalNotes, isLoading, isError, error } = useNotes(filter);
@@ -93,8 +98,8 @@ export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalLis
         <h2 className="view-title">
           Journal <span className="list-count">{visibleNotes.length}</span>
         </h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateEntry}>
-          + New entry
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateEntry}>
+          <Icon name="add" /> New entry
         </button>
       </div>
 
@@ -113,19 +118,19 @@ export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalLis
             <div className="journal-week-controls">
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-sm btn-with-icon"
                 aria-label="Previous week"
                 onClick={() => {
                   setVisibleWeek((week) => shiftWeek(week, -1));
                   setFilterTag("");
                 }}
               >
-                ←
+                <Icon name="back" />
               </button>
               <span className="journal-week-label">{formatWeekLabel(visibleWeek, timezone)}</span>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-sm btn-with-icon"
                 aria-label="Next week"
                 disabled={isCurrentWeek}
                 onClick={() => {
@@ -133,15 +138,15 @@ export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalLis
                   setFilterTag("");
                 }}
               >
-                →
+                <Icon name="forward" />
               </button>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-sm btn-with-icon"
                 disabled={isCurrentWeek}
                 onClick={() => setVisibleWeek(currentWeek)}
               >
-                This week
+                <Icon name="week" /> This week
               </button>
             </div>
           </div>
@@ -162,14 +167,14 @@ export function JournalList({ timezone, onCreateEntry, onViewEntry }: JournalLis
           </label>
           <button
             type="button"
-            className="btn btn-secondary btn-sm list-clear-filters"
+            className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
             onClick={() => {
               setSearchText("");
               setFilterTag("");
               setVisibleWeek(currentWeek);
             }}
           >
-            Clear filters
+            <Icon name="clear-filters" /> Clear filters
           </button>
         </div>
       </div>

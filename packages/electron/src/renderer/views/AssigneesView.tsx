@@ -1,5 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Icon } from "../components/Icon.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import { useActors, useSetActorArchived } from "../hooks/useTodu.js";
 import { AssigneeDetail } from "./AssigneeDetail.js";
 import { CreateAssigneeDialog } from "./CreateAssigneeDialog.js";
@@ -9,7 +11,11 @@ export function AssigneesView(): ReactNode {
   const { data: actors, isLoading, isError, error } = useActors();
   const setArchived = useSetActorArchived();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useSavedSelection<string>("assignees:status", "active", [
+    "active",
+    "archived",
+    "all",
+  ]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
   const [archiving, setArchiving] = useState<{ id: string; name: string } | null>(null);
@@ -36,13 +42,13 @@ export function AssigneesView(): ReactNode {
         </h2>
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary btn-with-icon"
           disabled={creating || !!editing || !!archiving || pending}
           onClick={() => {
             setCreating(true);
           }}
         >
-          + Add assignee
+          <Icon name="add" /> Add assignee
         </button>
       </div>
       <div className="filter-bar list-filters">
@@ -69,13 +75,13 @@ export function AssigneesView(): ReactNode {
           </label>
           <button
             type="button"
-            className="btn btn-secondary btn-sm list-clear-filters"
+            className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
             onClick={() => {
               setSearch("");
               setStatus("all");
             }}
           >
-            Clear filters
+            <Icon name="clear-filters" /> Clear filters
           </button>
         </div>
       </div>
@@ -97,6 +103,7 @@ export function AssigneesView(): ReactNode {
           title="Archive Assignee"
           message={`Archive ${archiving.name}? You can restore this assignee later from the Archived list.`}
           confirmLabel={pending ? "Archiving…" : "Archive assignee"}
+          confirmIcon="archive"
           pending={pending}
           error={setArchived.error?.message}
           onCancel={() => {
@@ -158,17 +165,19 @@ export function AssigneesView(): ReactNode {
                   <div className="assignees-directory-row-actions">
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn-icon"
                       aria-label={`Rename ${actor.displayName}`}
+                      title={`Rename ${actor.displayName}`}
                       disabled={pending || !!editing || !!archiving}
                       onClick={() => setEditing({ id: actor.id, name: actor.displayName })}
                     >
-                      Rename
+                      <Icon name="edit" />
                     </button>
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn-icon"
                       aria-label={`${actor.archived ? "Restore" : "Archive"} ${actor.displayName}`}
+                      title={`${actor.archived ? "Restore" : "Archive"} ${actor.displayName}`}
                       disabled={pending || !!editing || !!archiving}
                       onClick={() => {
                         setArchived.reset();
@@ -179,7 +188,7 @@ export function AssigneesView(): ReactNode {
                         }
                       }}
                     >
-                      {actor.archived ? "Restore" : "Archive"}
+                      <Icon name={actor.archived ? "restore" : "archive"} />
                     </button>
                   </div>
                 </td>

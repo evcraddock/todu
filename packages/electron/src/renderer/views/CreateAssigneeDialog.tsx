@@ -1,5 +1,6 @@
 import { createActorId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { useCreateActor } from "../hooks/useTodu.js";
 
 export function CreateAssigneeDialog({ onClose }: { onClose: () => void }): ReactNode {
@@ -102,10 +103,20 @@ export function CreateAssigneeDialog({ onClose }: { onClose: () => void }): Reac
             </div>
           )}
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" disabled={pending} onClick={close}>
-              Cancel
+            <button
+              type="button"
+              className="btn btn-secondary btn-with-icon"
+              disabled={pending}
+              onClick={close}
+            >
+              <Icon name="cancel" /> Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={!name.trim() || pending}>
+            <button
+              type="submit"
+              className="btn btn-primary btn-with-icon"
+              disabled={!name.trim() || pending}
+            >
+              <Icon name="add" />
               {pending ? "Adding…" : "Add assignee"}
             </button>
           </div>

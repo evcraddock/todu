@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { Icon } from "./Icon.js";
 
 export function EntityIdCopy({ id, entityName }: { id: string; entityName: string }): ReactNode {
   const [idCopyResult, setIdCopyResult] = useState<{
@@ -23,20 +24,7 @@ export function EntityIdCopy({ id, entityName }: { id: string; entityName: strin
           }
         }}
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
+        <Icon name="copy" size={16} />
       </button>
       <span role="status">
         {idCopyState === "copied" ? "Copied!" : idCopyState === "error" ? "Could not copy ID." : ""}

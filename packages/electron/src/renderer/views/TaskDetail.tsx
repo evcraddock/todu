@@ -6,12 +6,16 @@ import {
   type TaskStatus,
 } from "@todu/core/browser";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { AssigneeOptions } from "../components/AssigneeOptions.js";
+import { BackButton } from "../components/BackButton.js";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { Icon } from "../components/Icon.js";
 import { LabelPicker } from "../components/LabelPicker.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
 import { TabBar } from "../components/TabBar.js";
 import {
   useActors,
@@ -98,9 +102,7 @@ export function TaskDetail({
   if (isError || !task) {
     return (
       <div className="view-container">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← {backLabel}
-        </button>
+        <BackButton label={backLabel} onClick={onBack} />
         <div className="error-state">
           <p>Failed to load task</p>
           <p className="error-detail">
@@ -220,15 +222,15 @@ export function TaskDetail({
       <div className="detail-page-header">
         {/* Toolbar */}
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← {backLabel}
-          </button>
+          <BackButton label={backLabel} onClick={onBack} />
           <button
             type="button"
-            className="btn btn-danger btn-sm"
+            className="btn-icon"
+            title="Delete"
+            aria-label="Delete"
             onClick={() => setShowDeleteConfirm(true)}
           >
-            Delete
+            <Icon name="delete" />
           </button>
         </div>
 
@@ -312,11 +314,7 @@ export function TaskDetail({
                 disabled={moveTask.isPending}
                 onChange={(e) => handleMove(e.target.value)}
               >
-                {projects?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <ProjectOptions projects={projects} />
               </select>
             </label>
           </div>
@@ -384,10 +382,10 @@ export function TaskDetail({
               activeTab === "comments" && !commentComposerOpen ? (
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   onClick={() => setCommentComposerOpen(true)}
                 >
-                  Add Comment
+                  <Icon name="add" /> Add Comment
                 </button>
               ) : activeTab === "assignees" ? (
                 <div className="assignee-add">
@@ -403,19 +401,15 @@ export function TaskDetail({
                         ? "No other assignees available"
                         : "Choose an assignee…"}
                     </option>
-                    {addableAssigneeActors.map((actor) => (
-                      <option key={actor.id} value={actor.id}>
-                        {actor.displayName}
-                      </option>
-                    ))}
+                    <AssigneeOptions assignees={addableAssigneeActors} />
                   </select>
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    className="btn btn-primary btn-sm btn-with-icon"
                     disabled={!validatedSelectedAssigneeActorId || updateTask.isPending}
                     onClick={handleAddAssignee}
                   >
-                    Add assignee
+                    <Icon name="add" /> Add assignee
                   </button>
                 </div>
               ) : undefined
@@ -431,7 +425,7 @@ export function TaskDetail({
                   {task.descriptionApproval?.state === "pendingApproval" && (
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-primary btn-sm btn-with-icon"
                       onClick={() =>
                         approveTaskDescription.mutate(task.id as TaskId, {
                           onSuccess: () => setApprovalMessage("Task description approved."),
@@ -445,6 +439,7 @@ export function TaskDetail({
                       }
                       disabled={approveTaskDescription.isPending}
                     >
+                      <Icon name="check" />
                       {approveTaskDescription.isPending ? "Approving…" : "Approve"}
                     </button>
                   )}
@@ -509,21 +504,23 @@ export function TaskDetail({
                           <td className="cell-actions">
                             <button
                               type="button"
-                              className="btn btn-secondary btn-sm"
+                              className="btn-icon"
                               aria-label={`Remove ${entry.label} from task assignees`}
+                              title={`Remove ${entry.label}`}
                               disabled={updateTask.isPending}
                               onClick={() => handleRemoveAssignee(entry.actorId)}
                             >
-                              Remove
+                              <Icon name="delete" />
                             </button>
                             {entry.replacementOptions.length > 0 && (
                               <button
                                 type="button"
-                                className="btn btn-secondary btn-sm"
+                                className="btn btn-secondary btn-sm btn-with-icon"
                                 aria-label={`Replace ${entry.label}`}
                                 disabled={updateTask.isPending}
                                 onClick={() => setReplacingActorId(entry.actorId)}
                               >
+                                <Icon name="recurring" />
                                 Replace
                               </button>
                             )}
@@ -568,16 +565,12 @@ export function TaskDetail({
                           }
                         >
                           <option value="">Choose an assignee…</option>
-                          {entry.replacementOptions.map((actor) => (
-                            <option key={actor.id} value={actor.id}>
-                              {actor.displayName}
-                            </option>
-                          ))}
+                          <AssigneeOptions assignees={entry.replacementOptions} />
                         </select>
                       </label>
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm btn-with-icon"
                         disabled={
                           updateTask.isPending ||
                           !entry.replacementOptions.some(
@@ -586,13 +579,15 @@ export function TaskDetail({
                         }
                         onClick={() => handleReplaceAssignee(entry.actorId)}
                       >
+                        <Icon name="check" />
                         Apply replacement
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-secondary btn-sm btn-with-icon"
                         onClick={() => setReplacingActorId(null)}
                       >
+                        <Icon name="cancel" />
                         Cancel
                       </button>
                     </div>

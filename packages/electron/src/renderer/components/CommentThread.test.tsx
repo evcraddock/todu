@@ -150,7 +150,7 @@ describe("CommentThread", () => {
     } as ReturnType<typeof hooks.useNotes>);
     updateNoteMutate.mockImplementation((_input, options) => options.onSuccess());
     const { container } = render(<CommentThread entityType="task" entityId="task-1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit comment" }));
     const editor = container.querySelector('.comment-edit [contenteditable="true"]') as HTMLElement;
     await waitFor(() => expect(document.activeElement).toBe(editor));
     expect(editor.textContent).toBe("Imported comment");
@@ -172,7 +172,7 @@ describe("CommentThread", () => {
 
   it("cancels editing without changing the comment", () => {
     render(<CommentThread entityType="task" entityId="task-1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit comment" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(updateNoteMutate).not.toHaveBeenCalled();
     expect(screen.getByText("Imported comment")).toBeDefined();
@@ -184,7 +184,7 @@ describe("CommentThread", () => {
       options.onError(new Error("Save failed")),
     );
     render(<CommentThread entityType="task" entityId="task-1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit comment" }));
     fireEvent.click(screen.getByRole("button", { name: "Save comment" }));
     expect(screen.getByRole("alert").textContent).toBe("Save failed");
     expect(screen.getByRole("group", { name: "Edit comment" })).toBeDefined();

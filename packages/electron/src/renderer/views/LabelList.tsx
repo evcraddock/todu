@@ -1,6 +1,7 @@
 import type { LabelId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Icon } from "../components/Icon.js";
 import { useDeleteLabel, useLabels, useTasks } from "../hooks/useTodu.js";
 
 export function LabelList({
@@ -59,8 +60,8 @@ export function LabelList({
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">Labels</h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateLabel}>
-          + New Label
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateLabel}>
+          <Icon name="add" /> New Label
         </button>
       </div>
 
@@ -95,16 +96,18 @@ export function LabelList({
                   <td className="cell-actions">
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-secondary btn-sm btn-with-icon"
                       onClick={() => onEditLabel(label.id)}
                     >
+                      <Icon name="edit" />
                       Edit
                     </button>
                     <button
                       type="button"
-                      className="btn btn-danger btn-sm"
+                      className="btn btn-danger btn-sm btn-with-icon"
                       onClick={() => setDeleteTarget({ id: label.id, name: label.name })}
                     >
+                      <Icon name="delete" />
                       Delete
                     </button>
                   </td>

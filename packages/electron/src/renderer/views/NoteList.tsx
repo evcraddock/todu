@@ -1,6 +1,8 @@
 import type { NoteEntityType, NoteFilter, NoteId } from "@todu/core/browser";
 import { type ReactNode, useMemo, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Icon } from "../components/Icon.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import {
   useActors,
   useApprovals,
@@ -20,8 +22,14 @@ export function NoteList({
   onCreateNote: () => void;
   onNavigateToEntity: (entityType: string, entityId: string) => void;
 }): ReactNode {
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterTag, setFilterTag] = useState("");
+  const [filterType, setFilterType] = useSavedSelection<string>("notes:type", "all", [
+    "all",
+    "standalone",
+    "task",
+    "project",
+    "habit",
+  ]);
+  const [filterTag, setFilterTag] = useSavedSelection<string>("notes:tag", "");
 
   const filter: NoteFilter = {
     ...(filterType === "standalone"
@@ -117,8 +125,8 @@ export function NoteList({
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">Notes</h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateNote}>
-          + New Note
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateNote}>
+          <Icon name="add" /> New Note
         </button>
       </div>
 
@@ -164,7 +172,7 @@ export function NoteList({
                     {approval.kind === "taskDescription" && approval.taskId ? (
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm btn-with-icon"
                         disabled={approveTaskDescription.isPending}
                         onClick={() =>
                           approveTaskDescription.mutate(approval.taskId!, {
@@ -178,12 +186,13 @@ export function NoteList({
                           })
                         }
                       >
+                        <Icon name="check" />
                         {approveTaskDescription.isPending ? "Approving…" : "Approve"}
                       </button>
                     ) : approval.kind === "noteContent" && approval.noteId ? (
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-primary btn-sm btn-with-icon"
                         disabled={approveNoteContent.isPending}
                         onClick={() =>
                           approveNoteContent.mutate(approval.noteId!, {
@@ -197,6 +206,7 @@ export function NoteList({
                           })
                         }
                       >
+                        <Icon name="check" />
                         {approveNoteContent.isPending ? "Approving…" : "Approve"}
                       </button>
                     ) : (
@@ -280,7 +290,7 @@ export function NoteList({
                   {note.contentApproval?.state === "pendingApproval" && (
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-primary btn-sm btn-with-icon"
                       onClick={() =>
                         approveNoteContent.mutate(note.id, {
                           onSuccess: () => setApprovalMessage("Note content approved."),
@@ -292,12 +302,13 @@ export function NoteList({
                       }
                       disabled={approveNoteContent.isPending}
                     >
+                      <Icon name="check" />
                       {approveNoteContent.isPending ? "Approving…" : "Approve"}
                     </button>
                   )}
                   <button
                     type="button"
-                    className="btn btn-danger btn-sm"
+                    className="btn btn-danger btn-sm btn-with-icon"
                     onClick={() =>
                       setDeleteTarget({
                         id: note.id,
@@ -305,6 +316,7 @@ export function NoteList({
                       })
                     }
                   >
+                    <Icon name="delete" />
                     Delete
                   </button>
                 </td>

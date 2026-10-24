@@ -1,6 +1,7 @@
 import type { Note, NoteId } from "@todu/core/browser";
 import { type ReactNode, useCallback, useState } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
+import { Icon } from "../components/Icon.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { useCreateNote, useUpdateNote } from "../hooks/useTodu.js";
 import { formatJournalEntryDate } from "../lib/journal-time.js";
@@ -132,10 +133,11 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
             />
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-with-icon"
               disabled={isPending}
               onClick={() => setEditingTags(false)}
             >
+              <Icon name="check" />
               Done
             </button>
             <span id="journal-tags-hint" className="detail-property-hint">
@@ -162,7 +164,7 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
               disabled={isPending}
               onClick={() => setEditingTags(true)}
             >
-              <span aria-hidden="true">{parseTags().length ? "✎" : "+"}</span>{" "}
+              <Icon name={parseTags().length ? "edit" : "add"} />
               {parseTags().length ? "Edit tags" : "Add tags"}
             </button>
           </div>
@@ -171,18 +173,19 @@ export function JournalEditor({ note, timezone, onClose }: JournalEditorProps): 
         <div className="journal-editor-actions">
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm btn-with-icon"
             onClick={handleBack}
             disabled={isPending}
           >
-            Cancel
+            <Icon name="cancel" /> Cancel
           </button>
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm btn-with-icon"
             onClick={handleSave}
             disabled={!content.trim() || isPending}
           >
+            <Icon name="save" />
             {isPending ? "Saving…" : "Save"}
           </button>
         </div>

@@ -20,7 +20,7 @@ vi.mock("./AssigneeDetail.js", () => ({
     <div>
       Assignee {actorId}
       <button type="button" onClick={onBack}>
-        Home
+        Overview
       </button>
     </div>
   ),
@@ -79,7 +79,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("Home weekly planning", () => {
+describe("Overview weekly planning", () => {
   it("shows scheduled work in This Week and preserves navigation, priority, and habits", () => {
     state.tasks = [
       makeTask("Later this week", { priority: "low", scheduledDate: "2026-10-17" }),
@@ -185,7 +185,7 @@ function makeProject(id: string, overrides: Partial<Project> = {}): Project {
   };
 }
 
-describe("Home project focus", () => {
+describe("Overview project focus", () => {
   it("includes active high-priority projects even with no tasks and opens the selected project", () => {
     const focused = Object.freeze(makeProject("Empty focused project"));
     state.projects = [
@@ -317,7 +317,7 @@ it("shows assignees and opens their details without opening the task", () => {
   fireEvent.click(screen.getByRole("button", { name: "User", exact: true }));
   expect(screen.getByText("Assignee actor-user")).toBeTruthy();
   expect(onNavigateToTask).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Home", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Overview", exact: true }));
   const row = screen.getByRole("button", { name: /Assigned work/ });
   fireEvent.keyDown(row, { key: "Enter" });
   expect(onNavigateToTask).toHaveBeenCalledWith("Assigned work");

@@ -9,6 +9,7 @@ import {
   useUpdateNote,
 } from "../hooks/useTodu.js";
 import { createActorMap, getActorName, getApprovalLabel } from "../lib/actors.js";
+import { Icon } from "./Icon.js";
 import { MarkdownEditor } from "./MarkdownEditor.js";
 
 export function CommentThread({
@@ -73,10 +74,10 @@ export function CommentThread({
           {!showComposer && composerOpen === undefined && (
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm btn-with-icon"
               onClick={() => setShowComposer(true)}
             >
-              Add Comment
+              <Icon name="add" /> Add Comment
             </button>
           )}
         </div>
@@ -109,22 +110,22 @@ export function CommentThread({
           <div className="comment-edit-actions">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm btn-with-icon"
               onClick={handleSubmit}
               disabled={!newComment.trim() || createNote.isPending}
             >
-              Comment
+              <Icon name="save" /> Comment
             </button>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm btn-with-icon"
               disabled={createNote.isPending}
               onClick={() => {
                 setNewComment("");
                 setShowComposer(false);
               }}
             >
-              Cancel
+              <Icon name="cancel" /> Cancel
             </button>
           </div>
         </div>
@@ -145,7 +146,7 @@ export function CommentThread({
               {note.contentApproval?.state === "pendingApproval" && (
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   onClick={() =>
                     approveNoteContent.mutate(note.id, {
                       onSuccess: () => setApprovalMessage("Comment approved."),
@@ -157,6 +158,7 @@ export function CommentThread({
                   }
                   disabled={approveNoteContent.isPending || isEditing}
                 >
+                  <Icon name="check" />
                   {approveNoteContent.isPending ? "Approving…" : "Approve"}
                 </button>
               )}
@@ -164,24 +166,27 @@ export function CommentThread({
               {!isEditing && (
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn-icon"
+                  title="Edit comment"
+                  aria-label="Edit comment"
                   disabled={editingComment !== null || updateNote.isPending}
                   onClick={() => {
                     setEditingComment({ id: note.id, content: note.content });
                     setEditError("");
                   }}
                 >
-                  Edit
+                  <Icon name="edit" />
                 </button>
               )}
               <button
                 type="button"
                 className="btn-icon"
                 title="Delete comment"
+                aria-label="Delete comment"
                 disabled={isEditing || updateNote.isPending}
                 onClick={() => deleteNote.mutate(note.id)}
               >
-                ✕
+                <Icon name="delete" />
               </button>
             </div>
             <div className="comment-body">
@@ -214,22 +219,23 @@ export function CommentThread({
                   <div className="comment-edit-actions">
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-primary btn-sm btn-with-icon"
                       disabled={!editingComment.content.trim() || updateNote.isPending}
                       onClick={saveComment}
                     >
+                      <Icon name="save" />
                       {updateNote.isPending ? "Saving…" : "Save comment"}
                     </button>
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-secondary btn-sm btn-with-icon"
                       disabled={updateNote.isPending}
                       onClick={() => {
                         setEditingComment(null);
                         setEditError("");
                       }}
                     >
-                      Cancel
+                      <Icon name="cancel" /> Cancel
                     </button>
                   </div>
                 </div>

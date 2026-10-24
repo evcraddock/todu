@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { useLabels } from "../hooks/useTodu.js";
+import { Icon } from "./Icon.js";
 
 export function LabelPicker({
   labels,
@@ -45,7 +46,7 @@ export function LabelPicker({
             ))}
           </div>
           <button type="button" className="btn btn-sm task-label-edit" onClick={openLabelEditor}>
-            <span aria-hidden="true">✎</span> Edit labels
+            <Icon name="edit" /> Edit labels
           </button>
         </div>
       )}
@@ -59,11 +60,12 @@ export function LabelPicker({
                   {label}
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-secondary btn-sm btn-with-icon"
                     aria-label={`Remove label ${label}`}
                     disabled={isPending}
                     onClick={() => setDraftLabels(draftLabels.filter((name) => name !== label))}
                   >
+                    <Icon name="delete" />
                     Remove
                   </button>
                 </span>
@@ -97,29 +99,30 @@ export function LabelPicker({
             </label>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm btn-with-icon"
               disabled={!labelName.trim() || isPending}
               onClick={addDraftLabel}
             >
+              <Icon name="add" />
               Add label
             </button>
           </div>
           <div className="task-label-actions">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary btn-sm btn-with-icon"
               disabled={isPending}
               onClick={saveLabels}
             >
-              Save labels
+              <Icon name="save" /> Save labels
             </button>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm btn-with-icon"
               disabled={isPending}
               onClick={() => setEditingLabels(false)}
             >
-              Cancel
+              <Icon name="cancel" /> Cancel
             </button>
           </div>
         </section>
@@ -127,7 +130,7 @@ export function LabelPicker({
       <div className="task-property-footer">
         {labels.length === 0 && !editingLabels && (
           <button type="button" className="btn btn-sm task-label-edit" onClick={openLabelEditor}>
-            <span aria-hidden="true">+</span> Add labels
+            <Icon name="add" /> Add labels
           </button>
         )}
       </div>

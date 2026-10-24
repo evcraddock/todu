@@ -1,7 +1,9 @@
 import type { Note } from "@todu/core/browser";
 import type { ReactNode } from "react";
+import { BackButton } from "../components/BackButton.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { Icon } from "../components/Icon.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { formatJournalEntryDate, formatJournalEntryTime } from "../lib/journal-time.js";
 
@@ -20,11 +22,13 @@ export function JournalDetail({ note, timezone, onBack, onEdit }: JournalDetailP
     <div className="view-container entity-detail-view journal-detail">
       <div className="detail-page-header">
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← Journal
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => onEdit(note)}>
-            <span aria-hidden="true">✎</span> Edit entry
+          <BackButton label="Journal" onClick={onBack} />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm btn-with-icon"
+            onClick={() => onEdit(note)}
+          >
+            <Icon name="edit" /> Edit entry
           </button>
         </div>
 

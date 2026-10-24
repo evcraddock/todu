@@ -1,6 +1,9 @@
 import type { RecurringFilter } from "@todu/core/browser";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { PriorityChip } from "../components/PriorityChip.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import { useProjects, useRecurringList } from "../hooks/useTodu.js";
 import { describeSchedule } from "../lib/describe-schedule.js";
 import {
@@ -18,10 +21,22 @@ export function RecurringList({
   onCreateTemplate: () => void;
   externalFilter?: RecurringFilter | null;
 }): ReactNode {
-  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [filterProject, setFilterProject] = useState("active-projects");
+  const [filterStatus, setFilterStatus] = useSavedSelection<"all" | "active" | "paused">(
+    "recurring:status",
+    "all",
+    ["all", "active", "paused"],
+  );
+  const [filterProject, setFilterProject] = useSavedSelection<string>(
+    "recurring:project",
+    "active-projects",
+  );
   const [searchText, setSearchText] = useState("");
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useSavedSelection<string>("recurring:sort", "name", [
+    "name",
+    "nextDue",
+    "priority",
+    "status",
+  ]);
   const appliedExternalRef = useRef<RecurringFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -34,7 +49,7 @@ export function RecurringList({
       setFilterProject((externalFilter.projectId as string) ?? "");
       setSearchText(externalFilter.search ?? "");
     }
-  }, [externalFilter]);
+  }, [externalFilter, setFilterProject, setFilterStatus]);
 
   const filter: RecurringFilter = {
     ...(filterStatus === "active" ? { paused: false } : {}),
@@ -98,8 +113,8 @@ export function RecurringList({
         <h2 className="view-title">
           Recurring Tasks <span className="list-count">{displayTemplates.length}</span>
         </h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateTemplate}>
-          + New Recurring Task
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateTemplate}>
+          <Icon name="add" /> New Recurring Task
         </button>
       </div>
 
@@ -122,11 +137,7 @@ export function RecurringList({
             >
               <option value="active-projects">Active Projects</option>
               <option value="">All projects</option>
-              {projects?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <ProjectOptions projects={projects} />
             </select>
           </label>
           <label className="list-filter-field">
@@ -143,14 +154,14 @@ export function RecurringList({
           </label>
           <button
             type="button"
-            className="btn btn-secondary btn-sm list-clear-filters"
+            className="btn btn-secondary btn-sm list-clear-filters btn-with-icon"
             onClick={() => {
               setFilterStatus("all");
               setFilterProject("");
               setSearchText("");
             }}
           >
-            Clear filters
+            <Icon name="clear-filters" /> Clear filters
           </button>
         </div>
       </div>

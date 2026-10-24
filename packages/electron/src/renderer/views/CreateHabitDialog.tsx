@@ -1,5 +1,7 @@
 import type { ProjectId } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
+import { Icon } from "../components/Icon.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { useCreateHabit, useProjects } from "../hooks/useTodu.js";
 
@@ -90,11 +92,7 @@ export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNo
             value={effectiveProjectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
-            {projects?.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
+            <ProjectOptions projects={projects} />
           </select>
         </div>
 
@@ -147,15 +145,16 @@ export function CreateHabitDialog({ onClose }: { onClose: () => void }): ReactNo
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+          <button type="button" className="btn btn-secondary btn-with-icon" onClick={onClose}>
+            <Icon name="cancel" /> Cancel
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={handleSubmit}
             disabled={createHabit.isPending}
           >
+            <Icon name="add" />
             {createHabit.isPending ? "Creating…" : "Create Habit"}
           </button>
         </div>

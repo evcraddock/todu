@@ -141,6 +141,7 @@ describe("actor-aware renderer views", () => {
   let tasksData: Task[];
 
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     vi.mocked(hooks.useLabels).mockReturnValue({ data: [] } as unknown as ReturnType<
       typeof hooks.useLabels
@@ -289,7 +290,7 @@ describe("actor-aware renderer views", () => {
     fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
     fireEvent.click(screen.getByRole("button", { name: "user" }));
     expect(screen.getByRole("heading", { name: "user" })).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "← Task" }));
+    fireEvent.click(screen.getByRole("button", { name: "Task", exact: true }));
     expect(screen.getByRole("button", { name: "Remove user from task assignees" })).toBeDefined();
   });
 
@@ -305,7 +306,7 @@ describe("actor-aware renderer views", () => {
     fireEvent.click(screen.getByRole("button", { name: "Assignees" }));
     fireEvent.click(screen.getByRole("button", { name: "user" }));
     expect(screen.getByRole("heading", { name: "user" })).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "← Project" }));
+    fireEvent.click(screen.getByRole("button", { name: "Project", exact: true }));
     expect(
       screen.getByRole("button", { name: "Remove user from authorized assignees" }),
     ).toBeDefined();
@@ -528,7 +529,7 @@ describe("actor-aware renderer views", () => {
       },
     });
 
-    fireEvent.click(screen.getAllByText("Remove")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove user from task assignees" }));
 
     expect(updateTaskMutate).toHaveBeenLastCalledWith({
       id: "task-1",

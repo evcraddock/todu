@@ -1,5 +1,7 @@
 import { createProjectId, type TaskPriority } from "@todu/core/browser";
 import { type ReactNode, useState } from "react";
+import { Icon } from "../components/Icon.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
 import { useCreateTask, useProjects } from "../hooks/useTodu.js";
 
 export function CreateTaskDialog({
@@ -90,11 +92,7 @@ export function CreateTaskDialog({
             value={effectiveProjectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
-            {projects?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            <ProjectOptions projects={projects} />
           </select>
         </div>
 
@@ -144,15 +142,16 @@ export function CreateTaskDialog({
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+          <button type="button" className="btn btn-secondary btn-with-icon" onClick={onClose}>
+            <Icon name="cancel" /> Cancel
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-with-icon"
             onClick={handleSubmit}
             disabled={createTask.isPending}
           >
+            <Icon name="add" />
             {createTask.isPending ? "Creating…" : "Create Task"}
           </button>
         </div>

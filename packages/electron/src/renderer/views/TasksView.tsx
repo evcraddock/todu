@@ -49,7 +49,7 @@ export function TasksView({
     return (
       <TaskDetail
         taskId={selectedTaskId}
-        backLabel={selectedFromHome && onNavigateHome ? "Home" : "Tasks"}
+        backLabel={selectedFromHome && onNavigateHome ? "Overview" : "Tasks"}
         onBack={() => {
           if (selectedFromHome && onNavigateHome) onNavigateHome();
           else setSelectedTaskId(null);

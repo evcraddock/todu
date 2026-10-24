@@ -52,6 +52,7 @@ const resume = vi.fn();
 const update = vi.fn();
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   Object.defineProperty(window, "todu", {
     configurable: true,

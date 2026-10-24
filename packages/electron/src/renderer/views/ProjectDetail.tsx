@@ -1,11 +1,14 @@
 import type { ProjectId, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import { createProjectId } from "@todu/core/browser";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { AssigneeOptions } from "../components/AssigneeOptions.js";
+import { BackButton } from "../components/BackButton.js";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { EntityTimestamps } from "../components/EntityTimestamps.js";
 import { FilterBar } from "../components/FilterBar.js";
+import { Icon } from "../components/Icon.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
 import { TabBar } from "../components/TabBar.js";
 import { TaskTable } from "../components/TaskTable.js";
@@ -119,9 +122,7 @@ export function ProjectDetail({
   if (isError || !project) {
     return (
       <div className="view-container">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← {backLabel}
-        </button>
+        <BackButton label={backLabel} onClick={onBack} />
         <div className="error-state">
           <p>Failed to load project</p>
           <p className="error-detail">
@@ -221,15 +222,15 @@ export function ProjectDetail({
       <div className="detail-page-header">
         {/* Toolbar */}
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← {backLabel}
-          </button>
+          <BackButton label={backLabel} onClick={onBack} />
           <button
             type="button"
-            className="btn btn-danger btn-sm"
+            className="btn-icon"
+            title="Delete"
+            aria-label="Delete"
             onClick={() => setShowDeleteConfirm(true)}
           >
-            Delete
+            <Icon name="delete" />
           </button>
         </div>
 
@@ -348,18 +349,18 @@ export function ProjectDetail({
               activeTab === "tasks" ? (
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   onClick={() => onCreateTask(projectId)}
                 >
-                  + Add Task
+                  <Icon name="add" /> Add Task
                 </button>
               ) : activeTab === "comments" && !commentComposerOpen ? (
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   onClick={() => setCommentComposerOpen(true)}
                 >
-                  Add Comment
+                  <Icon name="add" /> Add Comment
                 </button>
               ) : activeTab === "assignees" ? (
                 <div className="assignee-add">
@@ -381,15 +382,11 @@ export function ProjectDetail({
                         ? "No other assignees available"
                         : "Choose an assignee…"}
                     </option>
-                    {availableAuthorizedActors.map((actor) => (
-                      <option key={actor.id} value={actor.id}>
-                        {actor.displayName}
-                      </option>
-                    ))}
+                    <AssigneeOptions assignees={availableAuthorizedActors} />
                   </select>
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    className="btn btn-primary btn-sm btn-with-icon"
                     disabled={
                       updateProject.isPending ||
                       !availableAuthorizedActors.some(
@@ -398,7 +395,7 @@ export function ProjectDetail({
                     }
                     onClick={handleAddAuthorizedActor}
                   >
-                    Add assignee
+                    <Icon name="add" /> Add assignee
                   </button>
                 </div>
               ) : undefined
@@ -470,13 +467,13 @@ export function ProjectDetail({
                           <td className="cell-actions">
                             <button
                               type="button"
-                              className="btn btn-secondary btn-sm"
+                              className="btn-icon"
                               aria-label={`Remove ${authorizedActorNames[index]} from authorized assignees`}
                               title={`Remove ${authorizedActorNames[index]}`}
                               disabled={updateProject.isPending}
                               onClick={() => handleRemoveAuthorizedActor(actorId)}
                             >
-                              Remove
+                              <Icon name="delete" />
                             </button>
                           </td>
                         </tr>

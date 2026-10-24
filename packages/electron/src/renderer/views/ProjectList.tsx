@@ -1,9 +1,12 @@
 import type { ProjectFilter } from "@todu/core/browser";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { PriorityChip } from "../components/PriorityChip.js";
 import { ProjectFilterBar } from "../components/ProjectFilterBar.js";
 import { StatusChip } from "../components/StatusChip.js";
+import { useSavedSelection } from "../hooks/useSavedSelection.js";
 import { useProjects, useTasks } from "../hooks/useTodu.js";
+import { loadProjectFilter, saveProjectFilter } from "../lib/filter-persistence.js";
 
 export function ProjectList({
   onSelectProject,
@@ -14,8 +17,16 @@ export function ProjectList({
   onCreateProject: () => void;
   externalFilter?: ProjectFilter | null;
 }): ReactNode {
-  const [filter, setFilter] = useState<ProjectFilter>({ status: "active" });
-  const [sort, setSort] = useState("name");
+  const [filter, setFilter] = useState<ProjectFilter>(() => loadProjectFilter());
+  const [sort, setSort] = useSavedSelection<string>("projects:sort", "name", [
+    "name",
+    "priority",
+    "tasks",
+    "created",
+  ]);
+  useEffect(() => {
+    saveProjectFilter(filter);
+  }, [filter]);
   const appliedExternalRef = useRef<ProjectFilter | null | undefined>(undefined);
 
   // Apply external filter when it changes (e.g., from agent ui-action)
@@ -68,8 +79,8 @@ export function ProjectList({
         <h2 className="view-title">
           Projects <span className="list-count">{displayProjects.length}</span>
         </h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateProject}>
-          + New Project
+        <button type="button" className="btn btn-primary btn-with-icon" onClick={onCreateProject}>
+          <Icon name="add" /> New Project
         </button>
       </div>
       <ProjectFilterBar filter={filter} onFilterChange={setFilter} />

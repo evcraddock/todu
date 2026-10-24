@@ -2,6 +2,7 @@ import type { Task, TaskSortField, TaskSortOptions } from "@todu/core/browser";
 import type { ReactNode } from "react";
 import { useActors } from "../hooks/useTodu.js";
 import { createActorMap, getActorNames } from "../lib/actors.js";
+import { Icon } from "./Icon.js";
 import { PriorityChip } from "./PriorityChip.js";
 import { StatusChip } from "./StatusChip.js";
 
@@ -21,7 +22,6 @@ function SortHeader({
   onSort: (field: TaskSortField) => void;
 }): ReactNode {
   const active = sort?.field === field;
-  const arrow = active ? (sort.direction === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
       className="sortable-header"
@@ -33,7 +33,7 @@ function SortHeader({
       }}
     >
       {label}
-      {arrow}
+      {active && <Icon name={sort.direction === "asc" ? "up" : "down"} size={14} />}
     </th>
   );
 }

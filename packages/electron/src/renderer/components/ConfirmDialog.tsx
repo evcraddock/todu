@@ -1,9 +1,11 @@
 import { type ReactNode, useId } from "react";
+import { Icon, type IconName } from "./Icon.js";
 
 interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmIcon?: IconName;
   cancelLabel?: string;
   pending?: boolean;
   error?: string;
@@ -15,6 +17,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Delete",
+  confirmIcon = "delete",
   cancelLabel = "Cancel",
   pending = false,
   error,
@@ -73,15 +76,20 @@ export function ConfirmDialog({
         <div className="dialog-actions">
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-with-icon"
             onClick={cancel}
             disabled={pending}
             autoFocus
           >
-            {cancelLabel}
+            <Icon name="cancel" /> {cancelLabel}
           </button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={pending}>
-            {confirmLabel}
+          <button
+            type="button"
+            className="btn btn-danger btn-with-icon"
+            onClick={onConfirm}
+            disabled={pending}
+          >
+            <Icon name={confirmIcon} /> {confirmLabel}
           </button>
         </div>
       </div>

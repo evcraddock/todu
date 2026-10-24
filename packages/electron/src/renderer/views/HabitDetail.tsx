@@ -1,10 +1,13 @@
 import type { HabitId, ProjectId } from "@todu/core/browser";
 import { type ReactNode, useEffect, useState } from "react";
+import { BackButton } from "../components/BackButton.js";
 import { CommentThread } from "../components/CommentThread.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { EntityIdCopy } from "../components/EntityIdCopy.js";
 import { EntityTimestamps } from "../components/EntityTimestamps.js";
+import { Icon } from "../components/Icon.js";
 import { MarkdownEditor } from "../components/MarkdownEditor.js";
+import { ProjectOptions } from "../components/ProjectOptions.js";
 import { SchedulePresetPicker } from "../components/SchedulePresetPicker.js";
 import { TabBar } from "../components/TabBar.js";
 import {
@@ -46,11 +49,15 @@ function StreakStats({ habitId }: { habitId: string }): ReactNode {
   return (
     <div className="streak-stats">
       <div className="streak-stat">
-        <span className="streak-stat-value">🔥 {streak.current}</span>
+        <span className="streak-stat-value">
+          <Icon name="habits" /> {streak.current}
+        </span>
         <span className="streak-stat-label">Current Streak</span>
       </div>
       <div className="streak-stat">
-        <span className="streak-stat-value">📊 {streak.longest}</span>
+        <span className="streak-stat-value">
+          <Icon name="chart" /> {streak.longest}
+        </span>
         <span className="streak-stat-label">Longest Streak</span>
       </div>
       <div className="streak-stat">
@@ -59,13 +66,18 @@ function StreakStats({ habitId }: { habitId: string }): ReactNode {
           className={`streak-checkin-btn ${streak.completedToday ? "checkin-done" : "checkin-pending"}`}
           onClick={handleToggle}
           disabled={isPending}
+          title={streak.completedToday ? "Uncheck today" : "Check in today"}
+          aria-pressed={streak.completedToday}
         >
-          {streak.completedToday ? "✅ Done" : "☐ Check In"}
+          <Icon name={streak.completedToday ? "checked-square" : "square"} />
+          {streak.completedToday ? "Done" : "Check In"}
         </button>
         <span className="streak-stat-label">Today</span>
       </div>
       <div className="streak-stat">
-        <span className="streak-stat-value">📈 {streak.totalCheckins}</span>
+        <span className="streak-stat-value">
+          <Icon name="trend" /> {streak.totalCheckins}
+        </span>
         <span className="streak-stat-label">Total Check-ins</span>
       </div>
     </div>
@@ -117,7 +129,7 @@ function HistoryCalendar({ habitId }: { habitId: string }): ReactNode {
           <div
             key={day.date}
             className={cls}
-            title={`${day.date}${day.scheduled ? (day.completed ? " ✅" : " missed") : " (not scheduled)"}`}
+            title={`${day.date}${day.scheduled ? (day.completed ? " completed" : " missed") : " (not scheduled)"}`}
           >
             <span className="history-day-num">{Number.parseInt(day.date.slice(8), 10)}</span>
           </div>
@@ -185,9 +197,7 @@ export function HabitDetail({
   if (isError || !habit) {
     return (
       <div className="view-container">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-          ← {backLabel}
-        </button>
+        <BackButton label={backLabel} onClick={onBack} />
         <div className="error-state">
           <p>Failed to load habit</p>
           <p className="error-detail">
@@ -239,16 +249,16 @@ export function HabitDetail({
       <div className="detail-page-header">
         {/* Toolbar */}
         <div className="detail-toolbar">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
-            ← {backLabel}
-          </button>
+          <BackButton label={backLabel} onClick={onBack} />
           <div className="toolbar-actions">
             <button
               type="button"
-              className="btn btn-danger btn-sm"
+              className="btn-icon"
+              title="Delete"
+              aria-label="Delete"
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete
+              <Icon name="delete" />
             </button>
           </div>
         </div>
@@ -325,11 +335,7 @@ export function HabitDetail({
                     {habit.projectId ? "Project unavailable" : "Choose a project"}
                   </option>
                 )}
-                {projects?.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
+                <ProjectOptions projects={projects} />
               </select>
               {!habit.projectId && (
                 <span className="detail-property-hint">
@@ -355,7 +361,7 @@ export function HabitDetail({
                   setEditingSchedule(true);
                 }}
               >
-                <span aria-hidden="true">✎</span> Edit schedule
+                <Icon name="edit" /> Edit schedule
               </button>
             )}
           </div>
@@ -365,19 +371,19 @@ export function HabitDetail({
               <div className="detail-schedule-actions">
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   disabled={!scheduleValue.trim() || updateHabit.isPending}
                   onClick={handleScheduleSave}
                 >
-                  Save schedule
+                  <Icon name="save" /> Save schedule
                 </button>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm btn-with-icon"
                   disabled={updateHabit.isPending}
                   onClick={() => setEditingSchedule(false)}
                 >
-                  Cancel
+                  <Icon name="cancel" /> Cancel
                 </button>
               </div>
             </section>
@@ -409,10 +415,10 @@ export function HabitDetail({
               activeTab === "comments" && !commentComposerOpen ? (
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-sm btn-with-icon"
                   onClick={() => setCommentComposerOpen(true)}
                 >
-                  Add Comment
+                  <Icon name="add" /> Add Comment
                 </button>
               ) : undefined
             }
