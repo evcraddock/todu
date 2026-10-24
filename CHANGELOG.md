@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-24
+
+### Added
+- Organized desktop Settings into General, AI, Sync, and Status tabs with provider connection dialogs and immediately applied model selection (#593).
+- Added guided dataset sharing and direct device enrollment, incoming approval/denial controls, optional sync server and listener settings, and explicit daemon restart controls (#593).
+
+### Changed
+- Simplified journal writing to a single full-width editor with tags and Cancel/Save controls beneath it, retaining unsaved-change confirmation (#593).
+- Refreshed sidebar, desktop, Dock, and menu bar/tray icons (#593).
+- Updated the packaged Electron runtime to 45.0.0 and refreshed security and compatible workspace dependencies (#589, #590).
+- Kept component versions independent: core 0.28.0, engine 0.24.6, daemon 0.28.2, CLI 0.25.2, and TUI 0.27.0. This desktop release does not publish new npm versions.
+- Prepared the Apple Silicon macOS installer with Developer ID signing; Apple notarization is not included.
+
+### Fixed
+- Supplied a persistent machine-local installation identifier required by ChatGPT sign-in (#593).
+
 ## [0.25.0] - 2026-10-23
 
 ### Added
