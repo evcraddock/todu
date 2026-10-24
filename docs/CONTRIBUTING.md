@@ -97,3 +97,9 @@ PR Pipeline Status
 - ci: pass|fail|unavailable
 - review: pending|approved|warnings|changes-requested
 ```
+
+## Test builds
+
+Both Vitest configurations build the workspace once in global setup before test workers start. CLI tests use those compiled artifacts instead of rebuilding from each test file. This also applies to filtered test runs and rebuilds before watch-mode reruns. A build failure stops the run before tests execute.
+
+The full suite uses half the available workers to leave capacity for child CLI and daemon processes. Command suites that launch multiple CLI subprocesses have a 30-second test budget; ordinary unit-test limits remain unchanged.

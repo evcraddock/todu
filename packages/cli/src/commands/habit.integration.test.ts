@@ -12,7 +12,6 @@ describe("habit CLI commands", { timeout: 30000 }, () => {
   let daemon: DaemonHandle | null = null;
 
   beforeAll(async () => {
-    execSync("npm run build", { cwd: rootDir, stdio: "pipe" });
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "todu-habit-cli-"));
     daemon = await startDaemonForTests(rootDir, tmpDir);
   });

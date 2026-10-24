@@ -1,17 +1,13 @@
 import { execSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { VERSION } from "./version.js";
 
 describe("CLI version output", { timeout: 30000 }, () => {
   const rootDir = path.resolve(import.meta.dirname, "../../..");
   const cliPath = path.join(rootDir, "packages/cli/dist/index.js");
   const packageJsonPath = path.join(rootDir, "packages/cli/package.json");
-
-  beforeAll(() => {
-    execSync("npm run build", { cwd: rootDir, stdio: "pipe" });
-  });
 
   it("prints only the version token", () => {
     const output = execSync(`node ${cliPath} --version`, {

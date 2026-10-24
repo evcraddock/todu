@@ -7,6 +7,8 @@ const root = import.meta.dirname;
 export default defineConfig({
   plugins: [react()],
   test: {
+    maxWorkers: "50%",
+    globalSetup: ["./scripts/test-global-setup.ts"],
     include: ["packages/*/src/**/*.test.{ts,tsx}", "scripts/**/*.test.ts"],
   },
   resolve: {
